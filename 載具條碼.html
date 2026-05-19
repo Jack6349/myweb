@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a0a">
+<title>載具條碼</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root {
+  --bg: #0a0a0a;
+  --bg2: #141414;
+  --bg3: #1e1e1e;
+  --border: rgba(255,255,255,0.1);
+  --accent: #f0cc7a;
+  --text: #f0f0f0;
+  --text2: #888;
+  --text3: #555;
+  --radius: 16px;
+  --font: 'Noto Sans TC', sans-serif;
+}
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+/* ── SETUP SCREEN ── */
+.setup-screen {
+  position: fixed; inset: 0; top: 44px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 32px 24px;
+  gap: 24px;
+}
+.setup-screen.hidden { display: none; }
+.setup-logo {
+  width: 64px; height: 64px;
+  background: rgba(240,204,122,.12);
+  border-radius: 18px;
+  border: 1px solid rgba(240,204,122,.25);
+  display: flex; align-items: center; justify-content: center;
+}
+.setup-title { font-size: 22px; font-weight: 700; text-align: center; }
+.setup-sub { font-size: 14px; color: var(--text2); text-align: center; line-height: 1.7; }
+.setup-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; }
+.setup-label { font-size: 13px; font-weight: 600; color: var(--text2); letter-spacing: .3px; }
+.setup-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  padding: 16px 20px;
+  outline: none;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+  transition: border-color .2s;
+}
+.setup-input:focus { border-color: var(--accent); }
+.setup-input::placeholder { font-size: 14px; letter-spacing: 1px; color: var(--text3); font-weight: 400; }
+.setup-hint { font-size: 12px; color: var(--text3); line-height: 1.6; }
+.btn-save {
+  width: 100%; padding: 16px;
+  background: var(--accent); color: #000;
+  border: none; border-radius: 12px;
+  font-size: 16px; font-weight: 700;
+  cursor: pointer; font-family: var(--font);
+  transition: opacity .15s;
+}
+.btn-save:active { opacity: .85; }
+
+/* ── MAIN SCREEN ── */
+.main-screen {
+  position: fixed; inset: 0; top: 44px;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+}
+.main-screen.hidden { display: none; }
+
+.top-bar {
+  padding: 16px 20px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.top-title { font-size: 18px; font-weight: 700; }
+.edit-btn {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text2);
+  font-size: 13px; font-weight: 600;
+  padding: 8px 14px; cursor: pointer;
+  font-family: var(--font); transition: background .15s;
+}
+.edit-btn:active { background: rgba(255,255,255,.1); }
+
+.barcode-area {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 16px 24px;
+  gap: 28px;
+}
+
+/* 白色背景卡（模擬實體載具） */
+.barcode-card {
+  background: #ffffff;
+  border-radius: var(--radius);
+  padding: 28px 24px 24px;
+  width: 100%; max-width: 360px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 20px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.6);
+}
+.card-header {
+  display: flex; align-items: center; gap: 10px;
+}
+.card-logo-text {
+  font-size: 13px; font-weight: 700;
+  color: #333; letter-spacing: .5px;
+}
+.card-sub-text { font-size: 11px; color: #999; }
+
+/* 條碼 SVG 容器 */
+#barcode-container {
+  width: 100%;
+  display: flex; justify-content: center;
+}
+#barcode-container canvas,
+#barcode-container svg { max-width: 100%; }
+
+/* 條碼號碼大字顯示 */
+.carrier-number {
+  font-family: 'Courier New', monospace;
+  font-size: 22px; font-weight: 700;
+  letter-spacing: 4px;
+  color: #111;
+  text-align: center;
+}
+.carrier-number-sub {
+  font-size: 11px; color: #aaa;
+  text-align: center; margin-top: -12px;
+}
+
+/* QR code 區 */
+#qr-container {
+  padding: 16px;
+  background: #fff;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 底部資訊 */
+.bottom-info {
+  flex-shrink: 0;
+  padding: 0 24px 32px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 8px;
+}
+.info-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg3); border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 13px; color: var(--text2);
+}
+.info-chip strong { color: var(--text); font-weight: 600; }
+.refresh-hint { font-size: 12px; color: var(--text3); }
+
+/* 亮度提示 */
+.brightness-bar {
+  width: 100%; max-width: 360px;
+  background: var(--bg3); border-radius: 8px;
+  padding: 10px 16px;
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--border);
+}
+.brightness-label { font-size: 12px; color: var(--text2); }
+.brightness-slider { flex: 1; accent-color: var(--accent); }
+
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.barcode-card { animation: fadeIn .3s ease; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ══════════════ HOME BAR ══════════════ -->
+<div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(10,10,10,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.07);padding:10px 16px;display:flex;align-items:center;gap:10px;">
+  <a href="生活總管.html" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:6px 14px 6px 10px;color:#888;text-decoration:none;font-size:13px;font-weight:600;font-family:'Noto Sans TC',sans-serif;white-space:nowrap;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+    生活總管
+  </a>
+  <span style="font-size:14px;font-weight:700;color:#f0f0f0;">載具條碼</span>
+</div>
+
+<!-- ══════════════ SETUP SCREEN ══════════════ -->
+<div class="setup-screen" id="setup-screen">
+  <div class="setup-logo">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#f0cc7a" stroke-width="2" stroke-linecap="round">
+      <rect x="3" y="4" width="2" height="16"/><rect x="7" y="4" width="1" height="16"/>
+      <rect x="10" y="4" width="2" height="16"/><rect x="14" y="4" width="1" height="16"/>
+      <rect x="17" y="4" width="2" height="16"/><rect x="21" y="4" width="1" height="16"/>
+    </svg>
+  </div>
+  <div class="setup-title">設定手機載具</div>
+  <div class="setup-sub">輸入您的手機條碼載具編號<br>設定後每次開啟直接顯示條碼</div>
+  <div class="setup-form">
+    <label class="setup-label">載具條碼編號</label>
+    <input class="setup-input" id="setup-input" type="text"
+      placeholder="/XXXXXXX" maxlength="8"
+      autocomplete="off" autocorrect="off" spellcheck="false">
+    <div class="setup-hint">
+      格式：/ 開頭，共 8 碼（如 /ABC1234）<br>
+      可至「財政部電子發票整合服務平台」查詢您的載具編號
+    </div>
+    <label class="setup-label" style="margin-top:8px">同步密碼（6 位數字）</label>
+    <input class="setup-input" id="setup-pin" type="password"
+      placeholder="設定後跨裝置需輸入相同密碼" maxlength="6" inputmode="numeric"
+      style="letter-spacing:8px;font-size:22px">
+    <div class="setup-hint">同一組密碼可在多台裝置解密讀取條碼</div>
+    <label class="setup-label" style="margin-top:8px">同步密碼（6 位數字）</label>
+    <input class="setup-input" id="setup-pin" type="password"
+      placeholder="設定後跨裝置輸入相同密碼解密" maxlength="6" inputmode="numeric"
+      style="letter-spacing:8px;font-size:22px">
+    <div class="setup-hint">同一組密碼可在多台裝置讀取條碼</div>
+    <button class="btn-save" onclick="saveCarrier()">儲存並顯示條碼</button>
+  </div>
+</div>
+
+<!-- ══════════════ MAIN SCREEN ══════════════ -->
+<div class="main-screen hidden" id="main-screen">
+  <div class="top-bar">
+    <div class="top-title">載具條碼</div>
+    <button class="edit-btn" onclick="showSetup()">修改</button>
+  </div>
+
+  <div class="barcode-area">
+    <!-- 亮度調整 -->
+    <div class="brightness-bar">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+      <span class="brightness-label">亮度</span>
+      <input type="range" class="brightness-slider" min="0" max="1" step="0.05" value="1"
+        oninput="document.querySelector('.barcode-card').style.filter='brightness('+this.value+')'">
+    </div>
+
+    <!-- 條碼卡片 -->
+    <div class="barcode-card" id="barcode-card">
+      <div class="card-header">
+        <div>
+          <div class="card-logo-text">手機條碼載具</div>
+          <div class="card-sub-text">電子發票整合服務</div>
+        </div>
+      </div>
+
+      <!-- 線性條碼 -->
+      <div id="barcode-container"></div>
+
+      <!-- 載具號碼 -->
+      <div class="carrier-number" id="carrier-display"></div>
+      <div class="carrier-number-sub">手機條碼載具</div>
+    </div>
+  </div>
+
+  <div class="bottom-info">
+    <div class="info-chip">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      結帳時請出示此條碼，店員掃描即可歸戶
+    </div>
+    <div class="refresh-hint">亮度不足時可調整上方滑桿</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+const CARRIER_KEY = 'carrier_barcode';
+
+function loadCarrier() {
+  return localStorage.getItem(CARRIER_KEY) || '';
+}
+function saveCarrier() {
+  var val = document.getElementById('setup-input').value.trim().toUpperCase();
+  if (!val.startsWith('/')) val = '/' + val;
+  if (val.length !== 8) {
+    alert('\u683c\u5f0f\u932f\u8aa4\uff1a/ \u958b\u982d 8 \u78bc');
+    return;
+  }
+  var pinEl = document.getElementById('setup-pin');
+  var pin = pinEl ? pinEl.value.trim() : '';
+  if (pin && pin.length !== 6) {
+    alert('\u5bc6\u78bc\u9700 6 \u4f4d\u6578\u5b57');
+    return;
+  }
+  localStorage.setItem(CARRIER_KEY, val);
+  if (pin) {
+    localStorage.setItem('carrier_pin', pin);
+    encryptCarrierSync(val, pin);
+  }
+  showMain(val);
+}
+
+
+
+async function encryptCarrierSync(val) {
+  try {
+    // 載具條碼用裝置 ID 作為加密鑰（無 PIN）
+    var deviceId = localStorage.getItem('device_id') || crypto.randomUUID();
+    localStorage.setItem('device_id', deviceId);
+    var key = await deriveKey(deviceId, 'carrier_salt_v1');
+    var encrypted = await encryptField(val, key);
+    var ts = new Date().toISOString();
+    await syncWrite('carrier', JSON.stringify({ enc: encrypted, deviceId: deviceId }), ts);
+  } catch(e) { console.warn('[Sync] carrier sync error:', e.message); }
+}
+
+function showMain(carrier) {
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('main-screen').classList.remove('hidden');
+  renderBarcode(carrier);
+}
+
+function showSetup() {
+  const carrier = loadCarrier();
+  document.getElementById('setup-input').value = carrier;
+  document.getElementById('main-screen').classList.add('hidden');
+  document.getElementById('setup-screen').classList.remove('hidden');
+}
+
+function renderBarcode(carrier) {
+  document.getElementById('carrier-display').textContent = carrier;
+  const container = document.getElementById('barcode-container');
+  container.innerHTML = '';
+  try {
+    const canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+    JsBarcode(canvas, carrier, {
+      format: 'CODE128',
+      width: 2.8,
+      height: 90,
+      displayValue: false,
+      background: '#ffffff',
+      lineColor: '#000000',
+      margin: 8,
+    });
+  } catch(e) {
+    container.innerHTML = '<div style="color:#999;font-size:13px;padding:16px">條碼產生失敗：' + e.message + '</div>';
+  }
+}
+
+// ── 初始化 ──
+
+// ══════════════ 雲端同步模組 ══════════════
+var SYNC_GAS_URL = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
+var SYNC_PENDING_KEY = 'sync_pending';
+
+async function deriveKey(pin, salt) {
+  var enc = new TextEncoder();
+  var km = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 100000, hash: 'SHA-256' },
+    km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptField(plain, key) {
+  if (plain == null || plain === '') return '';
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key,
+    new TextEncoder().encode(String(plain)));
+  var buf = new Uint8Array(12 + ct.byteLength);
+  buf.set(iv); buf.set(new Uint8Array(ct), 12);
+  return btoa(String.fromCharCode.apply(null, buf));
+}
+
+async function decryptField(cipher, key) {
+  if (!cipher) return '';
+  try {
+    var buf = Uint8Array.from(atob(cipher), function(c){ return c.charCodeAt(0); });
+    var dec = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: buf.slice(0,12) }, key, buf.slice(12));
+    return new TextDecoder().decode(dec);
+  } catch(e) { return ''; }
+}
+
+async function syncRead(sheetName) {
+  try {
+    var res = await fetch(SYNC_GAS_URL, {
+      method: 'POST', body: JSON.stringify({ action: 'sync_read', sheet: sheetName })
+    });
+    return await res.json();
+  } catch(e) { return { error: e.message }; }
+}
+
+async function syncWrite(sheetName, dataJson, updatedAt) {
+  try {
+    var res = await fetch(SYNC_GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'sync_write', sheet: sheetName, data: dataJson, updatedAt: updatedAt })
+    });
+    var r = await res.json();
+    if (r.stat === 'CONFLICT') {
+      // 雲端較新，更新本機
+      return { conflict: true, cloudData: r.data, cloudUpdatedAt: r.updatedAt };
+    }
+    // 成功：清除 pending
+    var pending = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
+    delete pending[sheetName];
+    localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(pending));
+    return r;
+  } catch(e) {
+    var pending = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
+    pending[sheetName] = { data: dataJson, updatedAt: updatedAt };
+    localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(pending));
+    return { error: e.message, pending: true };
+  }
+}
+
+async function flushPendingSync() {
+  var pending = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
+  var sheets = Object.keys(pending);
+  for (var i = 0; i < sheets.length; i++) {
+    var s = sheets[i];
+    var r = await syncWrite(s, pending[s].data, pending[s].updatedAt);
+    if (r && !r.error) {
+      var p2 = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
+      delete p2[s];
+      localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(p2));
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(flushPendingSync, 3000);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  const carrier = loadCarrier();
+  const savedPin = localStorage.getItem('carrier_pin');
+  if (carrier && carrier.startsWith('/') && carrier.length === 8) {
+    showMain(carrier);
+    // 背景嘗試從雲端拉取最新
+    if (savedPin) {
+      setTimeout(function() {
+        pullCarrier(savedPin).then(function(cloudVal) {
+          if (cloudVal && cloudVal !== carrier) {
+            localStorage.setItem(CARRIER_KEY, cloudVal);
+            renderBarcode(cloudVal);
+            document.getElementById('carrier-display').textContent = cloudVal;
+          }
+        });
+      }, 1500);
+    }
+  } else if (savedPin) {
+    // 嘗試從雲端還原
+    document.getElementById('setup-screen').classList.remove('hidden');
+    pullCarrier(savedPin).then(function(cloudVal) {
+      if (cloudVal) {
+        document.getElementById('setup-screen').classList.add('hidden');
+        showMain(cloudVal);
+      }
+    });
+  } else {
+    document.getElementById('setup-screen').classList.remove('hidden');
+  }
+  // Enter 鍵直接儲存
+  document.getElementById('setup-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveCarrier();
+  });
+  // 自動加 / 前綴
+  document.getElementById('setup-input').addEventListener('input', function() {
+    if (this.value && !this.value.startsWith('/')) {
+      this.value = '/' + this.value;
+    }
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1117">
+<title>&#20449;&#29992;&#21345;&#32317;&#31649;</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root {
+  --bg:#0d1117; --bg2:#161b22; --bg3:#21262d; --bg4:#30363d;
+  --accent:#f0cc7a; --accent2:#e8b84b;
+  --text:#e6edf3; --text2:#8b949e; --text3:#484f58;
+  --border:rgba(255,255,255,0.08); --border2:rgba(255,255,255,0.15);
+  --success:#3fb950; --danger:#f85149; --info:#58a6ff;
+  --radius:16px; --radius-sm:10px;
+  --font:'Noto Sans TC',sans-serif;
+  --nav-h:68px;
+}
+html,body { height:100%; background:var(--bg); color:var(--text); font-family:var(--font); overflow:hidden; }
+
+/* HOME BAR */
+.home-bar { position:fixed; top:0; left:0; right:0; z-index:200; background:rgba(13,17,23,.92); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-bottom:1px solid var(--border); padding:10px 16px; display:flex; align-items:center; gap:10px; }
+.home-link { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1); border-radius:20px; padding:6px 14px 6px 10px; color:var(--text2); text-decoration:none; font-size:13px; font-weight:600; white-space:nowrap; }
+.bar-title { font-size:14px; font-weight:700; color:var(--text); }
+
+/* SCREENS */
+.screen { position:fixed; inset:0; top:44px; bottom:0; display:flex; flex-direction:column; overflow:hidden; opacity:0; pointer-events:none; transition:opacity .2s; }
+.screen.active { opacity:1; pointer-events:all; }
+.scroll-area { flex:1; overflow-y:auto; padding:0 16px 24px; -webkit-overflow-scrolling:touch; }
+.scroll-area::-webkit-scrollbar { display:none; }
+
+/* PIN SCREEN */
+.pin-screen { background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:16px 24px 24px; gap:14px; overflow-y:auto; min-height:100%; }
+.pin-icon { width:48px; height:48px; background:rgba(240,204,122,.1); border:1px solid rgba(240,204,122,.2); border-radius:14px; display:flex; align-items:center; justify-content:center; margin-top:8px; }
+.pin-title { font-size:18px; font-weight:700; }
+.pin-sub { font-size:13px; color:var(--text2); text-align:center; line-height:1.6; }
+.pin-dots { display:flex; gap:14px; margin:4px 0; }
+.pin-dot { width:14px; height:14px; border-radius:50%; background:var(--bg4); border:2px solid var(--border2); transition:all .15s; }
+.pin-dot.filled { background:var(--accent); border-color:var(--accent); transform:scale(1.1); }
+.pin-dot.error { background:var(--danger); border-color:var(--danger); }
+.pin-error { font-size:13px; color:var(--danger); min-height:20px; }
+.pin-pad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:100%; max-width:280px; }
+.pin-btn { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius-sm); height:56px; font-size:20px; font-weight:600; color:var(--text); cursor:pointer; font-family:var(--font); transition:background .1s, transform .1s; display:flex; align-items:center; justify-content:center; }
+.pin-btn:active { background:var(--bg4); transform:scale(.95); }
+.pin-btn.del { font-size:16px; color:var(--text2); }
+.pin-btn.empty { background:transparent; border-color:transparent; pointer-events:none; }
+.pin-forget { font-size:13px; color:var(--text3); cursor:pointer; margin-top:4px; }
+.pin-forget:active { color:var(--danger); }
+
+/* PAGE HEADER */
+.page-header { padding:14px 16px 10px; background:var(--bg); position:sticky; top:0; z-index:10; }
+.page-title { font-size:22px; font-weight:700; }
+.page-sub { font-size:13px; color:var(--text2); margin-top:3px; }
+.header-row { display:flex; align-items:center; justify-content:space-between; }
+
+/* CARD LIST */
+.card-list { display:flex; flex-direction:column; gap:14px; padding-top:4px; }
+
+/* CREDIT CARD VISUAL */
+.cc-visual { width:100%; border-radius:var(--radius); padding:22px 22px 20px; position:relative; overflow:hidden; min-height:160px; display:flex; flex-direction:column; justify-content:space-between; cursor:pointer; transition:transform .15s; }
+.cc-visual:active { transform:scale(.98); }
+.cc-chip { width:36px; height:28px; background:rgba(255,255,255,.35); border-radius:5px; border:1px solid rgba(255,255,255,.4); }
+.cc-network { position:absolute; top:20px; right:20px; font-size:13px; font-weight:700; color:rgba(255,255,255,.9); letter-spacing:1px; }
+.cc-number { font-family:'Courier New',monospace; font-size:17px; font-weight:600; letter-spacing:3px; color:rgba(255,255,255,.9); margin-top:auto; padding-top:16px; }
+.cc-bottom { display:flex; justify-content:space-between; align-items:flex-end; margin-top:8px; }
+.cc-holder { font-size:13px; font-weight:600; color:rgba(255,255,255,.8); letter-spacing:.5px; text-transform:uppercase; }
+.cc-expiry-label { font-size:9px; color:rgba(255,255,255,.5); letter-spacing:.5px; }
+.cc-expiry { font-size:13px; font-weight:600; color:rgba(255,255,255,.8); }
+.cc-issuer { position:absolute; bottom:20px; right:20px; font-size:11px; color:rgba(255,255,255,.6); }
+.cc-glow { position:absolute; top:-60px; right:-60px; width:200px; height:200px; border-radius:50%; opacity:.15; pointer-events:none; }
+
+/* CARD INFO SECTION */
+.card-info { background:var(--bg3); border-radius:var(--radius); padding:16px; margin-top:10px; border:1px solid var(--border); }
+.info-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+.info-row:last-child { border-bottom:none; }
+.info-label { font-size:13px; color:var(--text2); }
+.info-value { font-size:14px; font-weight:600; }
+.cvv-masked { letter-spacing:3px; color:var(--text3); }
+.cvv-toggle { font-size:12px; color:var(--accent); cursor:pointer; padding:4px 8px; }
+
+/* FAB */
+.fab { position:fixed; bottom:calc(var(--nav-h) + 16px); right:16px; width:52px; height:52px; border-radius:50%; background:var(--accent); color:#000; border:none; font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(240,204,122,.4); z-index:50; transition:transform .15s; }
+.fab:active { transform:scale(.93); }
+
+/* BOTTOM NAV */
+.bottom-nav { position:fixed; bottom:0; left:0; right:0; height:var(--nav-h); background:var(--bg2); border-top:1px solid var(--border); display:flex; z-index:100; }
+.nav-item { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer; color:var(--text3); transition:color .15s; padding-bottom:4px; }
+.nav-item.active { color:var(--accent); }
+.nav-icon { width:24px; height:24px; }
+.nav-label { font-size:11px; font-weight:500; }
+
+/* MODAL */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:300; display:flex; align-items:flex-end; opacity:0; pointer-events:none; transition:opacity .25s; }
+.modal-overlay.open { opacity:1; pointer-events:all; }
+.modal { background:var(--bg2); border-radius:20px 20px 0 0; padding:0; width:100%; max-height:94vh; display:flex; flex-direction:column; transform:translateY(100%); transition:transform .3s cubic-bezier(.32,.72,0,1); }
+.modal-overlay.open .modal { transform:translateY(0); }
+.modal-header { padding:16px 20px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.modal-title { font-size:17px; font-weight:700; }
+.modal-close { width:30px; height:30px; border-radius:50%; background:var(--bg3); border:none; color:var(--text2); font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.modal-body { flex:1; overflow-y:auto; padding:20px; }
+.modal-body::-webkit-scrollbar { display:none; }
+
+/* FORM */
+.form-group { margin-bottom:18px; }
+.form-label { font-size:13px; font-weight:600; color:var(--text2); margin-bottom:8px; display:block; }
+input[type=text],input[type=number],input[type=password],select,textarea {
+  width:100%; background:var(--bg3); border:1px solid var(--border2); border-radius:var(--radius-sm);
+  color:var(--text); font-size:16px; padding:12px 14px; outline:none; font-family:var(--font);
+  transition:border-color .15s; -webkit-appearance:none;
+}
+input:focus,select:focus,textarea:focus { border-color:var(--accent); }
+input::placeholder,textarea::placeholder { color:var(--text3); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.btn-primary { width:100%; background:var(--accent); color:#000; border:none; border-radius:var(--radius-sm); padding:15px; font-size:16px; font-weight:700; cursor:pointer; font-family:var(--font); margin-top:4px; transition:opacity .15s; }
+.btn-primary:active { opacity:.85; }
+.btn-danger { width:100%; background:transparent; color:var(--danger); border:1px solid rgba(248,81,73,.3); border-radius:var(--radius-sm); padding:13px; font-size:15px; font-weight:600; cursor:pointer; font-family:var(--font); margin-top:10px; }
+.btn-secondary { width:100%; background:var(--bg3); color:var(--text); border:1px solid var(--border2); border-radius:var(--radius-sm); padding:13px; font-size:15px; font-weight:600; cursor:pointer; font-family:var(--font); margin-top:8px; }
+
+/* OCR UPLOAD */
+.upload-area { border:2px dashed var(--border2); border-radius:var(--radius); padding:28px; text-align:center; cursor:pointer; transition:border-color .2s; margin-bottom:12px; }
+.upload-area:active { border-color:var(--accent); }
+.upload-area.has-image { border-style:solid; border-color:var(--accent); padding:0; overflow:hidden; border-radius:var(--radius); }
+.upload-area img { width:100%; display:block; border-radius:var(--radius); }
+.upload-icon { color:var(--text3); margin-bottom:10px; }
+.upload-label { font-size:14px; color:var(--text2); }
+.upload-sub { font-size:12px; color:var(--text3); margin-top:4px; }
+.ocr-btn { width:100%; background:var(--bg4); border:1px solid var(--border2); border-radius:var(--radius-sm); color:var(--accent); font-size:14px; font-weight:600; padding:12px; cursor:pointer; font-family:var(--font); margin-bottom:12px; }
+.ocr-status { font-size:13px; color:var(--text2); text-align:center; padding:8px; min-height:28px; }
+
+/* NETWORK BADGES */
+.network-badge { display:inline-flex; align-items:center; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:700; letter-spacing:.5px; }
+.badge-VISA { background:rgba(26,31,113,.4); color:#fff; border:1px solid rgba(255,255,255,.15); }
+.badge-Mastercard { background:rgba(180,30,30,.3); color:#fff; border:1px solid rgba(255,100,100,.2); }
+.badge-JCB { background:rgba(0,100,180,.3); color:#fff; border:1px solid rgba(100,180,255,.2); }
+.badge-AE { background:rgba(50,150,50,.3); color:#fff; border:1px solid rgba(100,255,100,.2); }
+.badge-UnionPay { background:rgba(150,30,30,.3); color:#fff; border:1px solid rgba(255,100,100,.2); }
+
+/* EMPTY */
+.empty-state { text-align:center; padding:60px 24px; }
+.empty-text { font-size:16px; color:var(--text2); }
+.empty-sub { font-size:13px; color:var(--text3); margin-top:6px; }
+
+/* SPINNER */
+@keyframes spin { to { transform:rotate(360deg); } }
+.spinner { width:18px; height:18px; border:2px solid rgba(0,0,0,.2); border-top-color:#000; border-radius:50%; animation:spin .6s linear infinite; display:inline-block; vertical-align:middle; margin-right:8px; }
+.spinner-light { border-color:rgba(255,255,255,.2); border-top-color:var(--accent); }
+
+/* STEP INDICATOR */
+.steps { display:flex; gap:8px; margin-bottom:20px; }
+.step { flex:1; height:4px; border-radius:2px; background:var(--bg4); transition:background .3s; }
+.step.done { background:var(--accent); }
+.step.active { background:var(--accent2); }
+
+  .thumb-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:4px 0 24px; }
+  .thumb-card { background:var(--bg3); border-radius:var(--radius-sm); border:1px solid var(--border); overflow:hidden; cursor:pointer; transition:transform .15s; }
+  .thumb-card:active { transform:scale(.97); }
+  .thumb-img { width:100%; aspect-ratio:1.586; object-fit:cover; display:block; background:var(--bg4); }
+  .thumb-img-placeholder { width:100%; aspect-ratio:1.586; background:var(--bg4); display:flex; align-items:center; justify-content:center; }
+  .thumb-info { padding:7px 9px; }
+  .thumb-name { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .thumb-network { font-size:10px; color:var(--text3); margin-top:1px; }
+  .detail-photo { width:100%; border-radius:var(--radius); overflow:hidden; margin-bottom:4px; position:relative; }
+  .detail-photo img { width:100%; display:block; }
+  .detail-photo-label { font-size:11px; color:var(--text3); text-align:center; padding:4px 0 12px; }
+  .detail-field { background:var(--bg3); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:10px; border:1px solid var(--border); }
+  .detail-field-label { font-size:11px; color:var(--text3); margin-bottom:4px; letter-spacing:.3px; }
+  .detail-field-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .detail-field-val { font-size:16px; font-weight:600; font-family:'Courier New',monospace; letter-spacing:1px; }
+  .copy-btn { background:var(--bg4); border:1px solid var(--border2); border-radius:6px; color:var(--accent); font-size:12px; font-weight:600; padding:5px 10px; cursor:pointer; font-family:var(--font); flex-shrink:0; transition:background .15s; }
+  .copy-btn:active { background:rgba(232,184,75,.2); }
+  .copy-btn.copied { color:var(--success); border-color:var(--success); }
+  .upload-pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+  .upload-slot { border:2px dashed var(--border2); border-radius:var(--radius-sm); aspect-ratio:1.586; cursor:pointer; overflow:hidden; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; transition:border-color .2s; }
+  .upload-slot:active { border-color:var(--accent); }
+  .upload-slot.has-img { border-style:solid; border-color:rgba(232,184,75,.4); }
+  .upload-slot img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .upload-slot-label { font-size:11px; color:var(--text2); position:relative; z-index:1; }
+  .upload-slot-icon { color:var(--text3); position:relative; z-index:1; }
+  .action-bar { display:flex; gap:10px; margin-top:16px; }
+  .btn-icon { flex:1; background:var(--bg3); border:1px solid var(--border2); border-radius:var(--radius-sm); color:var(--text); font-size:14px; font-weight:600; padding:13px 8px; cursor:pointer; font-family:var(--font); transition:background .15s; }
+  .btn-icon:active { background:var(--bg4); }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="home-bar">
+  <a class="home-link" href="&#29983;&#27963;&#32317;&#31649;.html">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+    &#29983;&#27963;&#32317;&#31649;
+  </a>
+  <span class="bar-title">&#20449;&#29992;&#21345;&#32317;&#31649;</span>
+</div>
+
+<!-- PIN -->
+<div class="screen active" id="screen-pin">
+  <div class="pin-screen">
+    <div class="pin-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f0cc7a" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <div class="pin-title" id="pin-title">&#20449;&#29992;&#21345;&#32317;&#31649;</div>
+    <div class="pin-sub" id="pin-sub">&#35531;&#36664;&#20837; 6 &#20491;&#25976; PIN &#30908;</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div>
+      <div class="pin-dot" id="d4"></div><div class="pin-dot" id="d5"></div>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+    <div class="pin-pad">
+      <button class="pin-btn" onclick="pinPress(1)">1</button>
+      <button class="pin-btn" onclick="pinPress(2)">2</button>
+      <button class="pin-btn" onclick="pinPress(3)">3</button>
+      <button class="pin-btn" onclick="pinPress(4)">4</button>
+      <button class="pin-btn" onclick="pinPress(5)">5</button>
+      <button class="pin-btn" onclick="pinPress(6)">6</button>
+      <button class="pin-btn" onclick="pinPress(7)">7</button>
+      <button class="pin-btn" onclick="pinPress(8)">8</button>
+      <button class="pin-btn" onclick="pinPress(9)">9</button>
+      <button class="pin-btn empty"></button>
+      <button class="pin-btn" onclick="pinPress(0)">0</button>
+      <button class="pin-btn del" onclick="pinDel()">&#9003;</button>
+    </div>
+    <div class="pin-forget" id="pin-forget-btn" onclick="pinForget()" style="display:none">&#24536;&#35352; PIN &#30908;&#65288;&#28165;&#38500;&#25152;&#26377;&#36039;&#26009;&#65289;</div>
+  </div>
+</div>
+
+<!-- LIST -->
+<div class="screen" id="screen-list">
+  <div class="page-header">
+    <div class="header-row">
+      <div>
+        <div class="page-title">&#20449;&#29992;&#21345;&#32317;&#31649;</div>
+        <div class="page-sub" id="list-count"></div>
+      </div>
+      <button onclick="showScreen('settings')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);padding:8px 12px;cursor:pointer;font-size:13px;font-family:var(--font);">&#35373;&#23450;</button>
+    </div>
+  </div>
+  <div class="scroll-area" id="card-list-area"></div>
+  <button class="fab" onclick="openAdd()">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+</div>
+
+<!-- DETAIL (read-only) -->
+<div class="screen" id="screen-detail">
+  <div class="page-header">
+    <div class="header-row">
+      <button onclick="showScreen('list')" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:4px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        &#36820;&#22238;
+      </button>
+      <button onclick="openEdit()" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);">&#32232;&#36655;</button>
+    </div>
+  </div>
+  <div class="scroll-area" id="detail-area"></div>
+</div>
+
+<!-- ADD / EDIT -->
+<div class="screen" id="screen-edit">
+  <div class="page-header">
+    <div class="header-row">
+      <button onclick="cancelEdit()" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:4px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        &#21462;&#28040;
+      </button>
+      <div class="page-title" id="edit-title">&#26032;&#22686;&#20449;&#29992;&#21345;</div>
+      <button onclick="saveCard()" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);">&#20648;&#23384;</button>
+    </div>
+  </div>
+  <div class="scroll-area" id="edit-area"></div>
+</div>
+
+<!-- SETTINGS -->
+<div class="screen" id="screen-settings">
+  <div class="page-header">
+    <div class="header-row">
+      <div class="page-title">&#35373;&#23450;</div>
+      <button onclick="showScreen('list')" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);">&#23436;&#25104;</button>
+    </div>
+  </div>
+  <div class="scroll-area">
+    <div style="padding-top:12px">
+      <button class="btn-secondary" onclick="changePIN()">&#20462;&#25913; PIN &#30908;</button>
+      <button class="btn-danger" onclick="confirmClearAll()" style="margin-top:16px">&#28165;&#38500;&#25152;&#26377;&#20449;&#29992;&#21345;&#36039;&#26009;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+var DB_KEY = 'cc_v2';
+var PIN_KEY = 'cc_pin';
+
+function hashPin(s) {
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
+    .then(function(b) {
+      return Array.from(new Uint8Array(b))
+        .map(function(x) { return ('00'+x.toString(16)).slice(-2); }).join('');
+    });
+}
+function loadCards() { try { return JSON.parse(localStorage.getItem(DB_KEY)) || []; } catch(e) { return []; } }
+function saveCards(d) {
+  localStorage.setItem(DB_KEY, JSON.stringify(d));
+  // 加密後同步至雲端
+  encryptAndSync(d);
+}
+
+async function encryptAndSync(cards) {
+  var pin = localStorage.getItem(PIN_KEY + '_raw');
+  if (!pin) return; // 無 PIN 無法加密
+  try {
+    var key = await deriveKey(pin, 'cc_salt_v1');
+    var encrypted = [];
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      var enc = Object.assign({}, c);
+      enc.cardNumber = await encryptField(c.cardNumber, key);
+      enc.cardholderName = await encryptField(c.cardholderName, key);
+      enc.expiry = await encryptField(c.expiry, key);
+      enc.cvv = await encryptField(c.cvv, key);
+      encrypted.push(enc);
+    }
+    var ts = new Date().toISOString();
+    await syncWrite('cards', JSON.stringify(encrypted), ts);
+  } catch(e) { console.warn('[Sync] encrypt error:', e.message); }
+}
+
+async function pullAndDecryptCards(pin) {
+  try {
+    var r = await syncRead('cards');
+    if (!r || r.error || !r.data) return null;
+    var localTs = localStorage.getItem(DB_KEY + '_ts') || '';
+    if (r.updatedAt && r.updatedAt <= localTs) return null; // 本機較新
+    var key = await deriveKey(pin, 'cc_salt_v1');
+    var encrypted = JSON.parse(r.data);
+    var decrypted = [];
+    for (var i = 0; i < encrypted.length; i++) {
+      var c = encrypted[i];
+      var dec = Object.assign({}, c);
+      dec.cardNumber = await decryptField(c.cardNumber, key);
+      dec.cardholderName = await decryptField(c.cardholderName, key);
+      dec.expiry = await decryptField(c.expiry, key);
+      dec.cvv = await decryptField(c.cvv, key);
+      decrypted.push(dec);
+    }
+    localStorage.setItem(DB_KEY, JSON.stringify(decrypted));
+    localStorage.setItem(DB_KEY + '_ts', r.updatedAt);
+    console.log('[Sync] cards updated from cloud');
+    return decrypted;
+  } catch(e) { console.warn('[Sync] decrypt error:', e.message); return null; }
+}
+
+var cards = [];
+var curId = null;
+var editingId = null;
+var pinBuf = '';
+var pinMode = 'verify';
+var pinTmp = '';
+var frontDataURL = null;
+var backDataURL = null;
+
+// PIN
+function updateDots(n, err) {
+  ['d0','d1','d2','d3','d4','d5'].forEach(function(id,i) {
+    var el = document.getElementById(id);
+    if (el) el.className = 'pin-dot' + (i < n ? (err ? ' error' : ' filled') : '');
+  });
+}
+function pinPress(d) {
+  if (pinBuf.length >= 6) return;
+  pinBuf += String(d);
+  updateDots(pinBuf.length, false);
+  document.getElementById('pin-error').textContent = '';
+  if (pinBuf.length === 6) setTimeout(doPinComplete, 80);
+}
+function pinDel() { pinBuf = pinBuf.slice(0,-1); updateDots(pinBuf.length, false); }
+function doPinComplete() {
+  hashPin(pinBuf).then(function(hash) {
+    var stored = localStorage.getItem(PIN_KEY);
+    if (pinMode === 'set') {
+      pinTmp = pinBuf; pinBuf = ''; updateDots(0,false);
+      setT('pin-sub', '請再輸入一次確認');
+      pinMode = 'confirm';
+    } else if (pinMode === 'confirm') {
+      if (pinBuf === pinTmp) {
+        hashPin(pinBuf).then(function(h2) { localStorage.setItem(PIN_KEY,h2); pinBuf=''; pinTmp=''; unlockApp(); });
+      } else {
+        showPinErr('不一致，請重設');
+        setTimeout(function(){pinBuf='';pinTmp='';updateDots(0,false);pinMode='set';setT('pin-sub','請設定 6 位數 PIN 碼');},900);
+      }
+    } else if (pinMode === 'verify') {
+      if (hash === stored) { pinBuf=''; updateDots(0,false); unlockApp(); }
+      else { showPinErr('PIN 碼錯誤'); setTimeout(function(){pinBuf='';updateDots(0,false);},900); }
+    } else if (pinMode === 'ch_old') {
+      if (hash === stored) { pinBuf=''; pinMode='ch_new'; updateDots(0,false); setT('pin-sub','新 PIN 碼'); }
+      else { showPinErr('PIN 碼錯誤'); setTimeout(function(){pinBuf='';updateDots(0,false);},900); }
+    } else if (pinMode === 'ch_new') {
+      pinTmp=pinBuf; pinBuf=''; pinMode='ch_confirm'; updateDots(0,false); setT('pin-sub','再輸入一次');
+    } else if (pinMode === 'ch_confirm') {
+      if (pinBuf === pinTmp) {
+        hashPin(pinBuf).then(function(h2){ localStorage.setItem(PIN_KEY,h2); pinBuf=''; pinTmp=''; showScreen('settings'); alert('PIN 已更新'); });
+      } else {
+        showPinErr('不一致');
+        setTimeout(function(){pinBuf='';pinTmp='';updateDots(0,false);pinMode='ch_new';setT('pin-sub','新 PIN 碼');},900);
+      }
+    }
+  });
+}
+function showPinErr(msg) { updateDots(6,true); document.getElementById('pin-error').textContent = msg; }
+function setT(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; }
+function unlockApp() {
+  // 暫存 PIN 用於加密（記憶體中，不寫 localStorage）
+  localStorage.setItem(PIN_KEY + '_raw', pinBuf);
+  cards = loadCards();
+  showScreen('list');
+  renderList();
+  // 背景拉取雲端資料
+  var currentPin = pinBuf;
+  setTimeout(function() {
+    pullAndDecryptCards(currentPin).then(function(cloudCards) {
+      if (cloudCards) { cards = cloudCards; renderList(); }
+    });
+  }, 1500);
+}
+function changePIN() {
+  pinBuf=''; pinTmp=''; pinMode='ch_old';
+  setT('pin-sub','目前 PIN 碼');
+  document.getElementById('pin-error').textContent = '';
+  updateDots(0,false); showScreen('pin');
+}
+function pinForget() {
+  if (!confirm('確定清除所有資料？')) return;
+  localStorage.removeItem(DB_KEY); localStorage.removeItem(PIN_KEY); location.reload();
+}
+
+// Nav
+function showScreen(name) {
+  var all = document.querySelectorAll('.screen');
+  for (var i=0;i<all.length;i++) all[i].classList.remove('active');
+  var el = document.getElementById('screen-'+name);
+  if (el) el.classList.add('active');
+}
+function confirmClearAll() {
+  if (!confirm('確定清除？')) return;
+  cards=[]; saveCards(cards); renderList(); showScreen('list');
+}
+
+// Helpers
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtNum(n) {
+  if (!n) return '---- ---- ---- ----';
+  var s = n.replace(/(.{4})/g,'$1 ').trim();
+  return s;
+}
+var NETS = { VISA:'VISA', Mastercard:'MC', JCB:'JCB', AE:'AMEX', UnionPay:'UP' };
+var NET_CLS = { VISA:'badge-VISA', Mastercard:'badge-Mastercard', JCB:'badge-JCB', AE:'badge-AE', UnionPay:'badge-UnionPay' };
+function netBadge(n) {
+  if (!n || !NETS[n]) return esc(n||'');
+  return '<span class="network-badge '+NET_CLS[n]+'">'+(NETS[n]||n)+'</span>';
+}
+
+// LIST
+function renderList() {
+  var area = document.getElementById('card-list-area');
+  var cnt = document.getElementById('list-count');
+  if (cnt) cnt.textContent = cards.length===0 ? '' : cards.length+' 張卡片';
+  if (!area) return;
+  if (cards.length === 0) {
+    area.innerHTML = '<div class="empty-state"><div style="font-size:48px;margin-bottom:16px">&#x1F4B3;</div>'+
+      '<div class="empty-text">尚無信用卡資料</div>'+
+      '<div class="empty-sub">點右下角 + 新增</div></div>';
+    return;
+  }
+  var h = '<div class="thumb-grid">';
+  cards.forEach(function(c) {
+    var imgHtml = c.frontPhoto
+      ? '<img class="thumb-img" src="'+c.frontPhoto+'">'
+      : '<div class="thumb-img-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>';
+    h += '<div class="thumb-card" data-id="'+c.id+'" onclick="thumbClick(this)">'+
+      imgHtml+
+      '<div class="thumb-info">'+
+        '<div class="thumb-name">'+esc(c.cardName||c.issuer||'信用卡')+'</div>'+
+        '<div class="thumb-network">'+esc(c.issuer||'')+(c.network?' &bull; '+esc(c.network):'')+'</div>'+
+      '</div></div>';
+  });
+  h += '</div>';
+  area.innerHTML = h;
+}
+
+// DETAIL
+function thumbClick(el) { showDetail(el.getAttribute('data-id')); }
+function showDetail(id) {
+  curId = id;
+  var c = cards.filter(function(x){return x.id===id;})[0];
+  if (!c) return;
+  var h = '';
+  // Fields first
+  h += mkField('卡號', fmtNum(c.cardNumber), true, c.cardNumber);
+  h += mkField('有效期限', c.expiry, true, c.expiry);
+  h += mkField('CVV', c.cvv ? c.cvv.replace(/./g,'&#x25CF;') : '', true, c.cvv, true);
+  h += mkField('發卡行', c.issuer, false);
+  h += mkField('卡片名稱', c.cardName, false);
+  h += mkField('卡片類別', c.network, false);
+  h += mkField('持卡人', c.cardholderName, false);
+  if (c.notes) h += mkField('備註', c.notes, false);
+  // Photos side by side at bottom
+  if (c.frontPhoto || c.backPhoto) {
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">';
+    h += '<div>';
+    if (c.frontPhoto) {
+      h += '<div class="detail-photo"><img src="'+c.frontPhoto+'"></div>'+
+           '<div class="detail-photo-label">正面</div>';
+    }
+    h += '</div><div>';
+    if (c.backPhoto) {
+      h += '<div class="detail-photo"><img src="'+c.backPhoto+'"></div>'+
+           '<div class="detail-photo-label">背面</div>';
+    }
+    h += '</div></div>';
+  }
+  // Action bar
+  h += '<div class="action-bar">'+
+    '<button class="btn-icon" onclick="openEdit()">&#9998; &#32232;&#36655;</button>'+
+    '<button class="btn-icon btn-danger" onclick="deleteCard(\'' + c.id + '\')">&#128465; &#21024;&#38500;</button>'+
+  '</div>';
+  document.getElementById('detail-area').innerHTML = h;
+  window._curCard = c;
+  showScreen('detail');
+}
+function mkField(label, val, hasCopy, rawVal, isCVV) {
+  if (!val && val !== 0) return '';
+  var copyBtn = hasCopy
+    ? '<button class="copy-btn" data-copy="'+esc(rawVal||val)+'" onclick="copyBtn(this)">&#x2398; &#35079;&#35069;</button>'
+    : '';
+  var showToggle = isCVV
+    ? '<button class="copy-btn" id="cvv-toggle" onclick="toggleCVV()" style="margin-right:4px">顯示</button>'
+    : '';
+  return '<div class="detail-field">'+
+    '<div class="detail-field-label">'+label+'</div>'+
+    '<div class="detail-field-row">'+
+      '<span class="detail-field-val" id="fval-'+label.replace(/[^\w]/g,'_')+'">'+val+'</span>'+
+      '<div style="display:flex;gap:4px">'+showToggle+copyBtn+'</div>'+
+    '</div></div>';
+}
+function copyBtn(btn) { copyVal(btn, btn.getAttribute('data-copy')); }
+function copyVal(btn, val) {
+  navigator.clipboard.writeText(val).then(function(){
+    var orig = btn.innerHTML;
+    btn.innerHTML = '&#x2713; &#24050;&#35079;&#35069;';
+    btn.classList.add('copied');
+    setTimeout(function(){ btn.innerHTML = orig; btn.classList.remove('copied'); }, 1500);
+  }).catch(function(){ alert('複製失敗'); });
+}
+function toggleCVV() {
+  var c = window._curCard;
+  var el = document.getElementById('fval-CVV');
+  var btn = document.getElementById('cvv-toggle');
+  if (!el || !c) return;
+  if (el.innerHTML.indexOf('&#x25CF;') >= 0 || el.textContent.indexOf('●') >= 0) {
+    el.textContent = c.cvv;
+    if (btn) btn.textContent = '隱藏';
+  } else {
+    el.innerHTML = c.cvv ? c.cvv.replace(/./g,'&#x25CF;') : '';
+    if (btn) btn.textContent = '顯示';
+  }
+}
+function delBtn(el) { deleteCard(el.getAttribute('data-del')); }
+function deleteCard(id) {
+  if (!confirm('確定刪除？')) return;
+  cards = cards.filter(function(c){return c.id!==id;});
+  saveCards(cards); renderList(); showScreen('list');
+}
+
+// ADD / EDIT
+function openAdd() {
+  editingId = null; frontDataURL = null; backDataURL = null;
+  setT('edit-title', '新增信用卡');
+  buildEditForm(null);
+  showScreen('edit');
+}
+function openEdit() {
+  var c = cards.filter(function(x){return x.id===curId;})[0];
+  if (!c) return;
+  editingId = curId;
+  frontDataURL = c.frontPhoto || null;
+  backDataURL = c.backPhoto || null;
+  setT('edit-title', '編輯卡片');
+  buildEditForm(c);
+  showScreen('edit');
+}
+function cancelEdit() {
+  if (editingId) showDetail(editingId);
+  else showScreen('list');
+}
+
+function buildEditForm(c) {
+  var nets = ['VISA','Mastercard','JCB','AE','UnionPay'];
+  var opts = nets.map(function(n,i){
+    return '<option value="'+n+'"'+((c&&c.network===n)||(!c&&i===0)?' selected':'')+'>'+n+'</option>';
+  }).join('');
+  var fPlaceholder = frontDataURL
+    ? '<img src="'+frontDataURL+'">'
+    : '<div class="upload-slot-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div><div class="upload-slot-label">正面</div>';
+  var bPlaceholder = backDataURL
+    ? '<img src="'+backDataURL+'">'
+    : '<div class="upload-slot-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div><div class="upload-slot-label">背面</div>';
+
+  document.getElementById('edit-area').innerHTML =
+    '<div class="upload-pair">'+
+      '<div class="upload-slot'+(frontDataURL?' has-img':'')+'" id="slot-front" onclick="triggerUp(this)" data-side="front">'+fPlaceholder+'</div>'+
+      '<div class="upload-slot'+(backDataURL?' has-img':'')+'" id="slot-back" onclick="triggerUp(this)" data-side="back">'+bPlaceholder+'</div>'+
+    '</div>'+
+    '<input type="file" id="f-front" accept="image/*" style="display:none">'+
+    '<input type="file" id="f-back" accept="image/*" style="display:none">'+
+    '<div class="form-group"><label class="form-label">發卡行</label>'+
+      '<input type="text" id="fi" value="'+esc(c&&c.issuer||'')+'" placeholder="例：玉山銀行"></div>'+
+    '<div class="form-group"><label class="form-label">卡片名稱</label>'+
+      '<input type="text" id="fn" value="'+esc(c&&c.cardName||'')+'" placeholder="例：ESUN 現金回饵卡"></div>'+
+    '<div class="form-group"><label class="form-label">卡片類別</label>'+
+      '<select id="fnet">'+opts+'</select></div>'+
+    '<div class="form-group"><label class="form-label">卡號</label>'+
+      '<input type="text" id="fnum" value="'+esc(c&&c.cardNumber||'')+'" placeholder="1234567890123456" maxlength="19" oninput="fmtCard(this)"></div>'+
+    '<div class="form-row">'+
+      '<div class="form-group"><label class="form-label">持卡人英文姓名</label>'+
+        '<input type="text" id="fh" value="'+esc(c&&c.cardholderName||'')+'" placeholder="JOHN DOE" style="text-transform:uppercase"></div>'+
+      '<div class="form-group"><label class="form-label">有效期限</label>'+
+        '<input type="text" id="fe" value="'+esc(c&&c.expiry||'')+'" placeholder="MM/YY" maxlength="5" oninput="fmtExp(this)"></div>'+
+    '</div>'+
+    '<div class="form-group"><label class="form-label">CVV</label>'+
+      '<input type="password" id="fc" value="'+esc(c&&c.cvv||'')+'" placeholder="3 或 4 位數" maxlength="4"></div>'+
+    '<div class="form-group"><label class="form-label">備註</label>'+
+      '<input type="text" id="fno" value="'+esc(c&&c.notes||'')+'" placeholder="選填"></div>'+
+    (editingId ? '<button class="btn-danger" id="edit-del-btn">刪除此卡片</button>' : '');
+  // Attach file input event listeners after innerHTML is set
+  setTimeout(function() {
+    var ff = document.getElementById('f-front');
+    var fb = document.getElementById('f-back');
+    if (ff) ff.addEventListener('change', function(e){ onFile(e,'front'); });
+    if (fb) fb.addEventListener('change', function(e){ onFile(e,'back'); });
+    var db = document.getElementById('edit-del-btn');
+    if (db && editingId) db.addEventListener('click', function(){ deleteCard(editingId); });
+  }, 0);
+}
+
+function triggerUp(slot) {
+  var side = slot.getAttribute ? slot.getAttribute('data-side') : slot;
+  var el = document.getElementById('f-'+side);
+  if (el) el.click();
+}
+function onFile(e, side) {
+  var file = e.target.files[0];
+  if (!file) return;
+  var r = new FileReader();
+  r.onload = function(ev) {
+    var url = ev.target.result;
+    if (side === 'front') { frontDataURL = url; }
+    else { backDataURL = url; }
+    var slot = document.getElementById('slot-'+side);
+    if (slot) {
+      slot.innerHTML = '<img src="'+url+'">';
+      slot.classList.add('has-img');
+    }
+  };
+  r.readAsDataURL(file);
+}
+function fmtCard(el) {
+  var v = el.value.replace(/[^0-9]/g,'').slice(0,16);
+  el.value = v.replace(/(.{4})/g,'$1 ').trim();
+}
+function fmtExp(el) {
+  var v = el.value.replace(/[^0-9]/g,'');
+  el.value = v.length > 2 ? v.slice(0,2)+'/'+v.slice(2,4) : v;
+}
+function g(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function saveCard() {
+  var card = {
+    id: editingId || String(Date.now()),
+    frontPhoto: frontDataURL,
+    backPhoto: backDataURL,
+    issuer: g('fi'),
+    cardName: g('fn'),
+    network: (document.getElementById('fnet')||{value:''}).value,
+    cardNumber: g('fnum').replace(/\s/g,''),
+    cardholderName: g('fh').toUpperCase(),
+    expiry: g('fe'),
+    cvv: g('fc'),
+    notes: g('fno'),
+    updatedAt: new Date().toISOString()
+  };
+  if (editingId) {
+    cards = cards.map(function(c){ return c.id===editingId ? card : c; });
+  } else {
+    cards.push(card);
+  }
+  saveCards(cards);
+  curId = card.id;
+  renderList();
+  showDetail(card.id);
+}
+
+// Init
+
+// ══════════════ 雲端同步模組 ══════════════
+var SYNC_GAS_URL = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
+var SYNC_PENDING_KEY = 'sync_pending';
+
+async function deriveKey(pin, salt) {
+  var enc = new TextEncoder();
+  var km = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 100000, hash: 'SHA-256' },
+    km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptField(plain, key) {
+  if (plain == null || plain === '') return '';
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key,
+    new TextEncoder().encode(String(plain)));
+  var buf = new Uint8Array(12 + ct.byteLength);
+  buf.set(iv); buf.set(new Uint8Array(ct), 12);
+  return btoa(String.fromCharCode.apply(null, buf));
+}
+
+async function decryptField(cipher, key) {
+  if (!cipher) return '';
+  try {
+    var buf = Uint8Array.from(atob(cipher), function(c){ return c.charCodeAt(0); });
+    var dec = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: buf.slice(0,12) }, key, buf.slice(12));
+    return new TextDecoder().decode(dec);
+  } catch(e) { return ''; }
+}
+
+async function syncRead(sheetName) {
+  try {
+    var res = await fetch(SYNC_GAS_URL, {
+      method: 'POST', body: JSON.stringify({ action: 'sync_read', sheet: sheetName })
+    });
+    return await res.json();
+  } catch(e) { return { error: e.message }; }
+}
+
+async function syncWrite(sheetName, dataJson, updatedAt) {
+  try {
+    var res = await fetch(SYNC_GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'sync_write', sheet: sheetName, data: dataJson, updatedAt: updatedAt })
+    });
+    var r = await res.json();
+    if (r.stat === 'CONFLICT') {
+      // 雲端較新，更新本機
+      return { conflict: true, cloudData: r.data, cloudUpdatedAt: r.updatedAt };
+    }
+    // 成功：清除 pending
+    var pending = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
+    delete pending[sheetName];
+    localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(pending));
+    return r;
+  } catch(e) {
+    var pending = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
+    pending[sheetName] = { data: dataJson, updatedAt: updatedAt };
+    localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(pending));
+    return { error: e.message, pending: true };
+  }
+}
+
+async function flushPendingSync() {
+  var pending = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
+  var sheets = Object.keys(pending);
+  for (var i = 0; i < sheets.length; i++) {
+    var s = sheets[i];
+    var r = await syncWrite(s, pending[s].data, pending[s].updatedAt);
+    if (r && !r.error) {
+      var p2 = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
+      delete p2[s];
+      localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(p2));
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(flushPendingSync, 3000);
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  var stored = localStorage.getItem(PIN_KEY);
+  if (!stored) {
+    pinMode = 'set';
+    setT('pin-title', '設定 PIN 碼');
+    setT('pin-sub', '首次使用，請設定 6 位數 PIN 碼');
+  } else {
+    var fb = document.getElementById('pin-forget-btn');
+    if (fb) fb.style.display = 'block';
+  }
+});
+
+window.pinPress=pinPress; window.pinDel=pinDel; window.pinForget=pinForget;
+window.showScreen=showScreen; window.openAdd=openAdd; window.openEdit=openEdit;
+window.cancelEdit=cancelEdit; window.showDetail=showDetail; window.deleteCard=deleteCard;
+window.saveCard=saveCard; window.copyVal=copyVal; window.toggleCVV=toggleCVV;
+window.triggerUp=triggerUp; window.onFile=onFile; window.fmtCard=fmtCard; window.fmtExp=fmtExp;
+window.confirmClearAll=confirmClearAll; window.changePIN=changePIN;
+window.thumbClick=thumbClick; window.delBtn=delBtn; window.copyBtn=copyBtn;
+})();
+</script>
+</body>
+</html>
