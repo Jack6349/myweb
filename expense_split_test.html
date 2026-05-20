@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>費用分攤原型</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0f1923;color:#f0e6d3;font-family:system-ui,sans-serif;padding:12px;max-width:420px;margin:0 auto;}
+input,select,button{font-family:inherit;}
+.card{background:#1e2d3d;border-radius:14px;padding:14px;margin-bottom:10px;}
+.sec{font-size:12px;font-weight:700;color:#c8b89a;letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px;}
+.amount-row{display:flex;gap:8px;}
+.amount-row input{flex:1;background:#162030;border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#f0e6d3;font-size:20px;font-weight:700;padding:10px 14px;outline:none;}
+.amount-row select{background:#162030;border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#f0e6d3;font-size:13px;padding:0 10px;outline:none;width:75px;}
+.payer-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.payer-chip{padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid transparent;transition:.15s;user-select:none;}
+.mode-row{display:flex;gap:8px;margin-top:8px;}
+.mode-btn{flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid rgba(255,255,255,.15);background:#162030;color:#c8b89a;transition:.15s;}
+.mode-btn.sel{border-color:#e8b84b;color:#e8b84b;background:rgba(232,184,75,.1);}
+.heads{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.head{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;transition:.15s;flex:1;min-width:60px;user-select:none;}
+.head-av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid transparent;transition:all .2s;}
+.head-name{font-size:11px;font-weight:600;}
+.head-amt{font-size:11px;font-weight:700;}
+.head.target-active .head-av{box-shadow:0 0 0 4px rgba(232,184,75,.5);border-color:#e8b84b;}
+.blocks-area{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.block{width:74px;height:72px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;border:2px solid rgba(255,255,255,.12);background:#162030;position:relative;user-select:none;}
+.block:active{transform:scale(.95);}
+.block.selected{transform:scale(1.08);box-shadow:0 0 0 3px #e8b84b;}
+.b-name{font-size:11px;font-weight:700;margin-bottom:2px;}
+.b-amt{font-size:10px;}
+.b-rem{font-size:9px;margin-top:2px;}
+.b-done{position:absolute;top:3px;right:5px;font-size:11px;color:#7bed9f;}
+.popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center;z-index:999;}
+.popup{background:#1e2d3d;border-radius:18px 18px 0 0;width:100%;max-width:420px;padding:18px 16px 28px;}
+.popup-title{font-size:15px;font-weight:700;color:#e0d4c0;margin-bottom:4px;}
+.popup-sub{font-size:12px;color:#c8b89a;margin-bottom:14px;}
+.ratio-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.ratio-btn{padding:11px 4px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid rgba(255,255,255,.15);background:#162030;color:#f0e6d3;text-align:center;transition:.1s;}
+.ratio-btn:active{background:#243447;}
+.custom-row{display:flex;gap:8px;margin-bottom:8px;}
+.custom-row input{flex:1;background:#162030;border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#f0e6d3;font-size:16px;padding:9px 12px;outline:none;}
+.apply-btn{padding:9px 14px;border-radius:8px;background:rgba(232,184,75,.15);border:1.5px solid #e8b84b;color:#e8b84b;font-size:13px;font-weight:700;cursor:pointer;}
+.warn-msg{font-size:11px;color:#ff6b6b;min-height:16px;margin-bottom:8px;}
+.cancel-btn{width:100%;padding:10px;border-radius:8px;background:none;border:1px solid rgba(255,255,255,.15);color:#c8b89a;font-size:13px;font-weight:600;cursor:pointer;}
+.sum-rows{display:flex;flex-direction:column;gap:5px;}
+.sum-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#162030;border-radius:8px;}
+.sum-left{display:flex;align-items:center;gap:8px;}
+.sum-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+.sum-nm{font-size:13px;font-weight:600;}
+.sum-detail{font-size:10px;color:#c8b89a;margin-top:1px;}
+.sum-amt{font-size:14px;font-weight:700;}
+.total-row{display:flex;justify-content:space-between;padding:8px 10px 0;margin-top:6px;border-top:1px solid rgba(255,255,255,.1);font-size:14px;font-weight:700;}
+.tip{font-size:11px;line-height:1.6;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:rgba(232,184,75,.08);border:1px solid rgba(232,184,75,.2);}
+.reset-btn{margin-top:10px;width:100%;padding:8px;border-radius:8px;background:none;border:1px solid rgba(255,255,255,.12);color:#c8b89a;font-size:12px;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="sec">費用金額</div>
+  <div class="amount-row">
+    <input type="number" id="amt" value="50000" oninput="onAmtChange()">
+    <select id="cur" onchange="render()">
+      <option value="JPY">JPY</option>
+      <option value="TWD">TWD</option>
+      <option value="USD">USD</option>
+    </select>
+  </div>
+  <div class="sec" style="margin-top:12px">付款人</div>
+  <div class="payer-row" id="payer-row"></div>
+  <div class="sec" style="margin-top:12px">分攤方式</div>
+  <div class="mode-row">
+    <button class="mode-btn" id="m-avg" onclick="setMode('avg')">平均分攤</button>
+    <button class="mode-btn sel" id="m-custom" onclick="setMode('custom')">自訂分攤</button>
+  </div>
+</div>
+
+<div id="custom-area" class="card">
+  <div class="sec">積木分配</div>
+  <div class="tip" id="tip-text">點任一積木選取，再點上方頭像分配金額。</div>
+  <div class="heads" id="heads"></div>
+  <div class="blocks-area" id="blocks-area"></div>
+  <button class="reset-btn" onclick="resetBlocks()">↺ 重置分配</button>
+</div>
+
+<div class="card">
+  <div class="sec">結算明細</div>
+  <div class="sum-rows" id="sum-rows"></div>
+</div>
+
+<div id="popup-container"></div>
+
+<script>
+const MEMBERS=[
+  {id:'jack',  name:'Jack', color:'#6ec6f0', bg:'#1a3a50', text:'#9dd4f0'},
+  {id:'sister',name:'妹妹',  color:'#7bed9f', bg:'#1a3d28', text:'#a0e8b8'},
+  {id:'bro',   name:'妹夫',  color:'#e8b84b', bg:'#3d2e10', text:'#f5d47a'},
+  {id:'mom',   name:'媽媽',  color:'#ff9f9f', bg:'#3d1a1a', text:'#ffbbbb'},
+];
+const gm=id=>MEMBERS.find(m=>m.id===id);
+
+// State
+let payerId='jack';
+let mode='custom';
+let selectedBlockId=null;
+// blocks[mid] = { slices:[{pid,amt,locked}], totalAmt }
+let blocks={};
+
+function getTotal(){return parseInt(document.getElementById('amt').value)||0;}
+function getCur(){return document.getElementById('cur').value;}
+
+function initBlocks(){
+  const total=getTotal();
+  const perPerson=total/MEMBERS.length;
+  blocks={};
+  MEMBERS.forEach((m,i)=>{
+    const amt=i===0?total-Math.round(perPerson)*(MEMBERS.length-1):Math.round(perPerson);
+    blocks[m.id]={
+      totalAmt: i===0?total-Math.round(perPerson)*(MEMBERS.length-1):Math.round(perPerson),
+      slices:[]
+    };
+  });
+  // Default: each person owns their own block
+  MEMBERS.forEach(m=>{
+    blocks[m.id].slices=[{pid:m.id, amt:blocks[m.id].totalAmt, locked:false}];
+  });
+}
+
+function resetBlocks(){
+  selectedBlockId=null;
+  initBlocks();
+  render();
+}
+
+function blockUsed(mid){
+  return blocks[mid].slices.reduce((s,sl)=>s+sl.amt,0);
+}
+function blockRemaining(mid){
+  return blocks[mid].totalAmt - blockUsed(mid);
+}
+function payerTotal(pid){
+  let sum=0;
+  MEMBERS.forEach(m=>{
+    (blocks[m.id].slices||[]).forEach(sl=>{if(sl.pid===pid)sum+=sl.amt;});
+  });
+  return sum;
+}
+
+function fmt(n){
+  const cur=getCur();
+  n=Math.round(n);
+  if(cur==='JPY')return'¥'+n.toLocaleString();
+  if(cur==='TWD')return'NT$'+n.toLocaleString();
+  return'$'+n.toLocaleString();
+}
+
+function setMode(m){
+  mode=m;
+  document.getElementById('m-avg').classList.toggle('sel',m==='avg');
+  document.getElementById('m-custom').classList.toggle('sel',m==='custom');
+  document.getElementById('custom-area').style.display=m==='custom'?'block':'none';
+  selectedBlockId=null;
+  initBlocks();
+  render();
+}
+
+function setPayerId(pid){
+  payerId=pid;
+  selectedBlockId=null;
+  initBlocks();
+  render();
+}
+
+function onAmtChange(){
+  selectedBlockId=null;
+  initBlocks();
+  render();
+}
+
+function onBlockClick(mid){
+  const rem=blockRemaining(mid);
+  if(rem<=0){
+    // Already fully assigned - deselect
+    selectedBlockId=null;
+  } else {
+    selectedBlockId=selectedBlockId===mid?null:mid;
+  }
+  render();
+}
+
+function onHeadClick(pid){
+  if(!selectedBlockId){return;}
+  const mid=selectedBlockId;
+  const rem=blockRemaining(mid);
+  if(rem<=0){selectedBlockId=null;render();return;}
+  // Don't allow assigning to the block's own owner again if already has slice
+  showPopup(mid,pid,rem);
+}
+
+function showPopup(mid,targetPid,remaining){
+  const bm=gm(mid), tm=gm(targetPid);
+  const RATIOS=[
+    {label:'全部',  ratio:1},
+    {label:'½',    ratio:0.5},
+    {label:'⅓',    ratio:1/3},
+    {label:'¼',    ratio:0.25},
+    {label:'⅔',    ratio:2/3},
+    {label:'¾',    ratio:0.75},
+  ];
+
+  const overlay=document.createElement('div');
+  overlay.className='popup-overlay';
+  overlay.onclick=function(e){if(e.target===overlay)closePopup();};
+
+  const box=document.createElement('div');
+  box.className='popup';
+
+  box.innerHTML=`
+    <div class="popup-title">${bm.name} 的份額 → <span style="color:${tm.color}">${tm.name}</span></div>
+    <div class="popup-sub">可分配：${fmt(remaining)}（積木總額 ${fmt(blocks[mid].totalAmt)}）</div>
+    <div class="ratio-grid" id="pg-ratios"></div>
+    <div class="custom-row">
+      <input type="number" id="pg-custom" placeholder="自訂金額" inputmode="numeric" oninput="checkCustom(${remaining})">
+      <button class="apply-btn" onclick="applyCustomAmt('${mid}','${targetPid}',${remaining})">確定</button>
+    </div>
+    <div class="warn-msg" id="pg-warn"></div>
+    <button class="cancel-btn" onclick="closePopup()">取消</button>
+  `;
+
+  const grid=box.querySelector('#pg-ratios');
+  RATIOS.forEach(r=>{
+    const amt=Math.round(remaining*r.ratio);
+    const btn=document.createElement('button');
+    btn.className='ratio-btn';
+    btn.innerHTML=`<div style="font-size:16px">${r.label}</div><div style="font-size:11px;color:#c8b89a;margin-top:3px">${fmt(amt)}</div>`;
+    btn.onclick=()=>applyRatio(mid,targetPid,amt,remaining);
+    grid.appendChild(btn);
+  });
+
+  overlay.appendChild(box);
+  document.getElementById('popup-container').innerHTML='';
+  document.getElementById('popup-container').appendChild(overlay);
+}
+
+function checkCustom(remaining){
+  const v=parseInt(document.getElementById('pg-custom').value)||0;
+  const w=document.getElementById('pg-warn');
+  if(w)w.textContent=v>remaining?`超過可分配金額 ${fmt(remaining)}`:'';
+}
+
+function applyRatio(mid,pid,amt,remaining){
+  // Remove existing unassigned slice for this owner if assigning to someone else
+  if(pid!==mid){
+    blocks[mid].slices=blocks[mid].slices.filter(sl=>!(sl.pid===mid&&!sl.locked));
+  }
+  blocks[mid].slices.push({pid,amt,locked:false});
+  closePopup();
+  const newRem=blockRemaining(mid);
+  if(newRem<=0)selectedBlockId=null;
+  render();
+}
+
+function applyCustomAmt(mid,pid,remaining){
+  const v=parseInt(document.getElementById('pg-custom').value)||0;
+  if(v<=0){document.getElementById('pg-warn').textContent='請輸入金額';return;}
+  if(v>remaining){document.getElementById('pg-warn').textContent=`超過可分配金額 ${fmt(remaining)}`;return;}
+  if(pid!==mid){
+    blocks[mid].slices=blocks[mid].slices.filter(sl=>!(sl.pid===mid&&!sl.locked));
+  }
+  blocks[mid].slices.push({pid,amt:v,locked:true});
+  closePopup();
+  const newRem=blockRemaining(mid);
+  if(newRem<=0)selectedBlockId=null;
+  render();
+}
+
+function closePopup(){
+  document.getElementById('popup-container').innerHTML='';
+}
+
+function render(){
+  const total=getTotal();
+
+  // Payer chips
+  document.getElementById('payer-row').innerHTML=MEMBERS.map(m=>
+    `<div class="payer-chip" onclick="setPayerId('${m.id}')" style="background:${m.id===payerId?m.bg:'#162030'};color:${m.id===payerId?m.color:'#c8b89a'};border-color:${m.id===payerId?m.color:'transparent'}">${m.name}</div>`
+  ).join('');
+
+  if(mode==='avg'){renderSummary();return;}
+
+  // Heads
+  document.getElementById('heads').innerHTML=MEMBERS.map(m=>{
+    const amt=payerTotal(m.id);
+    const isTarget=selectedBlockId&&selectedBlockId!==m.id;
+    return `<div class="head${isTarget?' target-active':''}" onclick="onHeadClick('${m.id}')">
+      <div class="head-av" style="background:${m.bg};color:${m.color};border-color:${amt>0?m.color:'transparent'}">${m.name[0]}</div>
+      <div class="head-name" style="color:${m.color}">${m.name}</div>
+      <div class="head-amt" style="color:${amt>0?m.color:'#5a7390'}">${amt>0?fmt(amt):'—'}</div>
+    </div>`;
+  }).join('');
+
+  // Blocks
+  const ba=document.getElementById('blocks-area');
+  ba.innerHTML='';
+  MEMBERS.forEach(m=>{
+    const b=blocks[m.id];
+    const rem=blockRemaining(m.id);
+    const isSel=selectedBlockId===m.id;
+    const isDone=rem<=0;
+
+    // Determine display color from dominant slice
+    let dispM=m;
+    if(b.slices.length>0){
+      // Show color of first non-owner slice if exists
+      const ext=b.slices.find(sl=>sl.pid!==m.id);
+      if(ext)dispM=gm(ext.pid)||m;
+    }
+
+    const d=document.createElement('div');
+    d.className='block'+(isSel?' selected':'');
+    d.style.background=isSel?'rgba(232,184,75,.15)':dispM.bg;
+    d.style.borderColor=isSel?'#e8b84b':isDone?dispM.color:'rgba(255,255,255,.12)';
+
+    d.innerHTML=`
+      <div class="b-name" style="color:${m.color}">${m.name}</div>
+      <div class="b-amt" style="color:${m.text}">${fmt(b.totalAmt)}</div>
+      ${rem>0&&rem<b.totalAmt?`<div class="b-rem" style="color:#e8b84b">剩 ${fmt(rem)}</div>`:''}
+      ${isDone?`<div class="b-done">✓</div>`:''}
+    `;
+    d.onclick=()=>onBlockClick(m.id);
+    ba.appendChild(d);
+  });
+
+  // Tip
+  const tip=document.getElementById('tip-text');
+  if(selectedBlockId){
+    const bm=gm(selectedBlockId);
+    const rem=blockRemaining(selectedBlockId);
+    tip.innerHTML=`已選取 <strong style="color:${bm.color}">${bm.name}</strong> 積木（剩餘 <strong style="color:#e8b84b">${fmt(rem)}</strong>）→ 點上方頭像分配給誰`;
+    tip.style.background='rgba(232,184,75,.12)';
+  } else {
+    tip.textContent='點任一積木選取（發光），再點頭像選擇由誰負擔。';
+    tip.style.background='rgba(232,184,75,.08)';
+  }
+
+  renderSummary();
+}
+
+function renderSummary(){
+  const total=getTotal();
+  let html='';
+  let grandTotal=0;
+
+  if(mode==='avg'){
+    MEMBERS.forEach((m,i)=>{
+      const perP=Math.round(total/MEMBERS.length);
+      const amt=i===0?total-(MEMBERS.length-1)*perP:perP;
+      grandTotal+=amt;
+      html+=`<div class="sum-row">
+        <div class="sum-left">
+          <div class="sum-av" style="background:${m.bg};color:${m.color}">${m.name[0]}</div>
+          <div class="sum-nm">${m.name}</div>
+        </div>
+        <div class="sum-amt" style="color:${m.color}">${fmt(amt)}</div>
+      </div>`;
+    });
+  } else {
+    MEMBERS.forEach(m=>{
+      const amt=payerTotal(m.id);
+      if(amt===0)return;
+      grandTotal+=amt;
+      const details=[];
+      MEMBERS.forEach(bm=>{
+        (blocks[bm.id].slices||[]).forEach(sl=>{
+          if(sl.pid===m.id){
+            if(bm.id===m.id)details.push(`自己 ${fmt(sl.amt)}`);
+            else details.push(`${bm.name} ${fmt(sl.amt)}`);
+          }
+        });
+      });
+      html+=`<div class="sum-row">
+        <div class="sum-left">
+          <div class="sum-av" style="background:${m.bg};color:${m.color}">${m.name[0]}</div>
+          <div>
+            <div class="sum-nm">${m.name}</div>
+            <div class="sum-detail">${details.join(' · ')}</div>
+          </div>
+        </div>
+        <div class="sum-amt" style="color:${m.color}">${fmt(amt)}</div>
+      </div>`;
+    });
+    const unalloc=MEMBERS.reduce((s,m)=>s+blockRemaining(m.id),0);
+    if(unalloc>0){
+      html+=`<div class="sum-row">
+        <div class="sum-left"><div class="sum-nm" style="color:#ff6b6b">⚠ 未分配</div></div>
+        <div class="sum-amt" style="color:#ff6b6b">${fmt(unalloc)}</div>
+      </div>`;
+    }
+  }
+
+  html+=`<div class="total-row">
+    <span>合計</span>
+    <span style="color:${grandTotal===total?'#7bed9f':'#ff6b6b'}">${fmt(grandTotal)}</span>
+  </div>`;
+  document.getElementById('sum-rows').innerHTML=html;
+}
+
+// Init
+initBlocks();
+render();
+</script>
+</body>
+</html>
