@@ -113,19 +113,22 @@ function getCur(){return document.getElementById('cur').value;}
 
 function initBlocks(){
   const total=getTotal();
-  const perPerson=total/MEMBERS.length;
+  const n=MEMBERS.length;
+  const base=Math.floor(total/n);
+  const rem=total-base*n;
   blocks={};
   MEMBERS.forEach((m,i)=>{
-    const amt=i===0?total-Math.round(perPerson)*(MEMBERS.length-1):Math.round(perPerson);
-    blocks[m.id]={
-      totalAmt: i===0?total-Math.round(perPerson)*(MEMBERS.length-1):Math.round(perPerson),
-      slices:[]
-    };
+    // First member gets remainder to ensure sum equals total
+    const amt=i===0?base+rem:base;
+    blocks[m.id]={totalAmt:amt, slices:[]};
   });
-  // Default: each person owns their own block
-  MEMBERS.forEach(m=>{
-    blocks[m.id].slices=[{pid:m.id, amt:blocks[m.id].totalAmt, locked:false}];
-  });
+  // In custom mode: leave slices empty (unassigned)
+  // In avg mode: auto-assign each block to its owner
+  if(mode==='avg'){
+    MEMBERS.forEach(m=>{
+      blocks[m.id].slices=[{pid:m.id,amt:blocks[m.id].totalAmt,locked:false}];
+    });
+  }
 }
 
 function resetBlocks(){
@@ -328,8 +331,9 @@ function render(){
       <div class="b-amt" style="color:${m.text}">${fmt(b.totalAmt)}</div>
       ${rem>0&&rem<b.totalAmt?`<div class="b-rem" style="color:#e8b84b">剩 ${fmt(rem)}</div>`:''}
       ${isDone?`<div class="b-done">✓</div>`:''}
+      ${rem>0&&b.slices.length===0?`<div class="b-rem" style="color:#c8b89a">未分配</div>`:''}
     `;
-    d.onclick=()=>onBlockClick(m.id);
+    (function(mid){d.addEventListener('click',function(){onBlockClick(mid);});})(m.id);
     ba.appendChild(d);
   });
 
