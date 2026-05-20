@@ -18,13 +18,13 @@ input,select,button{font-family:inherit;}
 .mode-row{display:flex;gap:8px;margin-top:8px;}
 .mode-btn{flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid rgba(255,255,255,.15);background:#162030;color:#c8b89a;transition:.15s;}
 .mode-btn.sel{border-color:#e8b84b;color:#e8b84b;background:rgba(232,184,75,.1);}
-.heads{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
-.head{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;transition:.15s;flex:1;min-width:60px;user-select:none;}
+.heads{display:flex;gap:8px;margin-top:0;flex-wrap:wrap;justify-content:center;}
+.head{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;transition:.15s;width:70px;flex:none;user-select:none;}
 .head-av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid transparent;transition:all .2s;}
 .head-name{font-size:11px;font-weight:600;}
 .head-amt{font-size:11px;font-weight:700;}
 .head.target-active .head-av{box-shadow:0 0 0 4px rgba(232,184,75,.5);border-color:#e8b84b;}
-.blocks-area{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.blocks-area{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:14px;}
 .block{width:74px;height:72px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;border:2px solid rgba(255,255,255,.12);background:#162030;position:relative;user-select:none;}
 .block:active{transform:scale(.95);}
 .block.selected{transform:scale(1.08);box-shadow:0 0 0 3px #e8b84b;}
@@ -52,7 +52,7 @@ input,select,button{font-family:inherit;}
 .sum-detail{font-size:10px;color:#c8b89a;margin-top:1px;}
 .sum-amt{font-size:14px;font-weight:700;}
 .total-row{display:flex;justify-content:space-between;padding:8px 10px 0;margin-top:6px;border-top:1px solid rgba(255,255,255,.1);font-size:14px;font-weight:700;}
-.tip{font-size:11px;line-height:1.6;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:rgba(232,184,75,.08);border:1px solid rgba(232,184,75,.2);}
+.tip{font-size:11px;line-height:1.6;margin-top:10px;margin-bottom:0;padding:8px 10px;border-radius:8px;background:rgba(232,184,75,.08);border:1px solid rgba(232,184,75,.2);}
 .reset-btn{margin-top:10px;width:100%;padding:8px;border-radius:8px;background:none;border:1px solid rgba(255,255,255,.12);color:#c8b89a;font-size:12px;cursor:pointer;}
 </style>
 </head>
@@ -79,9 +79,11 @@ input,select,button{font-family:inherit;}
 
 <div id="custom-area" class="card">
   <div class="sec">費用分配</div>
-  <div class="tip" id="tip-text">點任一費用區塊選取（發光），再點下方成員頭像分配。</div>
-  <div class="heads" id="heads"></div>
   <div class="blocks-area" id="blocks-area"></div>
+  <div style="border-top:1px solid rgba(255,255,255,.1);margin:4px 0 12px;"></div>
+  <div style="font-size:11px;font-weight:700;color:#c8b89a;letter-spacing:.5px;margin-bottom:8px;">由誰負擔</div>
+  <div class="heads" id="heads"></div>
+  <div class="tip" id="tip-text">點任一費用區塊選取（發光），再點上方成員頭像分配。</div>
   <button class="reset-btn" onclick="resetBlocks()">↺ 重置分配</button>
 </div>
 
