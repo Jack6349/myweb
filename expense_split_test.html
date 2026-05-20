@@ -78,8 +78,8 @@ input,select,button{font-family:inherit;}
 </div>
 
 <div id="custom-area" class="card">
-  <div class="sec">積木分配</div>
-  <div class="tip" id="tip-text">點任一積木選取，再點上方頭像分配金額。</div>
+  <div class="sec">費用分配</div>
+  <div class="tip" id="tip-text">點任一費用區塊選取（發光），再點下方成員頭像分配。</div>
   <div class="heads" id="heads"></div>
   <div class="blocks-area" id="blocks-area"></div>
   <button class="reset-btn" onclick="resetBlocks()">↺ 重置分配</button>
@@ -222,7 +222,7 @@ function showPopup(mid,targetPid,remaining){
 
   box.innerHTML=`
     <div class="popup-title">${bm.name} 的份額 → <span style="color:${tm.color}">${tm.name}</span></div>
-    <div class="popup-sub">可分配：${fmt(remaining)}（積木總額 ${fmt(blocks[mid].totalAmt)}）</div>
+    <div class="popup-sub">可分配：${fmt(remaining)}（區塊總額 ${fmt(blocks[mid].totalAmt)}）</div>
     <div class="ratio-grid" id="pg-ratios"></div>
     <div class="custom-row">
       <input type="number" id="pg-custom" placeholder="自訂金額" inputmode="numeric" oninput="checkCustom(${remaining})">
@@ -342,10 +342,10 @@ function render(){
   if(selectedBlockId){
     const bm=gm(selectedBlockId);
     const rem=blockRemaining(selectedBlockId);
-    tip.innerHTML=`已選取 <strong style="color:${bm.color}">${bm.name}</strong> 積木（剩餘 <strong style="color:#e8b84b">${fmt(rem)}</strong>）→ 點上方頭像分配給誰`;
+    tip.innerHTML=`已選取 <strong style="color:${bm.color}">${bm.name}</strong> 費用區塊（剩餘 <strong style="color:#e8b84b">${fmt(rem)}</strong>）→ 點上方頭像分配給誰`;
     tip.style.background='rgba(232,184,75,.12)';
   } else {
-    tip.textContent='點任一積木選取（發光），再點頭像選擇由誰負擔。';
+    tip.textContent='點任一費用區塊選取（發光），再點下方成員選擇由誰負擔。';
     tip.style.background='rgba(232,184,75,.08)';
   }
 
