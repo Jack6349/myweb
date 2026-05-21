@@ -1839,26 +1839,34 @@ async function doTransitQuery(shiftTime){
       try {
         var gRes = await fetch(GAS+'?geocode='+encodeURIComponent(fromTxt));
         var gData = await gRes.json();
+        console.log('[geocode from]', fromTxt, '->', JSON.stringify(gData));
         if(gData.place_id) fromPid = gData.place_id;
-      } catch(e) {}
+      } catch(e) { console.log('[geocode from error]', e); }
     }
     if(!toPid && toTxt) {
       try {
         var gRes2 = await fetch(GAS+'?geocode='+encodeURIComponent(toTxt));
         var gData2 = await gRes2.json();
+        console.log('[geocode to]', toTxt, '->', JSON.stringify(gData2));
         if(gData2.place_id) toPid = gData2.place_id;
-      } catch(e) {}
+      } catch(e) { console.log('[geocode to error]', e); }
     }
     var originParam = fromPid ? 'place_id:'+fromPid : fromTxt;
     var destParam   = toPid   ? 'place_id:'+toPid   : toTxt;
-    var url=GAS+'?transit_origin='+encodeURIComponent(originParam)+
-      '&transit_dest='+encodeURIComponent(destParam)+
-      '&depart_time='+ts+
-      '&alternatives=true'+
-      (mode==='arrive'?'&arrival_time=true':'')+
-      (routing?'&routing_pref='+encodeURIComponent(routing):'')+
-      (modes.length?'&transit_modes='+encodeURIComponent(modes.join('|')):'');
-    var res=await fetch(url);
+    var res=await fetch(GAS, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        action:'transit_route',
+        transit_origin: originParam,
+        transit_dest: destParam,
+        depart_time: ts,
+        alternatives: true,
+        routing_pref: routing||'',
+        transit_modes: modes.join('|'),
+        arrival_time: mode==='arrive'
+      })
+    });
     var data=await res.json();
     if(!data.routes||!data.routes.length)throw new Error(data.error||'\u672a\u627e\u5230\u8def\u7dda');
     _qResults=data.routes;
