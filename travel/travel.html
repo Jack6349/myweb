@@ -769,7 +769,16 @@ function tpmOpenById(wrap) {
     var dispEl = document.getElementById('tp-d-'+safeId);
     if (dispEl) { dispEl.textContent = v; dispEl.className = 'tp-display'; }
     if (onChangeFn) { try { eval(onChangeFn); } catch(e){} }
-    // Auto-calc duration for route dep/arr pickers
+    // Auto-calc duration for route dep/arr pickers (and airport flight dep/arr)
+    if(safeId==='sf-flight-dep'||safeId==='sf-flight-arr'){
+      var fdepEl=document.getElementById('tp-v-sf-flight-dep');
+      var farrEl=document.getElementById('tp-v-sf-flight-arr');
+      var srd0dep=document.getElementById('tp-v-srd-0-dep');
+      var srd0arr=document.getElementById('tp-v-srd-0-arr');
+      if(fdepEl&&srd0dep) srd0dep.value=fdepEl.value;
+      if(farrEl&&srd0arr) srd0arr.value=farrEl.value;
+      try { onChangeCalcDuration(0); } catch(e){}
+    }
     var calcMatch = safeId.match(/^srd-(\d+)-(dep|arr)$/);
     if(calcMatch) { try { onChangeCalcDuration(parseInt(calcMatch[1])); } catch(e){} }
     // Auto-sync route/leg fields from ID pattern
@@ -1437,12 +1446,28 @@ function saveStop(){
       var existAirport=routes[0];
       var airlineVal=(document.getElementById('sf-airline')||{value:''}).value.trim();
       var flightNoVal=(document.getElementById('sf-flight')||{value:''}).value.trim();
+      // Read fare/duration/importFare from DOM (route index 0)
+      var fareEl0=document.getElementById('srd-fare-0');
+      var fareCurEl0=document.getElementById('srd-farecur-0');
+      var importEl0=document.getElementById('srd-import-0');
+      var durEl0=document.querySelector('[data-ri="0"][data-field="duration"]');
+      // Auto-calc duration from flight dep/arr if not manually set
+      var calcDur=existAirport?existAirport.duration||0:0;
+      if(flightDep&&flightArr){
+        var dp=flightDep.split(':'),ap=flightArr.split(':');
+        var dm=parseInt(dp[0])*60+parseInt(dp[1]),am=parseInt(ap[0])*60+parseInt(ap[1]);
+        var dd=am-dm; if(dd<0)dd+=1440; calcDur=dd;
+      }
+      if(durEl0&&durEl0.value) calcDur=parseInt(durEl0.value)||calcDur;
       routes=[{
         id:existAirport?existAirport.id:uid(),
         tag:'planned',
         departTime:flightDep,
         arriveTime:flightArr,
-        duration:0,transfers:0,
+        duration:calcDur,transfers:0,
+        fare:fareEl0?parseFloat(fareEl0.value)||0:(existAirport?existAirport.fare||0:0),
+        fareCurrency:fareCurEl0?fareCurEl0.value:(existAirport?existAirport.fareCurrency||'TWD':'TWD'),
+        importFare:importEl0?importEl0.checked:(existAirport?existAirport.importFare||false:false),
         legs:[{mode:'flight',fromStop:fromEl.value,toStop:toEl.value,
           departTime:flightDep,arriveTime:flightArr,
           line:airlineVal+(flightNoVal?' '+flightNoVal:''),platform:''}]
