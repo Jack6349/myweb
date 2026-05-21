@@ -769,6 +769,9 @@ function tpmOpenById(wrap) {
     var dispEl = document.getElementById('tp-d-'+safeId);
     if (dispEl) { dispEl.textContent = v; dispEl.className = 'tp-display'; }
     if (onChangeFn) { try { eval(onChangeFn); } catch(e){} }
+    // Auto-calc duration for route dep/arr pickers
+    var calcMatch = safeId.match(/^srd-(\d+)-(dep|arr)$/);
+    if(calcMatch) { try { onChangeCalcDuration(parseInt(calcMatch[1])); } catch(e){} }
     // Auto-sync route/leg fields from ID pattern
     // rd-{ri}-dep/arr  or  lg-{ri}_{li}-dep/arr
     var rdm = safeId.match(/^rd-(\d+)-(dep|arr)$/);
@@ -1245,8 +1248,8 @@ function renderRouteEditor(r, ri){
       '</select>')+
     '<button data-ri="'+ri+'" onclick="removeStopRoute(parseInt(this.dataset.ri))" class="leg-del">&times;</button>'+
   '</div>';
-  html+=buildTimePicker('srd-'+ri+'-dep',isAirport?'\u8d77\u98db\u6642\u9593':'\u767c\u8eca\u6642\u9593',r.departTime||'','onChangeCalcDuration('+ri+')');
-  html+=buildTimePicker('srd-'+ri+'-arr',isAirport?'\u964d\u843d\u6642\u9593':'\u62b5\u9054\u6642\u9593',r.arriveTime||'','onChangeCalcDuration('+ri+')');
+  html+=buildTimePicker('srd-'+ri+'-dep',isAirport?'\u8d77\u98db\u6642\u9593':'\u767c\u8eca\u6642\u9593',r.departTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
+  html+=buildTimePicker('srd-'+ri+'-arr',isAirport?'\u964d\u843d\u6642\u9593':'\u62b5\u9054\u6642\u9593',r.arriveTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
   html+='<div class="fs">'+(isAirport?'<div class="fl">\u98db\u884c\u6642\u9593(\u5206)</div>':'<div class="frow">')+
     '<div><div class="fl">\u7e3d\u6642\u9593(\u5206)</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="duration" value="'+ea(r.duration||'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>'+
     (isAirport?'':'<div><div class="fl">\u63db\u4e58\u6b21\u6578</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="transfers" value="'+ea(r.transfers!==undefined?r.transfers:'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>')+
@@ -1450,6 +1453,15 @@ function saveStop(){
         var arrEl=document.getElementById('tp-v-srd-'+ri+'-arr');
         if(depEl) r.departTime=depEl.value;
         if(arrEl) r.arriveTime=arrEl.value;
+        // Sync fare, duration, fareCurrency, importFare from DOM
+        var fareEl=document.getElementById('srd-fare-'+ri);
+        var fareCurEl=document.getElementById('srd-farecur-'+ri);
+        var importEl=document.getElementById('srd-import-'+ri);
+        var durEl=document.querySelector('[data-ri="'+ri+'"][data-field="duration"]');
+        if(fareEl) r.fare=parseFloat(fareEl.value)||0;
+        if(fareCurEl) r.fareCurrency=fareCurEl.value;
+        if(importEl) r.importFare=importEl.checked;
+        if(durEl) r.duration=parseInt(durEl.value)||0;
       });
     }
     stop.transit={
