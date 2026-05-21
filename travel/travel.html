@@ -1810,9 +1810,12 @@ async function syncWrite(trips) {
   try {
     var ts = new Date().toISOString();
     localStorage.setItem(SYNC_KEY, ts);
-    var payload = JSON.stringify({ action: 'travel_write', data: trips, updatedAt: ts });
-    var b64 = btoa(unescape(encodeURIComponent(payload)));
-    await fetch(GAS + '?action=travel_write&b64=' + encodeURIComponent(b64));
+    // POST + text/plain 避免 CORS preflight，GAS 以 e.postData.contents 接收
+    await fetch(GAS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'travel_write', data: trips, updatedAt: ts })
+    });
   } catch(e) {
     console.log('sync write error:', e);
   }
