@@ -1252,28 +1252,51 @@ function renderRouteEditor(r, ri){
     html+='<div class="fs"><div class="fl">\u98db\u884c\u6642\u9593(\u5206)</div>'+
       '<div style="font-size:12px;color:#c8b89a;padding:2px 0">\u7e3d\u6642\u9593\uff1a<span id="dur-fmt-'+ri+'" style="color:#e8b84b;font-weight:700">'+fmtDuration(r.duration)+'</span></div>'+
     '</div>';
-  } else {
-    // 非 airport：顯示時間/換乘摘要（唯讀）+ legs 卡片
+  } else if(legs.length) {
+    // 非 airport + 有 legs（來自班次）：唯讀摘要
     html+='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:4px 0 2px">';
     if(r.departTime||r.arriveTime) html+='<div style="font-size:14px;font-weight:700;color:#6ec6f0">'+(r.departTime||'')+(r.arriveTime?' → '+r.arriveTime:'')+'</div>';
     if(r.duration) html+='<div style="font-size:12px;color:#c8b89a">'+fmtDuration(r.duration)+'</div>';
     if(r.transfers!==undefined) html+='<div style="font-size:11px;color:#c8b89a">\u4e58\u63db '+r.transfers+' \u6b21</div>';
     html+='</div>';
-    // Legs 唯讀摘要
-    if(legs.length){
-      html+='<div style="margin:4px 0 6px">';
-      legs.forEach(function(leg,li){
-        html+='<div style="font-size:11px;color:#c8b89a;padding:2px 0">';
-        html+='&#'+(9311+li+1)+'; '+esc(leg.line||leg.fromStop||'');
-        if(leg.headsign) html+='<span style="color:#e0d4c0">（'+esc(leg.headsign)+'）</span>';
-        html+=' '+esc(leg.fromStop||'');
-        if(leg.platform) html+='（'+esc(leg.platform)+'）';
-        html+=' → '+esc(leg.toStop||'');
-        if(leg.arrPlatform) html+='（'+esc(leg.arrPlatform)+'）';
-        html+='</div>';
-      });
+    html+='<div style="margin:4px 0 6px">';
+    legs.forEach(function(leg,li){
+      html+='<div style="font-size:11px;color:#c8b89a;padding:2px 0">';
+      html+='&#'+(9311+li+1)+'; '+esc(leg.line||leg.fromStop||'');
+      if(leg.headsign) html+='<span style="color:#e0d4c0">（'+esc(leg.headsign)+'）</span>';
+      html+=' '+esc(leg.fromStop||'');
+      if(leg.platform) html+='（'+esc(leg.platform)+'）';
+      html+=' → '+esc(leg.toStop||'');
+      if(leg.arrPlatform) html+='（'+esc(leg.arrPlatform)+'）';
       html+='</div>';
+    });
+    html+='</div>';
+  } else {
+    // 非 airport + 無 legs（手動新增）：可編輯表單
+    var MODES=['walk','shuttle','car','taxi','train','bus','shinkansen','ferry','flight'];
+    var leg0=legs[0]||{mode:'shuttle',fromStop:'',toStop:'',departTime:'',arriveTime:'',line:''};
+    if(!r.legs||!r.legs.length){
+      r.legs=[{mode:'shuttle',fromStop:'',toStop:'',departTime:'',arriveTime:'',line:'',platform:'',arrPlatform:'',headsign:''}];
+      leg0=r.legs[0];
     }
+    html+='<div style="background:var(--bg4);border-radius:8px;padding:10px 12px;margin-bottom:6px">';
+    // 交通方式
+    html+='<div class="fs"><div class="fl">\u4ea4\u901a\u65b9\u5f0f</div>'+
+      '<select class="fsel" style="font-size:13px;padding:8px 10px" onchange="setManualLegField('+ri+',0,\'mode\',this.value)">'+
+      MODES.map(function(m){return'<option value="'+m+'"'+(leg0.mode===m?' selected':'')+'>'+legModeIcon(m)+' '+legModeName(m)+'</option>';}).join('')+
+      '</select></div>';
+    // 出發/到達站
+    html+='<div class="frow" style="gap:6px">';
+    html+='<div><div class="fl">\u51fa\u767c\u5730</div><input class="fi fi-sm" placeholder="\u51fa\u767c\u5730" value="'+ea(leg0.fromStop||'')+'" onchange="setManualLegField('+ri+',0,\'fromStop\',this.value)"></div>';
+    html+='<div><div class="fl">\u76ee\u7684\u5730</div><input class="fi fi-sm" placeholder="\u76ee\u7684\u5730" value="'+ea(leg0.toStop||'')+'" onchange="setManualLegField('+ri+',0,\'toStop\',this.value)"></div>';
+    html+='</div>';
+    // 起訖時間
+    html+=buildTimePicker('srd-'+ri+'-dep','\u51fa\u767c\u6642\u9593',r.departTime||leg0.departTime||'','');
+    html+=buildTimePicker('srd-'+ri+'-arr','\u6297\u9054\u6642\u9593',r.arriveTime||leg0.arriveTime||'','');
+    // 備註（車牌/服務名稱）
+    html+='<div class="fs"><div class="fl">\u5099\u8a3b\uff08\u8eca\u724c/\u670d\u52d9\u540d\u7a31\uff09</div>'+
+      '<input class="fi" placeholder="\u53ef\u7559\u7a7a" value="'+ea(leg0.line||'')+'" onchange="setManualLegField('+ri+',0,\'line\',this.value)"></div>';
+    html+='</div>';
   }
   // 付款資訊
   var curs=(trip()?trip().currencies:null)||['TWD','JPY'];
@@ -1370,6 +1393,22 @@ function removeStopRoute(ri){
   if(!stop||!stop.transit)return;
   stop.transit.routes.splice(ri,1); save(S.trips); _stopDirty=true; _refreshTransitRoutes();
 }
+
+// 設定手動新增路線的 leg 欄位
+function setManualLegField(ri, li, field, value) {
+  var stop = S.stopIdx !== null ? ((day().stops||[])[S.stopIdx]) : null;
+  if (!stop || !stop.transit) return;
+  var r = (stop.transit.routes||[])[ri];
+  if (!r) return;
+  if (!r.legs || !r.legs.length) r.legs = [{}];
+  r.legs[li][field] = value;
+  // 同步時間到 route 層級
+  if (field === 'departTime') r.departTime = value;
+  if (field === 'arriveTime') r.arriveTime = value;
+  save(S.trips);
+  _stopDirty = true;
+}
+
 function addManualRoute(){
   // 先開啟班次選擇器，若無班次再提供空白手填
   var d = day(); if(!d) return;
