@@ -1849,8 +1849,10 @@ async function doTransitQuery(shiftTime){
         if(gData2.place_id) toPid = gData2.place_id;
       } catch(e) {}
     }
-    var url=GAS+'?transit_origin='+encodeURIComponent(fromPid||fromTxt)+
-      '&transit_dest='+encodeURIComponent(toPid||toTxt)+
+    var originParam = fromPid ? 'place_id:'+fromPid : fromTxt;
+    var destParam   = toPid   ? 'place_id:'+toPid   : toTxt;
+    var url=GAS+'?transit_origin='+encodeURIComponent(originParam)+
+      '&transit_dest='+encodeURIComponent(destParam)+
       '&depart_time='+ts+
       '&alternatives=true'+
       (mode==='arrive'?'&arrival_time=true':'')+
