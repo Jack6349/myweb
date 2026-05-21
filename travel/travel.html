@@ -2560,18 +2560,18 @@ async function doTimetableImport() {
         r.onerror = rej;
         r.readAsDataURL(_ttFile);
       });
-      // 圖片/PDF 用 JSON POST（GAS doPost 支援）
+      // 圖片/PDF：Content-Type text/plain 避免 CORS preflight
       var res = await fetch(GAS, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type })
       });
       result = await res.json();
     } else if (textInput) {
-      // 純文字 → Gemini（JSON POST）
+      // 純文字：Content-Type text/plain 避免 CORS preflight
       var res2 = await fetch(GAS, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action: 'timetable_parse_text', text: textInput })
       });
       result = await res2.json();
