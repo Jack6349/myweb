@@ -1260,7 +1260,7 @@ function renderRouteEditor(r, ri){
   html+=buildTimePicker('srd-'+ri+'-dep',isAirport?'\u8d77\u98db\u6642\u9593':'\u767c\u8eca\u6642\u9593',r.departTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
   html+=buildTimePicker('srd-'+ri+'-arr',isAirport?'\u964d\u843d\u6642\u9593':'\u62b5\u9054\u6642\u9593',r.arriveTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
   html+='<div class="fs">'+(isAirport?'<div class="fl">\u98db\u884c\u6642\u9593(\u5206)</div>':'<div class="frow">')+
-    '<div><div class="fl">\u7e3d\u6642\u9593<span id="dur-fmt-'+ri+'" style="color:#e8b84b;font-size:11px;margin-left:6px">'+fmtDuration(r.duration)+'</span></div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="duration" value="'+ea(r.duration||'')+'" oninput="var s=document.getElementById(\'dur-fmt-\'+this.dataset.ri);if(s)s.textContent=fmtDuration(parseInt(this.value)||0);" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>'+
+    '<div style="font-size:12px;color:#c8b89a;padding:2px 0">\u7e3d\u6642\u9593\uff1a<span id="dur-fmt-'+ri+'" style="color:#e8b84b;font-weight:700">'+fmtDuration(r.duration)+'</span></div>'+
     (isAirport?'':'<div><div class="fl">\u63db\u4e58\u6b21\u6578</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="transfers" value="'+ea(r.transfers!==undefined?r.transfers:'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>')+
     (isAirport?'':'</div>')+
   '</div>';
@@ -1454,15 +1454,13 @@ function saveStop(){
       var fareEl0=document.getElementById('srd-fare-0');
       var fareCurEl0=document.getElementById('srd-farecur-0');
       var importEl0=document.getElementById('srd-import-0');
-      var durEl0=document.querySelector('[data-ri="0"][data-field="duration"]');
-      // Auto-calc duration from flight dep/arr if not manually set
+      // Auto-calc duration from flight dep/arr
       var calcDur=existAirport?existAirport.duration||0:0;
       if(flightDep&&flightArr){
         var dp=flightDep.split(':'),ap=flightArr.split(':');
         var dm=parseInt(dp[0])*60+parseInt(dp[1]),am=parseInt(ap[0])*60+parseInt(ap[1]);
         var dd=am-dm; if(dd<0)dd+=1440; calcDur=dd;
       }
-      if(durEl0&&durEl0.value) calcDur=parseInt(durEl0.value)||calcDur;
       routes=[{
         id:existAirport?existAirport.id:uid(),
         tag:'planned',
@@ -1487,11 +1485,9 @@ function saveStop(){
         var fareEl=document.getElementById('srd-fare-'+ri);
         var fareCurEl=document.getElementById('srd-farecur-'+ri);
         var importEl=document.getElementById('srd-import-'+ri);
-        var durEl=document.querySelector('[data-ri="'+ri+'"][data-field="duration"]');
         if(fareEl) r.fare=parseFloat(fareEl.value)||0;
         if(fareCurEl) r.fareCurrency=fareCurEl.value;
         if(importEl) r.importFare=importEl.checked;
-        if(durEl) r.duration=parseInt(durEl.value)||0;
         var pmEl=document.getElementById('srd-paymethod-'+ri);
         if(pmEl) r.payMethod=pmEl.value;
       });
@@ -2765,7 +2761,8 @@ function onChangeCalcDuration(ri){
   var diff=arrMin-depMin;
   if(diff<0)diff+=1440; // cross midnight
   var durEl=document.querySelector('[data-ri="'+ri+'"][data-field="duration"]');
-  if(durEl){durEl.value=diff;setStopRouteField(ri,'duration',diff);var fmt=document.getElementById('dur-fmt-'+ri);if(fmt)fmt.textContent=fmtDuration(diff);}
+  setStopRouteField(ri,'duration',diff);
+  var fmt=document.getElementById('dur-fmt-'+ri);if(fmt)fmt.textContent=fmtDuration(diff);
   _stopDirty=true;
 }
 
