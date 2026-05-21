@@ -2560,11 +2560,14 @@ async function doTimetableImport() {
         r.onerror = rej;
         r.readAsDataURL(_ttFile);
       });
-      // 圖片/PDF：GET + b64
-      var ttFileB64 = btoa(unescape(encodeURIComponent(
+      // 圖片/PDF：分段上傳（避免 URL 長度限制與 CORS preflight）
+      // 先上傳 mimeType 與 base64 長度，再用 GET 傳文字部分
+      // 實際做法：直接 POST 不帶 Content-Type（簡單請求）
+      var formData = new FormData();
+      formData.append('timetable_b64', btoa(unescape(encodeURIComponent(
         JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type })
-      )));
-      var res = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(ttFileB64));
+      ))));
+      var res = await fetch(GAS, { method: 'POST', body: formData });
       result = await res.json();
     } else if (textInput) {
       // 純文字：GET + b64（GAS POST 會被重導向為 GET）
