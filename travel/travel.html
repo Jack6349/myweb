@@ -1823,9 +1823,9 @@ async function doTransitQuery(shiftTime){
   var trainCk=document.getElementById('q-tr-train').checked;
   var busCk=document.getElementById('q-tr-bus').checked;
   var ferryCk=document.getElementById('q-tr-ferry').checked;
-  var dateStr=dateVal||new Date().toISOString().slice(0,10);
+  var dateStr=(dateVal||new Date().toISOString().slice(0,10)).replace(/\//g,'-');
   var timeStr=timeVal||new Date().toTimeString().slice(0,5);
-  var dt=new Date(dateStr+'T'+timeStr+':00');
+  var dt=new Date(dateStr+'T'+timeStr+':00+08:00');
   var ts=Math.floor(dt.getTime()/1000);
   var modes=[];
   if(trainCk)modes.push('train','subway','tram');
@@ -1931,8 +1931,8 @@ function shiftQuery(dir){
   var ref=dir===-1?_qResults[0]:_qResults[_qResults.length-1];
   var refTime=dir===-1?ref.departTime:ref.arriveTime;
   if(!refTime)return;
-  var dateVal=document.getElementById('q-date').value||new Date().toISOString().slice(0,10);
-  var dt=new Date(dateVal+'T'+refTime+':00');
+  var dateVal=(document.getElementById('q-date').value||new Date().toISOString().slice(0,10)).replace(/\//g,'-');
+  var dt=new Date(dateVal+'T'+refTime+':00+08:00');
   dt.setMinutes(dt.getMinutes()+(dir===1?1:-60));
   var shiftTime=String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
   document.getElementById('tp-v-q-time').value=shiftTime;
