@@ -2582,7 +2582,19 @@ function renderTimetableSelector(d) {
   if (!body) return;
   var t = trip();
   var schedules = (t && t.timetables) || [];
-  var dayDate = d ? d.date || '' : '';
+  // 動態計算當天日期（trip.startDate + day index）
+  var t2 = trip();
+  var dayDate = '';
+  if (t2 && t2.startDate && t2.days) {
+    var dayIdx = t2.days.indexOf(d);
+    if (dayIdx >= 0) {
+      var dd2 = new Date(t2.startDate);
+      dd2.setDate(dd2.getDate() + dayIdx);
+      dayDate = dd2.getFullYear() + '-' +
+        String(dd2.getMonth()+1).padStart(2,'0') + '-' +
+        String(dd2.getDate()).padStart(2,'0');
+    }
+  }
 
   // 篩選當天班次（有日期就比對，無日期的全部顯示）
   var filtered = schedules.filter(function(s) {
