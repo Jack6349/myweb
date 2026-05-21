@@ -1097,7 +1097,9 @@ function stopBackConfirm(){
   goBack('sc-day'); renderDayTL();
 }
 
+var _tempRoutes = {};
 function renderStopForm(stop, stopIdx){
+  _tempRoutes = {};
   var type=stop?stop.type:'transit';
   var STYPES=[
     {id:'transit',icon:'🚉',label:'交通站'},
@@ -1242,8 +1244,8 @@ function renderRouteEditor(r, ri){
       '</select>')+
     '<button data-ri="'+ri+'" onclick="removeStopRoute(parseInt(this.dataset.ri))" class="leg-del">&times;</button>'+
   '</div>';
-  html+=buildTimePicker('srd-'+ri+'-dep','\u767c\u8eca\u6642\u9593',r.departTime||'','');
-  html+=buildTimePicker('srd-'+ri+'-arr','\u6296\u9054\u6642\u9593',r.arriveTime||'','');
+  html+=buildTimePicker('srd-'+ri+'-dep',isAirport?'\u8d77\u98db\u6642\u9593':'\u767c\u8eca\u6642\u9593',r.departTime||'','onChangeCalcDuration('+ri+')');
+  html+=buildTimePicker('srd-'+ri+'-arr',isAirport?'\u964d\u843d\u6642\u9593':'\u62b5\u9054\u6642\u9593',r.arriveTime||'','onChangeCalcDuration('+ri+')');
   html+='<div class="fs">'+(isAirport?'<div class="fl">\u98db\u884c\u6642\u9593(\u5206)</div>':'<div class="frow">')+
     '<div><div class="fl">\u7e3d\u6642\u9593(\u5206)</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="duration" value="'+ea(r.duration||'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>'+
     (isAirport?'':'<div><div class="fl">\u63db\u4e58\u6b21\u6578</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="transfers" value="'+ea(r.transfers!==undefined?r.transfers:'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>')+
@@ -1265,9 +1267,9 @@ function renderRouteEditor(r, ri){
     '<label for="srd-import-'+ri+'" style="font-size:12px;color:#e0d4c0">\u5e36\u5165\u8cbb\u7528\u8a18\u9304</label>'+
     '<span style="font-size:11px;color:#c8b89a">\uff08\u9810\u8a2d\u4e0d\u5e36\u5165\uff0c\u5982\u4f7f\u7528 JR Pass \u8acb\u4e0d\u52fe\u9078\uff09</span>'+
   '</div>';
-  html+='<div style="font-size:10px;font-weight:700;color:#c8b89a;letter-spacing:.5px;padding:6px 0 4px">\u63db\u4e58\u6bb5</div>';
-  legs.forEach(function(leg,li){ html+=renderLegEditor(leg,ri,li); });
-  html+='<button data-ri="'+ri+'" onclick="addStopLeg(parseInt(this.dataset.ri))" style="width:100%;padding:6px;border:1px dashed var(--border2);border-radius:6px;background:none;color:#c8b89a;font-size:11px;cursor:pointer;margin-top:2px">+ \u65b0\u589e\u63db\u4e58\u6bb5</button>';
+  if(!isAirport){ html+='<div style="font-size:10px;font-weight:700;color:#c8b89a;letter-spacing:.5px;padding:6px 0 4px">\u63db\u4e58\u6bb5</div>';
+  legs.forEach(function(leg,li){ if(!isAirport) html+=renderLegEditor(leg,ri,li); }); }
+  if(!isAirport){ html+='<button data-ri="'+ri+'" onclick="addStopLeg(parseInt(this.dataset.ri))" style="width:100%;padding:6px;border:1px dashed var(--border2);border-radius:6px;background:none;color:#c8b89a;font-size:11px;cursor:pointer;margin-top:2px">+ \u65b0\u589e\u63db\u4e58\u6bb5</button>'; }
   html+='</div>';
   return html;
 }
@@ -1325,8 +1327,14 @@ function setStopRouteTag(ri,tag){
 }
 function setStopRouteField(ri,field,val){
   var stop=S.stopIdx!==null?((day().stops||[])[S.stopIdx]):null;
-  if(!stop||!stop.transit||!stop.transit.routes[ri])return;
-  stop.transit.routes[ri][field]=val; save(S.trips); _stopDirty=true;
+  if(stop&&stop.transit&&stop.transit.routes[ri]){
+    stop.transit.routes[ri][field]=val; save(S.trips);
+  }
+  // Also update in _tempRoutes for new stops
+  if(!_tempRoutes) _tempRoutes={};
+  if(!_tempRoutes[ri]) _tempRoutes[ri]={};
+  _tempRoutes[ri][field]=val;
+  _stopDirty=true;
 }
 function removeStopRoute(ri){
   var stop=S.stopIdx!==null?((day().stops||[])[S.stopIdx]):null;
@@ -2689,6 +2697,21 @@ function fmtReportAmt(n, cur){
   if(cur==='JPY') return '\xA5'+n.toLocaleString();
   if(cur==='TWD') return 'NT$'+n.toLocaleString();
   return '$'+n.toLocaleString();
+}
+
+
+function onChangeCalcDuration(ri){
+  var depEl=document.getElementById('tp-v-srd-'+ri+'-dep');
+  var arrEl=document.getElementById('tp-v-srd-'+ri+'-arr');
+  if(!depEl||!arrEl||!depEl.value||!arrEl.value)return;
+  var dep=depEl.value.split(':'), arr=arrEl.value.split(':');
+  var depMin=parseInt(dep[0])*60+parseInt(dep[1]);
+  var arrMin=parseInt(arr[0])*60+parseInt(arr[1]);
+  var diff=arrMin-depMin;
+  if(diff<0)diff+=1440; // cross midnight
+  var durEl=document.querySelector('[data-ri="'+ri+'"][data-field="duration"]');
+  if(durEl){durEl.value=diff;setStopRouteField(ri,'duration',diff);}
+  _stopDirty=true;
 }
 
 // ════ INIT ════
