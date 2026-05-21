@@ -1347,11 +1347,34 @@ function removeStopRoute(ri){
   stop.transit.routes.splice(ri,1); save(S.trips); _stopDirty=true; _refreshTransitRoutes();
 }
 function addManualRoute(){
-  var stop=S.stopIdx!==null?((day().stops||[])[S.stopIdx]):null;
-  if(!stop) return;
-  if(!stop.transit) stop.transit={fromPlace:(document.getElementById('sf-transit-from')||{value:''}).value,toPlace:(document.getElementById('sf-transit-to')||{value:''}).value,routes:[]};
-  stop.transit.routes.push({id:uid(),tag:'backup',departTime:'',arriveTime:'',duration:0,transfers:0,legs:[{mode:'train',fromStop:'',toStop:'',departTime:'',arriveTime:'',line:'',platform:''}]});
-  save(S.trips); _stopDirty=true; _refreshTransitRoutes();
+  // 先開啟班次選擇器，若無班次再提供空白手填
+  var d = day(); if(!d) return;
+  var t = trip();
+  var schedules = (t && t.timetables) || [];
+  // 計算當天日期
+  var dayDate = '';
+  if (t && t.startDate && t.days) {
+    var dayIdx = t.days.indexOf(d);
+    if (dayIdx >= 0) {
+      var dd2 = new Date(t.startDate);
+      dd2.setDate(dd2.getDate() + dayIdx);
+      dayDate = dd2.getFullYear() + '-' +
+        String(dd2.getMonth()+1).padStart(2,'0') + '-' +
+        String(dd2.getDate()).padStart(2,'0');
+    }
+  }
+  var filtered = schedules.filter(function(s){ return !s.date || s.date === dayDate; });
+  if (filtered.length > 0) {
+    // 有班次：開啟選擇器
+    openTimetableSelector();
+  } else {
+    // 無班次：直接新增空白路線
+    var stop=S.stopIdx!==null?((d.stops||[])[S.stopIdx]):null;
+    if(!stop) return;
+    if(!stop.transit) stop.transit={fromPlace:(document.getElementById('sf-transit-from')||{value:''}).value,toPlace:(document.getElementById('sf-transit-to')||{value:''}).value,routes:[]};
+    stop.transit.routes.push({id:uid(),tag:'backup',departTime:'',arriveTime:'',duration:0,transfers:0,legs:[{mode:'train',fromStop:'',toStop:'',departTime:'',arriveTime:'',line:'',platform:''}]});
+    save(S.trips); _stopDirty=true; _refreshTransitRoutes();
+  }
 }
 function addStopLeg(ri){
   var stop=S.stopIdx!==null?((day().stops||[])[S.stopIdx]):null;
@@ -2616,15 +2639,57 @@ function renderTimetableSelector(d) {
   filtered.forEach(function(s, idx) {
     // 找原始 index
     var origIdx = schedules.indexOf(s);
-    html += '<div onclick="applyTimetable(' + origIdx + ')" style="background:var(--bg3);border:1px solid rgba(110,198,240,.3);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;active:opacity:.8">' +
-      '<div style="font-size:13px;font-weight:700;color:#e0d4c0;margin-bottom:6px">' + esc(s.from || '') + ' → ' + esc(s.to || '') + '</div>' +
-      '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
-        '<div style="font-size:16px;font-weight:700;color:#6ec6f0">' + esc(s.departTime || '') + ' → ' + esc(s.arriveTime || '') + '</div>' +
-        (s.trainName ? '<div style="font-size:12px;color:#e8b84b;background:rgba(232,184,75,.12);border:1px solid rgba(232,184,75,.3);padding:2px 8px;border-radius:6px">' + esc(s.trainName) + '</div>' : '') +
-        (s.duration ? '<div style="font-size:12px;color:#c8b89a">' + esc(s.duration) + '</div>' : '') +
-        (s.fare ? '<div style="font-size:12px;color:#c8b89a">¥' + esc(String(s.fare)) + '</div>' : '') +
+    // 建立 legs 詳細資訊
+    var legsHtml = '';
+    if (s.legs && s.legs.length) {
+      s.legs.forEach(function(leg, li) {
+        var legLine = leg.line_name || '';
+        var legDest = leg.destination_for || '';
+        var legDep = leg.departure_station || '';
+        var legArr = leg.arrival_station || '';
+        var legDepTime = leg.departure_time || '';
+        var legArrTime = leg.arrival_time || '';
+        var legDepPlatform = leg.departure_platform || '';
+        var legArrPlatform = leg.arrival_platform || '';
+        var isDirect = leg.is_through_service ? '直通' : '';
+        legsHtml += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">' +
+          '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">' +
+            '<div style="font-size:11px;color:#c8b89a">&#9312;</div>'.replace('&#9312;', '&#' + (9311+li+1) + ';') +
+            '<div style="font-size:12px;font-weight:600;color:#e0d4c0">' + esc(legLine) + '</div>' +
+            (legDest ? '<div style="font-size:11px;color:#c8b89a">(' + esc(legDest) + ')</div>' : '') +
+            (isDirect ? '<div style="font-size:10px;color:#7bed9f;background:rgba(123,237,159,.1);border:1px solid rgba(123,237,159,.3);padding:1px 6px;border-radius:4px">直通</div>' : '') +
+          '</div>' +
+          '<div style="font-size:11px;color:#c8b89a;padding-left:14px">' +
+            esc(legDep) + (legDepPlatform ? '（' + esc(legDepPlatform) + '）' : '') + ' ' + esc(legDepTime) +
+            ' → ' + esc(legArr) + (legArrPlatform ? '（' + esc(legArrPlatform) + '）' : '') + ' ' + esc(legArrTime) +
+          '</div>' +
+        '</div>';
+      });
+    }
+
+    // IC/現金票價分開顯示
+    var fareHtml = '';
+    if (s.fare_ic && s.fare_ticket) {
+      fareHtml = '¥' + s.fare_ic + '（IC）/ ¥' + s.fare_ticket + '（現金）';
+    } else if (s.fare) {
+      fareHtml = '¥' + esc(String(s.fare));
+    }
+
+    html += '<div onclick="applyTimetable(' + origIdx + ')" style="background:var(--bg3);border:1px solid rgba(110,198,240,.3);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer">' +
+      // 標題行：出發→到達 + 乘換
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+        '<div style="font-size:13px;font-weight:700;color:#e0d4c0">' + esc(s.from || '') + ' → ' + esc(s.to || '') + '</div>' +
+        (s.transfers !== undefined ? '<div style="font-size:11px;color:#c8b89a">乘換 ' + s.transfers + ' 次</div>' : '') +
       '</div>' +
-      (s.transfers !== undefined ? '<div style="font-size:11px;color:#c8b89a;margin-top:4px">乘換 ' + s.transfers + ' 次</div>' : '') +
+      // 時間 + 所需時間
+      '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:4px">' +
+        '<div style="font-size:16px;font-weight:700;color:#6ec6f0">' + esc(s.departTime || '') + ' → ' + esc(s.arriveTime || '') + '</div>' +
+        (s.duration ? '<div style="font-size:12px;color:#c8b89a">' + esc(s.duration) + '</div>' : '') +
+      '</div>' +
+      // 票價
+      (fareHtml ? '<div style="font-size:12px;color:#c8b89a;margin-bottom:2px">' + fareHtml + '</div>' : '') +
+      // Legs 詳情
+      legsHtml +
     '</div>';
   });
 
@@ -2659,8 +2724,12 @@ function applyTimetable(origIdx) {
     transfers: s.transfers || 0,
     fare: s.fare ? parseFloat(s.fare) || 0 : 0,
     fareCurrency: 'JPY',
-    importFare: true,
-    legs: (s.legs || []).map(function(l) {
+    importFare: false,
+    legs: (s.legs && s.legs.length ? s.legs : [{
+      departure_station: s.from, arrival_station: s.to,
+      departure_time: s.departTime, arrival_time: s.arriveTime,
+      line_name: s.trainName
+    }]).map(function(l) {
       return {
         mode: 'train',
         fromStop: l.departure_station || s.from || '',
@@ -2668,7 +2737,9 @@ function applyTimetable(origIdx) {
         departTime: l.departure_time || '',
         arriveTime: l.arrival_time || '',
         line: l.line_name || s.trainName || '',
-        platform: l.departure_platform || ''
+        platform: l.departure_platform || '',
+        arrPlatform: l.arrival_platform || '',
+        headsign: l.destination_for || ''
       };
     })
   }];
@@ -2758,8 +2829,11 @@ async function doTimetableImport() {
               trainName: (r.legs || []).map(function(l){return l.line_name||'';}).filter(Boolean).join(' → '),
               duration: r.duration_minutes ? r.duration_minutes + '分' : '',
               fare: r.fare ? (r.fare.ic_yen || r.fare.ticket_yen || '') : '',
+              fare_ic: r.fare ? (r.fare.ic_yen || '') : '',
+              fare_ticket: r.fare ? (r.fare.ticket_yen || '') : '',
               date: (parsed.search_meta && parsed.search_meta.search_departure_date) || '',
-              transfers: r.transfers || 0
+              transfers: r.transfers || 0,
+              legs: r.legs || []
             };
           })};
         } else {
@@ -2821,6 +2895,25 @@ function renderTimetable() {
       isPast = depDt < now;
     }
 
+    // fare 顯示
+    var fareStr = '';
+    if (s.fare_ic && s.fare_ticket) fareStr = '¥' + s.fare_ic + '（IC）/ ¥' + s.fare_ticket + '（現金）';
+    else if (s.fare) fareStr = '¥' + s.fare;
+    // legs 摘要
+    var legsSummary = '';
+    if (s.legs && s.legs.length) {
+      legsSummary = '<div style="margin-top:6px">';
+      s.legs.forEach(function(leg, li) {
+        legsSummary += '<div style="font-size:11px;color:#c8b89a;margin-top:2px">' +
+          '&#' + (9311+li+1) + '; ' + esc(leg.line_name||'') +
+          (leg.destination_for ? '（' + esc(leg.destination_for) + '）' : '') +
+          (leg.is_through_service ? ' <span style="color:#7bed9f">直通</span>' : '') + ' ' +
+          esc(leg.departure_station||'') + (leg.departure_platform ? '（' + esc(leg.departure_platform) + '）' : '') +
+          ' → ' + esc(leg.arrival_station||'') + (leg.arrival_platform ? '（' + esc(leg.arrival_platform) + '）' : '') +
+        '</div>';
+      });
+      legsSummary += '</div>';
+    }
     html += '<div style="background:var(--bg3);border:1px solid ' + (isPast ? 'var(--border)' : 'rgba(110,198,240,.3)') + ';border-radius:12px;padding:14px 16px;margin-bottom:10px;opacity:' + (isPast ? '.55' : '1') + '">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">' +
         '<div style="font-size:13px;font-weight:700;color:#e0d4c0">' + esc(s.from || '') + ' → ' + esc(s.to || '') + '</div>' +
@@ -2828,10 +2921,11 @@ function renderTimetable() {
       '</div>' +
       '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
         '<div style="font-size:15px;font-weight:700;color:' + (isPast ? '#c8b89a' : '#6ec6f0') + '">' + esc(s.departTime || '') + ' → ' + esc(s.arriveTime || '') + '</div>' +
-        (s.trainName ? '<div style="font-size:12px;color:#e8b84b;background:rgba(232,184,75,.12);border:1px solid rgba(232,184,75,.3);padding:2px 8px;border-radius:6px">' + esc(s.trainName) + '</div>' : '') +
         (s.duration ? '<div style="font-size:12px;color:#c8b89a">' + esc(s.duration) + '</div>' : '') +
-        (s.fare ? '<div style="font-size:12px;color:#c8b89a">¥' + s.fare + '</div>' : '') +
+        (s.transfers !== undefined ? '<div style="font-size:11px;color:#c8b89a">乘換 ' + s.transfers + ' 次</div>' : '') +
       '</div>' +
+      (fareStr ? '<div style="font-size:12px;color:#c8b89a;margin-top:3px">' + fareStr + '</div>' : '') +
+      legsSummary +
       (s.date ? '<div style="font-size:11px;color:#c8b89a;margin-top:4px">' + esc(s.date) + '</div>' : '') +
       (isPast ? '<div style="margin-top:8px;display:flex;gap:8px">' +
         '<button onclick="openNavitime(\'' + encodeURIComponent(s.from||'') + '\',\'' + encodeURIComponent(s.to||'') + '\')" style="flex:1;padding:8px;background:rgba(110,198,240,.12);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:12px;cursor:pointer">連結 NAVITime</button>' +
