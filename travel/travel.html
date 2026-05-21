@@ -435,6 +435,7 @@ a{text-decoration:none;color:inherit;}
       <div class="hdr-sub" id="day-hdr-sub"></div>
     </div>
     <button class="hdr-action" onclick="renameDayTitle()">標題</button>
+    <button class="hdr-action" onclick="openTimetable()" style="color:#6ec6f0">班次</button>
     <button class="hdr-action" onclick="openDayExpense()" style="color:#7bed9f">＋費用</button>
     <button class="hdr-btn" onclick="exportTrip()">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -617,87 +618,43 @@ a{text-decoration:none;color:inherit;}
 </div>
 
 
-<!-- ══ SCREEN: TRANSIT QUERY ══ -->
-<div class="screen" id="sc-query">
+<!-- ══ SCREEN: TIMETABLE ══ -->
+<div class="screen" id="sc-timetable">
   <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
     <div class="hdr">
-      <button class="hdr-back" onclick="closeQuery()">
+      <button class="hdr-back" onclick="goBack('sc-day')">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <div class="hdr-title">查詢時刻表</div>
+      <div class="hdr-title">班次管理</div>
+      <button class="hdr-action primary" onclick="openTimetableImport()">匯入</button>
     </div>
-    <div class="body no-nav" id="query-body" style="padding-bottom:20px">
-      <div id="query-form" style="padding:12px 0 0">
-        <div class="fs">
-          <div class="fl">出發地</div>
-          <div style="position:relative">
-            <input class="fi" id="q-from" placeholder="輸入出發地點" autocomplete="off"
-              oninput="acSearch(this,'q-from-list')" onfocus="acSearch(this,'q-from-list')">
-            <div id="q-from-list" class="ac-list" style="display:none"></div>
-          </div>
-          <input type="hidden" id="q-from-pid">
-        </div>
-        <div class="fs">
-          <div class="fl">目的地</div>
-          <div style="position:relative">
-            <input class="fi" id="q-to" placeholder="輸入目的地點" autocomplete="off"
-              oninput="acSearch(this,'q-to-list')" onfocus="acSearch(this,'q-to-list')">
-            <div id="q-to-list" class="ac-list" style="display:none"></div>
-          </div>
-          <input type="hidden" id="q-to-pid">
-        </div>
-        <div class="fs">
-          <div class="fl">查詢日期</div>
-          <input class="fi" type="date" id="q-date">
-        </div>
-        <div class="fs">
-          <div class="fl">時間模式</div>
-          <div style="display:flex;gap:12px;margin-top:4px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-              <input type="radio" name="q-tmode" value="depart" checked id="q-mode-dep"> 指定出發時間</label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-              <input type="radio" name="q-tmode" value="arrive" id="q-mode-arr"> 最晚抵達</label>
-          </div>
-        </div>
-        <div id="q-time-wrap" style="padding:0 16px 14px">
-          <div class="fl" id="q-time-label">出發時間</div>
-          <div id="tp-wrap-q-time" style="margin-top:6px"></div>
-          <input type="hidden" id="tp-v-q-time" value="">
-        </div>
-        <div class="fs">
-          <div class="fl">偏好交通工具</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
-            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="q-tr-train" checked>&#128643; 電車/捷運/地鐵</label>
-            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="q-tr-bus" checked>&#128652; 巴士</label>
-            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="q-tr-ferry">&#128674; 渡輪</label>
-          </div>
-        </div>
-        <div class="fs">
-          <div class="fl">路線偏好</div>
-          <select class="fsel" id="q-routing">
-            <option value="">系統推薦</option>
-            <option value="FEWER_TRANSFERS">少換乘</option>
-            <option value="LESS_WALKING">少步行</option>
-          </select>
-        </div>
-        <div style="padding:0 16px 16px">
-          <button class="btn btn-primary" id="q-search-btn" onclick="doTransitQuery()">
-            &#128269; 查詢
-          </button>
+    <div class="body no-nav" id="timetable-body" style="padding-bottom:20px"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: TIMETABLE IMPORT ══ -->
+<div class="screen" id="sc-timetable-import">
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
+    <div class="hdr">
+      <button class="hdr-back" onclick="goBack('sc-timetable')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hdr-title">匯入時刻表</div>
+    </div>
+    <div class="body no-nav" style="padding:16px">
+      <div class="fs">
+        <div class="fl">上傳截圖或 PDF</div>
+        <div style="border:2px dashed var(--border2);border-radius:12px;padding:24px;text-align:center;cursor:pointer;position:relative" onclick="document.getElementById('tt-file-input').click()">
+          <div id="tt-file-preview" style="font-size:13px;color:#c8b89a">點擊選擇截圖或 PDF（Navitime 時刻表）</div>
+          <input type="file" id="tt-file-input" accept="image/*,application/pdf" style="display:none" onchange="onTimetableFileSelected(this)">
         </div>
       </div>
-      <div id="query-results" style="display:none;padding:0 0 16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 8px">
-          <div class="sec" style="padding:0">查詢結果</div>
-          <div style="display:flex;gap:8px">
-            <button onclick="shiftQuery(-1)" style="background:var(--bg3);border:1px solid var(--border2);color:#e0d4c0;font-size:12px;padding:5px 10px;border-radius:6px;cursor:pointer">◀ 前一班</button>
-            <button onclick="shiftQuery(1)" style="background:var(--bg3);border:1px solid var(--border2);color:#e0d4c0;font-size:12px;padding:5px 10px;border-radius:6px;cursor:pointer">後一班 ▶</button>
-          </div>
-        </div>
-        <div id="q-results-list"></div>
-        <div style="padding:0 16px">
-          <button class="btn btn-secondary" onclick="showQueryForm()">↑ 重新查詢</button>
-        </div>
+      <div class="fs" style="margin-top:8px">
+        <div class="fl">或貼上文字</div>
+        <textarea class="fta" id="tt-text-input" rows="6" placeholder="直接貼上時刻表文字內容…"></textarea>
+      </div>
+      <div class="bottom-bar">
+        <button class="btn btn-primary" style="flex:1" onclick="doTimetableImport()">解析匯入</button>
       </div>
     </div>
   </div>
@@ -1210,7 +1167,6 @@ function buildStopFields(stop,type,isLast,nextStop){
     var isAirport=(type==='airport');
     html+='<div style="padding:0 16px 8px;display:flex;align-items:center;justify-content:space-between">'+
       '<div style="font-size:13px;font-weight:700;color:#e0d4c0">\u524d\u5f80\u4e0b\u4e00\u7ad9\u7684\u4ea4\u901a</div>'+
-      (isAirport?'':'<button onclick="queryTransitForStop()" style="background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);color:var(--info);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer">\ud83d\udd0d \u67e5\u8a62\u6642\u523b\u8868</button>')+
     '</div>';
     // From/To for query
     html+='<div class="fs"><div class="frow">'+
@@ -1733,218 +1689,6 @@ function fmtDFull(d){var w=['\u65e5','\u4e00','\u4e8c','\u4e09','\u56db','\u4e94
 
 
 // ════ TRANSIT QUERY ════
-var _qStopIdx = null;
-var _qResults = [];
-
-function queryTransitForStop(){
-  var d=day(); if(!d)return;
-  _qStopIdx = S.stopIdx;
-  var stop=_qStopIdx!==null?(d.stops||[])[_qStopIdx]:null;
-  var nextStop=_qStopIdx!==null&&_qStopIdx<d.stops.length-1?d.stops[_qStopIdx+1]:null;
-  var transit=stop?stop.transit:null;
-  document.getElementById('q-from').value=(transit&&transit.fromPlace)||(stop?stop.name||'':'');
-  document.getElementById('q-from-pid').value='';
-  document.getElementById('q-to').value=(transit&&transit.toPlace)||(nextStop?nextStop.name||'':'');
-  document.getElementById('q-to-pid').value='';
-  var t=trip();
-  if(t&&S.dayIdx!==null){
-    var dd=new Date(t.startDate); dd.setDate(dd.getDate()+S.dayIdx);
-    document.getElementById('q-date').value=dd.toISOString().slice(0,10);
-  }
-  var tWrap=document.getElementById('tp-wrap-q-time');
-  if(tWrap) tWrap.innerHTML='<div class="tp-wrap" data-tpid="q-time" data-label="\u51fa\u767c\u6642\u9593" data-onchange="" onclick="tpmOpenById(this)"><div class="tp-display empty" id="tp-d-q-time">-- : --</div><button class="tp-clear" onclick="event.stopPropagation();tpmClearById(this.parentElement)">&times;</button></div>';
-  var mDep=document.getElementById('q-mode-dep'), mArr=document.getElementById('q-mode-arr');
-  var lbl=document.getElementById('q-time-label');
-  if(mDep) mDep.onchange=function(){if(lbl)lbl.textContent='\u51fa\u767c\u6642\u9593';};
-  if(mArr) mArr.onchange=function(){if(lbl)lbl.textContent='\u6700\u665a\u62265\u9054\u6642\u9593';};
-  _qResults=[];
-  document.getElementById('query-form').style.display='block';
-  document.getElementById('query-results').style.display='none';
-  goTo('sc-query');
-}
-
-function closeQuery(){ goTo('sc-stop'); }
-function showQueryForm(){
-  document.getElementById('query-form').style.display='block';
-  document.getElementById('query-results').style.display='none';
-}
-
-var _acTimer={};
-function acSearch(input,listId){
-  var val=input.value.trim(), list=document.getElementById(listId);
-  if(!list)return;
-  if(val.length<2){list.style.display='none';return;}
-  clearTimeout(_acTimer[listId]);
-  _acTimer[listId]=setTimeout(async function(){
-    try{
-      var res=await fetch(GAS+'?autocomplete='+encodeURIComponent(val));
-      var data=await res.json();
-      if(!data.suggestions||!data.suggestions.length){list.style.display='none';return;}
-      list.innerHTML=data.suggestions.slice(0,6).map(function(s){
-        var p=s.placePrediction;
-        var txt=p.structuredFormat?p.structuredFormat.mainText.text:p.text.text;
-        var sub=p.structuredFormat&&p.structuredFormat.secondaryText?p.structuredFormat.secondaryText.text:'';
-        return '<div class="ac-item" data-pid="'+p.placeId+'" data-name="'+ea(txt)+'" onclick="acSelect(this,\''+listId+'\')">'+
-          '<div class="ac-main">'+esc(txt)+'</div>'+(sub?'<div class="ac-sub">'+esc(sub)+'</div>':'')+
-        '</div>';
-      }).join('');
-      list.style.display='block';
-    }catch(e){list.style.display='none';}
-  },350);
-}
-function acSelect(item,listId){
-  var pid=item.dataset.pid, name=item.dataset.name;
-  if(listId==='q-from-list'){
-    document.getElementById('q-from').value=name;
-    document.getElementById('q-from-pid').value=pid;
-  } else {
-    document.getElementById('q-to').value=name;
-    document.getElementById('q-to-pid').value=pid;
-  }
-  var list=document.getElementById(listId);
-  if(list)list.style.display='none';
-}
-document.addEventListener('click',function(e){
-  if(!e.target.closest('.ac-list')&&!e.target.closest('input')){
-    document.querySelectorAll('.ac-list').forEach(function(l){l.style.display='none';});
-  }
-});
-
-async function doTransitQuery(shiftTime){
-  var fromPid=document.getElementById('q-from-pid').value;
-  var toPid=document.getElementById('q-to-pid').value;
-  var fromTxt=document.getElementById('q-from').value.trim();
-  var toTxt=document.getElementById('q-to').value.trim();
-  if(!fromTxt||!toTxt){alert('\u8acb\u8f38\u5165\u51fa\u767c\u5730\u8207\u76ee\u7684\u5730');return;}
-  var dateVal=document.getElementById('q-date').value;
-  var timeVal=shiftTime||document.getElementById('tp-v-q-time').value;
-  var mode=document.querySelector('input[name="q-tmode"]:checked').value;
-  var routing=document.getElementById('q-routing').value;
-  var trainCk=document.getElementById('q-tr-train').checked;
-  var busCk=document.getElementById('q-tr-bus').checked;
-  var ferryCk=document.getElementById('q-tr-ferry').checked;
-  var dateStr=(dateVal||new Date().toISOString().slice(0,10)).replace(/\//g,'-');
-  var timeStr=timeVal||new Date().toTimeString().slice(0,5);
-  var dt=new Date(dateStr+'T'+timeStr+':00+08:00');
-  var ts=Math.floor(dt.getTime()/1000);
-  var modes=[];
-  if(trainCk)modes.push('train','subway','tram');
-  if(busCk)modes.push('bus');
-  if(ferryCk)modes.push('rail');
-  var btn=document.getElementById('q-search-btn');
-  if(btn){btn.textContent='\u67e5\u8a62\u4e2d\u2026';btn.disabled=true;}
-  try{
-    // If no place_id from autocomplete, try to geocode first
-    if(!fromPid && fromTxt) {
-      try {
-        var gRes = await fetch(GAS+'?geocode='+encodeURIComponent(fromTxt));
-        var gData = await gRes.json();
-        if(gData.place_id) fromPid = gData.place_id;
-      } catch(e) {}
-    }
-    if(!toPid && toTxt) {
-      try {
-        var gRes2 = await fetch(GAS+'?geocode='+encodeURIComponent(toTxt));
-        var gData2 = await gRes2.json();
-        if(gData2.place_id) toPid = gData2.place_id;
-      } catch(e) {}
-    }
-    var originParam = fromPid ? 'place_id:'+fromPid : fromTxt;
-    var destParam   = toPid   ? 'place_id:'+toPid   : toTxt;
-    var transitPayload=JSON.stringify({
-      transit_origin: originParam,
-      transit_dest: destParam,
-      depart_time: ts,
-      alternatives: true,
-      routing_pref: routing||'',
-      transit_modes: modes.join('|'),
-      arrival_time: mode==='arrive'
-    });
-    var transitB64=btoa(unescape(encodeURIComponent(transitPayload)));
-    var res=await fetch(GAS+'?transit_b64='+encodeURIComponent(transitB64));
-    var data=await res.json();
-    if(!data.routes||!data.routes.length)throw new Error(data.error||'\u672a\u627e\u5230\u8def\u7dda');
-    _qResults=data.routes;
-    renderQueryResults(data.routes);
-  }catch(e){
-    alert('\u67e5\u8a62\u5931\u6557\uff1a'+e.message);
-  }
-  if(btn){btn.textContent='\ud83d\udd0d \u67e5\u8a62';btn.disabled=false;}
-}
-
-function renderQueryResults(routes){
-  document.getElementById('query-form').style.display='none';
-  document.getElementById('query-results').style.display='block';
-  var html='';
-  routes.forEach(function(r,i){
-    html+='<div class="rr-card" data-ridx="'+i+'" onclick="selectQueryRoute('+i+')">';
-    html+='<div class="rr-top"><div>';
-    html+='<div class="rr-time">'+(r.departTime||'')+' \u2192 '+(r.arriveTime||'')+'</div>';
-    html+='<div class="rr-dur">'+(r.durationSec?fmtDuration(Math.round(r.durationSec/60)):fmtDuration(r.duration)||'')+'</div>';
-    html+='</div><div class="rr-meta">';
-    if(r.transfers!==undefined)html+='<div>\u63db\u4e58 '+r.transfers+' \u6b21</div>';
-    html+='</div></div>';
-    if(r.steps&&r.steps.length){
-      html+='<div class="rr-legs">';
-      r.steps.forEach(function(step){
-        if(step.travelMode==='WALKING'){
-          html+='<div class="rr-leg"><div class="rr-leg-icon">\ud83d\udeb6</div><div><div class="rr-leg-detail">\u6b65\u884c '+(step.duration||'')+'</div></div></div>';
-        } else if(step.transit){
-          var t=step.transit;
-          html+='<div class="rr-leg">'+
-            '<div class="rr-leg-icon">'+legModeIcon(legModeFromVehicle(t.vehicleName||''))+'</div>'+
-            '<div class="rr-leg-info">'+
-              '<div class="rr-leg-line">'+esc(t.line||t.lineName||'')+'</div>'+
-              '<div class="rr-leg-detail">'+esc(t.departStop||'')+' \u2192 '+esc(t.arriveStop||'')+
-              (t.departTime?' '+t.departTime:'')+(t.numStops?' \u30fb '+t.numStops+'\u7ad9':'')+
-              '</div>'+
-            '</div>'+
-          '</div>';
-        }
-      });
-      html+='</div>';
-    }
-    html+='</div>';
-  });
-  document.getElementById('q-results-list').innerHTML=html;
-}
-
-function selectQueryRoute(ridx){
-  document.querySelectorAll('.rr-card').forEach(function(card,i){card.classList.toggle('selected',i===ridx);});
-  var r=_qResults[ridx]; if(!r)return;
-  if(!confirm('\u5957\u7528\u6b64\u8def\u7dda\u65b9\u6848\u5230\u884c\u7a0b\uff1f'))return;
-  var d=day(); if(!d)return;
-  var stop=_qStopIdx!==null?(d.stops||[])[_qStopIdx]:null; if(!stop)return;
-  var legs=(r.steps||[]).map(function(s){
-    if(!s.transit) return {mode:'walk',fromStop:'',toStop:'',departTime:'',arriveTime:'',line:'\u6b65\u884c',platform:''};
-    var t=s.transit;
-    return {mode:legModeFromVehicle(t.vehicleName||''),fromStop:t.departStop||'',toStop:t.arriveStop||'',departTime:t.departTime||'',arriveTime:t.arriveTime||'',line:t.line||t.lineName||'',platform:t.platform||'',numStops:t.numStops||0};
-  });
-  var newRoute={id:uid(),tag:'planned',departTime:r.departTime||'',arriveTime:r.arriveTime||'',duration:r.durationSec?Math.round(r.durationSec/60):0,transfers:r.transfers||0,source:'api',legs:legs};
-  if(!stop.transit)stop.transit={fromPlace:document.getElementById('q-from').value,toPlace:document.getElementById('q-to').value,routes:[]};
-  (stop.transit.routes||[]).forEach(function(rt){if(rt.tag==='planned')rt.tag='backup';});
-  stop.transit.routes.unshift(newRoute);
-  stop.transit.fromPlace=document.getElementById('q-from').value;
-  stop.transit.toPlace=document.getElementById('q-to').value;
-  save(S.trips);
-  goTo('sc-stop');
-  renderStopForm((d.stops||[])[_qStopIdx],_qStopIdx);
-}
-
-function shiftQuery(dir){
-  if(!_qResults.length)return;
-  var ref=dir===-1?_qResults[0]:_qResults[_qResults.length-1];
-  var refTime=dir===-1?ref.departTime:ref.arriveTime;
-  if(!refTime)return;
-  var dateVal=(document.getElementById('q-date').value||new Date().toISOString().slice(0,10)).replace(/\//g,'-');
-  var dt=new Date(dateVal+'T'+refTime+':00+08:00');
-  dt.setMinutes(dt.getMinutes()+(dir===1?1:-60));
-  var shiftTime=String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
-  document.getElementById('tp-v-q-time').value=shiftTime;
-  var disp=document.getElementById('tp-d-q-time');
-  if(disp){disp.textContent=shiftTime;disp.className='tp-display';}
-  doTransitQuery(shiftTime);
-}
 
 function legModeFromVehicle(v){
   v=(v||'').toLowerCase();
@@ -2769,6 +2513,164 @@ function onChangeCalcDuration(ri){
   setStopRouteField(ri,'duration',diff);
   var fmt=document.getElementById('dur-fmt-'+ri);if(fmt)fmt.textContent=fmtDuration(diff);
   _stopDirty=true;
+}
+
+
+// ════ 班次管理 ════
+
+var _ttFile = null;
+
+// 開啟班次管理畫面
+function openTimetable() {
+  renderTimetable();
+  goTo('sc-timetable');
+}
+
+// 開啟匯入畫面
+function openTimetableImport() {
+  document.getElementById('tt-file-input').value = '';
+  document.getElementById('tt-file-preview').textContent = '點擊選擇截圖或 PDF（Navitime 時刻表）';
+  document.getElementById('tt-text-input').value = '';
+  _ttFile = null;
+  goTo('sc-timetable-import');
+}
+
+// 選擇檔案後預覽
+function onTimetableFileSelected(input) {
+  var file = input.files[0];
+  if (!file) return;
+  _ttFile = file;
+  document.getElementById('tt-file-preview').textContent = '已選擇：' + file.name;
+}
+
+// 執行解析匯入
+async function doTimetableImport() {
+  var t = trip(); if (!t) return;
+  var textInput = document.getElementById('tt-text-input').value.trim();
+  var btn = document.querySelector('#sc-timetable-import .btn-primary');
+  if (btn) { btn.textContent = '解析中…'; btn.disabled = true; }
+
+  try {
+    var result;
+    if (_ttFile) {
+      // 圖片或 PDF → base64 → Gemini
+      var b64 = await new Promise(function(res, rej) {
+        var r = new FileReader();
+        r.onload = function() { res(r.result.split(',')[1]); };
+        r.onerror = rej;
+        r.readAsDataURL(_ttFile);
+      });
+      var payload = JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type });
+      var b64pay = btoa(unescape(encodeURIComponent(payload)));
+      var res = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(b64pay));
+      result = await res.json();
+    } else if (textInput) {
+      // 純文字 → Gemini
+      var payload2 = JSON.stringify({ action: 'timetable_parse_text', text: textInput });
+      var b64pay2 = btoa(unescape(encodeURIComponent(payload2)));
+      var res2 = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(b64pay2));
+      result = await res2.json();
+    } else {
+      alert('請選擇檔案或貼上文字');
+      return;
+    }
+
+    if (!result || result.stat !== 'OK' || !result.schedules || !result.schedules.length) {
+      alert('解析失敗：' + (result && result.error ? result.error : '無法取得班次資料'));
+      return;
+    }
+
+    // 合併到行程的 timetables 陣列
+    if (!t.timetables) t.timetables = [];
+    result.schedules.forEach(function(s) { t.timetables.push(s); });
+    save(S.trips);
+    alert('成功匯入 ' + result.schedules.length + ' 筆班次');
+    goBack('sc-timetable');
+    renderTimetable();
+  } catch(e) {
+    alert('匯入失敗：' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '解析匯入'; btn.disabled = false; }
+  }
+}
+
+// 渲染班次列表
+function renderTimetable() {
+  var t = trip();
+  var body = document.getElementById('timetable-body');
+  if (!body) return;
+  var schedules = (t && t.timetables) || [];
+  var now = new Date();
+
+  if (!schedules.length) {
+    body.innerHTML = '<div style="padding:32px 20px;text-align:center;color:#c8b89a;font-size:14px">尚無班次，點右上角「匯入」新增</div>';
+    return;
+  }
+
+  // 依出發時間排序
+  var sorted = schedules.slice().sort(function(a, b) {
+    return (a.departTime || '').localeCompare(b.departTime || '');
+  });
+
+  var html = '<div style="padding:12px 16px 0">';
+  sorted.forEach(function(s, idx) {
+    // 判斷班次是否已過
+    var isPast = false;
+    if (s.date && s.departTime) {
+      var depDt = new Date(s.date + 'T' + s.departTime);
+      isPast = depDt < now;
+    }
+
+    html += '<div style="background:var(--bg3);border:1px solid ' + (isPast ? 'var(--border)' : 'rgba(110,198,240,.3)') + ';border-radius:12px;padding:14px 16px;margin-bottom:10px;opacity:' + (isPast ? '.55' : '1') + '">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">' +
+        '<div style="font-size:13px;font-weight:700;color:#e0d4c0">' + esc(s.from || '') + ' → ' + esc(s.to || '') + '</div>' +
+        '<button onclick="deleteTimetable(' + idx + ')" style="background:none;border:none;color:#c8b89a;font-size:16px;cursor:pointer;padding:0 0 0 8px">&times;</button>' +
+      '</div>' +
+      '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
+        '<div style="font-size:15px;font-weight:700;color:' + (isPast ? '#c8b89a' : '#6ec6f0') + '">' + esc(s.departTime || '') + ' → ' + esc(s.arriveTime || '') + '</div>' +
+        (s.trainName ? '<div style="font-size:12px;color:#e8b84b;background:rgba(232,184,75,.12);border:1px solid rgba(232,184,75,.3);padding:2px 8px;border-radius:6px">' + esc(s.trainName) + '</div>' : '') +
+        (s.duration ? '<div style="font-size:12px;color:#c8b89a">' + esc(s.duration) + '</div>' : '') +
+        (s.fare ? '<div style="font-size:12px;color:#c8b89a">¥' + s.fare + '</div>' : '') +
+      '</div>' +
+      (s.date ? '<div style="font-size:11px;color:#c8b89a;margin-top:4px">' + esc(s.date) + '</div>' : '') +
+      (isPast ? '<div style="margin-top:8px;display:flex;gap:8px">' +
+        '<button onclick="openNavitime(\'' + encodeURIComponent(s.from||'') + '\',\'' + encodeURIComponent(s.to||'') + '\')" style="flex:1;padding:8px;background:rgba(110,198,240,.12);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:12px;cursor:pointer">連結 NAVITime</button>' +
+      '</div>' : '') +
+    '</div>';
+  });
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+// 刪除班次
+function deleteTimetable(idx) {
+  var t = trip(); if (!t || !t.timetables) return;
+  // 找到排序後對應的原始 index
+  var sorted = t.timetables.slice().sort(function(a, b) {
+    return (a.departTime || '').localeCompare(b.departTime || '');
+  });
+  var target = sorted[idx];
+  var origIdx = t.timetables.indexOf(target);
+  if (origIdx < 0) return;
+  if (!confirm('刪除此班次？')) return;
+  t.timetables.splice(origIdx, 1);
+  save(S.trips);
+  renderTimetable();
+}
+
+// 開啟 NAVItime（自動判斷手機/PC）
+function openNavitime(from, to) {
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var f = decodeURIComponent(from), t2 = decodeURIComponent(to);
+  var url;
+  if (isMobile) {
+    url = 'https://transfer.navitime.biz/5931bus/smart/transfer/Top?startName=' +
+      encodeURIComponent(f) + '&goalName=' + encodeURIComponent(t2);
+  } else {
+    url = 'https://transfer.navitime.biz/5931bus/pc/transfer/Top?startName=' +
+      encodeURIComponent(f) + '&goalName=' + encodeURIComponent(t2);
+  }
+  window.open(url, '_blank');
 }
 
 // ════ INIT ════
