@@ -2560,15 +2560,20 @@ async function doTimetableImport() {
         r.onerror = rej;
         r.readAsDataURL(_ttFile);
       });
-      var payload = JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type });
-      var b64pay = btoa(unescape(encodeURIComponent(payload)));
-      var res = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(b64pay));
+      // 圖片/PDF 用 no-cors 相容的 form-encoded POST 避免 URL 長度限制
+      var filePayload = JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type });
+      var fileB64 = btoa(unescape(encodeURIComponent(filePayload)));
+      var res = await fetch(GAS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'timetable_b64=' + encodeURIComponent(fileB64)
+      });
       result = await res.json();
     } else if (textInput) {
-      // 純文字 → Gemini
-      var payload2 = JSON.stringify({ action: 'timetable_parse_text', text: textInput });
-      var b64pay2 = btoa(unescape(encodeURIComponent(payload2)));
-      var res2 = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(b64pay2));
+      // 純文字 → Gemini（GET + b64，避免 CORS）
+      var res2 = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(btoa(unescape(encodeURIComponent(
+        JSON.stringify({ action: 'timetable_parse_text', text: textInput })
+      )))));
       result = await res2.json();
     } else {
       alert('請選擇檔案或貼上文字');
