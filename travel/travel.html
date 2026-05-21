@@ -662,6 +662,8 @@ a{text-decoration:none;color:inherit;}
 
 <script>
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
+var GEMINI_KEY = 'AIzaSyCUDzzdhp8_BAPF6yUE95fEIhSXfEstCWA';
+var GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY;
 var STORE_KEY = 'travel_v2';
 
 // ════ TIME SCROLL PICKER ════
@@ -2516,6 +2518,56 @@ function onChangeCalcDuration(ri){
 }
 
 
+
+// ════ 前端直接呼叫 Gemini API（時刻表解析）════
+
+var TIMETABLE_PROMPT = '你是時刻表解析助手。請解析內容，提取所有班次資料。' +
+  '每筆班次包含：出發站(from)、到達站(to)、出發時間(departTime,HH:MM格式)、' +
+  '抵達時間(arriveTime,HH:MM格式)、列車名稱(trainName)、所需時間(duration,如39分)、' +
+  '票價(fare,純數字,無則留空)、日期(date,YYYY-MM-DD格式,無則留空)。' +
+  '只回傳JSON，格式：{"schedules":[{...}]}，不要任何說明文字。';
+
+// 解析時刻表文字
+async function geminiParseTimetableText(text) {
+  var res = await fetch(GEMINI_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: TIMETABLE_PROMPT + '\n\n' + text }] }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+    })
+  });
+  var data = await res.json();
+  if (data.candidates && data.candidates[0]) {
+    var result = JSON.parse(data.candidates[0].content.parts[0].text);
+    return { stat: 'OK', schedules: result.schedules || [] };
+  }
+  return { stat: 'ERROR', error: JSON.stringify(data).slice(0, 200) };
+}
+
+// 解析時刻表圖片或 PDF
+async function geminiParseTimetableFile(base64Data, mimeType) {
+  var res = await fetch(GEMINI_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: mimeType, data: base64Data } },
+          { text: TIMETABLE_PROMPT }
+        ]
+      }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+    })
+  });
+  var data = await res.json();
+  if (data.candidates && data.candidates[0]) {
+    var result = JSON.parse(data.candidates[0].content.parts[0].text);
+    return { stat: 'OK', schedules: result.schedules || [] };
+  }
+  return { stat: 'ERROR', error: JSON.stringify(data).slice(0, 200) };
+}
+
 // ════ 班次管理 ════
 
 var _ttFile = null;
@@ -2560,22 +2612,11 @@ async function doTimetableImport() {
         r.onerror = rej;
         r.readAsDataURL(_ttFile);
       });
-      // 圖片/PDF：分段上傳（避免 URL 長度限制與 CORS preflight）
-      // 先上傳 mimeType 與 base64 長度，再用 GET 傳文字部分
-      // 實際做法：直接 POST 不帶 Content-Type（簡單請求）
-      var formData = new FormData();
-      formData.append('timetable_b64', btoa(unescape(encodeURIComponent(
-        JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type })
-      ))));
-      var res = await fetch(GAS, { method: 'POST', body: formData });
-      result = await res.json();
+      // 圖片/PDF：直接呼叫 Gemini API（避開 GAS CORS 限制）
+      result = await geminiParseTimetableFile(b64, _ttFile.type);
     } else if (textInput) {
-      // 純文字：GET + b64（GAS POST 會被重導向為 GET）
-      var ttB64 = btoa(unescape(encodeURIComponent(
-        JSON.stringify({ action: 'timetable_parse_text', text: textInput })
-      )));
-      var res2 = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(ttB64));
-      result = await res2.json();
+      // 純文字：直接呼叫 Gemini API（避開 GAS CORS 限制）
+      result = await geminiParseTimetableText(textInput);
     } else {
       alert('請選擇檔案或貼上文字');
       return;
