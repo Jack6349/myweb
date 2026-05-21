@@ -1071,7 +1071,7 @@ function openStop(idx){
   var d=day(); if(!d)return;
   S.stopIdx=idx; _stopDirty=false;
   var stop=(d.stops||[])[idx];
-  document.getElementById('stop-hdr-title').textContent='\u7de8\u8f2f\u5730\u9ede';
+  document.getElementById('stop-hdr-title').textContent='\u7de8\u8f2f/\u6aa2\u8996\u5730\u9ede';
   document.getElementById('stop-del-btn').style.display='block';
   renderStopForm(stop, idx);
   goTo('sc-stop');
@@ -1222,7 +1222,7 @@ function buildStopFields(stop,type,isLast,nextStop){
     }
     html+='</div>';
     html+='<div style="padding:0 16px 8px">'+
-      '<button onclick="addManualRoute()" style="width:100%;padding:9px;border:1px dashed var(--border2);border-radius:var(--radius-sm);background:none;color:#c8b89a;font-size:12px;cursor:pointer">+ \u624b\u52d5\u65b0\u589e\u8def\u7dda\u65b9\u6848</button>'+
+      '<button onclick="addManualRoute()" style="width:100%;padding:9px;border:1px dashed var(--border2);border-radius:var(--radius-sm);background:none;color:#c8b89a;font-size:12px;cursor:pointer">+ \u65b0\u589e\u65b9\u6848</button>'+
     '</div>';
   }
   return html;
@@ -1245,14 +1245,37 @@ function renderRouteEditor(r, ri){
       '</select>')+
     '<button data-ri="'+ri+'" onclick="removeStopRoute(parseInt(this.dataset.ri))" class="leg-del">&times;</button>'+
   '</div>';
-  html+=buildTimePicker('srd-'+ri+'-dep',isAirport?'\u8d77\u98db\u6642\u9593':'\u767c\u8eca\u6642\u9593',r.departTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
-  html+=buildTimePicker('srd-'+ri+'-arr',isAirport?'\u964d\u843d\u6642\u9593':'\u62b5\u9054\u6642\u9593',r.arriveTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
-  html+='<div class="fs">'+(isAirport?'<div class="fl">\u98db\u884c\u6642\u9593(\u5206)</div>':'<div class="frow">')+
-    '<div style="font-size:12px;color:#c8b89a;padding:2px 0">\u7e3d\u6642\u9593\uff1a<span id="dur-fmt-'+ri+'" style="color:#e8b84b;font-weight:700">'+fmtDuration(r.duration)+'</span></div>'+
-    (isAirport?'':'<div><div class="fl">\u63db\u4e58\u6b21\u6578</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="transfers" value="'+ea(r.transfers!==undefined?r.transfers:'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>')+
-    (isAirport?'':'</div>')+
-  '</div>';
-  // Fare row with import toggle
+  // Airport 模式保留時間 picker
+  if(isAirport){
+    html+=buildTimePicker('srd-'+ri+'-dep','\u8d77\u98db\u6642\u9593',r.departTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
+    html+=buildTimePicker('srd-'+ri+'-arr','\u964d\u843d\u6642\u9593',r.arriveTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
+    html+='<div class="fs"><div class="fl">\u98db\u884c\u6642\u9593(\u5206)</div>'+
+      '<div style="font-size:12px;color:#c8b89a;padding:2px 0">\u7e3d\u6642\u9593\uff1a<span id="dur-fmt-'+ri+'" style="color:#e8b84b;font-weight:700">'+fmtDuration(r.duration)+'</span></div>'+
+    '</div>';
+  } else {
+    // 非 airport：顯示時間/換乘摘要（唯讀）+ legs 卡片
+    html+='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:4px 0 2px">';
+    if(r.departTime||r.arriveTime) html+='<div style="font-size:14px;font-weight:700;color:#6ec6f0">'+(r.departTime||'')+(r.arriveTime?' → '+r.arriveTime:'')+'</div>';
+    if(r.duration) html+='<div style="font-size:12px;color:#c8b89a">'+fmtDuration(r.duration)+'</div>';
+    if(r.transfers!==undefined) html+='<div style="font-size:11px;color:#c8b89a">\u4e58\u63db '+r.transfers+' \u6b21</div>';
+    html+='</div>';
+    // Legs 唯讀摘要
+    if(legs.length){
+      html+='<div style="margin:4px 0 6px">';
+      legs.forEach(function(leg,li){
+        html+='<div style="font-size:11px;color:#c8b89a;padding:2px 0">';
+        html+='&#'+(9311+li+1)+'; '+esc(leg.line||leg.fromStop||'');
+        if(leg.headsign) html+='<span style="color:#e0d4c0">（'+esc(leg.headsign)+'）</span>';
+        html+=' '+esc(leg.fromStop||'');
+        if(leg.platform) html+='（'+esc(leg.platform)+'）';
+        html+=' → '+esc(leg.toStop||'');
+        if(leg.arrPlatform) html+='（'+esc(leg.arrPlatform)+'）';
+        html+='</div>';
+      });
+      html+='</div>';
+    }
+  }
+  // 付款資訊
   var curs=(trip()?trip().currencies:null)||['TWD','JPY'];
   html+='<div class="fs"><div class="frow">'+
     '<div><div class="fl">\u8cbb\u7528\uff08\u53c3\u8003\uff09</div>'+
@@ -1264,7 +1287,7 @@ function renderRouteEditor(r, ri){
   '</div></div>';
   html+='<div class="fs"><div class="fl">\u4ed8\u6b3e\u65b9\u5f0f</div>'+
     '<select class="fsel" id="srd-paymethod-'+ri+'" onchange="setStopRouteField('+ri+',\'payMethod\',this.value)" style="font-size:13px;padding:8px 10px">'+
-    ['','cash','card','ic'].map(function(v){var nm={'':'—','cash':'現金','card':'刷卡','ic':'IC卡'};return'<option value="'+v+'"'+(r.payMethod===v?' selected':'')+'>'+nm[v]+'</option>';}).join('')+
+    ['','cash','card','ic'].map(function(v){var nm={'':'\u2014','cash':'\u73fe\u91d1','card':'\u5237\u5361','ic':'IC\u5361'};return'<option value="'+v+'"'+(r.payMethod===v?' selected':'')+'>'+nm[v]+'</option>';}).join('')+
     '</select></div>';
   html+='<div class="fs" style="display:flex;align-items:center;gap:8px;padding:2px 0">'+
     '<input type="checkbox" id="srd-import-'+ri+'" style="width:18px;height:18px"'+
@@ -1272,9 +1295,6 @@ function renderRouteEditor(r, ri){
     '<label for="srd-import-'+ri+'" style="font-size:12px;color:#e0d4c0">\u5e36\u5165\u8cbb\u7528\u8a18\u9304</label>'+
     '<span style="font-size:11px;color:#c8b89a">\uff08\u9810\u8a2d\u4e0d\u5e36\u5165\uff0c\u5982\u4f7f\u7528 JR Pass \u8acb\u4e0d\u52fe\u9078\uff09</span>'+
   '</div>';
-  if(!isAirport){ html+='<div style="font-size:10px;font-weight:700;color:#c8b89a;letter-spacing:.5px;padding:6px 0 4px">\u63db\u4e58\u6bb5</div>';
-  legs.forEach(function(leg,li){ if(!isAirport) html+=renderLegEditor(leg,ri,li); }); }
-  if(!isAirport){ html+='<button data-ri="'+ri+'" onclick="addStopLeg(parseInt(this.dataset.ri))" style="width:100%;padding:6px;border:1px dashed var(--border2);border-radius:6px;background:none;color:#c8b89a;font-size:11px;cursor:pointer;margin-top:2px">+ \u65b0\u589e\u63db\u4e58\u6bb5</button>'; }
   html+='</div>';
   return html;
 }
@@ -1369,8 +1389,12 @@ function addManualRoute(){
   }
   var filtered = schedules.filter(function(s){ return !s.date || s.date === dayDate; });
   if (filtered.length > 0) {
-    // 有班次：開啟選擇器
-    openTimetableSelector();
+    // 有班次：開啟多選模式選擇器
+    _ttSelectorMulti = true;
+    _ttSelectedIdxs = [];
+    _ttSelectorStopIdx = S.stopIdx;
+    renderTimetableSelector(d);
+    goTo('sc-timetable-selector');
   } else {
     // 無班次：直接新增空白路線
     var stop=S.stopIdx!==null?((d.stops||[])[S.stopIdx]):null;
@@ -2580,7 +2604,10 @@ function onChangeCalcDuration(ri){
 
 // ════ 班次選擇器 ════
 
-var _ttSelectorStopIdx = null; // 當前正在編輯的 stop index
+var _ttSelectorStopIdx = null;
+var _ttSelectorMulti = false;   // 是否為多選模式
+var _ttSelectedIdxs = [];        // 已選班次的 index 陣列
+ // 當前正在編輯的 stop index
 
 // 開啟班次選擇畫面（從地點編輯頁呼叫）
 function openTimetableSelector() {
@@ -2589,11 +2616,9 @@ function openTimetableSelector() {
   _ttSelectorStopIdx = S.stopIdx;
   var stop = (d.stops || [])[_ttSelectorStopIdx];
 
-  // 若已選過，直接顯示已選班次（不進入選擇器）
-  if (stop && stop.selectedTimetableId) {
-    // 已有選擇，不需要進入，renderStopBody 已顯示
-    return;
-  }
+  // 單選模式
+  _ttSelectorMulti = false;
+  _ttSelectedIdxs = [];
   renderTimetableSelector(d);
   goTo('sc-timetable-selector');
 }
@@ -2637,8 +2662,9 @@ function renderTimetableSelector(d) {
     return;
   }
 
+  var isMulti = _ttSelectorMulti || false;
   var html = '<div style="padding:12px 16px 0">' +
-    '<div style="font-size:12px;color:#c8b89a;margin-bottom:12px">選擇要套用到此段交通的班次：</div>';
+    '<div style="font-size:12px;color:#c8b89a;margin-bottom:12px">' + (isMulti ? '可複選班次，選好後點「套用」' : '選擇要套用到此段交通的班次：') + '</div>';
 
   filtered.forEach(function(s, idx) {
     // 找原始 index
@@ -2679,7 +2705,9 @@ function renderTimetableSelector(d) {
       fareHtml = '¥' + esc(String(s.fare));
     }
 
-    html += '<div onclick="applyTimetable(' + origIdx + ')" style="background:var(--bg3);border:1px solid rgba(110,198,240,.3);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer">' +
+    var isSelected = _ttSelectedIdxs && _ttSelectedIdxs.indexOf(origIdx) >= 0;
+    html += '<div onclick="toggleTimetableSelect(' + origIdx + ')" style="background:var(--bg3);border:2px solid ' + (isSelected ? '#6ec6f0' : 'rgba(110,198,240,.25)') + ';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;position:relative">' +
+    (isSelected ? '      \'<div style="position:absolute;top:10px;right:12px;width:18px;height:18px;background:#6ec6f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#0f1923">✓</div>\' +' : '') +
       // 標題行：出發→到達 + 乘換
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
         '<div style="font-size:13px;font-weight:700;color:#e0d4c0">' + esc(s.from || '') + ' → ' + esc(s.to || '') + '</div>' +
@@ -2698,7 +2726,82 @@ function renderTimetableSelector(d) {
   });
 
   html += '</div>';
+  // 套用按鈕（多選模式）
+  if (_ttSelectorMulti) {
+    html += '<div style="padding:12px 16px"><button onclick="applyMultiTimetable()" style="width:100%;padding:12px;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#0f1923;font-size:14px;font-weight:700;cursor:pointer">套用已選方案</button></div>';
+  }
   body.innerHTML = html;
+}
+
+
+// 切換班次選取狀態（多選模式）
+function toggleTimetableSelect(origIdx) {
+  if (!_ttSelectorMulti) {
+    // 單選模式：直接套用
+    applyTimetable(origIdx);
+    return;
+  }
+  // 多選模式：toggle
+  var pos = _ttSelectedIdxs.indexOf(origIdx);
+  if (pos >= 0) {
+    _ttSelectedIdxs.splice(pos, 1);
+  } else {
+    _ttSelectedIdxs.push(origIdx);
+  }
+  renderTimetableSelector(day());
+}
+
+// 套用多選的班次（每筆各建立一個方案）
+function applyMultiTimetable() {
+  if (!_ttSelectedIdxs.length) { alert('請先選擇班次'); return; }
+  var d = day(); if (!d) return;
+  var stop = (d.stops || [])[_ttSelectorStopIdx];
+  if (!stop) return;
+  var t = trip();
+  if (!stop.transit) stop.transit = {
+    fromPlace: (document.getElementById('sf-transit-from') || {value:''}).value,
+    toPlace: (document.getElementById('sf-transit-to') || {value:''}).value,
+    routes: []
+  };
+
+  _ttSelectedIdxs.forEach(function(origIdx) {
+    var s = t && t.timetables ? t.timetables[origIdx] : null;
+    if (!s) return;
+    stop.transit.routes.push({
+      id: uid(),
+      tag: 'planned',
+      departTime: s.departTime || '',
+      arriveTime: s.arriveTime || '',
+      duration: s.duration ? parseInt(s.duration) || 0 : 0,
+      transfers: s.transfers || 0,
+      fare: s.fare ? parseFloat(s.fare) || 0 : 0,
+      fareCurrency: 'JPY',
+      importFare: false,
+      legs: (s.legs && s.legs.length ? s.legs : [{
+        departure_station: s.from, arrival_station: s.to,
+        departure_time: s.departTime, arrival_time: s.arriveTime,
+        line_name: s.trainName
+      }]).map(function(l) {
+        return {
+          mode: 'train',
+          fromStop: l.departure_station || s.from || '',
+          toStop: l.arrival_station || s.to || '',
+          departTime: l.departure_time || '',
+          arriveTime: l.arrival_time || '',
+          line: l.line_name || s.trainName || '',
+          platform: l.departure_platform || '',
+          arrPlatform: l.arrival_platform || '',
+          headsign: l.destination_for || ''
+        };
+      })
+    });
+  });
+
+  save(S.trips);
+  _stopDirty = false;
+  _ttSelectedIdxs = [];
+  goBack('sc-stop');
+  renderStopForm(stop, _ttSelectorStopIdx);
 }
 
 // 套用選擇的班次到地點路線方案
