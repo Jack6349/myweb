@@ -1033,7 +1033,7 @@ function renderDayTL(){
         html+='<div class="tl-seg-card" data-stopidx="'+i+'" onclick="openStopByEl(this)" style="margin-top:6px">';
         html+='<div class="tl-seg-summary">';
         html+='<span class="tl-seg-time">'+(plannedRoute.departTime||'')+' \u2192 '+(plannedRoute.arriveTime||'')+'</span>';
-        if(plannedRoute.duration) html+='<span class="tl-seg-dur">'+plannedRoute.duration+'\u5206</span>';
+        if(plannedRoute.duration) html+='<span class="tl-seg-dur">'+fmtDuration(plannedRoute.duration)+'</span>';
         if(plannedRoute.transfers>0) html+='<span class="tl-seg-dur">\u63db\u4e58'+plannedRoute.transfers+'\u6b21</span>';
         html+='<span class="tl-seg-tag tag-planned">\u9810\u5b9a</span>';
         if(transit.routes&&transit.routes.length>1) html+='<span class="tl-seg-dur">'+transit.routes.length+'\u65b9\u6848</span>';
@@ -1260,7 +1260,7 @@ function renderRouteEditor(r, ri){
   html+=buildTimePicker('srd-'+ri+'-dep',isAirport?'\u8d77\u98db\u6642\u9593':'\u767c\u8eca\u6642\u9593',r.departTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
   html+=buildTimePicker('srd-'+ri+'-arr',isAirport?'\u964d\u843d\u6642\u9593':'\u62b5\u9054\u6642\u9593',r.arriveTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
   html+='<div class="fs">'+(isAirport?'<div class="fl">\u98db\u884c\u6642\u9593(\u5206)</div>':'<div class="frow">')+
-    '<div><div class="fl">\u7e3d\u6642\u9593(\u5206)</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="duration" value="'+ea(r.duration||'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>'+
+    '<div><div class="fl">\u7e3d\u6642\u9593<span id="dur-fmt-'+ri+'" style="color:#e8b84b;font-size:11px;margin-left:6px">'+fmtDuration(r.duration)+'</span></div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="duration" value="'+ea(r.duration||'')+'" oninput="var s=document.getElementById(\'dur-fmt-\'+this.dataset.ri);if(s)s.textContent=fmtDuration(parseInt(this.value)||0);" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>'+
     (isAirport?'':'<div><div class="fl">\u63db\u4e58\u6b21\u6578</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="transfers" value="'+ea(r.transfers!==undefined?r.transfers:'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>')+
     (isAirport?'':'</div>')+
   '</div>';
@@ -1274,6 +1274,10 @@ function renderRouteEditor(r, ri){
         curs.map(function(cur){return'<option value="'+cur+'"'+(r.fareCurrency===cur?' selected':'')+'>'+cur+'</option>';}).join('')+
       '</select></div>'+
   '</div></div>';
+  html+='<div class="fs"><div class="fl">\u4ed8\u6b3e\u65b9\u5f0f</div>'+
+    '<select class="fsel" id="srd-paymethod-'+ri+'" onchange="setStopRouteField('+ri+',\'payMethod\',this.value)" style="font-size:13px;padding:8px 10px">'+
+    ['','cash','card','ic'].map(function(v){var nm={'':'—','cash':'現金','card':'刷卡','ic':'IC卡'};return'<option value="'+v+'"'+(r.payMethod===v?' selected':'')+'>'+nm[v]+'</option>';}).join('')+
+    '</select></div>';
   html+='<div class="fs" style="display:flex;align-items:center;gap:8px;padding:2px 0">'+
     '<input type="checkbox" id="srd-import-'+ri+'" style="width:18px;height:18px"'+
       (r.importFare?' checked':'')+' onchange="setStopRouteField('+ri+',\'importFare\',this.checked)">'+
@@ -1468,6 +1472,7 @@ function saveStop(){
         fare:fareEl0?parseFloat(fareEl0.value)||0:(existAirport?existAirport.fare||0:0),
         fareCurrency:fareCurEl0?fareCurEl0.value:(existAirport?existAirport.fareCurrency||'TWD':'TWD'),
         importFare:importEl0?importEl0.checked:(existAirport?existAirport.importFare||false:false),
+        payMethod:(function(){var el=document.getElementById('srd-paymethod-0');return el?el.value:(existAirport?existAirport.payMethod||'':'');})(),
         legs:[{mode:'flight',fromStop:fromEl.value,toStop:toEl.value,
           departTime:flightDep,arriveTime:flightArr,
           line:airlineVal+(flightNoVal?' '+flightNoVal:''),platform:''}]
@@ -1487,6 +1492,8 @@ function saveStop(){
         if(fareCurEl) r.fareCurrency=fareCurEl.value;
         if(importEl) r.importFare=importEl.checked;
         if(durEl) r.duration=parseInt(durEl.value)||0;
+        var pmEl=document.getElementById('srd-paymethod-'+ri);
+        if(pmEl) r.payMethod=pmEl.value;
       });
     }
     stop.transit={
@@ -1715,6 +1722,16 @@ function legModeIcon(mode){return {walk:'\ud83d\udeb6',flight:'\u2708\ufe0f',shi
 function legModeName(mode){return {walk:'\u6b65\u884c',flight:'\u822a\u73ed',shinkansen:'\u65b0\u5e39\u7dda/\u7279\u6025',train:'\u96fb\u8eca/\u5730\u9435',bus:'\u5df4\u58eb',ferry:'\u6e21\u8f2a',taxi:'\u8a08\u7a0b\u8eca'}[mode]||mode;}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function ea(s){return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function fmtDuration(mins){
+  if(!mins||mins<=0) return '';
+  mins=Math.round(mins);
+  var d=Math.floor(mins/1440), h=Math.floor((mins%1440)/60), m=mins%60;
+  var s='';
+  if(d>0) s+=d+'天';
+  if(h>0) s+=h+'小時';
+  if(m>0) s+=m+'分';
+  return s||'0分';
+}
 function fmtD(d){if(!d)return'';var dt=new Date(d);return(dt.getMonth()+1)+'/'+(dt.getDate());}
 function fmtDFull(d){var w=['\u65e5','\u4e00','\u4e8c','\u4e09','\u56db','\u4e94','\u516d'];return(d.getMonth()+1)+'/'+(d.getDate())+' (\u9031'+w[d.getDay()]+')';}
 
@@ -1862,7 +1879,7 @@ function renderQueryResults(routes){
     html+='<div class="rr-card" data-ridx="'+i+'" onclick="selectQueryRoute('+i+')">';
     html+='<div class="rr-top"><div>';
     html+='<div class="rr-time">'+(r.departTime||'')+' \u2192 '+(r.arriveTime||'')+'</div>';
-    html+='<div class="rr-dur">'+(r.durationSec?Math.round(r.durationSec/60)+'\u5206':r.duration||'')+'</div>';
+    html+='<div class="rr-dur">'+(r.durationSec?fmtDuration(Math.round(r.durationSec/60)):fmtDuration(r.duration)||'')+'</div>';
     html+='</div><div class="rr-meta">';
     if(r.transfers!==undefined)html+='<div>\u63db\u4e58 '+r.transfers+' \u6b21</div>';
     html+='</div></div>';
@@ -2748,7 +2765,7 @@ function onChangeCalcDuration(ri){
   var diff=arrMin-depMin;
   if(diff<0)diff+=1440; // cross midnight
   var durEl=document.querySelector('[data-ri="'+ri+'"][data-field="duration"]');
-  if(durEl){durEl.value=diff;setStopRouteField(ri,'duration',diff);}
+  if(durEl){durEl.value=diff;setStopRouteField(ri,'duration',diff);var fmt=document.getElementById('dur-fmt-'+ri);if(fmt)fmt.textContent=fmtDuration(diff);}
   _stopDirty=true;
 }
 
