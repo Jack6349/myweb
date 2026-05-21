@@ -2560,20 +2560,20 @@ async function doTimetableImport() {
         r.onerror = rej;
         r.readAsDataURL(_ttFile);
       });
-      // 圖片/PDF 用 no-cors 相容的 form-encoded POST 避免 URL 長度限制
-      var filePayload = JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type });
-      var fileB64 = btoa(unescape(encodeURIComponent(filePayload)));
+      // 圖片/PDF 用 JSON POST（GAS doPost 支援）
       var res = await fetch(GAS, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'timetable_b64=' + encodeURIComponent(fileB64)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type })
       });
       result = await res.json();
     } else if (textInput) {
-      // 純文字 → Gemini（GET + b64，避免 CORS）
-      var res2 = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(btoa(unescape(encodeURIComponent(
-        JSON.stringify({ action: 'timetable_parse_text', text: textInput })
-      )))));
+      // 純文字 → Gemini（JSON POST）
+      var res2 = await fetch(GAS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'timetable_parse_text', text: textInput })
+      });
       result = await res2.json();
     } else {
       alert('請選擇檔案或貼上文字');
