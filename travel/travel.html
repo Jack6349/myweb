@@ -1296,7 +1296,11 @@ function renderLegEditor(leg,ri,li){
   html+=buildTimePicker('slg-'+ri+'_'+li+'-arr','\u5230',leg.arriveTime||'','');
   html+='<div class="frow" style="gap:6px">'+
     '<input class="fi fi-sm" placeholder="\u8def\u7dda\u540d\u7a31" data-ri="'+ri+'" data-li="'+li+'" data-field="line" value="'+ea(leg.line||'')+'" onchange="setStopLegField(parseInt(this.dataset.ri),parseInt(this.dataset.li),this.dataset.field,this.value)">'+
-    '<input class="fi fi-sm" placeholder="\u65b9\u5411/\u6708\u53f0" data-ri="'+ri+'" data-li="'+li+'" data-field="platform" value="'+ea(leg.platform||'')+'" onchange="setStopLegField(parseInt(this.dataset.ri),parseInt(this.dataset.li),this.dataset.field,this.value)">'+
+    '<input class="fi fi-sm" placeholder="\u65b9\u5411(\u884c)" data-ri="'+ri+'" data-li="'+li+'" data-field="headsign" value="'+ea(leg.headsign||'')+'" onchange="setStopLegField(parseInt(this.dataset.ri),parseInt(this.dataset.li),this.dataset.field,this.value)">'+
+  '</div>'+
+  '<div class="frow" style="gap:6px">'+
+    '<input class="fi fi-sm" placeholder="\u51fa\u767c\u6708\u53f0" data-ri="'+ri+'" data-li="'+li+'" data-field="platform" value="'+ea(leg.platform||'')+'" onchange="setStopLegField(parseInt(this.dataset.ri),parseInt(this.dataset.li),this.dataset.field,this.value)">'+
+    '<input class="fi fi-sm" placeholder="\u5230\u9054\u6708\u53f0" data-ri="'+ri+'" data-li="'+li+'" data-field="arrPlatform" value="'+ea(leg.arrPlatform||'')+'" onchange="setStopLegField(parseInt(this.dataset.ri),parseInt(this.dataset.li),this.dataset.field,this.value)">'+
   '</div>';
   html+='</div>';
   return html;
