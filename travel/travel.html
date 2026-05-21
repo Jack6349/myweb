@@ -1300,7 +1300,7 @@ function renderRouteEditor(r, ri){
 }
 
 function renderLegEditor(leg,ri,li){
-  var MODES=['walk','flight','shinkansen','train','bus','ferry','taxi'];
+  var MODES=['walk','flight','shinkansen','train','bus','ferry','taxi','shuttle','car'];
   var html='<div style="background:var(--bg3);border-radius:6px;padding:8px;margin-bottom:6px;border:1px solid var(--border)">';
   html+='<div style="display:flex;gap:6px;margin-bottom:6px">'+
     '<select class="leg-mode-sel" data-ri="'+ri+'" data-li="'+li+'" data-field="mode" onchange="setStopLegField(parseInt(this.dataset.ri),parseInt(this.dataset.li),this.dataset.field,this.value)">'+
@@ -1753,8 +1753,8 @@ function fileToB64(file){
 
 // ════ HELPERS ════
 function stopTypeIcon(type){return {transit:'🚉',spot:'\ud83d\udccd',food:'\ud83c\udf7d\ufe0f',hotel:'\ud83c\udfe8',airport:'\u2708\ufe0f'}[type]||'\ud83d\udccc';}
-function legModeIcon(mode){return {walk:'\ud83d\udeb6',flight:'\u2708\ufe0f',shinkansen:'\ud83d\ude84',train:'\ud83d\ude83',bus:'\ud83d\ude8c',ferry:'\ud83d\udea2',taxi:'\ud83d\ude96'}[mode]||'\ud83d\udd39';}
-function legModeName(mode){return {walk:'\u6b65\u884c',flight:'\u822a\u73ed',shinkansen:'\u65b0\u5e39\u7dda/\u7279\u6025',train:'\u96fb\u8eca/\u5730\u9435',bus:'\u5df4\u58eb',ferry:'\u6e21\u8f2a',taxi:'\u8a08\u7a0b\u8eca'}[mode]||mode;}
+function legModeIcon(mode){return {walk:'\ud83d\udeb6',flight:'\u2708\ufe0f',shinkansen:'\ud83d\ude84',train:'\ud83d\ude83',bus:'\ud83d\ude8c',ferry:'\ud83d\udea2',taxi:'\ud83d\ude96',shuttle:'\ud83d\ude90',car:'\ud83d\ude97'}[mode]||'\ud83d\udd39';}
+function legModeName(mode){return {walk:'\u6b65\u884c',flight:'\u822a\u73ed',shinkansen:'\u65b0\u5e39\u7dda/\u7279\u6025',train:'\u96fb\u8eca/\u5730\u9435',bus:'\u5df4\u58eb',ferry:'\u6e21\u8f2a',taxi:'\u8a08\u7a0b\u8eca',shuttle:'\u63a5\u99f3\u8eca',car:'\u79c1\u5bb6\u8eca'}[mode]||mode;}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function ea(s){return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function fmtDuration(mins){
