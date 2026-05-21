@@ -2560,24 +2560,18 @@ async function doTimetableImport() {
         r.onerror = rej;
         r.readAsDataURL(_ttFile);
       });
-      var body1 = JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type });
-      console.log('[timetable file] body slice:', body1.slice(0,100));
-      var res = await fetch(GAS, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: body1
-      });
-      console.log('[timetable file] status:', res.status, res.type);
+      // 圖片/PDF：GET + b64
+      var ttFileB64 = btoa(unescape(encodeURIComponent(
+        JSON.stringify({ action: 'timetable_parse_file', base64: b64, mimeType: _ttFile.type })
+      )));
+      var res = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(ttFileB64));
       result = await res.json();
     } else if (textInput) {
-      var body2 = JSON.stringify({ action: 'timetable_parse_text', text: textInput });
-      console.log('[timetable text] body slice:', body2.slice(0,100));
-      var res2 = await fetch(GAS, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: body2
-      });
-      console.log('[timetable text] status:', res2.status, res2.type);
+      // 純文字：GET + b64（GAS POST 會被重導向為 GET）
+      var ttB64 = btoa(unescape(encodeURIComponent(
+        JSON.stringify({ action: 'timetable_parse_text', text: textInput })
+      )));
+      var res2 = await fetch(GAS + '?timetable_b64=' + encodeURIComponent(ttB64));
       result = await res2.json();
     } else {
       alert('請選擇檔案或貼上文字');
