@@ -660,10 +660,22 @@ a{text-decoration:none;color:inherit;}
   </div>
 </div>
 
+<!-- ══ SCREEN: TIMETABLE SELECTOR ══ -->
+<div class="screen" id="sc-timetable-selector">
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
+    <div class="hdr">
+      <button class="hdr-back" onclick="closeTimetableSelector()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hdr-title">選擇班次</div>
+    </div>
+    <div class="body no-nav" id="timetable-selector-body" style="padding-bottom:20px"></div>
+  </div>
+</div>
+
 <script>
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
-var GEMINI_KEY = 'AIzaSyCUDzzdhp8_BAPF6yUE95fEIhSXfEstCWA';
-var GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY;
+
 var STORE_KEY = 'travel_v2';
 
 // ════ TIME SCROLL PICKER ════
@@ -1169,6 +1181,7 @@ function buildStopFields(stop,type,isLast,nextStop){
     var isAirport=(type==='airport');
     html+='<div style="padding:0 16px 8px;display:flex;align-items:center;justify-content:space-between">'+
       '<div style="font-size:13px;font-weight:700;color:#e0d4c0">\u524d\u5f80\u4e0b\u4e00\u7ad9\u7684\u4ea4\u901a</div>'+
+      '<button onclick="openTimetableSelector()" style="background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:11px;padding:4px 10px;cursor:pointer">\u5f9e\u73ed\u6b21\u9078\u64c7</button>'+
     '</div>';
     // From/To for query
     html+='<div class="fs"><div class="frow">'+
@@ -1182,11 +1195,28 @@ function buildStopFields(stop,type,isLast,nextStop){
       html+=buildTimePicker('sf-flight-arr','\u964d\u843d\u6642\u9593\uff08\u5230\uff09',flightRoute?flightRoute.arriveTime||'':'','');
     }
     // Route list
+    // 已選班次顯示
+    var t=trip();
+    var selId=stop?stop.selectedTimetableId:null;
+    var selSched=(t&&t.timetables&&selId!==null&&selId!==undefined)?t.timetables[selId]:null;
+    if(selSched){
+      html+='<div style="margin:0 16px 8px;background:var(--bg3);border:1px solid rgba(110,198,240,.4);border-radius:12px;padding:12px 14px">'+
+        '<div style="font-size:11px;color:#6ec6f0;margin-bottom:4px">\u5df2\u9078\u73ed\u6b21</div>'+
+        '<div style="font-size:13px;font-weight:700;color:#e0d4c0;margin-bottom:4px">'+esc(selSched.from||'')+'\u2192'+esc(selSched.to||'')+'</div>'+
+        '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+          '<div style="font-size:15px;font-weight:700;color:#6ec6f0">'+esc(selSched.departTime||'')+' \u2192 '+esc(selSched.arriveTime||'')+'</div>'+
+          (selSched.trainName?'<div style="font-size:11px;color:#e8b84b">'+esc(selSched.trainName)+'</div>':'')+
+          (selSched.duration?'<div style="font-size:11px;color:#c8b89a">'+esc(selSched.duration)+'</div>':'')+
+          (selSched.fare?'<div style="font-size:11px;color:#c8b89a">&yen;'+esc(String(selSched.fare))+'</div>':'')+
+        '</div>'+
+        '<button onclick="resetTimetableSelection()" style="margin-top:8px;padding:5px 12px;background:none;border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#c8b89a;font-size:11px;cursor:pointer">\u91cd\u65b0\u9078\u64c7</button>'+
+      '</div>';
+    }
     html+='<div id="sf-transit-routes">';
     var routes=transit?transit.routes||[]:[];
-    if(routes.length===0){
+    if(routes.length===0&&!selSched){
       html+='<div style="margin:0 16px 12px;padding:12px;background:var(--bg4);border-radius:var(--radius-sm);font-size:12px;color:#c8b89a;text-align:center">'+
-        '\u5c1a\u7121\u8def\u7dda\u65b9\u6848\u3002\u9ede\u300c\u67e5\u8a62\u6642\u523b\u8868\u300d\u81ea\u52d5\u5e36\u5165\uff0c\u6216\u624b\u52d5\u65b0\u589e\u3002</div>';
+        '\u5c1a\u7121\u8def\u7dda\u65b9\u6848\u3002\u9ede\u300c\u5f9e\u73ed\u6b21\u9078\u64c7\u300d\u5e36\u5165\uff0c\u6216\u624b\u52d5\u65b0\u589e\u3002</div>';
     } else {
       routes.forEach(function(r,ri){ html+=renderRouteEditor(r,ri); });
     }
@@ -2519,53 +2549,135 @@ function onChangeCalcDuration(ri){
 
 
 
-// ════ 前端直接呼叫 Gemini API（時刻表解析）════
 
-var TIMETABLE_PROMPT = '你是時刻表解析助手。請解析內容，提取所有班次資料。' +
-  '每筆班次包含：出發站(from)、到達站(to)、出發時間(departTime,HH:MM格式)、' +
-  '抵達時間(arriveTime,HH:MM格式)、列車名稱(trainName)、所需時間(duration,如39分)、' +
-  '票價(fare,純數字,無則留空)、日期(date,YYYY-MM-DD格式,無則留空)。' +
-  '只回傳JSON，格式：{"schedules":[{...}]}，不要任何說明文字。';
 
-// 解析時刻表文字
-async function geminiParseTimetableText(text) {
-  var res = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: TIMETABLE_PROMPT + '\n\n' + text }] }],
-      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-    })
-  });
-  var data = await res.json();
-  if (data.candidates && data.candidates[0]) {
-    var result = JSON.parse(data.candidates[0].content.parts[0].text);
-    return { stat: 'OK', schedules: result.schedules || [] };
+// ════ 班次選擇器 ════
+
+var _ttSelectorStopIdx = null; // 當前正在編輯的 stop index
+
+// 開啟班次選擇畫面（從地點編輯頁呼叫）
+function openTimetableSelector() {
+  var d = day(); if (!d) return;
+  // 取得當前 stop index
+  _ttSelectorStopIdx = S.stopIdx;
+  var stop = (d.stops || [])[_ttSelectorStopIdx];
+
+  // 若已選過，直接顯示已選班次（不進入選擇器）
+  if (stop && stop.selectedTimetableId) {
+    // 已有選擇，不需要進入，renderStopBody 已顯示
+    return;
   }
-  return { stat: 'ERROR', error: JSON.stringify(data).slice(0, 200) };
+  renderTimetableSelector(d);
+  goTo('sc-timetable-selector');
 }
 
-// 解析時刻表圖片或 PDF
-async function geminiParseTimetableFile(base64Data, mimeType) {
-  var res = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        parts: [
-          { inline_data: { mime_type: mimeType, data: base64Data } },
-          { text: TIMETABLE_PROMPT }
-        ]
-      }],
-      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-    })
+// 關閉選擇器，返回地點編輯
+function closeTimetableSelector() {
+  goBack('sc-stop');
+}
+
+// 渲染班次選擇卡片（當天所有班次）
+function renderTimetableSelector(d) {
+  var body = document.getElementById('timetable-selector-body');
+  if (!body) return;
+  var t = trip();
+  var schedules = (t && t.timetables) || [];
+  var dayDate = d ? d.date || '' : '';
+
+  // 篩選當天班次（有日期就比對，無日期的全部顯示）
+  var filtered = schedules.filter(function(s) {
+    if (!s.date) return true;
+    return s.date === dayDate;
   });
-  var data = await res.json();
-  if (data.candidates && data.candidates[0]) {
-    var result = JSON.parse(data.candidates[0].content.parts[0].text);
-    return { stat: 'OK', schedules: result.schedules || [] };
+
+  if (!filtered.length) {
+    body.innerHTML = '<div style="padding:32px 20px;text-align:center;color:#c8b89a;font-size:14px">' +
+      '當天無匯入班次。<br><br>' +
+      '<button onclick="goBack(\u0027sc-timetable-selector\u0027);openTimetable();" style="padding:10px 20px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:13px;cursor:pointer">\u524d\u5f80\u532f\u5165\u73ed\u6b21</button>' +
+      '</div>';
+    return;
   }
-  return { stat: 'ERROR', error: JSON.stringify(data).slice(0, 200) };
+
+  var html = '<div style="padding:12px 16px 0">' +
+    '<div style="font-size:12px;color:#c8b89a;margin-bottom:12px">選擇要套用到此段交通的班次：</div>';
+
+  filtered.forEach(function(s, idx) {
+    // 找原始 index
+    var origIdx = schedules.indexOf(s);
+    html += '<div onclick="applyTimetable(' + origIdx + ')" style="background:var(--bg3);border:1px solid rgba(110,198,240,.3);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;active:opacity:.8">' +
+      '<div style="font-size:13px;font-weight:700;color:#e0d4c0;margin-bottom:6px">' + esc(s.from || '') + ' → ' + esc(s.to || '') + '</div>' +
+      '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
+        '<div style="font-size:16px;font-weight:700;color:#6ec6f0">' + esc(s.departTime || '') + ' → ' + esc(s.arriveTime || '') + '</div>' +
+        (s.trainName ? '<div style="font-size:12px;color:#e8b84b;background:rgba(232,184,75,.12);border:1px solid rgba(232,184,75,.3);padding:2px 8px;border-radius:6px">' + esc(s.trainName) + '</div>' : '') +
+        (s.duration ? '<div style="font-size:12px;color:#c8b89a">' + esc(s.duration) + '</div>' : '') +
+        (s.fare ? '<div style="font-size:12px;color:#c8b89a">¥' + esc(String(s.fare)) + '</div>' : '') +
+      '</div>' +
+      (s.transfers !== undefined ? '<div style="font-size:11px;color:#c8b89a;margin-top:4px">乘換 ' + s.transfers + ' 次</div>' : '') +
+    '</div>';
+  });
+
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+// 套用選擇的班次到地點路線方案
+function applyTimetable(origIdx) {
+  var d = day(); if (!d) return;
+  var stop = (d.stops || [])[_ttSelectorStopIdx];
+  if (!stop) return;
+  var t = trip();
+  var s = (t && t.timetables) ? t.timetables[origIdx] : null;
+  if (!s) return;
+
+  // 記錄選擇
+  stop.selectedTimetableId = origIdx;
+
+  // 同步建立路線方案
+  if (!stop.transit) stop.transit = { fromPlace: s.from || '', toPlace: s.to || '', routes: [] };
+  stop.transit.fromPlace = s.from || stop.transit.fromPlace;
+  stop.transit.toPlace = s.to || stop.transit.toPlace;
+
+  // 清除舊路線，加入新的
+  stop.transit.routes = [{
+    id: uid(),
+    tag: 'planned',
+    departTime: s.departTime || '',
+    arriveTime: s.arriveTime || '',
+    duration: s.duration ? parseInt(s.duration) || 0 : 0,
+    transfers: s.transfers || 0,
+    fare: s.fare ? parseFloat(s.fare) || 0 : 0,
+    fareCurrency: 'JPY',
+    importFare: true,
+    legs: (s.legs || []).map(function(l) {
+      return {
+        mode: 'train',
+        fromStop: l.departure_station || s.from || '',
+        toStop: l.arrival_station || s.to || '',
+        departTime: l.departure_time || '',
+        arriveTime: l.arrival_time || '',
+        line: l.line_name || s.trainName || '',
+        platform: l.departure_platform || ''
+      };
+    })
+  }];
+
+  save(S.trips);
+  _stopDirty = false;
+  goBack('sc-stop');
+  // 重新渲染地點編輯頁
+  renderStopForm(stop, _ttSelectorStopIdx);
+}
+
+// 重新選擇（清除已選班次）
+function resetTimetableSelection() {
+  var d = day(); if (!d) return;
+  var stop = (d.stops || [])[_ttSelectorStopIdx !== null ? _ttSelectorStopIdx : S.stopIdx];
+  if (!stop) return;
+  if (!confirm('清除已選班次並重新選擇？')) return;
+  delete stop.selectedTimetableId;
+  save(S.trips);
+  renderTimetableSelector(d);
+  goTo('sc-timetable-selector');
 }
 
 // ════ 班次管理 ════
@@ -2612,11 +2724,40 @@ async function doTimetableImport() {
         r.onerror = rej;
         r.readAsDataURL(_ttFile);
       });
-      // 圖片/PDF：直接呼叫 Gemini API（避開 GAS CORS 限制）
-      result = await geminiParseTimetableFile(b64, _ttFile.type);
+      alert('圖片/PDF 匯入目前不支援，請改用 AI 整理後的 JSON 文字貼上。');
+      return;
     } else if (textInput) {
-      // 純文字：直接呼叫 Gemini API（避開 GAS CORS 限制）
-      result = await geminiParseTimetableText(textInput);
+      // 先嘗試直接解析 JSON（如 AI 預先整理好的格式）
+      try {
+        var parsed = JSON.parse(textInput);
+        // 支援 {routes:[...]} 或 {schedules:[...]} 兩種格式
+        if (parsed.schedules) {
+          result = { stat: 'OK', schedules: parsed.schedules };
+        } else if (parsed.routes) {
+          // 將 routes 格式轉換為 schedules 格式
+          result = { stat: 'OK', schedules: parsed.routes.map(function(r) {
+            var firstLeg = (r.legs || [])[0] || {};
+            var lastLeg = (r.legs || []).slice(-1)[0] || {};
+            return {
+              from: firstLeg.departure_station || '',
+              to: lastLeg.arrival_station || '',
+              departTime: r.departure_time || firstLeg.departure_time || '',
+              arriveTime: r.arrival_time || lastLeg.arrival_time || '',
+              trainName: (r.legs || []).map(function(l){return l.line_name||'';}).filter(Boolean).join(' → '),
+              duration: r.duration_minutes ? r.duration_minutes + '分' : '',
+              fare: r.fare ? (r.fare.ic_yen || r.fare.ticket_yen || '') : '',
+              date: (parsed.search_meta && parsed.search_meta.search_departure_date) || '',
+              transfers: r.transfers || 0
+            };
+          })};
+        } else {
+          throw new Error('未知格式');
+        }
+      } catch(jsonErr) {
+        // 非 JSON 格式：提示使用者先用 AI 整理
+        alert('請貼上 JSON 格式的班次資料。\n可使用 AI（如 ChatGPT/Gemini）將 Navitime 時刻表整理成 JSON 後再貼入。');
+        return;
+      }
     } else {
       alert('請選擇檔案或貼上文字');
       return;
