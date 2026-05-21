@@ -827,7 +827,7 @@ function buildTimePicker(id, label, value, onChangeFn) {
 
 // ════ DATA ════
 function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'[]'); }catch(e){ return []; } }
-function save(trips){ localStorage.setItem(STORE_KEY, JSON.stringify(trips)); }
+function _saveLocal(trips){ localStorage.setItem(STORE_KEY, JSON.stringify(trips)); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
 // ════ STATE ════
@@ -1924,12 +1924,12 @@ async function syncWrite(trips) {
   }
 }
 
-// Override save to also sync
-var _origSave = save;
-function save(trips) {
-  _origSave(trips);
+// Save with cloud sync
+function save(trips){
+  localStorage.setItem(STORE_KEY, JSON.stringify(trips));
   syncWrite(trips);
 }
+
 
 // Sync indicator
 function showSyncStatus(msg, color) {
