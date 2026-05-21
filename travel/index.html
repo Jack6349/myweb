@@ -1228,22 +1228,27 @@ function buildStopFields(stop,type,isLast,nextStop){
 // ── Route/Leg rendering for stop form ──
 function renderRouteEditor(r, ri){
   var legs=r.legs||[];
+  var d=day(), stops=d?d.stops||[]:[];
+  var curStop=S.stopIdx!==null?stops[S.stopIdx]:null;
+  var isAirport=curStop&&curStop.type==='airport';
   var html='<div class="leg-item" style="margin:0 16px 8px">';
   html+='<div class="leg-hdr">'+
-    '<span style="font-size:12px;font-weight:700;color:#e0d4c0">\u65b9\u6848 '+(ri+1)+'</span>'+
-    '<select data-ri="'+ri+'" onchange="setStopRouteTag(parseInt(this.dataset.ri),this.value)" style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px;padding:3px 7px;margin-left:auto">'+
-      '<option value="planned"'+(r.tag==='planned'?' selected':'')+'>&#9733; \u9810\u5b9a</option>'+
-      '<option value="backup"'+(r.tag==='backup'?' selected':'')+'>&#9651; \u5019\u88dc</option>'+
-      '<option value="last"'+(r.tag==='last'?' selected':'')+'>&#9660; \u6700\u665a</option>'+
-    '</select>'+
+    '<span style="font-size:12px;font-weight:700;color:#e0d4c0">'+(isAirport?'\u822a\u73ed\u8cc7\u8a0a':'\u65b9\u6848 '+(ri+1))+'</span>'+
+    (isAirport?'':
+      '<select data-ri="'+ri+'" onchange="setStopRouteTag(parseInt(this.dataset.ri),this.value)" style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px;padding:3px 7px;margin-left:auto">'+
+        '<option value="planned"'+(r.tag==='planned'?' selected':'')+'>&#9733; \u9810\u5b9a</option>'+
+        '<option value="backup"'+(r.tag==='backup'?' selected':'')+'>&#9651; \u5019\u88dc</option>'+
+        '<option value="last"'+(r.tag==='last'?' selected':'')+'>&#9660; \u6700\u665a</option>'+
+      '</select>')+
     '<button data-ri="'+ri+'" onclick="removeStopRoute(parseInt(this.dataset.ri))" class="leg-del">&times;</button>'+
   '</div>';
   html+=buildTimePicker('srd-'+ri+'-dep','\u767c\u8eca\u6642\u9593',r.departTime||'','');
   html+=buildTimePicker('srd-'+ri+'-arr','\u6296\u9054\u6642\u9593',r.arriveTime||'','');
-  html+='<div class="fs"><div class="frow">'+
+  html+='<div class="fs">'+(isAirport?'<div class="fl">\u98db\u884c\u6642\u9593(\u5206)</div>':'<div class="frow">')+
     '<div><div class="fl">\u7e3d\u6642\u9593(\u5206)</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="duration" value="'+ea(r.duration||'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>'+
-    '<div><div class="fl">\u63db\u4e58\u6b21\u6578</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="transfers" value="'+ea(r.transfers!==undefined?r.transfers:'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>'+
-  '</div></div>';
+    (isAirport?'':'<div><div class="fl">\u63db\u4e58\u6b21\u6578</div><input class="fi fi-sm" type="number" data-ri="'+ri+'" data-field="transfers" value="'+ea(r.transfers!==undefined?r.transfers:'')+'" onchange="setStopRouteField(parseInt(this.dataset.ri),this.dataset.field,parseInt(this.value)||0)"></div>')+
+    (isAirport?'':'</div>')+
+  '</div>';
   // Fare row with import toggle
   var curs=(trip()?trip().currencies:null)||['TWD','JPY'];
   html+='<div class="fs"><div class="frow">'+
@@ -1914,11 +1919,9 @@ async function syncWrite(trips) {
   try {
     var ts = new Date().toISOString();
     localStorage.setItem(SYNC_KEY, ts);
-    await fetch(GAS, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ action: 'travel_write', data: trips, updatedAt: ts })
-    });
+    var payload = JSON.stringify({ action: 'travel_write', data: trips, updatedAt: ts });
+    var b64 = btoa(unescape(encodeURIComponent(payload)));
+    await fetch(GAS + '?action=travel_write&b64=' + encodeURIComponent(b64));
   } catch(e) {
     console.log('sync write error:', e);
   }
