@@ -3246,17 +3246,21 @@ function renderPersonReport(exps, members, curs){
     var paidExps = exps.filter(function(e){return e.paidBy===m.id;});
     // Shared expenses allocated to this member
     var allocatedAmt = {}; // cur -> amt
+    var allocatedExps = 0;
     exps.forEach(function(e){
       if(e.shareType==='shared'&&e.splits){
+        var hasAlloc = false;
         e.splits.forEach(function(split){
           if(split.mid===m.id){
             (split.slices||[]).forEach(function(sl){
               if(sl.pid===m.id){
                 allocatedAmt[e.currency]=(allocatedAmt[e.currency]||0)+sl.amt;
+                hasAlloc = true;
               }
             });
           }
         });
+        if(hasAlloc) allocatedExps++;
       }
     });
 
@@ -3268,7 +3272,9 @@ function renderPersonReport(exps, members, curs){
       '<div class="member-report-av" style="background:'+mc.bg+';color:'+mc.color+'">'+m.name[0]+'</div>'+
       '<div style="flex:1">'+
         '<div style="font-size:14px;font-weight:700;color:'+mc.color+'">'+esc(m.name)+'</div>'+
-        '<div style="font-size:11px;color:#c8b89a">\u5be6\u969b\u4ed8\u6b3e '+paidExps.length+' \u7b46 \u00b7 \u9ede\u64ca\u5c55\u958b</div>'+
+        '<div style="font-size:11px;color:#c8b89a">\u5be6\u969b\u4ed8\u6b3e '+paidExps.length+' \u7b46'+
+        (allocatedExps>0?' \u00b7 \u5206\u64d4 '+allocatedExps+' \u7b46':'')+
+        ' \u00b7 \u9ede\u64ca\u5c55\u958b</div>'+
       '</div>'+
       '<div style="text-align:right">'+
         curs.map(function(cur){
