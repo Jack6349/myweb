@@ -23,12 +23,34 @@
 }
 /* 日間模式 */
 .day-mode{
-  --bg:#f0f4f8;--bg2:#e4eaf0;--bg3:#d8e2ec;--bg4:#ccd6e0;
-  --accent:#c47f00;--accent2:#a66a00;
-  --text:#1a2530;--text2:#2c3e50;--text3:#4a6070;
-  --border:rgba(0,0,0,.10);--border2:rgba(0,0,0,.18);
-  --success:#2d7a54;--danger:#c0392b;--info:#1a6e9e;
+  --bg:#f0f4f8;--bg2:#e4eaf0;--bg3:#ffffff;--bg4:#e8f0f7;
+  --accent:#9a6200;--accent2:#7a4e00;
+  --text:#0d1b27;--text2:#1a3045;--text3:#2e5070;
+  --border:rgba(0,0,0,.12);--border2:rgba(0,0,0,.22);
+  --success:#1d6b45;--danger:#b02020;--info:#0d5a8a;
 }
+.day-mode .trip-card,
+.day-mode .day-card,
+.day-mode .tl-stop-block,
+.day-mode .hdr,
+.day-mode .screen,
+.day-mode .bottom-bar{
+  color: var(--text);
+}
+.day-mode .trip-name{ color:#0d1b27 !important; }
+.day-mode .trip-dates{ color:#2e5070 !important; }
+.day-mode .prev-chip{ background:rgba(0,0,0,.08);color:#0d1b27 !important; }
+.day-mode .tl-stop-name{ color:#0d1b27 !important; }
+.day-mode .tl-seg{ color:#2e5070 !important; }
+.day-mode .hdr-title{ color:#0d1b27 !important; }
+.day-mode .hdr-action{ color:#0d5a8a !important; }
+.day-mode .hdr-back svg{ stroke:#0d1b27 !important; }
+.day-mode .fl{ color:#0d1b27 !important; }
+.day-mode .fi,.day-mode .fsel,.day-mode .fta{
+  background:#ffffff;color:#0d1b27;border-color:rgba(0,0,0,.20);
+}
+.day-mode .btn-primary{ background:#9a6200;color:#fff; }
+.day-mode .section-label{ color:#2e5070 !important; }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden;}
 button,input,select,textarea{font-family:var(--font);}
