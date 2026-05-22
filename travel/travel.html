@@ -1294,26 +1294,19 @@ function buildStopFields(stop,type,isLast,nextStop){
       selSched = null;
       save(S.trips);
     }
-    if(selSched){
-      html+='<div style="margin:0 16px 8px;background:var(--bg3);border:1px solid rgba(110,198,240,.4);border-radius:12px;padding:12px 14px">'+
-        '<div style="font-size:11px;color:#6ec6f0;margin-bottom:4px">\u5df2\u9078\u73ed\u6b21</div>'+
-        '<div style="font-size:13px;font-weight:700;color:#e0d4c0;margin-bottom:4px">'+esc(selSched.from||'')+'\u2192'+esc(selSched.to||'')+'</div>'+
-        '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
-          '<div style="font-size:15px;font-weight:700;color:#6ec6f0">'+esc(selSched.departTime||'')+' \u2192 '+esc(selSched.arriveTime||'')+'</div>'+
-          (selSched.trainName?'<div style="font-size:11px;color:#e8b84b">'+esc(selSched.trainName)+'</div>':'')+
-          (selSched.duration?'<div style="font-size:11px;color:#c8b89a">'+esc(selSched.duration)+'</div>':'')+
-          (selSched.fare?'<div style="font-size:11px;color:#c8b89a">&yen;'+esc(String(selSched.fare))+'</div>':'')+
-        '</div>'+
-        '<button onclick="resetTimetableSelection()" style="margin-top:8px;padding:5px 12px;background:none;border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#c8b89a;font-size:11px;cursor:pointer">\u91cd\u65b0\u9078\u64c7</button>'+
-      '</div>';
-    }
     html+='<div id="sf-transit-routes">';
     var routes=transit?transit.routes||[]:[];
-    if(routes.length===0&&!selSched){
+    if(routes.length===0){
       html+='<div style="margin:0 16px 12px;padding:12px;background:var(--bg4);border-radius:var(--radius-sm);font-size:12px;color:#c8b89a;text-align:center">'+
         '\u5c1a\u7121\u8def\u7dda\u65b9\u6848\u3002\u9ede\u300c\u5f9e\u73ed\u6b21\u9078\u64c7\u300d\u5e36\u5165\uff0c\u6216\u624b\u52d5\u65b0\u589e\u3002</div>';
     } else {
       routes.forEach(function(r,ri){ html+=renderRouteEditor(r,ri); });
+      // 有班次時顯示「重新選擇」
+      if(selSched){
+        html+='<div style="padding:0 16px 4px">'+
+          '<button onclick="resetTimetableSelection()" style="padding:5px 12px;background:none;border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#c8b89a;font-size:11px;cursor:pointer">\u91cd\u65b0\u9078\u64c7</button>'+
+        '</div>';
+      }
     }
     html+='</div>';
     html+='<div style="padding:0 16px 8px">'+
@@ -1329,19 +1322,43 @@ function renderRouteEditor(r, ri){
   var d=day(), stops=d?d.stops||[]:[];
   var curStop=S.stopIdx!==null?stops[S.stopIdx]:null;
   var isAirport=curStop&&curStop.type==='airport';
+  // 卡片頂部摘要（點擊展開費用）
+  var cat = classifyTransport(r);
+  var tagBadge = r.tag==='planned' ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(123,237,159,.15);color:#7bed9f;border:1px solid rgba(123,237,159,.3)">★ \u9810\u5b9a</span>'
+                : r.tag==='backup' ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(200,184,154,.12);color:#c8b89a;border:1px solid rgba(200,184,154,.2)">△ \u5019\u88dc</span>'
+                : '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(255,107,107,.12);color:#ff7070">▼ \u6700\u665a</span>';
+  var collapseId = 'route-detail-'+ri;
   var html='<div class="leg-item" style="margin:0 16px 8px">';
-  html+='<div class="leg-hdr">'+
-    '<span style="font-size:12px;font-weight:700;color:#e0d4c0">'+(isAirport?'\u822a\u73ed\u8cc7\u8a0a':'\u65b9\u6848 '+(ri+1))+'</span>'+
-    (isAirport?'':
-      (r.tag==='backup'?('<button onclick="setAsPlanned('+ri+')" style="font-size:11px;padding:3px 8px;background:rgba(123,237,159,.12);border:1px solid rgba(123,237,159,.3);border-radius:6px;color:#7bed9f;cursor:pointer;margin-left:auto">\u8a2d\u70ba\u9810\u5b9a</button>'):'<span style="margin-left:auto"></span>')+
-      '<select data-ri="'+ri+'" onchange="setStopRouteTag(parseInt(this.dataset.ri),this.value)" style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px;padding:3px 7px">'+
-        '<option value="planned"'+(r.tag==='planned'?' selected':'')+'>&#9733; \u9810\u5b9a</option>'+
-        '<option value="backup"'+(r.tag==='backup'?' selected':'')+'>&#9651; \u5019\u88dc</option>'+
-        '<option value="last"'+(r.tag==='last'?' selected':'')+'>&#9660; \u6700\u665a</option>'+
-      '</select>')+
-    '<button data-ri="'+ri+'" onclick="removeStopRoute(parseInt(this.dataset.ri))" class="leg-del">&times;</button>'+
-  '</div>';
-  // Airport 模式保留時間 picker
+  // 卡片頭部（摘要 + 點擊展開）
+  html+='<div onclick="toggleRouteDetail(\''+collapseId+'\')" style="cursor:pointer">';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">';
+  html+=tagBadge;
+  html+='<div style="display:flex;gap:6px;align-items:center">';
+  if(!isAirport && r.tag==='backup') html+='<button onclick="event.stopPropagation();setAsPlanned('+ri+')" style="font-size:11px;padding:2px 7px;background:rgba(123,237,159,.12);border:1px solid rgba(123,237,159,.3);border-radius:6px;color:#7bed9f;cursor:pointer">\u8a2d\u70ba\u9810\u5b9a</button>';
+  html+='<button data-ri="'+ri+'" onclick="event.stopPropagation();removeStopRoute(parseInt(this.dataset.ri))" class="leg-del">&times;</button>';
+  html+='</div></div>';
+  // 交通類別
+  if(!isAirport) html+='<div style="font-size:11px;color:#c8b89a;margin-bottom:3px">'+cat.icon+' '+cat.label+'</div>';
+  // 時間摘要行
+  if(r.departTime||r.arriveTime) html+='<div style="font-size:14px;font-weight:700;color:#6ec6f0;margin-bottom:2px">'+(r.departTime||'')+(r.arriveTime?' → '+r.arriveTime:'')+(r.duration?' <span style="font-size:11px;font-weight:400;color:#c8b89a">'+fmtDuration(r.duration)+'</span>':'')+'</div>';
+  // legs 摘要（唯讀）
+  if(!isAirport && legs.length){
+    legs.forEach(function(leg,li){
+      html+='<div style="font-size:11px;color:#c8b89a;padding:1px 0">';
+      html+='&#'+(9311+li+1)+'; '+esc(leg.line||leg.fromStop||'');
+      if(leg.headsign) html+='（'+esc(leg.headsign)+'）';
+      html+=' '+esc(leg.fromStop||'');
+      if(leg.platform) html+='（'+esc(leg.platform)+'）';
+      html+=' → '+esc(leg.toStop||'');
+      if(leg.arrPlatform) html+='（'+esc(leg.arrPlatform)+'）';
+      html+='</div>';
+    });
+  }
+  html+='<div style="font-size:11px;color:#c8b89a;margin-top:3px">▾ \u9ede\u64ca\u5c55\u958b\u8cbb\u7528\u8a73\u60c5</div>';
+  html+='</div>'; // end clickable header
+  // 摺疊區域（費用相關）
+  html+='<div id="'+collapseId+'" style="display:none;padding-top:8px;border-top:1px solid var(--border);margin-top:6px">';
+  // Airport 模式保留時間 picker，其他只顯示費用
   if(isAirport){
     html+=buildTimePicker('srd-'+ri+'-dep','\u8d77\u98db\u6642\u9593',r.departTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
     html+=buildTimePicker('srd-'+ri+'-arr','\u964d\u843d\u6642\u9593',r.arriveTime||'','') + '<span data-calcri="'+ri+'" style="display:none" class="calc-trigger"></span>';
@@ -1349,12 +1366,6 @@ function renderRouteEditor(r, ri){
       '<div style="font-size:12px;color:#c8b89a;padding:2px 0">\u7e3d\u6642\u9593\uff1a<span id="dur-fmt-'+ri+'" style="color:#e8b84b;font-weight:700">'+fmtDuration(r.duration)+'</span></div>'+
     '</div>';
   } else if(legs.length) {
-    // 非 airport + 有 legs（來自班次）：唯讀摘要
-    html+='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:4px 0 2px">';
-    if(r.departTime||r.arriveTime) html+='<div style="font-size:14px;font-weight:700;color:#6ec6f0">'+(r.departTime||'')+(r.arriveTime?' → '+r.arriveTime:'')+'</div>';
-    if(r.duration) html+='<div style="font-size:12px;color:#c8b89a">'+fmtDuration(r.duration)+'</div>';
-    if(r.transfers!==undefined) html+='<div style="font-size:11px;color:#c8b89a">\u4e58\u63db '+r.transfers+' \u6b21</div>';
-    html+='</div>';
     html+='<div style="margin:4px 0 6px">';
     legs.forEach(function(leg,li){
       html+='<div style="font-size:11px;color:#c8b89a;padding:2px 0">';
@@ -1414,8 +1425,24 @@ function renderRouteEditor(r, ri){
     '<label for="srd-import-'+ri+'" style="font-size:12px;color:#e0d4c0">\u5e36\u5165\u8cbb\u7528\u8a18\u9304</label>'+
     '<span style="font-size:11px;color:#c8b89a">\uff08\u9810\u8a2d\u4e0d\u5e36\u5165\uff0c\u5982\u4f7f\u7528 JR Pass \u8acb\u4e0d\u52fe\u9078\uff09</span>'+
   '</div>';
-  html+='</div>';
+  html+='</div>'; // end collapseId
+  html+='</div>'; // end leg-item
   return html;
+}
+
+
+// 展開/收合路線方案費用詳情
+function toggleRouteDetail(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  // 更新提示文字
+  var card = el.previousElementSibling;
+  if (card) {
+    var hint = card.querySelector('.expand-hint');
+    if (hint) hint.textContent = isOpen ? '▾ 點擊展開費用詳情' : '▴ 點擊收合';
+  }
 }
 
 function renderLegEditor(leg,ri,li){
@@ -3148,7 +3175,11 @@ function resetTimetableSelection() {
   if (!stop) return;
   if (!confirm('清除已選班次並重新選擇？')) return;
   delete stop.selectedTimetableId;
+  if (stop.transit) stop.transit.routes = [];
   save(S.trips);
+  _ttSelectorStopIdx = S.stopIdx;
+  _ttSelectorMulti = false;
+  _ttSelectedIdxs = [];
   renderTimetableSelector(d);
   goTo('sc-timetable-selector');
 }
