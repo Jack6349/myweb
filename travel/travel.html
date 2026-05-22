@@ -3421,7 +3421,18 @@ async function doTimetableImport() {
 
 // 從路線名稱判斷交通工具類別
 function classifyTransport(s) {
-  var name = ((s.trainName || '') + ' ' + (s.legs && s.legs[0] ? (s.legs[0].line_name || '') : '')).toLowerCase();
+  // 優先用 legs[0].mode（手動路線）
+  var legMode = s.legs && s.legs[0] ? s.legs[0].mode || '' : '';
+  var modeMap = {
+    walk:     { icon: '🚶', label: '步行' },
+    shuttle:  { icon: '🚐', label: '接駁車' },
+    car:      { icon: '🚗', label: '私家車' },
+    taxi:     { icon: '🚕', label: '計程車' },
+    ferry:    { icon: '⛴️', label: '渡輪' },
+    flight:   { icon: '✈️', label: '航班' },
+  };
+  if (modeMap[legMode]) return modeMap[legMode];
+  // 用路線名稱判斷（匯入班次）
   var orig = (s.trainName || '') + ' ' + (s.legs && s.legs[0] ? (s.legs[0].line_name || '') : '');
   if (/高速バス|高速巴士|highwaybus/i.test(orig)) return { icon: '🚌', label: '高速巴士' };
   if (/新幹線|はやぶさ|のぞみ|こまち|やまびこ|つばさ|かがやき|はくたか|あさま/i.test(orig)) return { icon: '🚄', label: '新幹線' };
@@ -3432,7 +3443,9 @@ function classifyTransport(s) {
   if (/空港線|airport/i.test(orig)) return { icon: '🚃', label: '機場線' };
   if (/モノレール|monorail/i.test(orig)) return { icon: '🚝', label: '單軌列車' };
   if (/フェリー|ferry|渡輪/i.test(orig)) return { icon: '⛴️', label: '渡輪' };
-  if (s.legs && s.legs[0] && s.legs[0].line_name) return { icon: '🚃', label: '電車' };
+  if (legMode === 'bus') return { icon: '🚌', label: '巴士' };
+  if (legMode === 'shinkansen') return { icon: '🚄', label: '新幹線' };
+  if (legMode === 'train') return { icon: '🚃', label: '電車' };
   return { icon: '🚃', label: '電車' };
 }
 
