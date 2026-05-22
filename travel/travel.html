@@ -2331,7 +2331,8 @@ function collectMembers(){
 // ════ EXPENSE ════
 var _expDirty = false;
 var _expCtx = null;
-var _expReturnToList = false;  // {source:'day'|'stop', dayIdx, stopIdx, expIdx}
+var _expReturnToList = false;
+var _expReturnToReport = false;  // {source:'day'|'stop', dayIdx, stopIdx, expIdx}
 var _expSplitSelected = null;  // block mid being assigned
 
 var EXP_CATS = [
@@ -2407,6 +2408,10 @@ function expenseBackConfirm(){
     _expReturnToList = false;
     renderExpenseList();
     goBack('sc-expense-list');
+  } else if(_expReturnToReport){
+    _expReturnToReport = false;
+    renderReport();
+    goBack('sc-report');
   } else {
     goBack('sc-day');
   }
@@ -2763,6 +2768,10 @@ function deleteExpense(){
     _expReturnToList = false;
     renderExpenseList();
     goBack('sc-expense-list');
+  } else if(_expReturnToReport){
+    _expReturnToReport = false;
+    renderReport();
+    goBack('sc-report');
   } else {
     goBack('sc-day'); renderDayTL();
   }
@@ -2800,7 +2809,7 @@ function importStopExpenses(d, stop) {
       upsertExpense(d, sourceId, {
         sourceId: sourceId,
         category: 'transport',
-        title: title,
+        desc: title,
         amount: planned.fare,
         currency: planned.fareCurrency || 'JPY',
         payMethod: planned.payMethod || '',
@@ -2822,7 +2831,7 @@ function importStopExpenses(d, stop) {
       upsertExpense(d, hotelSourceId, {
         sourceId: hotelSourceId,
         category: 'hotel',
-        title: esc(stop.name || '住宿費'),
+        desc: stop.name || '住宿費',
         amount: hotel.amount,
         currency: hotel.currency || 'JPY',
         payMethod: hotel.payMethod || '',
@@ -2869,7 +2878,7 @@ function members_findById(id) {
 
 // 一次性補跑：掃描所有地點，補建 importFare 費用記錄
 function migrateImportFareOnce() {
-  var MIGRATE_KEY = 'travel_import_fare_migrated_v1';
+  var MIGRATE_KEY = 'travel_import_fare_migrated_v2';
   if (localStorage.getItem(MIGRATE_KEY)) return; // 已跑過
   var t = trip(); if (!t) return;
   var changed = false;
@@ -2950,7 +2959,7 @@ function renderExpenseList() {
           '<div style="display:flex;gap:8px;align-items:center">' +
             '<span style="font-size:18px">' + icon + '</span>' +
             '<div>' +
-              '<div style="font-size:13px;font-weight:700;color:#e0d4c0">' + esc(exp.title || catLabel) + '</div>' +
+              '<div style="font-size:13px;font-weight:700;color:#e0d4c0">' + esc(exp.desc || exp.title || catLabel) + '</div>' +
               (isAuto ? '<div style="font-size:10px;color:#6ec6f0;margin-top:1px">自動帶入</div>' : '') +
             '</div>' +
           '</div>' +
@@ -2965,6 +2974,15 @@ function renderExpenseList() {
   }
   html += '</div>';
   body.innerHTML = html;
+}
+
+
+// 從費用報表開啟費用編輯
+function openExpenseFromReport(dayIdx, expIdx, stopIdx) {
+  S.dayIdx = dayIdx;
+  _expReturnToList = false;
+  _expReturnToReport = true;
+  openExpense({source: stopIdx != null ? 'stop' : 'day', dayIdx: dayIdx, expIdx: expIdx, stopIdx: stopIdx});
 }
 
 function openExpenseEdit(ei) {
@@ -3068,7 +3086,7 @@ function renderTotalReport(exps, curs){
       var member = exp.paidBy ? tripMembers().find(function(m){return m.id===exp.paidBy;}) : null;
       var mi = member ? tripMembers().indexOf(member) : -1;
       var mc = mi>=0 ? mcolor(mi) : {color:'#c8b89a'};
-      html += '<div class="report-row">'+
+      html += '<div class="report-row" style="cursor:pointer" onclick="openExpenseFromReport('+exp.dayIdx+','+(exp.expIdx!==undefined?exp.expIdx:'null')+','+JSON.stringify(exp.stopIdx)+')">' +
         '<div class="report-row-left">'+
           '<span class="report-cat-icon">'+CAT_INFO[cat]+'</span>'+
           '<div class="report-desc">'+
