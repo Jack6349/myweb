@@ -37,20 +37,39 @@
 .day-mode .bottom-bar{
   color: var(--text);
 }
-.day-mode .trip-name{ color:#0d1b27 !important; }
-.day-mode .trip-dates{ color:#2e5070 !important; }
-.day-mode .prev-chip{ background:rgba(0,0,0,.08);color:#0d1b27 !important; }
+/* 卡片文字 */
+.day-mode .card-title{ color:#0d1b27 !important; }
+.day-mode .card-info{ color:#1a3045 !important; }
+.day-mode .chip{ background:rgba(0,0,0,.08);color:#0d1b27 !important; }
+.day-mode .chip.green{ color:#1d6b45 !important;background:rgba(29,107,69,.12) !important; }
+.day-mode .chip.yellow{ color:#7a4e00 !important;background:rgba(122,78,0,.12) !important; }
+.day-mode .chip.blue{ color:#0d5a8a !important;background:rgba(13,90,138,.12) !important; }
+.day-mode .prev-chip{ background:rgba(0,0,0,.08);color:#0d1b27 !important;border-color:rgba(0,0,0,.15) !important; }
+/* 時間軸 */
 .day-mode .tl-stop-name{ color:#0d1b27 !important; }
 .day-mode .tl-seg{ color:#2e5070 !important; }
+.day-mode .tl-seg-dur{ color:#0d5a8a !important; }
+.day-mode .tl-time{ color:#1a3045 !important; }
+/* Header */
 .day-mode .hdr-title{ color:#0d1b27 !important; }
 .day-mode .hdr-action{ color:#0d5a8a !important; }
 .day-mode .hdr-back svg{ stroke:#0d1b27 !important; }
+/* 表單 */
 .day-mode .fl{ color:#0d1b27 !important; }
 .day-mode .fi,.day-mode .fsel,.day-mode .fta{
-  background:#ffffff;color:#0d1b27;border-color:rgba(0,0,0,.20);
+  background:#ffffff !important;color:#0d1b27 !important;border-color:rgba(0,0,0,.22) !important;
 }
-.day-mode .btn-primary{ background:#9a6200;color:#fff; }
+.day-mode .fs .fl{ font-weight:600; }
+/* 按鈕 */
+.day-mode .btn-primary{ background:#9a6200 !important;color:#fff !important; }
 .day-mode .section-label{ color:#2e5070 !important; }
+/* 通用深色文字覆寫 */
+.day-mode *[style*='color:#c8b89a']{ color:#3a5060 !important; }
+.day-mode *[style*='color:#e0d4c0']{ color:#0d1b27 !important; }
+.day-mode *[style*='color:#e8edf2']{ color:#0d1b27 !important; }
+.day-mode *[style*='color:var(--text3)']{ color:#3a5060 !important; }
+.day-mode *[style*='color:var(--text2)']{ color:#1a3045 !important; }
+.day-mode *[style*='color:var(--text)']{ color:#0d1b27 !important; }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden;}
 button,input,select,textarea{font-family:var(--font);}
