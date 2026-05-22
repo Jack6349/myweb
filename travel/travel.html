@@ -2886,11 +2886,11 @@ function renderTimetableSelector(d) {
   if (!body) return;
   var t = trip();
   var schedules = (t && t.timetables) || [];
-  // 動態計算當天日期（trip.startDate + day index）
+  // 動態計算當天日期（優先用 S.dayIdx，備用 indexOf）
   var t2 = trip();
   var dayDate = '';
-  if (t2 && t2.startDate && t2.days) {
-    var dayIdx = t2.days.indexOf(d);
+  if (t2 && t2.startDate) {
+    var dayIdx = (S.dayIdx !== null && S.dayIdx !== undefined) ? S.dayIdx : (t2.days ? t2.days.indexOf(d) : -1);
     if (dayIdx >= 0) {
       var dd2 = new Date(t2.startDate);
       dd2.setDate(dd2.getDate() + dayIdx);
