@@ -1507,6 +1507,25 @@ function _refreshTransitRoutes(){
   var el=document.getElementById('sf-transit-routes');
   if(el) el.innerHTML=html;
 }
+
+// 將候補方案設為預定，原預定降為候補，重新排序
+function setAsPlanned(ri) {
+  var stop = S.stopIdx !== null ? ((day().stops||[])[S.stopIdx]) : null;
+  if (!stop || !stop.transit) return;
+  var routes = stop.transit.routes || [];
+  routes.forEach(function(r, i) {
+    if (i !== ri && r.tag === 'planned') r.tag = 'backup';
+  });
+  routes[ri].tag = 'planned';
+  // 重新排序：planned 在前，其他依原順序
+  var planned = routes.filter(function(r){ return r.tag === 'planned'; });
+  var others  = routes.filter(function(r){ return r.tag !== 'planned'; });
+  stop.transit.routes = planned.concat(others);
+  save(S.trips);
+  _stopDirty = false;
+  _refreshTransitRoutes();
+}
+
 function setStopRouteTag(ri,tag){
   var stop=S.stopIdx!==null?((day().stops||[])[S.stopIdx]):null;
   if(!stop||!stop.transit||!stop.transit.routes[ri])return;
