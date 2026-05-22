@@ -560,6 +560,20 @@ a{text-decoration:none;color:inherit;}
   </div>
 </div>
 
+<!-- ══ SCREEN: EXPENSE LIST ══ -->
+<div class="screen" id="sc-expense-list">
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
+    <div class="hdr">
+      <button class="hdr-back" onclick="goBack('sc-day')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hdr-title" id="expense-list-title">費用記錄</div>
+      <button class="hdr-action" onclick="openExpenseNew()" style="color:#7bed9f">＋新增</button>
+    </div>
+    <div class="body no-nav" id="expense-list-body"></div>
+  </div>
+</div>
+
 <!-- ══ SCREEN: STOP EDIT ══ -->
 <div class="screen" id="sc-stop">
   <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
@@ -1517,6 +1531,15 @@ function renderRouteEditor(r, ri){
     '<select class="fsel" id="srd-paymethod-'+ri+'" onchange="setStopRouteField('+ri+',\'payMethod\',this.value)" style="font-size:13px;padding:8px 10px">'+
     ['','cash','card','ic'].map(function(v){var nm={'':'\u2014','cash':'\u73fe\u91d1','card':'\u5237\u5361','ic':'IC\u5361'};return'<option value="'+v+'"'+(r.payMethod===v?' selected':'')+'>'+nm[v]+'</option>';}).join('')+
     '</select></div>';
+  // 付款人
+  var routeMembers=(trip()&&trip().members)||[];
+  if(routeMembers.length){
+    html+='<div class="fs"><div class="fl">\u4ed8\u6b3e\u4eba</div>'+
+      '<select class="fsel" id="srd-payer-'+ri+'" onchange="setStopRouteField('+ri+',\'payerId\',this.value)" style="font-size:13px;padding:8px 10px">'+
+      '<option value="">\u2014</option>'+
+      routeMembers.map(function(m){return'<option value="'+m.id+'"'+(r.payerId===m.id?' selected':'')+'>'+esc(m.name)+'</option>';}).join('')+
+      '</select></div>';
+  }
   html+='<div class="fs" style="display:flex;align-items:center;gap:8px;padding:2px 0">'+
     '<input type="checkbox" id="srd-import-'+ri+'" style="width:18px;height:18px"'+
       (r.importFare?' checked':'')+' onchange="setStopRouteField('+ri+',\'importFare\',this.checked)">'+
@@ -1806,6 +1829,8 @@ function saveStop(){
     var at=S.insertAt!==null?S.insertAt:d.stops.length;
     d.stops.splice(at,0,stop);
   }
+  // 帶入費用記錄
+  importStopExpenses(d, stop);
   save(S.trips);
   _stopDirty=false;
   goBack('sc-day'); renderDayTL();
@@ -2305,7 +2330,8 @@ function collectMembers(){
 
 // ════ EXPENSE ════
 var _expDirty = false;
-var _expCtx = null;  // {source:'day'|'stop', dayIdx, stopIdx, expIdx}
+var _expCtx = null;
+var _expReturnToList = false;  // {source:'day'|'stop', dayIdx, stopIdx, expIdx}
 var _expSplitSelected = null;  // block mid being assigned
 
 var EXP_CATS = [
@@ -2377,7 +2403,13 @@ function getExpenseByCtx(ctx){
 
 function expenseBackConfirm(){
   if(_expDirty&&!confirm('\u78ba\u5b9a\u653e\u68c4\u4fee\u6539\uff1f'))return;
-  goBack('sc-day');
+  if(_expReturnToList){
+    _expReturnToList = false;
+    renderExpenseList();
+    goBack('sc-expense-list');
+  } else {
+    goBack('sc-day');
+  }
 }
 
 function renderExpenseForm(exp){
@@ -2727,14 +2759,219 @@ function deleteExpense(){
     var stop=(d.stops||[])[ctx.stopIdx]; if(stop)stop.expenses.splice(ctx.expIdx,1);
   }
   save(S.trips); _expDirty=false;
-  goBack('sc-day'); renderDayTL();
+  if(_expReturnToList){
+    _expReturnToList = false;
+    renderExpenseList();
+    goBack('sc-expense-list');
+  } else {
+    goBack('sc-day'); renderDayTL();
+  }
 }
 
 
 function openDayExpense(){
+  renderExpenseList();
+  goTo('sc-expense-list');
+}
+
+function openExpenseNew(){
   openExpense({source:'day', dayIdx:S.dayIdx});
 }
 
+
+
+
+// ════ 帶入費用記錄 ════
+
+// 從地點的 importFare 設定自動建立/更新費用表
+function importStopExpenses(d, stop) {
+  if (!d || !stop) return;
+  if (!d.expenses) d.expenses = [];
+
+  // ── 交通費用（transit routes 中 planned 且 importFare=true）──
+  var transit = stop.transit;
+  if (transit && transit.routes) {
+    var planned = transit.routes.find(function(r){ return r.tag === 'planned'; });
+    if (planned && planned.importFare && planned.fare && planned.fare > 0) {
+      var sourceId = stop.id + '_transit';
+      var cat = classifyTransport(planned);
+      var title = esc(transit.fromPlace||stop.name||'') + ' → ' + esc(transit.toPlace||'') + '（' + cat.label + '）';
+      var payer = members_findById(planned.payerId);
+      upsertExpense(d, sourceId, {
+        sourceId: sourceId,
+        category: 'transport',
+        title: title,
+        amount: planned.fare,
+        currency: planned.fareCurrency || 'JPY',
+        payMethod: planned.payMethod || '',
+        paidBy: planned.payerId || '',
+        splitType: 'shared',
+        splits: []
+      });
+    } else {
+      // importFare=false 或無費用：移除已帶入的費用
+      removeExpenseBySourceId(d, stop.id + '_transit');
+    }
+  }
+
+  // ── 住宿費用 ──
+  if (stop.type === 'hotel' && stop.hotel) {
+    var hotel = stop.hotel;
+    if (hotel.importFare && hotel.amount && hotel.amount > 0) {
+      var hotelSourceId = stop.id + '_hotel';
+      upsertExpense(d, hotelSourceId, {
+        sourceId: hotelSourceId,
+        category: 'hotel',
+        title: esc(stop.name || '住宿費'),
+        amount: hotel.amount,
+        currency: hotel.currency || 'JPY',
+        payMethod: hotel.payMethod || '',
+        paidBy: hotel.payerId || '',
+        splitType: 'shared',
+        splits: []
+      });
+    } else {
+      removeExpenseBySourceId(d, stop.id + '_hotel');
+    }
+  }
+}
+
+// 新增或更新費用（以 sourceId 為唯一鍵）
+function upsertExpense(d, sourceId, expData) {
+  if (!d.expenses) d.expenses = [];
+  var idx = d.expenses.findIndex(function(e){ return e.sourceId === sourceId; });
+  if (idx >= 0) {
+    // 更新金額/幣別/付款資訊，保留已設定的分配
+    var existing = d.expenses[idx];
+    existing.amount = expData.amount;
+    existing.currency = expData.currency;
+    existing.payMethod = expData.payMethod;
+    existing.paidBy = expData.paidBy;
+    existing.title = expData.title;
+    existing.category = expData.category;
+  } else {
+    d.expenses.push(Object.assign({ id: uid() }, expData));
+  }
+}
+
+// 移除帶入的費用（importFare 取消時）
+function removeExpenseBySourceId(d, sourceId) {
+  if (!d.expenses) return;
+  d.expenses = d.expenses.filter(function(e){ return e.sourceId !== sourceId; });
+}
+
+// 輔助：by member id
+function members_findById(id) {
+  var members = tripMembers();
+  return members.find(function(m){ return m.id === id; }) || null;
+}
+
+
+// 一次性補跑：掃描所有地點，補建 importFare 費用記錄
+function migrateImportFareOnce() {
+  var MIGRATE_KEY = 'travel_import_fare_migrated_v1';
+  if (localStorage.getItem(MIGRATE_KEY)) return; // 已跑過
+  var t = trip(); if (!t) return;
+  var changed = false;
+  (t.days || []).forEach(function(d) {
+    (d.stops || []).forEach(function(stop) {
+      // 交通
+      var transit = stop.transit;
+      if (transit && transit.routes) {
+        var planned = transit.routes.find(function(r){ return r.tag === 'planned'; });
+        if (planned && planned.importFare && planned.fare && planned.fare > 0) {
+          importStopExpenses(d, stop);
+          changed = true;
+        }
+      }
+      // 住宿
+      if (stop.type === 'hotel' && stop.hotel && stop.hotel.importFare && stop.hotel.amount > 0) {
+        importStopExpenses(d, stop);
+        changed = true;
+      }
+    });
+  });
+  if (changed) save(S.trips);
+  localStorage.setItem(MIGRATE_KEY, '1');
+}
+
+// ════ 費用列表 ════
+
+var CAT_ICON = {transport:'🚃', hotel:'🏨', food:'🍽️', ticket:'🎫', shopping:'🛒', other:'📋'};
+var CAT_LABEL = {transport:'交通', hotel:'住宿', food:'餐飲', ticket:'門票', shopping:'購物', other:'其他'};
+
+function renderExpenseList() {
+  var body = document.getElementById('expense-list-body');
+  if (!body) return;
+  var d = day(); if (!d) return;
+  var t = trip();
+  var members = tripMembers();
+
+  // 設定標題
+  var dd = new Date(t.startDate);
+  dd.setDate(dd.getDate() + S.dayIdx);
+  document.getElementById('expense-list-title').textContent = 'D' + (S.dayIdx+1) + ' 費用記錄';
+
+  var exps = (d.expenses || []);
+  var html = '<div style="padding:12px 16px">';
+
+  if (!exps.length) {
+    html += '<div style="padding:32px 20px;text-align:center;color:#c8b89a;font-size:14px">尚無費用記錄<br><br>' +
+      '<button onclick="openExpenseNew()" style="padding:10px 20px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:13px;cursor:pointer">＋ 新增費用</button>' +
+      '</div>';
+  } else {
+    exps.forEach(function(exp, ei) {
+      var icon = CAT_ICON[exp.category] || '📋';
+      var catLabel = CAT_LABEL[exp.category] || exp.category || '';
+      var payerName = '';
+      if (exp.paidBy && members.length) {
+        var pm = members.find(function(m){ return m.id === exp.paidBy; });
+        if (pm) payerName = pm.name;
+      }
+      // 分配摘要
+      var splitSummary = '';
+      if (exp.splitType === 'private') {
+        splitSummary = '私人費用';
+      } else if (exp.splits && exp.splits.length) {
+        var assigned = exp.splits.filter(function(s){ return s.assignedTo; });
+        if (assigned.length) {
+          splitSummary = assigned.map(function(s){
+            var m = members.find(function(m){ return m.id === s.assignedTo; });
+            return (m ? m.name : '') + ' ' + fmtReportAmt(s.amount, exp.currency);
+          }).join(' · ');
+        } else {
+          splitSummary = '未分配';
+        }
+      }
+      // 是否為自動帶入
+      var isAuto = !!exp.sourceId;
+      html += '<div onclick="openExpenseEdit(' + ei + ')" style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">' +
+          '<div style="display:flex;gap:8px;align-items:center">' +
+            '<span style="font-size:18px">' + icon + '</span>' +
+            '<div>' +
+              '<div style="font-size:13px;font-weight:700;color:#e0d4c0">' + esc(exp.title || catLabel) + '</div>' +
+              (isAuto ? '<div style="font-size:10px;color:#6ec6f0;margin-top:1px">自動帶入</div>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div style="text-align:right">' +
+            '<div style="font-size:15px;font-weight:700;color:var(--accent)">' + fmtReportAmt(exp.amount, exp.currency) + '</div>' +
+            (payerName ? '<div style="font-size:11px;color:#c8b89a">' + esc(payerName) + ' 付款</div>' : '') +
+          '</div>' +
+        '</div>' +
+        (splitSummary ? '<div style="font-size:11px;color:#c8b89a;border-top:1px solid var(--border);padding-top:6px;margin-top:2px">' + esc(splitSummary) + '</div>' : '') +
+      '</div>';
+    });
+  }
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+function openExpenseEdit(ei) {
+  openExpense({source:'day', dayIdx:S.dayIdx, expIdx:ei});
+  // 返回時回到列表
+  _expReturnToList = true;
+}
 
 // ════ EXPENSE REPORT ════
 var _reportTab = 'total';
@@ -3556,6 +3793,7 @@ function openNavitime(from, to) {
 // ════ INIT ════
 renderList();
 initDayMode();
+migrateImportFareOnce();
 
 </script>
 </body>
