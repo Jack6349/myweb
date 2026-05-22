@@ -932,10 +932,10 @@ function renderTripDays(){
       '</div>';
     if(stops.length>0){
       html+='<div class="day-preview">';
-      stops.slice(0,4).forEach(function(st){
+      stops.slice(0,6).forEach(function(st){
         html+='<span class="prev-chip">'+stopTypeIcon(st.type)+' '+esc((st.name||'').slice(0,8))+'</span>';
       });
-      if(stops.length>4) html+='<span class="prev-chip">+' +(stops.length-4)+'</span>';
+      if(stops.length>6) html+='<span class="prev-chip">+' +(stops.length-6)+'</span>';
       html+='</div>';
     }
     html+='</div>';
