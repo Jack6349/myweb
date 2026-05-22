@@ -523,6 +523,7 @@ a{text-decoration:none;color:inherit;}
       </button>
       <div class="hdr-title" id="trip-hdr-title">行程</div>
       <button class="hdr-action" onclick="openExpenseReport()" style="color:#7bed9f">&#128176; 費用</button>
+      <button class="hdr-action" onclick="openTripExpense()" style="color:#6ec6f0">＋費用</button>
     <button class="hdr-btn" onclick="editTripInfo()">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button>
@@ -557,6 +558,20 @@ a{text-decoration:none;color:inherit;}
   </div>
   <div class="body" id="day-body">
     <div class="tl" id="day-tl"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: TRIP EXPENSE LIST ══ -->
+<div class="screen" id="sc-trip-expense-list">
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
+    <div class="hdr">
+      <button class="hdr-back" onclick="goBack('sc-trip')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hdr-title">行程費用</div>
+      <button class="hdr-action" onclick="openTripExpenseNew()" style="color:#7bed9f">＋新增</button>
+    </div>
+    <div class="body no-nav" id="trip-expense-list-body"></div>
   </div>
 </div>
 
@@ -2394,6 +2409,7 @@ function openExpense(ctx){
 
 function getExpenseByCtx(ctx){
   if(!ctx) return null;
+  if(ctx.source==='trip'&&ctx.expIdx!==undefined) return (trip()&&trip().expenses||[])[ctx.expIdx]||null;
   var d = trip()&&trip().days?trip().days[ctx.dayIdx]:null; if(!d)return null;
   if(ctx.source==='day'&&ctx.expIdx!==undefined) return (d.expenses||[])[ctx.expIdx]||null;
   if(ctx.source==='stop'&&ctx.stopIdx!==undefined&&ctx.expIdx!==undefined){
@@ -2442,6 +2458,11 @@ function renderExpenseForm(exp){
   });
   html += '</div>';
 
+  // 行程費用：日期欄位
+  if(_expCtx && _expCtx.source==='trip'){
+    html += '<div class="fs"><div class="fl">\u65e5\u671f</div>'+
+      '<input class="fi" type="date" id="ef-date" value="'+ea(exp&&exp.date?exp.date:'')+'" oninput="_expDirty=true"></div>';
+  }
   // Description + Amount
   html += '<div class="fs"><div class="fl">\u8aaa\u660e</div>'+
     '<input class="fi" id="ef-desc" placeholder="\u8cbb\u7528\u8aaa\u660e" value="'+ea(exp?exp.desc||'':'')+'" oninput="_expDirty=true"></div>';
@@ -2717,6 +2738,8 @@ function collectExpense(){
   var cat=(document.querySelector('.cat-btn.sel')||{dataset:{cat:'other'}}).dataset.cat;
   var desc=(document.getElementById('ef-desc')||{value:''}).value.trim();
   var amount=parseFloat((document.getElementById('ef-amount')||{value:'0'}).value)||0;
+  var dateEl=document.getElementById('ef-date');
+  var expDate=dateEl?dateEl.value:'';
   var currency=(document.getElementById('ef-currency')||{value:'JPY'}).value;
   var paidBy='';
   var payerEl=document.querySelector('#ef-payer-row .member-chip.sel');
@@ -2732,7 +2755,8 @@ function collectExpense(){
   var personalType='self';
   var proxyItems=[];
   return {id:uid(),category:cat,desc:desc,amount:amount,currency:currency,
-    paidBy:paidBy,shareType:shareType,splits:splits,personalType:personalType,proxyItems:proxyItems};
+    paidBy:paidBy,shareType:shareType,splits:splits,personalType:personalType,proxyItems:proxyItems,
+    date:expDate||''};
 }
 
 function saveExpense(){
@@ -2740,6 +2764,17 @@ function saveExpense(){
   var exp=collectExpense();
   if(!exp.desc){alert('\u8acb\u8f38\u5165\u8cbb\u7528\u8aaa\u660e');return;}
   if(!exp.amount){alert('\u8acb\u8f38\u5165\u91d1\u984d');return;}
+  if(ctx.source==='trip'){
+    var t=trip(); if(!t)return;
+    if(!t.expenses)t.expenses=[];
+    if(ctx.expIdx!==undefined)t.expenses[ctx.expIdx]=exp;
+    else t.expenses.push(exp);
+    save(S.trips); _expDirty=false;
+    if(_expReturnToList){
+      _expReturnToList=false; renderTripExpenseList(); goBack('sc-trip-expense-list');
+    } else { renderTripExpenseList(); goBack('sc-trip-expense-list'); }
+    return;
+  }
   var d=trip()&&trip().days?trip().days[ctx.dayIdx]:null; if(!d)return;
   if(ctx.source==='day'){
     if(!d.expenses)d.expenses=[];
@@ -2757,6 +2792,12 @@ function saveExpense(){
 
 function deleteExpense(){
   var ctx=_expCtx; if(!ctx)return;
+  if(ctx.source==='trip'&&ctx.expIdx!==undefined){
+    var t=trip(); if(t&&t.expenses)t.expenses.splice(ctx.expIdx,1);
+    save(S.trips); _expDirty=false;
+    renderTripExpenseList(); goBack('sc-trip-expense-list');
+    return;
+  }
   var d=trip()&&trip().days?trip().days[ctx.dayIdx]:null; if(!d)return;
   if(ctx.source==='day'&&ctx.expIdx!==undefined){
     d.expenses.splice(ctx.expIdx,1);
@@ -2904,6 +2945,74 @@ function migrateImportFareOnce() {
   localStorage.setItem(MIGRATE_KEY, '1');
 }
 
+
+// ════ 行程費用 ════
+
+function openTripExpense() {
+  renderTripExpenseList();
+  goTo('sc-trip-expense-list');
+}
+
+function openTripExpenseNew() {
+  _expReturnToList = true;
+  openExpense({source: 'trip'});
+}
+
+function renderTripExpenseList() {
+  var body = document.getElementById('trip-expense-list-body');
+  if (!body) return;
+  var t = trip(); if (!t) return;
+  var members = tripMembers();
+  var exps = (t.expenses || []);
+  var html = '<div style="padding:12px 16px">';
+
+  if (!exps.length) {
+    html += '<div style="padding:32px 20px;text-align:center;color:#c8b89a;font-size:14px">尚無行程費用<br><small style="color:#c8b89a">如：網卡、旅遊保險、行李等</small><br><br>' +
+      '<button onclick="openTripExpenseNew()" style="padding:10px 20px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:13px;cursor:pointer">＋ 新增費用</button>' +
+      '</div>';
+  } else {
+    exps.forEach(function(exp, ei) {
+      var icon = CAT_ICON[exp.category] || '📋';
+      var catLabel = CAT_LABEL[exp.category] || exp.category || '';
+      var payerName = '';
+      if (exp.paidBy && members.length) {
+        var pm = members.find(function(m){ return m.id === exp.paidBy; });
+        if (pm) payerName = pm.name;
+      }
+      var splitSummary = '';
+      if (exp.shareType === 'personal') {
+        splitSummary = '私人費用';
+      } else if (exp.splits && exp.splits.length) {
+        var hasData = exp.splits.some(function(s){ return s.slices && s.slices.length; });
+        splitSummary = hasData ? '已分配' : '未分配';
+      }
+      html += '<div onclick="openTripExpenseEdit(' + ei + ')" style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">' +
+          '<div style="display:flex;gap:8px;align-items:center">' +
+            '<span style="font-size:18px">' + icon + '</span>' +
+            '<div>' +
+              '<div style="font-size:13px;font-weight:700;color:#e0d4c0">' + esc(exp.desc || catLabel) + '</div>' +
+              (exp.date ? '<div style="font-size:11px;color:#c8b89a;margin-top:1px">' + esc(exp.date) + '</div>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div style="text-align:right">' +
+            '<div style="font-size:15px;font-weight:700;color:var(--accent)">' + fmtReportAmt(exp.amount, exp.currency) + '</div>' +
+            (payerName ? '<div style="font-size:11px;color:#c8b89a">' + esc(payerName) + ' 付款</div>' : '') +
+          '</div>' +
+        '</div>' +
+        (splitSummary ? '<div style="font-size:11px;color:#c8b89a;border-top:1px solid var(--border);padding-top:6px;margin-top:2px">' + esc(splitSummary) + '</div>' : '') +
+      '</div>';
+    });
+  }
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+function openTripExpenseEdit(ei) {
+  _expReturnToList = true;
+  openExpense({source: 'trip', expIdx: ei});
+}
+
 // ════ 費用列表 ════
 
 var CAT_ICON = {transport:'🚃', hotel:'🏨', food:'🍽️', ticket:'🎫', shopping:'🛒', other:'📋'};
@@ -3025,6 +3134,10 @@ function getAllExpenses(){
           dayTitle:d.title||(di+1)+'\u65e5', stopName:stop.name||''}));
       });
     });
+  });
+  // 行程費用（不屬於特定日期）
+  (t.expenses||[]).forEach(function(exp,ei){
+    result.push(Object.assign({}, exp, {source:'trip', expIdx:ei, dayTitle:'\u884c\u7a0b\u8cbb\u7528', dayIdx:null}));
   });
   return result;
 }
