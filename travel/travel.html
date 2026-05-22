@@ -2465,9 +2465,9 @@ function renderExpenseForm(exp){
   html += '</div></div>';
 
   // Share type
-  html += '<div class="fs"><div class="fl">\u5206\u6cfc\u65b9\u5f0f</div></div>';
+  html += '<div class="fs"><div class="fl">\u5206\u914d\u65b9\u5f0f</div></div>';
   html += '<div class="share-type-row">';
-  html += '<button class="share-btn'+(shareType==='shared'?' sel':'')+'" id="sb-shared" onclick="selShareType(\'shared\')">\u5171\u7528\u5206\u6cfc</button>';
+  html += '<button class="share-btn'+(shareType==='shared'?' sel':'')+'" id="sb-shared" onclick="selShareType(\'shared\')">\u5171\u7528\u5206\u914d</button>';
   html += '<button class="share-btn'+(shareType==='personal'?' sel':'')+'" id="sb-personal" onclick="selShareType(\'personal\')">\u79c1\u4eba\u8cbb\u7528</button>';
   html += '</div>';
 
@@ -2490,7 +2490,7 @@ function buildSplitArea(members, exp){
   var total = parseInt((document.getElementById('ef-amount')||{value:'0'}).value)||0;
   if(members.length===0) return '<div style="padding:0 16px;font-size:12px;color:#c8b89a">\u8acb\u5148\u8a2d\u5b9a\u884c\u7a0b\u6210\u54e1</div>';
   var html = '<div class="split-wrap">';
-  html += '<div class="split-label">\u8cbb\u7528\u5206\u6cfc</div>';
+  html += '<div class="split-label">\u8cbb\u7528\u5206\u914d</div>';
   html += '<div class="split-tip">\u9ede\u9078\u8cbb\u7528\u5340\u584a\uff0c\u518d\u9ede\u4e0b\u65b9\u6210\u54e1\u982d\u50cf\u6307\u5b9a\u8ca0\u64d4\u4eba</div>';
   // Blocks
   html += '<div class="split-blocks" id="ef-split-blocks">';
@@ -3167,7 +3167,7 @@ function renderPersonReport(exps, members, curs){
     // Allocated amounts
     if(Object.keys(allocatedAmt).length){
       html += '<div class="report-row" style="background:rgba(123,237,159,.05)">'+
-        '<div style="font-size:12px;color:#7bed9f;flex:1">\u5206\u6cfc\u61c9\u8ca0\u64d4\u91d1\u984d</div>'+
+        '<div style="font-size:12px;color:#7bed9f;flex:1">\u5206\u914d\u61c9\u8ca0\u64d4\u91d1\u984d</div>'+
         '<div>'+Object.keys(allocatedAmt).map(function(cur){
           return '<div style="font-size:12px;font-weight:700;color:#7bed9f">'+fmtReportAmt(allocatedAmt[cur],cur)+'</div>';
         }).join('')+'</div>'+
