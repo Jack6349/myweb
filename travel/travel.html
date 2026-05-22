@@ -3225,6 +3225,17 @@ function renderTotalReport(exps, curs){
   return html;
 }
 
+
+// 展開/收合每人明細
+function toggleMemberDetail(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  var arrow = document.getElementById(id + '-arrow');
+  if (arrow) arrow.textContent = isOpen ? '▾' : '▴';
+}
+
 function renderPersonReport(exps, members, curs){
   if(!members.length) return '<div class="empty-report">\u5c1a\u672a\u8a2d\u5b9a\u884c\u7a0b\u6210\u54e1</div>';
   var html = '';
@@ -3251,12 +3262,13 @@ function renderPersonReport(exps, members, curs){
 
     if(!paidExps.length&&!Object.keys(allocatedAmt).length) return;
 
+    var colId = 'member-detail-'+mi;
     html += '<div class="report-card">';
-    html += '<div class="member-report-hdr">'+
+    html += '<div class="member-report-hdr" onclick="toggleMemberDetail(\''+colId+'\')" style="cursor:pointer">'+
       '<div class="member-report-av" style="background:'+mc.bg+';color:'+mc.color+'">'+m.name[0]+'</div>'+
       '<div style="flex:1">'+
         '<div style="font-size:14px;font-weight:700;color:'+mc.color+'">'+esc(m.name)+'</div>'+
-        '<div style="font-size:11px;color:#c8b89a">\u5be6\u969b\u4ed8\u6b3e '+paidExps.length+' \u7b46</div>'+
+        '<div style="font-size:11px;color:#c8b89a">\u5be6\u969b\u4ed8\u6b3e '+paidExps.length+' \u7b46 \u00b7 \u9ede\u64ca\u5c55\u958b</div>'+
       '</div>'+
       '<div style="text-align:right">'+
         curs.map(function(cur){
@@ -3264,8 +3276,10 @@ function renderPersonReport(exps, members, curs){
           if(!total)return'';
           return'<div style="font-size:13px;font-weight:700;color:var(--accent)">'+fmtReportAmt(total,cur)+'</div>';
         }).join('')+
+        '<div style="font-size:16px;color:#c8b89a" id="'+colId+'-arrow">▾</div>'+
       '</div>'+
     '</div>';
+    html += '<div id="'+colId+'" style="display:none">';
 
     // Paid expenses list
     paidExps.forEach(function(exp){
@@ -3292,7 +3306,8 @@ function renderPersonReport(exps, members, curs){
         }).join('')+'</div>'+
       '</div>';
     }
-    html += '</div>';
+    html += '</div>'; // end collapseId
+    html += '</div>'; // end report-card
   });
 
   if(!html) html = '<div class="empty-report">\u5c1a\u7121\u8cbb\u7528\u8a18\u9304</div>';
