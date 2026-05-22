@@ -2952,7 +2952,9 @@ function renderTimetableSelector(d) {
     else if (s.fare && s.fare > 0) fareHtml = '¥' + esc(String(s.fare));
 
     var isSelected = _ttSelectedIdxs && _ttSelectedIdxs.indexOf(origIdx) >= 0;
+    var cat2 = classifyTransport(s);
     html += '<div onclick="toggleTimetableSelect(' + origIdx + ')" style="background:var(--bg3);border:2px solid ' + (isSelected ? '#6ec6f0' : 'rgba(110,198,240,.25)') + ';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;position:relative">' +
+      '<div style="font-size:11px;color:#c8b89a;margin-bottom:6px">' + cat2.icon + ' ' + cat2.label + '</div>' +
     (isSelected ? '      \'<div style="position:absolute;top:10px;right:12px;width:18px;height:18px;background:#6ec6f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#0f1923">✓</div>\' +' : '') +
       // 標題行：出發→到達 + 乘換
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
@@ -3233,6 +3235,24 @@ async function doTimetableImport() {
   }
 }
 
+
+// 從路線名稱判斷交通工具類別
+function classifyTransport(s) {
+  var name = ((s.trainName || '') + ' ' + (s.legs && s.legs[0] ? (s.legs[0].line_name || '') : '')).toLowerCase();
+  var orig = (s.trainName || '') + ' ' + (s.legs && s.legs[0] ? (s.legs[0].line_name || '') : '');
+  if (/高速バス|高速巴士|highwaybus/i.test(orig)) return { icon: '🚌', label: '高速巴士' };
+  if (/新幹線|はやぶさ|のぞみ|こまち|やまびこ|つばさ|かがやき|はくたか|あさま/i.test(orig)) return { icon: '🚄', label: '新幹線' };
+  if (/特急|limited express/i.test(orig)) return { icon: '🚆', label: '特急' };
+  if (/快速/i.test(orig)) return { icon: '🚆', label: '快速電車' };
+  if (/地下鉄|地鐵|subway|metro/i.test(orig)) return { icon: '🚇', label: '地鐵' };
+  if (/バス|巴士|bus/i.test(orig)) return { icon: '🚌', label: '巴士' };
+  if (/空港線|airport/i.test(orig)) return { icon: '🚃', label: '機場線' };
+  if (/モノレール|monorail/i.test(orig)) return { icon: '🚝', label: '單軌列車' };
+  if (/フェリー|ferry|渡輪/i.test(orig)) return { icon: '⛴️', label: '渡輪' };
+  if (s.legs && s.legs[0] && s.legs[0].line_name) return { icon: '🚃', label: '電車' };
+  return { icon: '🚃', label: '電車' };
+}
+
 // 渲染班次列表
 function renderTimetable() {
   var t = trip();
@@ -3282,7 +3302,9 @@ function renderTimetable() {
       });
       legsSummary += '</div>';
     }
+    var cat1 = classifyTransport(s);
     html += '<div style="background:var(--bg3);border:1px solid ' + (isPast ? 'var(--border)' : 'rgba(110,198,240,.3)') + ';border-radius:12px;padding:14px 16px;margin-bottom:10px;opacity:' + (isPast ? '.55' : '1') + '">' +
+      '<div style="font-size:11px;color:#c8b89a;margin-bottom:6px">' + cat1.icon + ' ' + cat1.label + '</div>' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">' +
         '<div style="font-size:13px;font-weight:700;color:#e0d4c0">' + esc(s.from || '') + ' → ' + esc(s.to || '') + '</div>' +
         '<button onclick="deleteTimetable(' + idx + ')" style="background:none;border:none;color:#c8b89a;font-size:16px;cursor:pointer;padding:0 0 0 8px">&times;</button>' +
