@@ -511,6 +511,7 @@ a{text-decoration:none;color:inherit;}
       <div class="empty-title">尚無旅行行程</div>
       <div class="empty-sub">點右上角「＋ 新增」建立行程<br>或點上傳圖示 AI 匯入</div>
     </div>
+    <div id="app-version-label" style="text-align:center;padding:16px 0 8px;font-size:11px;color:var(--text3);opacity:.5"></div>
   </div>
 </div>
 
@@ -817,6 +818,8 @@ a{text-decoration:none;color:inherit;}
 </div>
 
 <script>
+var APP_VERSION = 'v20260523.1';
+
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
 // ── GitHub 同步設定 ──
@@ -1001,6 +1004,9 @@ document.querySelectorAll('.overlay').forEach(function(o){
 
 // ════ TRIP LIST ════
 function renderList(){
+  var vEl = document.getElementById('app-version-label');
+  if(vEl) vEl.textContent = APP_VERSION;
+
   var trips=load(); S.trips=trips;
   var c=document.getElementById('list-content');
   var e=document.getElementById('list-empty');
