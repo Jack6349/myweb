@@ -1410,38 +1410,13 @@ function setManualLegField(ri, li, field, value) {
 }
 
 function addManualRoute(){
-  // 先開啟班次選擇器，若無班次再提供空白手填
+  // 直接新增空白手動路線（不跳班次選擇器）
   var d = day(); if(!d) return;
-  var t = trip();
-  var schedules = (t && t.timetables) || [];
-  // 計算當天日期
-  var dayDate = '';
-  if (t && t.startDate && t.days) {
-    var dayIdx = t.days.indexOf(d);
-    if (dayIdx >= 0) {
-      var dd2 = new Date(t.startDate);
-      dd2.setDate(dd2.getDate() + dayIdx);
-      dayDate = dd2.getFullYear() + '-' +
-        String(dd2.getMonth()+1).padStart(2,'0') + '-' +
-        String(dd2.getDate()).padStart(2,'0');
-    }
-  }
-  var filtered = schedules.filter(function(s){ return !s.date || s.date === dayDate; });
-  if (filtered.length > 0) {
-    // 有班次：開啟多選模式選擇器
-    _ttSelectorMulti = true;
-    _ttSelectedIdxs = [];
-    _ttSelectorStopIdx = S.stopIdx;
-    renderTimetableSelector(d);
-    goTo('sc-timetable-selector');
-  } else {
-    // 無班次：直接新增空白路線
-    var stop=S.stopIdx!==null?((d.stops||[])[S.stopIdx]):null;
-    if(!stop) return;
-    if(!stop.transit) stop.transit={fromPlace:(document.getElementById('sf-transit-from')||{value:''}).value,toPlace:(document.getElementById('sf-transit-to')||{value:''}).value,routes:[]};
-    stop.transit.routes.push({id:uid(),tag:'backup',departTime:'',arriveTime:'',duration:0,transfers:0,legs:[{mode:'train',fromStop:'',toStop:'',departTime:'',arriveTime:'',line:'',platform:''}]});
-    save(S.trips); _stopDirty=true; _refreshTransitRoutes();
-  }
+  var stop=S.stopIdx!==null?((d.stops||[])[S.stopIdx]):null;
+  if(!stop) return;
+  if(!stop.transit) stop.transit={fromPlace:(document.getElementById('sf-transit-from')||{value:''}).value,toPlace:(document.getElementById('sf-transit-to')||{value:''}).value,routes:[]};
+  stop.transit.routes.push({id:uid(),tag:'backup',departTime:'',arriveTime:'',duration:0,transfers:0,legs:[]});
+  save(S.trips); _stopDirty=true; _refreshTransitRoutes();
 }
 function addStopLeg(ri){
   var stop=S.stopIdx!==null?((day().stops||[])[S.stopIdx]):null;
