@@ -5,7 +5,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0f1923">
+<meta name="theme-color" content="#0f1923" id="theme-color-meta">
 <title>旅行行程</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -20,6 +20,14 @@
   --radius:14px;--radius-sm:8px;
   --hdr:56px;--nav:64px;
   --sb:env(safe-area-inset-bottom,0px);
+}
+/* 日間模式 */
+.day-mode{
+  --bg:#f0f4f8;--bg2:#e4eaf0;--bg3:#d8e2ec;--bg4:#ccd6e0;
+  --accent:#c47f00;--accent2:#a66a00;
+  --text:#1a2530;--text2:#2c3e50;--text3:#4a6070;
+  --border:rgba(0,0,0,.10);--border2:rgba(0,0,0,.18);
+  --success:#2d7a54;--danger:#c0392b;--info:#1a6e9e;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden;}
@@ -386,6 +394,7 @@ a{text-decoration:none;color:inherit;}
     <div class="hdr-title">旅行行程</div>
     <div id="sync-status" style="font-size:10px;color:#c8b89a;padding:0 6px"></div>
     <button onclick="openGhTokenSetting()" title="GitHub 同步設定" style="background:none;border:none;color:#c8b89a;cursor:pointer;padding:4px;font-size:14px" id="gh-token-btn">⚙️</button>
+    <button onclick="toggleDayMode()" title="切換日/夜間模式" style="background:none;border:none;cursor:pointer;padding:4px;font-size:16px" id="theme-btn">🌙</button>
     <button class="hdr-btn" onclick="showOverlay('ov-import')" title="AI匯入">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
     </button>
@@ -1837,6 +1846,31 @@ function legModeFromVehicle(v){
 // ════ CLOUD SYNC ════
 var SYNC_KEY = 'travel_sync_ts';
 
+
+// ── 日/夜間模式切換 ──
+var DAY_MODE_KEY = 'travel_day_mode';
+
+function toggleDayMode() {
+  var isDay = document.body.classList.toggle('day-mode');
+  localStorage.setItem(DAY_MODE_KEY, isDay ? '1' : '0');
+  var btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = isDay ? '☀️' : '🌙';
+  // 更新 theme-color
+  var meta = document.getElementById('theme-color-meta');
+  if (meta) meta.content = isDay ? '#f0f4f8' : '#0f1923';
+}
+
+function initDayMode() {
+  var saved = localStorage.getItem(DAY_MODE_KEY);
+  if (saved === '1') {
+    document.body.classList.add('day-mode');
+    var btn = document.getElementById('theme-btn');
+    if (btn) btn.textContent = '☀️';
+    var meta = document.getElementById('theme-color-meta');
+    if (meta) meta.content = '#f0f4f8';
+  }
+}
+
 // ── GitHub 同步：讀取 ──
 // 從 GitHub raw content 讀取（不需 token，公開 repo 即可）
 async function syncRead() {
@@ -1956,11 +1990,28 @@ function openGhTokenSetting() {
   token = token.trim();
   if (token) {
     localStorage.setItem(GH_TOKEN_KEY, token);
-    localStorage.removeItem(GH_SHA_KEY); // 清除舊 SHA
-    alert('Token 已儲存，下次儲存將自動同步至 GitHub。');
+    localStorage.removeItem(GH_SHA_KEY);
+    var ghBtn = document.getElementById('gh-token-btn');
+    if (ghBtn) ghBtn.style.color = '#7bed9f';
+    showSyncStatus('同步中…', 'var(--info)');
+    // 立即從 GitHub 讀取最新資料
+    syncRead().then(function(remote) {
+      if (remote) {
+        S.trips = remote;
+        renderList();
+        showSyncStatus('已同步', 'var(--success)');
+        setTimeout(function(){ showSyncStatus('',''); }, 2000);
+      } else {
+        showSyncStatus('Token 已儲存', 'var(--success)');
+        setTimeout(function(){ showSyncStatus('',''); }, 2000);
+      }
+    });
   } else {
     localStorage.removeItem(GH_TOKEN_KEY);
-    alert('Token 已清除，將停止同步至 GitHub。');
+    var ghBtn2 = document.getElementById('gh-token-btn');
+    if (ghBtn2) ghBtn2.style.color = '#c8b89a';
+    showSyncStatus('Token 已清除', '#c8b89a');
+    setTimeout(function(){ showSyncStatus('',''); }, 2000);
   }
 }
 
@@ -3222,6 +3273,7 @@ function openNavitime(from, to) {
 
 // ════ INIT ════
 renderList();
+initDayMode();
 
 </script>
 </body>
