@@ -1157,6 +1157,25 @@ function buildStopFields(stop,type,isLast,nextStop){
       '<div><div class="fl">\u8cbb\u7528</div><input class="fi" type="number" id="sf-hamount" placeholder="0" value="'+ea(stop&&stop.hotel&&stop.hotel.amount?stop.hotel.amount:'')+'" oninput="_stopDirty=true"></div>'+
       '<div><div class="fl">\u5e63\u5225</div><select class="fsel" id="sf-hcur"><option>JPY</option><option>TWD</option></select></div>'+
     '</div></div>';
+    // 付款方式
+    html+='<div class="fs"><div class="fl">\u4ed8\u6b3e\u65b9\u5f0f</div>'+
+      '<select class="fsel" id="sf-hpaymethod" oninput="_stopDirty=true">'+
+      ['','cash','card','ic'].map(function(v){var nm={'':'\u2014','cash':'\u73fe\u91d1','card':'\u5237\u5361','ic':'IC\u5361'};return'<option value="'+v+'"'+(stop&&stop.hotel&&stop.hotel.payMethod===v?' selected':'')+'>'+nm[v]+'</option>';}).join('')+
+      '</select></div>';
+    // 付款人（從行程成員選）
+    var tripMembers=(trip()&&trip().members)||[];
+    if(tripMembers.length){
+      html+='<div class="fs"><div class="fl">\u4ed8\u6b3e\u4eba</div>'+
+        '<select class="fsel" id="sf-hpayer" oninput="_stopDirty=true">'+
+        '<option value="">\u2014</option>'+
+        tripMembers.map(function(m){return'<option value="'+m.id+'"'+(stop&&stop.hotel&&stop.hotel.payerId===m.id?' selected':'')+'>'+esc(m.name)+'</option>';}).join('')+
+        '</select></div>';
+    }
+    html+='<div class="fs" style="display:flex;align-items:center;gap:8px;padding:2px 0">'+
+      '<input type="checkbox" id="sf-himport" style="width:18px;height:18px"'+(stop&&stop.hotel&&stop.hotel.importFare?' checked':'')+' oninput="_stopDirty=true">'+
+      '<label for="sf-himport" style="font-size:12px;color:#e0d4c0">\u5e36\u5165\u8cbb\u7528\u8a18\u9304</label>'+
+      '<span style="font-size:11px;color:#c8b89a">\uff08\u9810\u8a2d\u4e0d\u5e36\u5165\uff09</span>'+
+    '</div>';
     html+='<div class="fs"><div class="fl">\u9910\u98df</div><input class="fi" id="sf-hmeal" placeholder="\u7121\u9910\u98df / \u5305\u65e9\u665a\u9910" value="'+ea(stop&&stop.hotel?stop.hotel.meal||'':'')+'" oninput="_stopDirty=true"></div>';
     html+='<div class="fs"><div class="fl">\u96fb\u8a71</div><input class="fi" id="sf-hphone" placeholder="\u96fb\u8a71\u865f\u78bc" value="'+ea(stop&&stop.hotel?stop.hotel.phone||'':'')+'" oninput="_stopDirty=true"></div>';
     html+='<div class="fs"><div class="fl">\u5730\u5740</div><input class="fi" id="sf-haddr" placeholder="\u98ef\u5e97\u5730\u5740" value="'+ea(stop&&stop.hotel?stop.hotel.address||'':'')+'" oninput="_stopDirty=true"></div>';
@@ -1476,6 +1495,9 @@ function saveStop(){
       meal:(document.getElementById('sf-hmeal')||{value:''}).value.trim(),
       phone:(document.getElementById('sf-hphone')||{value:''}).value.trim(),
       address:(document.getElementById('sf-haddr')||{value:''}).value.trim(),
+      payMethod:(document.getElementById('sf-hpaymethod')||{value:''}).value,
+      payerId:(document.getElementById('sf-hpayer')||{value:''}).value,
+      importFare:(document.getElementById('sf-himport')||{checked:false}).checked,
     };
   }
   if(type==='airport'){
