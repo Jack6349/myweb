@@ -2916,13 +2916,13 @@ function renderTimetableSelector(d) {
       });
     }
 
-    // IC/現金票價分開顯示
+    // IC/現金票價分開顯示（-1 視為無資料）
     var fareHtml = '';
-    if (s.fare_ic && s.fare_ticket) {
-      fareHtml = '¥' + s.fare_ic + '（IC）/ ¥' + s.fare_ticket + '（現金）';
-    } else if (s.fare) {
-      fareHtml = '¥' + esc(String(s.fare));
-    }
+    var sic = s.fare_ic && s.fare_ic > 0 ? s.fare_ic : 0;
+    var stk = s.fare_ticket && s.fare_ticket > 0 ? s.fare_ticket : 0;
+    if (sic && stk) fareHtml = '¥' + sic + '（IC）/ ¥' + stk + '（現金）';
+    else if (sic) fareHtml = '¥' + sic + '（IC）';
+    else if (s.fare && s.fare > 0) fareHtml = '¥' + esc(String(s.fare));
 
     var isSelected = _ttSelectedIdxs && _ttSelectedIdxs.indexOf(origIdx) >= 0;
     html += '<div onclick="toggleTimetableSelect(' + origIdx + ')" style="background:var(--bg3);border:2px solid ' + (isSelected ? '#6ec6f0' : 'rgba(110,198,240,.25)') + ';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;position:relative">' +
@@ -3155,8 +3155,8 @@ async function doTimetableImport() {
               trainName: (r.legs || []).map(function(l){return l.line_name||'';}).filter(Boolean).join(' → '),
               duration: r.duration_minutes ? r.duration_minutes + '分' : '',
               fare: r.fare ? (r.fare.ic_yen || r.fare.ticket_yen || '') : '',
-              fare_ic: r.fare ? (r.fare.ic_yen || '') : '',
-              fare_ticket: r.fare ? (r.fare.ticket_yen || '') : '',
+              fare_ic: r.fare && r.fare.ic_yen > 0 ? r.fare.ic_yen : '',
+              fare_ticket: r.fare && r.fare.ticket_yen > 0 ? r.fare.ticket_yen : '',
               date: (parsed.search_meta && parsed.search_meta.search_departure_date) || '',
               transfers: r.transfers || 0,
               legs: r.legs || []
@@ -3223,8 +3223,11 @@ function renderTimetable() {
 
     // fare 顯示
     var fareStr = '';
-    if (s.fare_ic && s.fare_ticket) fareStr = '¥' + s.fare_ic + '（IC）/ ¥' + s.fare_ticket + '（現金）';
-    else if (s.fare) fareStr = '¥' + s.fare;
+    var fareIc = s.fare_ic && s.fare_ic > 0 ? s.fare_ic : 0;
+    var fareTk = s.fare_ticket && s.fare_ticket > 0 ? s.fare_ticket : 0;
+    if (fareIc && fareTk) fareStr = '¥' + fareIc + '（IC）/ ¥' + fareTk + '（現金）';
+    else if (fareIc) fareStr = '¥' + fareIc + '（IC）';
+    else if (s.fare && s.fare > 0) fareStr = '¥' + s.fare;
     // legs 摘要
     var legsSummary = '';
     if (s.legs && s.legs.length) {
