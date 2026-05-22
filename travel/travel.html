@@ -1841,19 +1841,25 @@ var SYNC_KEY = 'travel_sync_ts';
 // 從 GitHub raw content 讀取（不需 token，公開 repo 即可）
 async function syncRead() {
   try {
-    // 加 timestamp 避免快取
-    var url = 'https://raw.githubusercontent.com/' + GITHUB_REPO + '/main/' + GITHUB_FILE + '?t=' + Date.now();
-    var res = await fetch(url);
+    var token = localStorage.getItem(GH_TOKEN_KEY);
+    var headers = { 'Accept': 'application/vnd.github.v3+json' };
+    if (token) headers['Authorization'] = 'token ' + token;
+    // 用 Contents API 讀取（支援 private repo）
+    var res = await fetch(GITHUB_API, { headers: headers });
     if (!res.ok) return null;
-    var data = await res.json();
+    var meta = await res.json();
+    // 快取 SHA
+    if (meta.sha) localStorage.setItem(GH_SHA_KEY, meta.sha);
+    // 解碼 base64 內容
+    var content = meta.content ? decodeURIComponent(escape(atob(meta.content.replace(/\n/g,'')))) : null;
+    if (!content) return null;
+    var data = JSON.parse(content);
     if (!data || !data.trips) return null;
     var remoteTs = data.updatedAt || '';
     var localTs = localStorage.getItem(SYNC_KEY) || '';
     if (!localTs || remoteTs > localTs) {
       localStorage.setItem(STORE_KEY, JSON.stringify(data.trips));
       localStorage.setItem(SYNC_KEY, remoteTs);
-      // 快取 SHA 供寫入使用
-      if (data._sha) localStorage.setItem(GH_SHA_KEY, data._sha);
       return data.trips;
     }
     return null;
