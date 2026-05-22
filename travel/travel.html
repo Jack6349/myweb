@@ -240,6 +240,14 @@ a{text-decoration:none;color:inherit;}
 .fhint{font-size:11px;color:#c8b89a;margin-top:4px;}
 .fdiv{height:1px;background:var(--border);margin:4px 16px 14px;}
 
+/* ── LAYOVER TIME ── */
+.tl-layover{display:flex;align-items:center;gap:6px;margin:4px 0 4px 62px;padding:4px 10px;
+  font-size:11px;color:#c8b89a;}
+.tl-layover-time{font-weight:700;color:#e8b84b;}
+.tl-layover-unknown{color:#c8b89a;font-style:italic;}
+.day-mode .tl-layover{color:#3a5570;}
+.day-mode .tl-layover-time{color:#9a6200;}
+
 /* ── STOP TYPE SELECTOR ── */
 .stop-types{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:0 16px 14px;}
 .stype-btn{padding:8px 4px;border-radius:8px;border:1px solid var(--border2);
@@ -1079,6 +1087,34 @@ function openDay(idx){
   goTo('sc-day');
 }
 
+
+// 計算兩個 HH:MM 之間的分鐘差（支援跨日）
+function calcLayoverMins(arrTime, depTime) {
+  if (!arrTime || !depTime) return null;
+  var a = arrTime.split(':'), d = depTime.split(':');
+  if (a.length < 2 || d.length < 2) return null;
+  var aMins = parseInt(a[0]) * 60 + parseInt(a[1]);
+  var dMins = parseInt(d[0]) * 60 + parseInt(d[1]);
+  var diff = dMins - aMins;
+  if (diff < 0) diff += 24 * 60; // 跨日
+  return diff;
+}
+
+// 格式化間隔時間（含天數）
+function fmtLayover(mins) {
+  if (mins === null) return null;
+  if (mins === 0) return '即刻出發';
+  var days = Math.floor(mins / (24 * 60));
+  var rem = mins % (24 * 60);
+  var h = Math.floor(rem / 60);
+  var m = rem % 60;
+  var s = '';
+  if (days > 0) s += days + '天';
+  if (h > 0) s += h + '小時';
+  if (m > 0) s += m + '分';
+  return s || '0分';
+}
+
 // ════ DAY TIMELINE ════
 function renderDayTL(){
   var d=day(); if(!d)return;
@@ -1114,6 +1150,21 @@ function renderDayTL(){
     html+='<div class="tl-stop-name">'+stopTypeIcon(stop.type)+' '+esc(stop.name||'\uff08\u672a\u547d\u540d\uff09')+(stop.anchor?'<span class="anchor-badge">\u9328\u9ede</span>':'')+' </div>';
     if(stop.note) html+='<div class="tl-stop-sub">'+esc(stop.note)+'</div>';
     html+='</div>';
+
+    // 間隔時間（到達 → 出發）
+    if(prevArrTime || depTime) {
+      var layMins = calcLayoverMins(prevArrTime, depTime);
+      var layStr = fmtLayover(layMins);
+      html += '<div class="tl-layover">';
+      if (layStr !== null) {
+        html += '⏱ 停留 <span class="tl-layover-time">' + layStr + '</span>';
+      } else if (prevArrTime && !depTime) {
+        html += '<span class="tl-layover-unknown">⏱ 抵達後出發時間未定</span>';
+      } else if (!prevArrTime && depTime) {
+        html += '<span class="tl-layover-unknown">⏱ 到達時間未定</span>';
+      }
+      html += '</div>';
+    }
 
     // TRANSIT display (below stop card, above next stop)
     if(!isLast || (isLastDay&&isLast)){
