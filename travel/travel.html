@@ -1284,10 +1284,16 @@ function buildStopFields(stop,type,isLast,nextStop){
       html+=buildTimePicker('sf-flight-arr','\u964d\u843d\u6642\u9593\uff08\u5230\uff09',flightRoute?flightRoute.arriveTime||'':'','');
     }
     // Route list
-    // 已選班次顯示
+    // 已選班次顯示（防呆：若路線方案已被清空則自動重置）
     var t=trip();
     var selId=stop?stop.selectedTimetableId:null;
     var selSched=(t&&t.timetables&&selId!==null&&selId!==undefined)?t.timetables[selId]:null;
+    // 若有 selectedTimetableId 但路線方案為空，自動清除選定狀態
+    if(selSched && stop && (!stop.transit || !stop.transit.routes || stop.transit.routes.length===0)){
+      delete stop.selectedTimetableId;
+      selSched = null;
+      save(S.trips);
+    }
     if(selSched){
       html+='<div style="margin:0 16px 8px;background:var(--bg3);border:1px solid rgba(110,198,240,.4);border-radius:12px;padding:12px 14px">'+
         '<div style="font-size:11px;color:#6ec6f0;margin-bottom:4px">\u5df2\u9078\u73ed\u6b21</div>'+
