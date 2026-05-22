@@ -385,6 +385,7 @@ a{text-decoration:none;color:inherit;}
     </a>
     <div class="hdr-title">旅行行程</div>
     <div id="sync-status" style="font-size:10px;color:#c8b89a;padding:0 6px"></div>
+    <button onclick="openGhTokenSetting()" title="GitHub 同步設定" style="background:none;border:none;color:#c8b89a;cursor:pointer;padding:4px;font-size:14px" id="gh-token-btn">⚙️</button>
     <button class="hdr-btn" onclick="showOverlay('ov-import')" title="AI匯入">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
     </button>
@@ -675,6 +676,17 @@ a{text-decoration:none;color:inherit;}
 
 <script>
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
+
+// ── GitHub 同步設定 ──
+// GITHUB_REPO: 'username/repo-name'
+// GITHUB_FILE: 儲存路徑，例如 'travel/data.json'
+// token 存在 localStorage['gh_token']，首次使用時輸入
+var GITHUB_REPO = 'jack6349/jack6349.github.io';
+var GITHUB_FILE = 'travel/data.json';
+var GITHUB_API  = 'https://api.github.com/repos/' + GITHUB_REPO + '/contents/' + GITHUB_FILE;
+var GH_TOKEN_KEY = 'gh_token';
+var GH_SHA_KEY   = 'gh_sha';   // 快取最新檔案 SHA，寫入時需要
+
 
 var STORE_KEY = 'travel_v2';
 
@@ -1662,6 +1674,9 @@ function saveTrip(){
   save(trips); S.trips=trips;
   closeOverlay('ov-trip'); // Auto sync on load
 (async function(){
+  // 更新 token 狀態顯示
+  var ghBtn = document.getElementById('gh-token-btn');
+  if(ghBtn) ghBtn.style.color = localStorage.getItem(GH_TOKEN_KEY) ? '#7bed9f' : '#c8b89a';
   var el = document.getElementById('sync-status');
   if(el) { el.textContent = '同步中…'; el.style.color = 'var(--info)'; }
   var remote = await syncRead();
@@ -1822,38 +1837,106 @@ function legModeFromVehicle(v){
 // ════ CLOUD SYNC ════
 var SYNC_KEY = 'travel_sync_ts';
 
+// ── GitHub 同步：讀取 ──
+// 從 GitHub raw content 讀取（不需 token，公開 repo 即可）
 async function syncRead() {
   try {
-    var res = await fetch(GAS + '?action=travel_read');
+    // 加 timestamp 避免快取
+    var url = 'https://raw.githubusercontent.com/' + GITHUB_REPO + '/main/' + GITHUB_FILE + '?t=' + Date.now();
+    var res = await fetch(url);
+    if (!res.ok) return null;
     var data = await res.json();
-    if (!data || !data.data) return null;
+    if (!data || !data.trips) return null;
     var remoteTs = data.updatedAt || '';
     var localTs = localStorage.getItem(SYNC_KEY) || '';
     if (!localTs || remoteTs > localTs) {
-      // Remote is newer - update local
-      localStorage.setItem(STORE_KEY, JSON.stringify(data.data));
+      localStorage.setItem(STORE_KEY, JSON.stringify(data.trips));
       localStorage.setItem(SYNC_KEY, remoteTs);
-      return data.data;
+      // 快取 SHA 供寫入使用
+      if (data._sha) localStorage.setItem(GH_SHA_KEY, data._sha);
+      return data.trips;
     }
-    return null; // local is newer or same
+    return null;
   } catch(e) {
     console.log('sync read error:', e);
     return null;
   }
 }
 
+// ── GitHub 同步：寫入 ──
+// 需要 Personal Access Token（classic，repo scope）
 async function syncWrite(trips) {
+  var token = localStorage.getItem(GH_TOKEN_KEY);
+  if (!token) return; // 無 token 跳過
   try {
     var ts = new Date().toISOString();
     localStorage.setItem(SYNC_KEY, ts);
-    // POST + text/plain 避免 CORS preflight，GAS 以 e.postData.contents 接收
-    await fetch(GAS, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'travel_write', data: trips, updatedAt: ts })
+
+    // 先取最新 SHA（寫入時必須提供）
+    var sha = localStorage.getItem(GH_SHA_KEY) || '';
+    if (!sha) {
+      var metaRes = await fetch(GITHUB_API, {
+        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+      });
+      if (metaRes.ok) {
+        var meta = await metaRes.json();
+        sha = meta.sha || '';
+        localStorage.setItem(GH_SHA_KEY, sha);
+      }
+    }
+
+    var content = JSON.stringify({ trips: trips, updatedAt: ts }, null, 0);
+    var b64 = btoa(unescape(encodeURIComponent(content)));
+
+    var body = { message: 'sync: ' + ts.slice(0,16), content: b64 };
+    if (sha) body.sha = sha;
+
+    var res = await fetch(GITHUB_API, {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
     });
+
+    if (res.ok) {
+      var result = await res.json();
+      if (result.content && result.content.sha) {
+        localStorage.setItem(GH_SHA_KEY, result.content.sha);
+      }
+      showSyncStatus('已同步', 'var(--success)');
+    } else {
+      var err = await res.json();
+      // SHA 衝突時清除快取，下次重取
+      if (res.status === 409 || res.status === 422) {
+        localStorage.removeItem(GH_SHA_KEY);
+        // 重試一次
+        await syncWrite(trips);
+      } else {
+        console.log('sync write error:', err.message);
+        showSyncStatus('同步失敗', '#ff6b6b');
+      }
+    }
   } catch(e) {
     console.log('sync write error:', e);
+  }
+}
+
+// ── GitHub Token 設定 ──
+function openGhTokenSetting() {
+  var cur = localStorage.getItem(GH_TOKEN_KEY) || '';
+  var token = prompt('請輸入 GitHub Personal Access Token\n（Settings → Developer settings → Personal access tokens → classic）\n\n目前：' + (cur ? cur.slice(0,8)+'…' : '未設定'), cur);
+  if (token === null) return;
+  token = token.trim();
+  if (token) {
+    localStorage.setItem(GH_TOKEN_KEY, token);
+    localStorage.removeItem(GH_SHA_KEY); // 清除舊 SHA
+    alert('Token 已儲存，下次儲存將自動同步至 GitHub。');
+  } else {
+    localStorage.removeItem(GH_TOKEN_KEY);
+    alert('Token 已清除，將停止同步至 GitHub。');
   }
 }
 
