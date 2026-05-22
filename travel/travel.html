@@ -1914,9 +1914,27 @@ async function syncWrite(trips) {
         localStorage.removeItem(GH_SHA_KEY);
         // 重試一次
         await syncWrite(trips);
+      } else if (res.status === 401 || res.status === 403) {
+        // Token 過期或無效，清除後提示重新輸入
+        localStorage.removeItem(GH_TOKEN_KEY);
+        localStorage.removeItem(GH_SHA_KEY);
+        var ghBtn = document.getElementById('gh-token-btn');
+        if (ghBtn) ghBtn.style.color = '#c8b89a';
+        showSyncStatus('Token 已過期', '#ff6b6b');
+        // 延遲一秒後彈出重新輸入視窗
+        setTimeout(function() {
+          var newToken = prompt('GitHub Token 已過期或無效，請重新輸入：\n（Settings → Developer settings → Personal access tokens → classic）');
+          if (newToken) {
+            newToken = newToken.trim();
+            localStorage.setItem(GH_TOKEN_KEY, newToken);
+            if (ghBtn) ghBtn.style.color = '#7bed9f';
+            showSyncStatus('Token 已更新，重新同步中…', 'var(--info)');
+            syncWrite(trips);
+          }
+        }, 1000);
       } else {
         console.log('sync write error:', err.message);
-        showSyncStatus('同步失敗', '#ff6b6b');
+        showSyncStatus('同步失敗：' + (err.message||res.status), '#ff6b6b');
       }
     }
   } catch(e) {
