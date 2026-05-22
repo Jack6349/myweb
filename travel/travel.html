@@ -2156,7 +2156,7 @@ async function syncWrite(trips) {
   if (!token) return; // 無 token 跳過
   try {
     var ts = new Date().toISOString();
-    localStorage.setItem(SYNC_KEY, ts);
+    // SYNC_KEY 在成功後才更新，避免誤判
 
     // 先取最新 SHA（寫入時必須提供）
     var sha = localStorage.getItem(GH_SHA_KEY) || '';
@@ -2192,7 +2192,9 @@ async function syncWrite(trips) {
       if (result.content && result.content.sha) {
         localStorage.setItem(GH_SHA_KEY, result.content.sha);
       }
+      localStorage.setItem(SYNC_KEY, ts);
       showSyncStatus('已同步', 'var(--success)');
+      setTimeout(function(){ showSyncStatus('',''); }, 2000);
     } else {
       var err = await res.json();
       // SHA 衝突時清除快取，下次重取
