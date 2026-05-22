@@ -44,7 +44,8 @@
 .day-mode .chip.green{ color:#1d6b45 !important;background:rgba(29,107,69,.12) !important; }
 .day-mode .chip.yellow{ color:#7a4e00 !important;background:rgba(122,78,0,.12) !important; }
 .day-mode .chip.blue{ color:#0d5a8a !important;background:rgba(13,90,138,.12) !important; }
-.day-mode .prev-chip{ background:rgba(0,0,0,.08);color:#0d1b27 !important;border-color:rgba(0,0,0,.15) !important; }
+/* prev-chip：去掉底色，與卡片融合 */
+.day-mode .prev-chip{ background:rgba(0,0,0,.06);color:#1a3045 !important;border:1px solid rgba(0,0,0,.10) !important; }
 /* 時間軸 */
 .day-mode .tl-stop-name{ color:#0d1b27 !important; }
 .day-mode .tl-seg{ color:#2e5070 !important; }
@@ -63,6 +64,13 @@
 /* 按鈕 */
 .day-mode .btn-primary{ background:#9a6200 !important;color:#fff !important; }
 .day-mode .section-label{ color:#2e5070 !important; }
+/* 日期、副標題文字 */
+.day-mode .day-date{ color:#2e5070 !important; }
+.day-mode .day-d{ color:#4a6070 !important; }
+.day-mode .day-n{ color:#0d1b27 !important; }
+.day-mode .day-badge{ background:rgba(0,0,0,.06) !important;border-color:rgba(0,0,0,.12) !important; }
+.day-mode .card-sub{ color:#2e5070 !important; }
+.day-mode .card-title{ color:#0d1b27 !important; }
 /* 通用深色文字覆寫 */
 .day-mode *[style*='color:#c8b89a']{ color:#3a5060 !important; }
 .day-mode *[style*='color:#e0d4c0']{ color:#0d1b27 !important; }
@@ -3201,9 +3209,21 @@ async function doTimetableImport() {
 
     // 合併到行程的 timetables 陣列
     if (!t.timetables) t.timetables = [];
-    result.schedules.forEach(function(s) { t.timetables.push(s); });
+    // 去重複：以 from+to+departTime+date 為唯一鍵
+    var existing = t.timetables.map(function(s){
+      return (s.from||'')+'|'+(s.to||'')+'|'+(s.departTime||'')+'|'+(s.date||'');
+    });
+    var added = 0;
+    result.schedules.forEach(function(s) {
+      var key = (s.from||'')+'|'+(s.to||'')+'|'+(s.departTime||'')+'|'+(s.date||'');
+      if (existing.indexOf(key) < 0) {
+        t.timetables.push(s);
+        existing.push(key);
+        added++;
+      }
+    });
     save(S.trips);
-    alert('成功匯入 ' + result.schedules.length + ' 筆班次');
+    alert(added > 0 ? '成功匯入 ' + added + ' 筆班次' + (result.schedules.length - added > 0 ? '，略過 ' + (result.schedules.length - added) + ' 筆重複' : '') : '所有班次已存在，無新增');
     goBack('sc-timetable');
     renderTimetable();
   } catch(e) {
