@@ -1186,8 +1186,8 @@ function renderDayTL(){
     if(stop.note) html+='<div class="tl-stop-sub">'+esc(stop.note)+'</div>';
     html+='</div>';
 
-    // 間隔時間（到達 → 出發）
-    if(prevArrTime || depTime) {
+    // 間隔時間（到達 → 出發）—— 第一個地點不顯示
+    if(i > 0 && (prevArrTime || depTime)) {
       var layMins = calcLayoverMins(prevArrTime, depTime);
       var layStr = fmtLayover(layMins);
       html += '<div class="tl-layover">';
