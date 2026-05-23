@@ -1240,7 +1240,7 @@ function renderDayTL(){
           html+='<div class="tl-leg-row">'+
             '<div class="tl-leg-icon">'+legModeIcon(leg.mode)+'</div>'+
             '<div class="tl-leg-info">'+
-              (leg.line?'<div class="tl-leg-line">'+esc(leg.line)+'</div>':'')+
+              '<div class="tl-leg-line">'+esc(leg.line||legModeName(leg.mode||'train'))+'</div>'+
               '<div class="tl-leg-detail">'+
                 (leg.fromStop?esc(leg.fromStop):'')+
                 (leg.toStop?' \u2192 '+esc(leg.toStop):'')+
