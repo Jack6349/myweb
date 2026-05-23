@@ -525,6 +525,7 @@ a{text-decoration:none;color:inherit;}
       <div class="hdr-title" id="trip-hdr-title">行程</div>
       <button class="hdr-action" onclick="openExpenseReport()" style="color:#7bed9f">&#128176; 費用</button>
       <button class="hdr-action" onclick="openTripExpense()" style="color:#6ec6f0">＋費用</button>
+      <button class="hdr-action" onclick="openTripTodo()" style="position:relative;color:#e8b84b" id="trip-todo-btn">📝<span id="trip-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
     <button class="hdr-btn" onclick="editTripInfo()">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button>
@@ -575,6 +576,19 @@ a{text-decoration:none;color:inherit;}
   <div id="day-todo-banner" onclick="this.style.display='none'" style="display:none;background:rgba(232,184,75,.12);border-bottom:1px solid rgba(232,184,75,.3);padding:8px 16px;font-size:12px;color:#e8b84b;cursor:pointer;line-height:1.6"></div>
   <div class="body" id="day-body">
     <div class="tl" id="day-tl"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: TRIP TODO ══ -->
+<div class="screen" id="sc-trip-todo">
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
+    <div class="hdr">
+      <button class="hdr-back" onclick="goBack('sc-trip');updateTripTodoBadge()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hdr-title">代辦事項總表</div>
+    </div>
+    <div class="body no-nav" id="trip-todo-body"></div>
   </div>
 </div>
 
@@ -834,7 +848,7 @@ a{text-decoration:none;color:inherit;}
 </div>
 
 <script>
-var APP_VERSION = 'v20260523.3 18:20';
+var APP_VERSION = 'v20260523.4 18:45';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1758,6 +1772,154 @@ function syncTransitTimePickers(){
 }
 
 
+
+
+// ════ 代辦事項總表 ════
+
+function openTripTodo() {
+  renderTripTodoList();
+  goTo('sc-trip-todo');
+}
+
+function renderTripTodoList() {
+  var body = document.getElementById('trip-todo-body');
+  if (!body) return;
+  var t = trip(); if (!t) return;
+  var html = '<div style="padding:8px 0">';
+  var totalPending = 0;
+
+  (t.days || []).forEach(function(d, di) {
+    var todos = d.todos || [];
+    var pending = todos.filter(function(td){ return !td.done && td.text; });
+    var done = todos.filter(function(td){ return td.done; });
+    totalPending += pending.length;
+
+    var dd = new Date(t.startDate);
+    dd.setDate(dd.getDate() + di);
+    var dateStr = fmtDFull(dd);
+    var colId = 'trip-todo-day-' + di;
+    var hasTodos = todos.length > 0;
+
+    html += '<div style="border-bottom:1px solid var(--border)">';
+    // 日期行 header（點擊展開）
+    html += '<div onclick="toggleCatDetail(\'' + colId + '\')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer">';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<span style="font-size:14px;font-weight:800;color:var(--accent)">D' + (di+1) + '</span>';
+    html += '<span style="font-size:13px;color:#e0d4c0">' + esc(dateStr) + '</span>';
+    if (pending.length > 0) {
+      html += '<span style="font-size:10px;background:#ff6b6b;color:#fff;border-radius:50%;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px">' + pending.length + '</span>';
+    }
+    html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<button onclick="event.stopPropagation();addTripDayTodo(' + di + ')" style="font-size:11px;padding:2px 8px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:6px;color:#6ec6f0;cursor:pointer">＋</button>';
+    if (hasTodos) {
+      html += '<span style="font-size:11px;color:#c8b89a">' + (pending.length ? pending.length + '件未完成' : '已全部完成') + '</span>';
+    }
+    html += '<span style="font-size:14px;color:#c8b89a" id="' + colId + '-arrow">▾</span>';
+    html += '</div></div>';
+
+    // 展開區域
+    html += '<div id="' + colId + '" style="display:none;padding:0 16px 8px">';
+    if (!hasTodos) {
+      html += '<div style="font-size:12px;color:#c8b89a;padding:8px 0">尚無代辦事項</div>';
+    } else {
+      todos.forEach(function(todo, ti) {
+        html += renderTripTodoItem(di, ti, todo);
+      });
+    }
+    html += '</div>';
+    html += '</div>';
+  });
+
+  html += '</div>';
+  body.innerHTML = html;
+
+  // 更新總表 badge
+  updateTripTodoBadge();
+}
+
+function renderTripTodoItem(di, ti, todo) {
+  return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+    '<input type="checkbox" style="width:20px;height:20px;flex-shrink:0;margin-top:3px"' + (todo.done?' checked':'') +
+    ' onchange="setTripTodoDone(' + di + ',' + ti + ',this.checked)">' +
+    '<textarea class="fta" rows="2" style="flex:1;font-size:14px;resize:none;min-height:40px;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'') +
+    '" placeholder="代辦事項說明"' +
+    ' oninput="var el=this;el.style.height=\'auto\';el.style.height=el.scrollHeight+\'px\';setTripTodoText(' + di + ',' + ti + ',el.value)">' +
+    ea(todo.text||'') + '</textarea>' +
+    '<button onclick="removeTripTodo(' + di + ',' + ti + ')" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:18px;flex-shrink:0;margin-top:2px">&times;</button>' +
+    '</div>';
+}
+
+function addTripDayTodo(di) {
+  var t = trip(); if(!t || !t.days[di]) return;
+  var d = t.days[di];
+  if(!d.todos) d.todos = [];
+  d.todos.push({text:'', done:false, id:uid()});
+  save(S.trips);
+  // 展開該天並重新渲染
+  renderTripTodoList();
+  var colId = 'trip-todo-day-' + di;
+  var el = document.getElementById(colId);
+  if(el) el.style.display = 'block';
+  var arrow = document.getElementById(colId + '-arrow');
+  if(arrow) arrow.textContent = '▴';
+}
+
+function setTripTodoDone(di, ti, done) {
+  var t = trip(); if(!t || !t.days[di]) return;
+  var todos = t.days[di].todos || [];
+  if(!todos[ti]) return;
+  todos[ti].done = done;
+  save(S.trips);
+  renderTripTodoList();
+  var colId = 'trip-todo-day-' + di;
+  var el = document.getElementById(colId);
+  if(el) el.style.display = 'block';
+  var arrow = document.getElementById(colId + '-arrow');
+  if(arrow) arrow.textContent = '▴';
+  // 同步更新每日行程的 badge
+  updateTodoBadge();
+}
+
+function setTripTodoText(di, ti, text) {
+  var t = trip(); if(!t || !t.days[di]) return;
+  var todos = t.days[di].todos || [];
+  if(!todos[ti]) return;
+  todos[ti].text = text;
+  save(S.trips);
+  updateTripTodoBadge();
+  updateTodoBadge();
+}
+
+function removeTripTodo(di, ti) {
+  var t = trip(); if(!t || !t.days[di]) return;
+  var todos = t.days[di].todos || [];
+  todos.splice(ti, 1);
+  save(S.trips);
+  renderTripTodoList();
+  var colId = 'trip-todo-day-' + di;
+  var el = document.getElementById(colId);
+  if(el) el.style.display = 'block';
+  var arrow = document.getElementById(colId + '-arrow');
+  if(arrow) arrow.textContent = '▴';
+  updateTodoBadge();
+}
+
+function updateTripTodoBadge() {
+  var badge = document.getElementById('trip-todo-badge');
+  if(!badge) return;
+  var t = trip(); if(!t) return;
+  var count = 0;
+  (t.days||[]).forEach(function(d){
+    (d.todos||[]).forEach(function(td){ if(!td.done && td.text) count++; });
+  });
+  if(count > 0) {
+    badge.textContent = count > 9 ? '9+' : count;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
 
 // ════ 每日代辦事項 ════
 
