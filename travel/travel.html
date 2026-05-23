@@ -545,7 +545,7 @@ a{text-decoration:none;color:inherit;}
 <div class="screen" id="sc-day-todo">
   <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
     <div class="hdr">
-      <button class="hdr-back" onclick="goBack('sc-day');updateTodoBadge()">
+      <button class="hdr-back" onclick="_todoReturnToTripTodo?(goBack('sc-trip-todo'),_todoReturnToTripTodo=false,updateTripTodoBadge()):(goBack('sc-day'),updateTodoBadge())">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <div class="hdr-title" id="day-todo-hdr-title">待辦事項</div>
@@ -848,7 +848,7 @@ a{text-decoration:none;color:inherit;}
 </div>
 
 <script>
-var APP_VERSION = 'v20260523.7 19:30';
+var APP_VERSION = 'v20260523.8 20:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1873,6 +1873,7 @@ function addTripDayTodo(di) {
   // 確保 day stops 已載入
   if(t.days && !t.days[di].stops) t.days[di].stops = [];
   document.getElementById('day-todo-hdr-title').textContent = 'D'+(di+1)+' 待辦事項';
+  _todoReturnToTripTodo = true;
   addDayTodo();
   renderDayTodoList();
   goTo('sc-day-todo');
@@ -2752,6 +2753,7 @@ function collectMembers(){
 var _expDirty = false;
 var _expCtx = null;
 var _expReturnToList = false;
+var _todoReturnToTripTodo = false;
 var _expReturnToReport = false;  // {source:'day'|'stop', dayIdx, stopIdx, expIdx}
 var _expSplitSelected = null;  // block mid being assigned
 
