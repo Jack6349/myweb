@@ -3349,25 +3349,31 @@ function renderDayReport(exps, curs){
     var dd = new Date(t.startDate); dd.setDate(dd.getDate()+di);
     var totals = {};
     dayExps.forEach(function(e){ totals[e.currency]=(totals[e.currency]||0)+e.amount; });
+    var dayColId = 'day-detail-' + di;
     html += '<div class="report-card">';
-    html += '<div class="report-card-hdr">'+
+    html += '<div class="report-card-hdr" onclick="toggleCatDetail(\''+dayColId+'\')" style="cursor:pointer">'+
       '<div class="report-card-hdr-left">'+
         '<span style="font-size:14px;font-weight:800;color:var(--accent)">D'+(di+1)+'</span>'+
         '<span style="font-size:13px;font-weight:600;color:#e0d4c0">'+fmtDFull(dd)+'</span>'+
+        '<span style="font-size:11px;color:#c8b89a;margin-left:4px">'+dayExps.length+'\u7b46</span>'+
       '</div>'+
-      '<div style="text-align:right">'+
-        Object.keys(totals).map(function(cur){
-          return '<div style="font-size:12px;font-weight:700;color:var(--accent)">'+fmtReportAmt(totals[cur],cur)+'</div>';
-        }).join('')+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<div style="text-align:right">'+
+          Object.keys(totals).map(function(cur){
+            return '<div style="font-size:12px;font-weight:700;color:var(--accent)">'+fmtReportAmt(totals[cur],cur)+'</div>';
+          }).join('')+
+        '</div>'+
+        '<div style="font-size:16px;color:#c8b89a" id="'+dayColId+'-arrow">▾</div>'+
       '</div>'+
     '</div>';
+    html += '<div id="'+dayColId+'" style="display:none">';
     var CAT_INFO={transport:'\ud83d\ude83',hotel:'\ud83c\udfe8',food:'\ud83c\udf7d\ufe0f',
       ticket:'\ud83c\udfab',shopping:'\ud83d\uded2',other:'\ud83d\udccb'};
     dayExps.forEach(function(exp){
       var member = exp.paidBy ? tripMembers().find(function(m){return m.id===exp.paidBy;}) : null;
       var mi = member ? tripMembers().indexOf(member) : -1;
       var mc = mi>=0 ? mcolor(mi) : {color:'#c8b89a'};
-      html += '<div class="report-row">'+
+      html += '<div class="report-row" style="cursor:pointer" onclick="openExpenseFromReport('+exp.dayIdx+','+(exp.expIdx!==undefined?exp.expIdx:'null')+','+JSON.stringify(exp.stopIdx)+')">'+
         '<div class="report-row-left">'+
           '<span class="report-cat-icon">'+(CAT_INFO[exp.category]||'\ud83d\udccb')+'</span>'+
           '<div class="report-desc">'+
@@ -3381,7 +3387,8 @@ function renderDayReport(exps, curs){
         '<div class="report-amt" style="color:var(--accent)">'+fmtReportAmt(exp.amount,exp.currency)+'</div>'+
       '</div>';
     });
-    html += '</div>';
+    html += '</div>'; // end dayColId
+    html += '</div>'; // end report-card
   });
   if(!html) html = '<div class="empty-report">\u5c1a\u7121\u8cbb\u7528\u8a18\u9304</div>';
   return html;
@@ -3882,8 +3889,40 @@ function renderTimetable() {
     return (a.departTime || '').localeCompare(b.departTime || '');
   });
 
+  // 計算當日日期（只顯示當日班次）
+  var dayDate = '';
+  if (t && t.startDate && S.dayIdx !== null && S.dayIdx !== undefined) {
+    var dd2 = new Date(t.startDate);
+    dd2.setDate(dd2.getDate() + S.dayIdx);
+    dayDate = dd2.getFullYear() + '-' +
+      String(dd2.getMonth()+1).padStart(2,'0') + '-' +
+      String(dd2.getDate()).padStart(2,'0');
+  }
+  // 篩選當日班次
+  var filtered = dayDate ? sorted.filter(function(s){ return !s.date || s.date === dayDate; }) : sorted;
+
+  // 依 from→to 分組
+  var groups = {};
+  var groupOrder = [];
+  filtered.forEach(function(s) {
+    var key = (s.from || '') + ' → ' + (s.to || '');
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(s);
+  });
+
+  if (!filtered.length) {
+    body.innerHTML = '<div style="padding:32px 20px;text-align:center;color:#c8b89a;font-size:14px">當日無班次資料</div>';
+    return;
+  }
+
   var html = '<div style="padding:12px 16px 0">';
-  sorted.forEach(function(s, idx) {
+  groupOrder.forEach(function(groupKey) {
+    var groupItems = groups[groupKey];
+    // 分組標題
+    html += '<div style="font-size:12px;font-weight:700;color:#6ec6f0;margin:8px 0 6px;padding-bottom:4px;border-bottom:1px solid rgba(110,198,240,.2)">'
+      + esc(groupKey) + '</div>';
+    groupItems.forEach(function(s) {
+    var idx = schedules.indexOf(s);
     // 判斷班次是否已過
     var isPast = false;
     if (s.date && s.departTime) {
@@ -3932,7 +3971,8 @@ function renderTimetable() {
         '<button onclick="openNavitime(\'' + encodeURIComponent(s.from||'') + '\',\'' + encodeURIComponent(s.to||'') + '\')" style="flex:1;padding:8px;background:rgba(110,198,240,.12);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:12px;cursor:pointer">連結 NAVITime</button>' +
       '</div>' : '') +
     '</div>';
-  });
+    }); // end groupItems.forEach
+  }); // end groupOrder.forEach
   html += '</div>';
   body.innerHTML = html;
 }
