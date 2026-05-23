@@ -848,7 +848,7 @@ a{text-decoration:none;color:inherit;}
 </div>
 
 <script>
-var APP_VERSION = 'v20260523.4 18:45';
+var APP_VERSION = 'v20260523.6 19:15';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1803,12 +1803,18 @@ function renderTripTodoList() {
     html += '<div style="border-bottom:1px solid var(--border)">';
     // 日期行 header（點擊展開）
     html += '<div onclick="toggleCatDetail(\'' + colId + '\')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer">';
+    // 地點名稱摘要（最多3個）
+    var stopNames = (d.stops||[]).map(function(s){ return s.name||''; }).filter(Boolean);
+    var stopSummary = stopNames.slice(0,3).join(' · ') + (stopNames.length>3?' …':'');
+    html += '<div style="display:flex;flex-direction:column;gap:2px">';
     html += '<div style="display:flex;align-items:center;gap:8px">';
     html += '<span style="font-size:14px;font-weight:800;color:var(--accent)">D' + (di+1) + '</span>';
     html += '<span style="font-size:13px;color:#e0d4c0">' + esc(dateStr) + '</span>';
     if (pending.length > 0) {
       html += '<span style="font-size:10px;background:#ff6b6b;color:#fff;border-radius:50%;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px">' + pending.length + '</span>';
     }
+    html += '</div>';
+    if (stopSummary) html += '<div style="font-size:11px;color:#c8b89a;padding-left:2px">' + esc(stopSummary) + '</div>';
     html += '</div>';
     html += '<div style="display:flex;align-items:center;gap:8px">';
     html += '<button onclick="event.stopPropagation();addTripDayTodo(' + di + ')" style="font-size:11px;padding:2px 8px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:6px;color:#6ec6f0;cursor:pointer">＋</button>';
@@ -1839,13 +1845,22 @@ function renderTripTodoList() {
 }
 
 function renderTripTodoItem(di, ti, todo) {
+  var t = trip();
+  var d = t && t.days ? t.days[di] : null;
+  var stops = d ? (d.stops||[]) : [];
+  // 顯示關聯站點名稱
+  var stopLabel = '';
+  if (todo.stopId) {
+    var s = stops.find(function(s){ return s.id === todo.stopId; });
+    if (s) stopLabel = '<div style="font-size:11px;color:#6ec6f0;margin-top:3px">' + stopTypeIcon(s.type) + ' ' + esc(s.name||'') + '</div>';
+  }
   return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
     '<input type="checkbox" style="width:20px;height:20px;flex-shrink:0;margin-top:3px"' + (todo.done?' checked':'') +
     ' onchange="setTripTodoDone(' + di + ',' + ti + ',this.checked)">' +
-    '<textarea class="fta" rows="2" style="flex:1;font-size:14px;resize:none;min-height:40px;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'') +
-    '" placeholder="代辦事項說明"' +
-    ' oninput="var el=this;el.style.height=\'auto\';el.style.height=el.scrollHeight+\'px\';setTripTodoText(' + di + ',' + ti + ',el.value)">' +
-    ea(todo.text||'') + '</textarea>' +
+    '<div style="flex:1;min-width:0">' +
+      '<div style="font-size:14px;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'color:#e0d4c0') + '">' + esc(todo.text||'（未填寫）') + '</div>' +
+      stopLabel +
+    '</div>' +
     '<button onclick="removeTripTodo(' + di + ',' + ti + ')" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:18px;flex-shrink:0;margin-top:2px">&times;</button>' +
     '</div>';
 }
@@ -1970,16 +1985,29 @@ function renderDayTodoList() {
 }
 
 function renderDayTodoItem(todo, ti) {
+  var d = day();
+  var stops = d ? (d.stops||[]) : [];
+  var stopSel = '<select style="font-size:11px;padding:3px 6px;border-radius:6px;background:var(--bg3);border:1px solid var(--border2);color:var(--text3);margin-top:6px;max-width:160px"' +
+    ' onchange="setDayTodoStop(' + ti + ',this.value)">' +
+    '<option value="">— 無關聯站點 —</option>' +
+    stops.map(function(s){
+      return '<option value="'+s.id+'"'+(todo.stopId===s.id?' selected':'')+'>'+stopTypeIcon(s.type)+' '+esc((s.name||'').slice(0,12))+'</option>';
+    }).join('') +
+    '</select>';
   return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">' +
     '<input type="checkbox" style="width:20px;height:20px;flex-shrink:0;margin-top:4px"' + (todo.done?' checked':'') +
     ' onchange="setDayTodoDone(' + ti + ',this.checked)">' +
-    '<textarea class="fta" rows="2" style="flex:1;font-size:14px;resize:none;min-height:44px;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'') +
-    '" placeholder="代辦事項說明"' +
-    ' oninput="this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\';setDayTodoText(' + ti + ',this.value)">' +
-    ea(todo.text||'') + '</textarea>' +
+    '<div style="flex:1;min-width:0">' +
+      '<textarea class="fta" rows="2" style="width:100%;font-size:14px;resize:none;min-height:44px;box-sizing:border-box;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'') +
+      '" placeholder="代辦事項說明"' +
+      ' oninput="this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\';setDayTodoText(' + ti + ',this.value)">' +
+      ea(todo.text||'') + '</textarea>' +
+      stopSel +
+    '</div>' +
     '<button onclick="removeDayTodo(' + ti + ')" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:18px;flex-shrink:0;margin-top:2px">&times;</button>' +
     '</div>';
 }
+
 
 function addDayTodo() {
   var d = day(); if(!d) return;
@@ -1993,6 +2021,12 @@ function addDayTodo() {
     var inputs = document.querySelectorAll('#day-todo-body input[type=text], #day-todo-body .fi');
     if(inputs.length) inputs[inputs.length-1].focus();
   }, 100);
+}
+
+function setDayTodoStop(ti, stopId) {
+  var d = day(); if(!d||!d.todos||!d.todos[ti]) return;
+  d.todos[ti].stopId = stopId || '';
+  save(S.trips);
 }
 
 function setDayTodoDone(ti, done) {
