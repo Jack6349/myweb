@@ -525,6 +525,7 @@ a{text-decoration:none;color:inherit;}
       <div class="hdr-title" id="trip-hdr-title">行程</div>
       <button class="hdr-action" onclick="openExpenseReport()" style="color:#7bed9f">&#128176; 費用</button>
       <button class="hdr-action" onclick="openTripExpense()" style="color:#6ec6f0">＋費用</button>
+      <button class="hdr-action" onclick="openTripPhotos()" style="color:#c8b89a">📷</button>
       <button class="hdr-action" onclick="openTripTodo()" style="position:relative;color:#e8b84b" id="trip-todo-btn">📝<span id="trip-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
     <button class="hdr-btn" onclick="editTripInfo()">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -538,6 +539,46 @@ a{text-decoration:none;color:inherit;}
       <div class="sec">行程天數</div>
       <div id="trip-days"></div>
     </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: DAY PHOTOS ══ -->
+<div class="screen" id="sc-day-photos">
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
+    <div class="hdr">
+      <button class="hdr-back" onclick="goBack('sc-day')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hdr-title" id="day-photos-title">照片</div>
+      <button class="hdr-action" id="photos-edit-btn" onclick="togglePhotoEditMode()" style="color:#c8b89a">編輯</button>
+      <label class="hdr-action" style="color:#6ec6f0;cursor:pointer" id="photos-upload-label">
+        ＋上傳
+        <input type="file" accept="image/*" multiple style="display:none" id="photos-file-input" onchange="handlePhotoUpload(this)">
+      </label>
+    </div>
+    <div class="body no-nav" id="day-photos-body"></div>
+    <!-- 全屏瀏覽 -->
+    <div id="photo-fullscreen" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;flex-direction:column;align-items:center;justify-content:center">
+      <button onclick="closePhotoFullscreen()" style="position:absolute;top:16px;right:16px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;z-index:1">&times;</button>
+      <div style="position:absolute;top:16px;left:50%;transform:translateX(-50%);color:#c8b89a;font-size:12px" id="photo-fs-counter"></div>
+      <img id="photo-fs-img" style="max-width:100%;max-height:85vh;object-fit:contain">
+      <div style="color:#c8b89a;font-size:11px;margin-top:8px;text-align:center" id="photo-fs-info"></div>
+      <button onclick="photoFsNav(-1)" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:none;color:#fff;font-size:24px;padding:12px 8px;border-radius:8px;cursor:pointer">‹</button>
+      <button onclick="photoFsNav(1)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:none;color:#fff;font-size:24px;padding:12px 8px;border-radius:8px;cursor:pointer">›</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: TRIP PHOTOS ══ -->
+<div class="screen" id="sc-trip-photos">
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
+    <div class="hdr">
+      <button class="hdr-back" onclick="goBack('sc-trip')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hdr-title">照片總覽</div>
+    </div>
+    <div class="body no-nav" id="trip-photos-body"></div>
   </div>
 </div>
 
@@ -854,8 +895,9 @@ a{text-decoration:none;color:inherit;}
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260523.9 20:45';
+var APP_VERSION = 'v20260523.11 21:50';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -868,6 +910,10 @@ var GITHUB_FILE = 'travel/data.json';
 var GITHUB_API  = 'https://api.github.com/repos/' + GITHUB_REPO + '/contents/' + GITHUB_FILE;
 var GH_TOKEN_KEY = 'gh_token';
 var GH_SHA_KEY   = 'gh_sha';   // 快取最新檔案 SHA，寫入時需要
+var GITHUB_PHOTOS_FILE = 'travel/photos.json';
+var GITHUB_PHOTOS_API  = 'https://api.github.com/repos/' + GITHUB_REPO + '/contents/' + GITHUB_PHOTOS_FILE;
+var GH_PHOTOS_SHA_KEY  = 'gh_photos_sha';
+var PHOTOS_STORE_KEY   = 'travel_photos';
 
 
 var STORE_KEY = 'travel_v2';
@@ -1782,9 +1828,400 @@ function syncTransitTimePickers(){
 
 
 
-// ════ 照片功能（待實作）════
+
+// ════ 照片 JSON 同步 ════
+
+function getPhotos() {
+  try { return JSON.parse(localStorage.getItem(PHOTOS_STORE_KEY) || 'null') || {photos:{}}; }
+  catch(e) { return {photos:{}}; }
+}
+
+function savePhotos(photosData) {
+  localStorage.setItem(PHOTOS_STORE_KEY, JSON.stringify(photosData));
+  syncWritePhotos(photosData);
+}
+
+async function syncReadPhotos() {
+  try {
+    var token = localStorage.getItem(GH_TOKEN_KEY);
+    var headers = { 'Accept': 'application/vnd.github.v3+json' };
+    if (token) headers['Authorization'] = 'token ' + token;
+    var res = await fetch(GITHUB_PHOTOS_API, { headers: headers });
+    if (!res.ok) return null;
+    var meta = await res.json();
+    if (meta.sha) localStorage.setItem(GH_PHOTOS_SHA_KEY, meta.sha);
+    var content = meta.content ? decodeURIComponent(escape(atob(meta.content.replace(/\n/g,'')))) : null;
+    if (!content) return null;
+    var data = JSON.parse(content);
+    localStorage.setItem(PHOTOS_STORE_KEY, JSON.stringify(data));
+    return data;
+  } catch(e) {
+    console.log('photos read error:', e);
+    return null;
+  }
+}
+
+async function syncWritePhotos(photosData) {
+  var token = localStorage.getItem(GH_TOKEN_KEY);
+  if (!token) return;
+  try {
+    var sha = localStorage.getItem(GH_PHOTOS_SHA_KEY) || '';
+    if (!sha) {
+      var metaRes = await fetch(GITHUB_PHOTOS_API, {
+        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+      });
+      if (metaRes.ok) {
+        var metaData = await metaRes.json();
+        if (metaData.sha) { sha = metaData.sha; localStorage.setItem(GH_PHOTOS_SHA_KEY, sha); }
+      }
+    }
+    var payload = JSON.stringify(photosData);
+    var encoded = btoa(unescape(encodeURIComponent(payload)));
+    var body = { message: 'Update photos', content: encoded };
+    if (sha) body.sha = sha;
+    var res = await fetch(GITHUB_PHOTOS_API, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      var result = await res.json();
+      if (result.content && result.content.sha) localStorage.setItem(GH_PHOTOS_SHA_KEY, result.content.sha);
+      showSyncStatus('照片已同步', 'var(--success)');
+      setTimeout(function(){ showSyncStatus('',''); }, 2000);
+    } else if (res.status === 409) {
+      localStorage.removeItem(GH_PHOTOS_SHA_KEY);
+      setTimeout(function(){ syncWritePhotos(photosData); }, 500);
+    }
+  } catch(e) {
+    console.log('photos write error:', e);
+  }
+}
+
+// 開啟 App 時同時讀取照片
+async function syncReadAll() {
+  var [trips, photos] = await Promise.all([syncRead(), syncReadPhotos()]);
+  return trips;
+}
+
+
+// ════ 照片功能 ════
+
+var _photoEditMode = false;
+var _photoFsIdx = 0;
+var _photoFsList = [];
+var _photoDayKey = '';
+
+function photoDayKey(dayIdx) {
+  return dayIdx !== null && dayIdx !== undefined ? 'day_' + dayIdx : 'unclassified';
+}
+
 function openDayPhotos() {
-  alert('📷 照片功能即將推出');
+  _photoDayKey = photoDayKey(S.dayIdx);
+  var t = trip();
+  var d = t && t.days ? t.days[S.dayIdx] : null;
+  document.getElementById('day-photos-title').textContent = 'D' + (S.dayIdx+1) + ' 照片';
+  // PC 端隱藏上傳按鈕
+  var isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  var label = document.getElementById('photos-upload-label');
+  if (label) label.style.display = isMobile ? '' : 'none';
+  _photoEditMode = false;
+  renderDayPhotos();
+  goTo('sc-day-photos');
+}
+
+function renderDayPhotos() {
+  var body = document.getElementById('day-photos-body');
+  if (!body) return;
+  var photosData = getPhotos();
+  var list = (photosData.photos && photosData.photos[_photoDayKey]) || [];
+  var t = trip();
+  var d = t && t.days && S.dayIdx !== null ? t.days[S.dayIdx] : null;
+  var stops = d ? (d.stops || []) : [];
+
+  // 計算總大小
+  var totalBytes = list.reduce(function(s,p){ return s + (p.size||0); }, 0);
+  var totalMB = (totalBytes / 1024 / 1024).toFixed(2);
+  var sizeColor = totalBytes > 3*1024*1024 ? '#ff9944' : '#c8b89a';
+
+  var html = '<div style="padding:8px 12px 4px;display:flex;justify-content:space-between;align-items:center">';
+  html += '<span style="font-size:11px;color:' + sizeColor + '">' + list.length + ' 張 · ' + totalMB + ' MB / 建議 3MB</span>';
+  if (_photoEditMode && list.length) {
+    var selectedCount = list.filter(function(p){ return p._selected; }).length;
+    html += '<button onclick="deleteSelectedPhotos()" style="font-size:12px;padding:4px 10px;background:rgba(255,107,107,.15);border:1px solid rgba(255,107,107,.3);border-radius:6px;color:#ff6b6b;cursor:pointer">' +
+      '刪除 ' + selectedCount + ' 張</button>';
+  }
+  html += '</div>';
+
+  if (!list.length) {
+    html += '<div style="padding:40px 20px;text-align:center;color:#c8b89a;font-size:14px">尚無照片<br><small>點上方「＋上傳」從手機選取照片</small></div>';
+  } else {
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:4px">';
+    list.forEach(function(photo, pi) {
+      var stopName = '';
+      if (photo.stopId) {
+        var s = stops.find(function(s){ return s.id === photo.stopId; });
+        if (s) stopName = s.name;
+      }
+      html += '<div style="position:relative;aspect-ratio:1;overflow:hidden;border-radius:4px;background:#111" onclick="' +
+        (_photoEditMode ? 'togglePhotoSelect(' + pi + ')' : 'openPhotoFullscreen(' + pi + ')') + '">';
+      html += '<img src="' + photo.thumb + '" style="width:100%;height:100%;object-fit:cover">';
+      if (_photoEditMode) {
+        html += '<div style="position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;border:2px solid #fff;background:' +
+          (photo._selected ? '#6ec6f0' : 'rgba(0,0,0,.4)') + ';display:flex;align-items:center;justify-content:center">' +
+          (photo._selected ? '✓' : '') + '</div>';
+      }
+      if (photo.takenAt) {
+        var dt = new Date(photo.takenAt);
+        html += '<div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.7));padding:4px 4px 2px;font-size:9px;color:#fff">' +
+          (dt.getMonth()+1) + '/' + dt.getDate() + ' ' + String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0') +
+          (stopName ? ' · ' + stopName.slice(0,8) : '') + '</div>';
+      }
+      if (photo.lat) html += '<div style="position:absolute;top:3px;right:3px;font-size:10px">📍</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 站點篩選
+  if (stops.length && list.length) {
+    html += '<div style="padding:8px 12px;display:flex;gap:6px;flex-wrap:wrap">';
+    html += '<button onclick="filterPhotosByStop(null)" style="font-size:11px;padding:3px 8px;border-radius:12px;border:1px solid var(--border2);background:var(--bg3);color:#c8b89a;cursor:pointer">全部</button>';
+    stops.forEach(function(s) {
+      var cnt = list.filter(function(p){ return p.stopId === s.id; }).length;
+      if (cnt) html += '<button onclick="filterPhotosByStop(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;border-radius:12px;border:1px solid var(--border2);background:var(--bg3);color:#c8b89a;cursor:pointer">' + stopTypeIcon(s.type) + ' ' + esc(s.name.slice(0,8)) + ' (' + cnt + ')</button>';
+    });
+    html += '</div>';
+  }
+
+  body.innerHTML = html;
+}
+
+function togglePhotoEditMode() {
+  var photosData = getPhotos();
+  var list = (photosData.photos && photosData.photos[_photoDayKey]) || [];
+  // 清除選取狀態
+  list.forEach(function(p){ delete p._selected; });
+  _photoEditMode = !_photoEditMode;
+  var btn = document.getElementById('photos-edit-btn');
+  if (btn) { btn.textContent = _photoEditMode ? '完成' : '編輯'; btn.style.color = _photoEditMode ? '#6ec6f0' : '#c8b89a'; }
+  renderDayPhotos();
+}
+
+function togglePhotoSelect(pi) {
+  var photosData = getPhotos();
+  var list = (photosData.photos && photosData.photos[_photoDayKey]) || [];
+  if (list[pi]) list[pi]._selected = !list[pi]._selected;
+  renderDayPhotos();
+}
+
+function deleteSelectedPhotos() {
+  var photosData = getPhotos();
+  var list = (photosData.photos && photosData.photos[_photoDayKey]) || [];
+  var selected = list.filter(function(p){ return p._selected; }).length;
+  if (!selected || !confirm('刪除 ' + selected + ' 張照片？')) return;
+  photosData.photos[_photoDayKey] = list.filter(function(p){ return !p._selected; });
+  savePhotos(photosData);
+  _photoEditMode = false;
+  var btn = document.getElementById('photos-edit-btn');
+  if (btn) { btn.textContent = '編輯'; btn.style.color = '#c8b89a'; }
+  renderDayPhotos();
+}
+
+function filterPhotosByStop(stopId) {
+  // 暫存篩選（只影響顯示，不修改資料）
+  renderDayPhotos(stopId);
+}
+
+// ── 全屏瀏覽 ──
+function openPhotoFullscreen(pi) {
+  var photosData = getPhotos();
+  _photoFsList = (photosData.photos && photosData.photos[_photoDayKey]) || [];
+  _photoFsIdx = pi;
+  var fs = document.getElementById('photo-fullscreen');
+  if (fs) fs.style.display = 'flex';
+  updatePhotoFs();
+  // 滑動支援
+  var img = document.getElementById('photo-fs-img');
+  if (img) {
+    var startX = 0;
+    img.ontouchstart = function(e){ startX = e.touches[0].clientX; };
+    img.ontouchend = function(e){
+      var dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 50) photoFsNav(dx < 0 ? 1 : -1);
+    };
+  }
+}
+
+function updatePhotoFs() {
+  var photo = _photoFsList[_photoFsIdx];
+  if (!photo) return;
+  document.getElementById('photo-fs-img').src = photo.thumb;
+  document.getElementById('photo-fs-counter').textContent = (_photoFsIdx+1) + ' / ' + _photoFsList.length;
+  var info = '';
+  if (photo.takenAt) info += new Date(photo.takenAt).toLocaleString('zh-TW');
+  if (photo.placeName) info += '  📍 ' + photo.placeName;
+  document.getElementById('photo-fs-info').textContent = info;
+}
+
+function photoFsNav(dir) {
+  _photoFsIdx = (_photoFsIdx + dir + _photoFsList.length) % _photoFsList.length;
+  updatePhotoFs();
+}
+
+function closePhotoFullscreen() {
+  var fs = document.getElementById('photo-fullscreen');
+  if (fs) fs.style.display = 'none';
+}
+
+// ── 上傳與壓縮 ──
+function handlePhotoUpload(input) {
+  var files = Array.from(input.files);
+  if (!files.length) return;
+  var d = day();
+  var stops = d ? (d.stops || []) : [];
+  // 停用上傳按鈕，顯示進度
+  var label = document.getElementById('photos-upload-label');
+  if (label) label.style.opacity = '0.5';
+
+  var processed = 0;
+  var results = [];
+  files.forEach(function(file) {
+    compressPhoto(file, function(result) {
+      results.push(result);
+      processed++;
+      if (processed === files.length) {
+        // 全部完成後，如有多個站點讓使用者選擇關聯
+        if (stops.length > 0) {
+          showPhotoStopSelector(results, stops);
+        } else {
+          saveUploadedPhotos(results, '');
+        }
+        if (label) label.style.opacity = '1';
+        input.value = '';
+      }
+    });
+  });
+}
+
+function compressPhoto(file, callback) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      // 壓縮到長邊 400px
+      var MAX = 400;
+      var w = img.width, h = img.height;
+      if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } }
+      else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      var thumb = canvas.toDataURL('image/jpeg', 0.7);
+      var size = Math.round(thumb.length * 0.75); // base64 → bytes 估算
+      // 嘗試讀取 EXIF（使用原始 ArrayBuffer）
+      readExif(e.target.result, function(exif) {
+        var result = { id: uid(), thumb: thumb, size: size, takenAt: null, lat: null, lng: null, placeName: '' };
+        if (exif) {
+          if (exif.DateTimeOriginal) {
+            // EXIF 時間格式：2026:05:29 14:23:11
+            var dt = exif.DateTimeOriginal.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
+            result.takenAt = dt;
+          }
+          if (exif.GPSLatitude && exif.GPSLongitude) {
+            result.lat = convertDMSToDD(exif.GPSLatitude, exif.GPSLatitudeRef);
+            result.lng = convertDMSToDD(exif.GPSLongitude, exif.GPSLongitudeRef);
+          }
+        }
+        // 有 GPS 則查詢地名
+        if (result.lat && result.lng) {
+          fetchPlaceName(result.lat, result.lng, function(name) {
+            result.placeName = name || '';
+            callback(result);
+          });
+        } else {
+          callback(result);
+        }
+      });
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function readExif(dataUrl, callback) {
+  // 簡易 EXIF 讀取（從 ArrayBuffer 手動解析）
+  try {
+    var base64 = dataUrl.split(',')[1];
+    var binary = atob(base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    // 找 EXIF 標記 0xFFE1
+    var exifData = extractExifSimple(bytes);
+    callback(exifData);
+  } catch(e) {
+    callback(null);
+  }
+}
+
+function extractExifSimple(bytes) {
+  // 簡易解析：只取 DateTimeOriginal 和 GPS
+  // 若引入 exif-js CDN 則可完整解析；此為備援
+  return null; // 暫時返回 null，exif-js 載入後替換
+}
+
+function convertDMSToDD(dms, ref) {
+  if (!dms || dms.length < 3) return null;
+  var dd = dms[0] + dms[1]/60 + dms[2]/3600;
+  if (ref === 'S' || ref === 'W') dd = -dd;
+  return Math.round(dd * 1000000) / 1000000;
+}
+
+function fetchPlaceName(lat, lng, callback) {
+  var url = GAS + '?action=geocode&lat=' + lat + '&lng=' + lng;
+  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+    callback(d && d.name ? d.name : '');
+  }).catch(function(){ callback(''); });
+}
+
+// ── 站點關聯選擇 ──
+var _pendingPhotos = [];
+function showPhotoStopSelector(photos, stops) {
+  _pendingPhotos = photos;
+  var opts = '<option value="">— 無關聯站點 —</option>' +
+    stops.map(function(s){ return '<option value="' + s.id + '">' + stopTypeIcon(s.type) + ' ' + esc(s.name) + '</option>'; }).join('');
+  var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:flex-end">' +
+    '<div style="width:100%;background:var(--bg2);border-radius:16px 16px 0 0;padding:20px 16px">' +
+    '<div style="font-size:14px;font-weight:700;color:#e0d4c0;margin-bottom:12px">選擇關聯站點（選填）</div>' +
+    '<div style="font-size:12px;color:#c8b89a;margin-bottom:8px">已選 ' + photos.length + ' 張照片</div>' +
+    '<select id="photo-stop-sel" style="width:100%;padding:10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-size:14px;margin-bottom:16px">' + opts + '</select>' +
+    '<div style="display:flex;gap:8px">' +
+    '<button onclick="saveUploadedPhotos(_pendingPhotos,document.getElementById(\'photo-stop-sel\').value)" style="flex:1;padding:12px;background:rgba(110,198,240,.2);border:1px solid rgba(110,198,240,.4);border-radius:8px;color:#6ec6f0;font-size:14px;font-weight:700;cursor:pointer">確認</button>' +
+    '<button onclick="document.getElementById(\'photo-stop-overlay\').remove()" style="padding:12px 16px;background:none;border:1px solid var(--border2);border-radius:8px;color:#c8b89a;font-size:14px;cursor:pointer">略過</button>' +
+    '</div></div></div>';
+  var el = document.createElement('div');
+  el.id = 'photo-stop-overlay';
+  el.innerHTML = html;
+  document.body.appendChild(el);
+}
+
+function saveUploadedPhotos(photos, stopId) {
+  var overlay = document.getElementById('photo-stop-overlay');
+  if (overlay) overlay.remove();
+  var photosData = getPhotos();
+  if (!photosData.photos) photosData.photos = {};
+  if (!photosData.photos[_photoDayKey]) photosData.photos[_photoDayKey] = [];
+  photos.forEach(function(p) {
+    p.stopId = stopId || '';
+    photosData.photos[_photoDayKey].push(p);
+  });
+  savePhotos(photosData);
+  renderDayPhotos();
 }
 
 // ════ 代辦事項總表 ════
@@ -1946,6 +2383,87 @@ function updateTripTodoBadge() {
   } else {
     badge.style.display = 'none';
   }
+}
+
+
+// ════ 照片總覽 ════
+
+function openTripPhotos() {
+  renderTripPhotos();
+  goTo('sc-trip-photos');
+}
+
+function renderTripPhotos() {
+  var body = document.getElementById('trip-photos-body');
+  if (!body) return;
+  var t = trip(); if (!t) return;
+  var photosData = getPhotos();
+  var html = '<div style="padding:8px 0">';
+
+  // 各天照片
+  (t.days || []).forEach(function(d, di) {
+    var key = 'day_' + di;
+    var list = (photosData.photos && photosData.photos[key]) || [];
+    var dd = new Date(t.startDate);
+    dd.setDate(dd.getDate() + di);
+    var dateStr = fmtDFull(dd);
+    var colId = 'trip-photo-day-' + di;
+    var colQ = "'" + colId + "'";
+
+    html += '<div style="border-bottom:1px solid var(--border)">';
+    html += '<div onclick="toggleCatDetail(' + colQ + ')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer">';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<span style="font-size:14px;font-weight:800;color:var(--accent)">D' + (di+1) + '</span>';
+    html += '<span style="font-size:13px;color:#e0d4c0">' + esc(dateStr) + '</span>';
+    if (list.length) html += '<span style="font-size:11px;color:#c8b89a">' + list.length + ' 張</span>';
+    html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<button onclick="event.stopPropagation();S.dayIdx=' + di + ';openDayPhotos()" style="font-size:11px;padding:2px 8px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:6px;color:#6ec6f0;cursor:pointer">管理</button>';
+    html += '<span style="font-size:14px;color:#c8b89a" id="' + colId + '-arrow">▾</span>';
+    html += '</div></div>';
+
+    html += '<div id="' + colId + '" style="display:none;padding:0 8px 8px">';
+    if (!list.length) {
+      html += '<div style="font-size:12px;color:#c8b89a;padding:8px">尚無照片</div>';
+    } else {
+      html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px">';
+      list.slice(0, 8).forEach(function(photo, pi) {
+        html += '<div style="aspect-ratio:1;overflow:hidden;border-radius:3px;background:#111" onclick="S.dayIdx=' + di + ';openDayPhotos();setTimeout(function(){openPhotoFullscreen(' + pi + ')},300)">';
+        html += '<img src="' + photo.thumb + '" style="width:100%;height:100%;object-fit:cover">';
+        html += '</div>';
+      });
+      if (list.length > 8) {
+        html += '<div style="aspect-ratio:1;background:rgba(255,255,255,.08);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#c8b89a;cursor:pointer" onclick="S.dayIdx=' + di + ';openDayPhotos()">+' + (list.length - 8) + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div></div>';
+  });
+
+  // 未分類照片
+  var unclassified = (photosData.photos && photosData.photos['unclassified']) || [];
+  if (unclassified.length) {
+    var colId2 = 'trip-photo-unclassified';
+    html += '<div style="border-bottom:1px solid var(--border)">';
+    html += '<div onclick="toggleCatDetail(' + JSON.stringify(colId2) + ')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer">';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<span style="font-size:14px;font-weight:700;color:#c8b89a">📁 未分類</span>';
+    html += '<span style="font-size:11px;color:#c8b89a">' + unclassified.length + ' 張</span>';
+    html += '</div>';
+    html += '<span style="font-size:14px;color:#c8b89a" id="' + colId2 + '-arrow">▾</span>';
+    html += '</div>';
+    html += '<div id="' + colId2 + '" style="display:none;padding:0 8px 8px">';
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px">';
+    unclassified.slice(0, 8).forEach(function(photo) {
+      html += '<div style="aspect-ratio:1;overflow:hidden;border-radius:3px;background:#111">';
+      html += '<img src="' + photo.thumb + '" style="width:100%;height:100%;object-fit:cover">';
+      html += '</div>';
+    });
+    html += '</div></div></div>';
+  }
+
+  html += '</div>';
+  body.innerHTML = html;
 }
 
 // ════ 每日代辦事項 ════
