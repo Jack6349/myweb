@@ -583,6 +583,7 @@ a{text-decoration:none;color:inherit;}
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <div class="hdr-title">照片總覽</div>
+      <button class="hdr-action" onclick="manualSyncPhotos()" style="color:#6ec6f0">同步</button>
     </div>
     <div class="body no-nav" id="trip-photos-body"></div>
   </div>
@@ -903,7 +904,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.1 00:20';
+var APP_VERSION = 'v20260524.2 01:55';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1845,6 +1846,17 @@ function getPhotos() {
 function savePhotos(photosData) {
   localStorage.setItem(PHOTOS_STORE_KEY, JSON.stringify(photosData));
   syncWritePhotos(photosData);
+}
+
+async function manualSyncPhotos() {
+  var el = document.getElementById('sync-status');
+  if(el) { el.textContent = '照片同步中…'; el.style.color = 'var(--info)'; }
+  var photos = await syncReadPhotos();
+  // 同時將本地照片寫回 GitHub
+  var localPhotos = getPhotos();
+  await syncWritePhotos(localPhotos);
+  renderTripPhotos();
+  if(el) { el.textContent = '照片已同步'; el.style.color = 'var(--success)'; setTimeout(function(){ el.textContent=''; }, 2000); }
 }
 
 async function syncReadPhotos() {
@@ -2887,6 +2899,8 @@ function saveTrip(){
   var el = document.getElementById('sync-status');
   if(el) { el.textContent = '同步中…'; el.style.color = 'var(--info)'; }
   var remote = await syncRead();
+  // 同時讀取照片資料
+  syncReadPhotos();
   if(remote !== null) {
     S.trips = remote;
     if(el) { el.textContent = '已同步'; el.style.color = 'var(--success)'; }
@@ -3195,7 +3209,8 @@ function openGhTokenSetting() {
     if (ghBtn) ghBtn.style.color = '#7bed9f';
     showSyncStatus('同步中…', 'var(--info)');
     // 立即從 GitHub 讀取最新資料
-    syncRead().then(function(remote) {
+    syncReadPhotos();
+  syncRead().then(function(remote) {
       if (remote) {
         S.trips = remote;
         renderList();
