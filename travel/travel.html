@@ -540,6 +540,20 @@ a{text-decoration:none;color:inherit;}
   </div>
 </div>
 
+<!-- ══ SCREEN: DAY TODO ══ -->
+<div class="screen" id="sc-day-todo">
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
+    <div class="hdr">
+      <button class="hdr-back" onclick="goBack('sc-day');updateTodoBadge()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hdr-title" id="day-todo-hdr-title">待辦事項</div>
+      <button class="hdr-action" onclick="addDayTodo()" style="color:#6ec6f0">＋新增</button>
+    </div>
+    <div class="body no-nav" id="day-todo-body"></div>
+  </div>
+</div>
+
 <!-- ══ SCREEN: DAY ══ -->
 <div class="screen" id="sc-day">
   <div class="hdr">
@@ -552,6 +566,7 @@ a{text-decoration:none;color:inherit;}
     </div>
     <button class="hdr-action" onclick="renameDayTitle()">標題</button>
     <button class="hdr-action" onclick="openTimetable()" style="color:#6ec6f0">班次</button>
+    <button class="hdr-action" onclick="openDayTodo()" style="position:relative;color:#e8b84b" id="day-todo-btn">📝<span id="day-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
     <button class="hdr-action" onclick="openDayExpense()" style="color:#7bed9f">＋費用</button>
     <button class="hdr-btn" onclick="exportTrip()">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1121,25 +1136,6 @@ function openDay(idx){
   document.getElementById('day-hdr-sub').textContent=fmtDFull(dd);
   renderDayTL();
   goTo('sc-day');
-  // 開啟時提示當日未完成待辦
-  setTimeout(function(){
-    var allTodos = [];
-    (t.days[idx].stops||[]).forEach(function(stop){
-      (stop.todos||[]).forEach(function(todo){
-        if(!todo.done && todo.text) allTodos.push(stop.name+': '+todo.text);
-      });
-    });
-    if(allTodos.length) {
-      var el = document.getElementById('day-todo-banner');
-      if(el) {
-        el.textContent = '\ud83d\udcdd \u5f85\u8fa6: '+allTodos.join(' \u30fb ');
-        el.style.display = 'block';
-      }
-    } else {
-      var el = document.getElementById('day-todo-banner');
-      if(el) el.style.display = 'none';
-    }
-  }, 100);
 }
 
 
@@ -1204,8 +1200,6 @@ function renderDayTL(){
     html+='<div class="tl-stop-card'+(stop.anchor?' anchor':'')+(stop.type==='hotel'?' hotel':'')+'" data-stopidx="'+i+'" onclick="openStopByEl(this)">';
     html+='<div class="tl-stop-name">'+stopTypeIcon(stop.type)+' '+esc(stop.name||'\uff08\u672a\u547d\u540d\uff09')+(stop.anchor?'<span class="anchor-badge">\u9328\u9ede</span>':'')+' </div>';
     if(stop.note) html+='<div class="tl-stop-sub">'+esc(stop.note)+'</div>';
-    var pendingTodos = (stop.todos||[]).filter(function(t){return !t.done;});
-    if(pendingTodos.length) html+='<div class="tl-stop-sub" style="color:#e8b84b">\ud83d\udcdd '+pendingTodos.length+'\u4ef6\u5f85\u8fa6</div>';
     html+='</div>';
 
     // 間隔時間（到達 → 出發）—— 第一個地點不顯示
@@ -1372,30 +1366,6 @@ function buildStopFields(stop,type,isLast,nextStop){
   html+='<div class="fs" style="display:flex;align-items:center;gap:10px;padding:2px 0">'+
     '<input type="checkbox" id="sf-anchor" style="width:18px;height:18px"'+(stop&&stop.anchor?' checked':'')+' onchange="_stopDirty=true">'+
     '<label for="sf-anchor" style="font-size:13px">\u6a19\u8a18\u70ba <span class="anchor-badge">\u9328\u9ede</span>\uff08\u6642\u9593\u56fa\u5b9a\u4e0d\u53ef\u8b8a\u52d5\uff09</label></div>';
-  // 待辦事項
-  var todos = stop ? (stop.todos || []) : [];
-  html += '<div class="fdiv"></div>';
-  html += '<div class="fs"><div class="fl" style="display:flex;justify-content:space-between;align-items:center">'+
-    '\u5f85\u8fa6\u4e8b\u9805'+
-    '<button type="button" onclick="addStopTodo()" style="font-size:11px;padding:2px 8px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:6px;color:#6ec6f0;cursor:pointer">+ \u65b0\u589e</button>'+
-  '</div>'+
-  '<div id="sf-todos">';
-  if(!todos.length){
-    html += '<div style="font-size:12px;color:#c8b89a;padding:6px 0">\u5c1a\u7121\u5f85\u8fa6\u4e8b\u9805</div>';
-  } else {
-    todos.forEach(function(todo, ti){
-      html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">';
-      html += '<input type="checkbox" style="width:18px;height:18px;flex-shrink:0"'+(todo.done?' checked':'')+
-        ' onchange="setStopTodoDone('+ti+',this.checked)">';
-      html += '<input class="fi" style="flex:1;'+(todo.done?'text-decoration:line-through;color:#c8b89a':'')+
-        '" value="'+ea(todo.text||'')+'" placeholder="\u5f85\u8fa6\u4e8b\u9805\u8aaa\u660e"'+
-        ' onchange="setStopTodoText('+ti+',this.value)" oninput="_stopDirty=true">';
-      html += '<button onclick="removeStopTodo('+ti+')" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:16px;flex-shrink:0">&times;</button>';
-      html += '</div>';
-    });
-  }
-  html += '</div></div>';
-
   // Hotel fields
   if(type==='hotel'){
     html+='<div class="fdiv"></div>';
@@ -1788,7 +1758,118 @@ function syncTransitTimePickers(){
 }
 
 
-// ════ 待辦事項 ════
+
+// ════ 每日代辦事項 ════
+
+function openDayTodo() {
+  var d = day(); if(!d) return;
+  var t = trip();
+  var dd = new Date(t.startDate);
+  dd.setDate(dd.getDate() + S.dayIdx);
+  document.getElementById('day-todo-hdr-title').textContent = 'D'+(S.dayIdx+1)+' 待辦事項';
+  renderDayTodoList();
+  goTo('sc-day-todo');
+}
+
+function renderDayTodoList() {
+  var body = document.getElementById('day-todo-body');
+  if (!body) return;
+  var d = day(); if(!d) return;
+  var todos = d.todos || [];
+  var html = '<div style="padding:12px 16px">';
+
+  if (!todos.length) {
+    html += '<div style="padding:32px 20px;text-align:center;color:#c8b89a;font-size:14px">尚無代辦事項<br><br>' +
+      '<button onclick="addDayTodo()" style="padding:10px 20px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:13px;cursor:pointer">＋ 新增代辦</button>' +
+      '</div>';
+  } else {
+    var pending = todos.filter(function(t){return !t.done;});
+    var done = todos.filter(function(t){return t.done;});
+
+    // 未完成
+    if (pending.length) {
+      html += '<div style="font-size:11px;color:#c8b89a;margin-bottom:8px">未完成 ' + pending.length + ' 件</div>';
+      pending.forEach(function(todo) {
+        var ti = todos.indexOf(todo);
+        html += renderDayTodoItem(todo, ti);
+      });
+    }
+    // 已完成
+    if (done.length) {
+      html += '<div style="font-size:11px;color:#c8b89a;margin:12px 0 8px;padding-top:8px;border-top:1px solid var(--border)">已完成 ' + done.length + ' 件</div>';
+      done.forEach(function(todo) {
+        var ti = todos.indexOf(todo);
+        html += renderDayTodoItem(todo, ti);
+      });
+    }
+  }
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+function renderDayTodoItem(todo, ti) {
+  return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">' +
+    '<input type="checkbox" style="width:20px;height:20px;flex-shrink:0"' + (todo.done?' checked':'') +
+    ' onchange="setDayTodoDone(' + ti + ',this.checked)">' +
+    '<input class="fi" style="flex:1;font-size:14px;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'') +
+    '" value="' + ea(todo.text||'') + '" placeholder="代辦事項說明"' +
+    ' onchange="setDayTodoText(' + ti + ',this.value)">' +
+    '<button onclick="removeDayTodo(' + ti + ')" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:18px;flex-shrink:0">&times;</button>' +
+    '</div>';
+}
+
+function addDayTodo() {
+  var d = day(); if(!d) return;
+  if(!d.todos) d.todos = [];
+  d.todos.push({text:'', done:false, id:uid()});
+  save(S.trips);
+  renderDayTodoList();
+  updateTodoBadge();
+  // focus 新增的輸入框
+  setTimeout(function(){
+    var inputs = document.querySelectorAll('#day-todo-body input[type=text], #day-todo-body .fi');
+    if(inputs.length) inputs[inputs.length-1].focus();
+  }, 100);
+}
+
+function setDayTodoDone(ti, done) {
+  var d = day(); if(!d||!d.todos||!d.todos[ti]) return;
+  d.todos[ti].done = done;
+  save(S.trips);
+  renderDayTodoList();
+  updateTodoBadge();
+}
+
+function setDayTodoText(ti, text) {
+  var d = day(); if(!d||!d.todos||!d.todos[ti]) return;
+  d.todos[ti].text = text;
+  save(S.trips);
+  updateTodoBadge();
+}
+
+function removeDayTodo(ti) {
+  var d = day(); if(!d||!d.todos) return;
+  d.todos.splice(ti, 1);
+  save(S.trips);
+  renderDayTodoList();
+  updateTodoBadge();
+}
+
+// 更新 header 的紅點數字
+function updateTodoBadge() {
+  var badge = document.getElementById('day-todo-badge');
+  if(!badge) return;
+  var d = day();
+  var count = d ? (d.todos||[]).filter(function(t){return !t.done && t.text;}).length : 0;
+  if(count > 0) {
+    badge.textContent = count > 9 ? '9+' : count;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ════ 地點待辦（保留舊函數相容）════
 
 function addStopTodo() {
   var d = day(); if(!d) return;
@@ -1868,7 +1949,6 @@ function saveStop(){
     type:type, name:name,
     anchor:!!(document.getElementById('sf-anchor')||{checked:false}).checked,
     note:(document.getElementById('sf-note')||{value:''}).value.trim(),
-    todos:(S.stopIdx!==null&&(day().stops||[])[S.stopIdx])?((day().stops||[])[S.stopIdx].todos||[]):[],
   };
   if(type==='hotel'){
     stop.hotel={
@@ -1976,7 +2056,7 @@ function saveStop(){
   _stopDirty=false;
   goBack('sc-day');
   // 強制從 S.trips 重新讀取後渲染
-  setTimeout(function(){ renderDayTL(); }, 0);
+  setTimeout(function(){ renderDayTL(); updateTodoBadge(); }, 0);
 }
 
 function deleteStop(){
