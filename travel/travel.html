@@ -1526,10 +1526,13 @@ function renderRouteEditor(r, ri){
       MODES.map(function(m){return'<option value="'+m+'"'+(leg0.mode===m?' selected':'')+'>'+legModeIcon(m)+' '+legModeName(m)+'</option>';}).join('')+
       '</select></div>';
     // 出發/到達站
-    html+='<div class="frow" style="gap:6px">';
-    html+='<div><div class="fl">\u51fa\u767c\u5730</div><input class="fi fi-sm" placeholder="\u51fa\u767c\u5730" value="'+ea(leg0.fromStop||'')+'" onchange="setManualLegField('+ri+',0,\'fromStop\',this.value)"></div>';
-    html+='<div><div class="fl">\u76ee\u7684\u5730</div><input class="fi fi-sm" placeholder="\u76ee\u7684\u5730" value="'+ea(leg0.toStop||'')+'" onchange="setManualLegField('+ri+',0,\'toStop\',this.value)"></div>';
-    html+='</div>';
+    // 起訖站從上方 transit.fromPlace/toPlace 帶入，不需要重複顯示
+    if(!stop.transit||(!stop.transit.fromPlace&&!stop.transit.toPlace)){
+      html+='<div class="frow" style="gap:6px">';
+      html+='<div><div class="fl">\u51fa\u767c\u5730</div><input class="fi fi-sm" placeholder="\u51fa\u767c\u5730" value="'+ea(leg0.fromStop||'')+'" onchange="setManualLegField('+ri+',0,\'fromStop\',this.value)"></div>';
+      html+='<div><div class="fl">\u76ee\u7684\u5730</div><input class="fi fi-sm" placeholder="\u76ee\u7684\u5730" value="'+ea(leg0.toStop||'')+'" onchange="setManualLegField('+ri+',0,\'toStop\',this.value)"></div>';
+      html+='</div>';
+    }
     // 起訖時間
     html+=buildTimePicker('srd-'+ri+'-dep','\u51fa\u767c\u6642\u9593',r.departTime||leg0.departTime||'','');
     html+=buildTimePicker('srd-'+ri+'-arr','\u6297\u9054\u6642\u9593',r.arriveTime||leg0.arriveTime||'','');
