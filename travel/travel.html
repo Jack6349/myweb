@@ -534,10 +534,10 @@ a{text-decoration:none;color:inherit;}
     </div>
     <!-- Trip Header 行 2：功能按鈕 -->
     <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0;padding:2px 4px 4px;border-top:1px solid rgba(255,255,255,.06)">
-      <button class="hdr-action" onclick="openExpenseReport()" style="color:#7bed9f">💰 費用</button>
+      <button class="hdr-action" onclick="openExpenseReport()" style="color:#7bed9f">費用</button>
       <button class="hdr-action" onclick="openTripExpense()" style="color:#6ec6f0">＋費用</button>
-      <button class="hdr-action" onclick="openTripPhotos()" style="color:#c8b89a">📷</button>
-      <button class="hdr-action" onclick="openTripTodo()" style="position:relative;color:#e8b84b" id="trip-todo-btn">📝<span id="trip-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
+      <button class="hdr-action" onclick="openTripPhotos()" style="color:#c8b89a">照片</button>
+      <button class="hdr-action" onclick="openTripTodo()" style="position:relative;color:#e8b84b" id="trip-todo-btn">提醒<span id="trip-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
     </div>
     </div><!-- end trip header wrapper -->
     <div class="body" id="trip-body" style="padding-bottom:20px">
@@ -620,9 +620,9 @@ a{text-decoration:none;color:inherit;}
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0;padding:2px 4px 4px;border-top:1px solid rgba(255,255,255,.06)">
     <button class="hdr-action" onclick="renameDayTitle()">標題</button>
     <button class="hdr-action" onclick="openTimetable()" style="color:#6ec6f0">班次</button>
-    <button class="hdr-action" onclick="openDayTodo()" style="position:relative;color:#e8b84b" id="day-todo-btn">📝<span id="day-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
+    <button class="hdr-action" onclick="openDayTodo()" style="position:relative;color:#e8b84b" id="day-todo-btn">提醒<span id="day-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
     <button class="hdr-action" onclick="openDayExpense()" style="color:#7bed9f">＋費用</button>
-    <button class="hdr-action" onclick="openDayPhotos()" style="color:#c8b89a">📷</button>
+    <button class="hdr-action" onclick="openDayPhotos()" style="color:#c8b89a">照片</button>
     <button class="hdr-btn" onclick="exportTrip()">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     </button>
@@ -904,7 +904,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.3 02:10';
+var APP_VERSION = 'v20260524.4 02:25';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
