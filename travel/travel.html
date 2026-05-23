@@ -556,6 +556,7 @@ a{text-decoration:none;color:inherit;}
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <div class="hdr-title" id="day-photos-title">照片</div>
+      <button class="hdr-action" onclick="manualSyncPhotos();renderDayPhotos()" style="color:#6ec6f0">同步</button>
       <button class="hdr-action" id="photos-edit-btn" onclick="togglePhotoEditMode()" style="color:#c8b89a">編輯</button>
       <label class="hdr-action" style="color:#6ec6f0;cursor:pointer" id="photos-upload-label">
         ＋上傳
@@ -910,7 +911,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.5 02:45';
+var APP_VERSION = 'v20260524.6 03:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
