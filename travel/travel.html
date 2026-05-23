@@ -610,7 +610,7 @@ a{text-decoration:none;color:inherit;}
     </div>
   </div>
   <!-- Header 行 2：功能按鈕 -->
-  <div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;padding:2px 8px 6px">
+  <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0;padding:2px 4px 4px;border-top:1px solid rgba(255,255,255,.06)">
     <button class="hdr-action" onclick="renameDayTitle()">標題</button>
     <button class="hdr-action" onclick="openTimetable()" style="color:#6ec6f0">班次</button>
     <button class="hdr-action" onclick="openDayTodo()" style="position:relative;color:#e8b84b" id="day-todo-btn">📝<span id="day-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
@@ -897,7 +897,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260523.11 21:50';
+var APP_VERSION = 'v20260523.12 23:50';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1912,6 +1912,7 @@ async function syncReadAll() {
 // ════ 照片功能 ════
 
 var _photoEditMode = false;
+var _photoUploadReturnToTripPhotos = false;
 var _photoFsIdx = 0;
 var _photoFsList = [];
 var _photoDayKey = '';
@@ -2210,6 +2211,12 @@ function showPhotoStopSelector(photos, stops) {
   document.body.appendChild(el);
 }
 
+function handleUnclassifiedUpload(input) {
+  _photoDayKey = 'unclassified';
+  _photoUploadReturnToTripPhotos = true;
+  handlePhotoUpload(input);
+}
+
 function saveUploadedPhotos(photos, stopId) {
   var overlay = document.getElementById('photo-stop-overlay');
   if (overlay) overlay.remove();
@@ -2221,7 +2228,13 @@ function saveUploadedPhotos(photos, stopId) {
     photosData.photos[_photoDayKey].push(p);
   });
   savePhotos(photosData);
-  renderDayPhotos();
+  if (_photoUploadReturnToTripPhotos) {
+    _photoUploadReturnToTripPhotos = false;
+    renderTripPhotos();
+    goTo('sc-trip-photos');
+  } else {
+    renderDayPhotos();
+  }
 }
 
 // ════ 代辦事項總表 ════
@@ -2440,9 +2453,9 @@ function renderTripPhotos() {
     html += '</div></div>';
   });
 
-  // 未分類照片
+  // 未分類照片（出發前/非行程地點）
   var unclassified = (photosData.photos && photosData.photos['unclassified']) || [];
-  if (unclassified.length) {
+  {
     var colId2 = 'trip-photo-unclassified';
     html += '<div style="border-bottom:1px solid var(--border)">';
     html += '<div onclick="toggleCatDetail(' + JSON.stringify(colId2) + ')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer">';
@@ -2450,7 +2463,11 @@ function renderTripPhotos() {
     html += '<span style="font-size:14px;font-weight:700;color:#c8b89a">📁 未分類</span>';
     html += '<span style="font-size:11px;color:#c8b89a">' + unclassified.length + ' 張</span>';
     html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    var isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (isMobile) html += '<label style="font-size:11px;padding:2px 8px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:6px;color:#6ec6f0;cursor:pointer">＋上傳<input type="file" accept="image/*" multiple style="display:none" onchange="handleUnclassifiedUpload(this)"></label>';
     html += '<span style="font-size:14px;color:#c8b89a" id="' + colId2 + '-arrow">▾</span>';
+    html += '</div>';
     html += '</div>';
     html += '<div id="' + colId2 + '" style="display:none;padding:0 8px 8px">';
     html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px">';
