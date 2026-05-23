@@ -3188,21 +3188,27 @@ function renderTotalReport(exps, curs){
   cats.forEach(function(cat){
     var catExps = exps.filter(function(e){return e.category===cat;});
     if(!catExps.length) return;
+    var catColId = 'cat-detail-' + cat;
     html += '<div class="report-card">';
-    // Category header with totals per currency
+    // Category header with totals per currency - 折疊式
     var totals = {};
     catExps.forEach(function(e){ totals[e.currency]=(totals[e.currency]||0)+e.amount; });
-    html += '<div class="report-card-hdr">'+
+    html += '<div class="report-card-hdr" onclick="toggleCatDetail(\''+catColId+'\')" style="cursor:pointer">'+
       '<div class="report-card-hdr-left">'+
         '<span style="font-size:16px">'+CAT_INFO[cat]+'</span>'+
         '<span style="font-size:13px;font-weight:700;color:#e0d4c0">'+CAT_LABEL[cat]+'</span>'+
+        '<span style="font-size:11px;color:#c8b89a;margin-left:4px">'+catExps.length+'\u7b46</span>'+
       '</div>'+
-      '<div style="text-align:right">'+
-        Object.keys(totals).map(function(cur){
-          return '<div style="font-size:12px;font-weight:700;color:var(--accent)">'+fmtReportAmt(totals[cur],cur)+'</div>';
-        }).join('')+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<div style="text-align:right">'+
+          Object.keys(totals).map(function(cur){
+            return '<div style="font-size:12px;font-weight:700;color:var(--accent)">'+fmtReportAmt(totals[cur],cur)+'</div>';
+          }).join('')+
+        '</div>'+
+        '<div style="font-size:16px;color:#c8b89a" id="'+catColId+'-arrow">▾</div>'+
       '</div>'+
     '</div>';
+    html += '<div id="'+catColId+'" style="display:none">';
     catExps.forEach(function(exp){
       var member = exp.paidBy ? tripMembers().find(function(m){return m.id===exp.paidBy;}) : null;
       var mi = member ? tripMembers().indexOf(member) : -1;
@@ -3222,13 +3228,25 @@ function renderTotalReport(exps, curs){
         '<div class="report-amt" style="color:var(--accent)">'+fmtReportAmt(exp.amount,exp.currency)+'</div>'+
       '</div>';
     });
-    html += '</div>';
+    html += '</div>'; // end catColId
+    html += '</div>'; // end report-card
   });
   return html;
 }
 
 
 // 展開/收合每人明細
+
+// 展開/收合分類明細
+function toggleCatDetail(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  var arrow = document.getElementById(id + '-arrow');
+  if (arrow) arrow.textContent = isOpen ? '▾' : '▴';
+}
+
 function toggleMemberDetail(id) {
   var el = document.getElementById(id);
   if (!el) return;
