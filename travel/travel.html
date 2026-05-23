@@ -584,6 +584,12 @@ a{text-decoration:none;color:inherit;}
       </button>
       <div class="hdr-title">照片總覽</div>
       <button class="hdr-action" onclick="manualSyncPhotos()" style="color:#6ec6f0">同步</button>
+      <button class="hdr-action" id="trip-photos-edit-btn" onclick="toggleTripPhotoEditMode()" style="color:#c8b89a">編輯</button>
+    </div>
+    <!-- 編輯模式工具列 -->
+    <div id="trip-photos-toolbar" style="display:none;padding:6px 12px;background:rgba(255,107,107,.08);border-bottom:1px solid rgba(255,107,107,.2);display:none;align-items:center;justify-content:space-between">
+      <span id="trip-photos-sel-count" style="font-size:12px;color:#c8b89a">已選 0 張</span>
+      <button onclick="deleteTripSelectedPhotos()" style="font-size:12px;padding:5px 14px;background:rgba(255,107,107,.15);border:1px solid rgba(255,107,107,.3);border-radius:6px;color:#ff6b6b;cursor:pointer">刪除所選</button>
     </div>
     <div class="body no-nav" id="trip-photos-body"></div>
   </div>
@@ -904,7 +910,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.4 02:25';
+var APP_VERSION = 'v20260524.5 02:45';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2417,6 +2423,63 @@ function updateTripTodoBadge() {
 }
 
 
+
+var _tripPhotoEditMode = false;
+var _tripPhotoSelected = {}; // { 'day_0_pi': true }
+
+function toggleTripPhotoEditMode() {
+  _tripPhotoEditMode = !_tripPhotoEditMode;
+  _tripPhotoSelected = {};
+  var btn = document.getElementById('trip-photos-edit-btn');
+  var toolbar = document.getElementById('trip-photos-toolbar');
+  if (btn) { btn.textContent = _tripPhotoEditMode ? '完成' : '編輯'; btn.style.color = _tripPhotoEditMode ? '#6ec6f0' : '#c8b89a'; }
+  if (toolbar) toolbar.style.display = _tripPhotoEditMode ? 'flex' : 'none';
+  renderTripPhotos();
+}
+
+function toggleTripPhotoSelect(key) {
+  _tripPhotoSelected[key] = !_tripPhotoSelected[key];
+  var count = Object.values(_tripPhotoSelected).filter(Boolean).length;
+  var countEl = document.getElementById('trip-photos-sel-count');
+  if (countEl) countEl.textContent = '已選 ' + count + ' 張';
+  // 更新該縮圖外觀
+  var el = document.getElementById('tps-' + key);
+  if (el) {
+    var dot = el.querySelector('.tps-check');
+    if (dot) dot.style.background = _tripPhotoSelected[key] ? '#6ec6f0' : 'rgba(0,0,0,.4)';
+    if (dot) dot.textContent = _tripPhotoSelected[key] ? '✓' : '';
+  }
+}
+
+function deleteTripSelectedPhotos() {
+  var count = Object.values(_tripPhotoSelected).filter(Boolean).length;
+  if (!count) { alert('請先選擇要刪除的照片'); return; }
+  if (!confirm('刪除 ' + count + ' 張照片？')) return;
+  var photosData = getPhotos();
+  // 解析 key 格式：dayKey_pi
+  Object.keys(_tripPhotoSelected).forEach(function(key) {
+    if (!_tripPhotoSelected[key]) return;
+    var parts = key.lastIndexOf('_');
+    var dayKey = key.substring(0, parts);
+    var pi = parseInt(key.substring(parts + 1));
+    if (photosData.photos && photosData.photos[dayKey]) {
+      photosData.photos[dayKey][pi] = null; // 標記刪除
+    }
+  });
+  // 清除 null
+  Object.keys(photosData.photos || {}).forEach(function(key) {
+    photosData.photos[key] = (photosData.photos[key] || []).filter(Boolean);
+  });
+  savePhotos(photosData);
+  _tripPhotoSelected = {};
+  _tripPhotoEditMode = false;
+  var btn = document.getElementById('trip-photos-edit-btn');
+  var toolbar = document.getElementById('trip-photos-toolbar');
+  if (btn) { btn.textContent = '編輯'; btn.style.color = '#c8b89a'; }
+  if (toolbar) toolbar.style.display = 'none';
+  renderTripPhotos();
+}
+
 // ════ 照片總覽 ════
 
 function openTripPhotos() {
@@ -2458,14 +2521,19 @@ function renderTripPhotos() {
       html += '<div style="font-size:12px;color:#c8b89a;padding:8px">尚無照片</div>';
     } else {
       html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px">';
-      list.slice(0, 8).forEach(function(photo, pi) {
-        html += '<div style="aspect-ratio:1;overflow:hidden;border-radius:3px;background:#111" onclick="S.dayIdx=' + di + ';openDayPhotos();setTimeout(function(){openPhotoFullscreen(' + pi + ')},300)">';
-        html += '<img src="' + photo.thumb + '" style="width:100%;height:100%;object-fit:cover">';
+      list.forEach(function(photo, pi) {
+        var selKey = key + '_' + pi;
+        var isSelected = _tripPhotoEditMode && _tripPhotoSelected[selKey];
+        var clickAction = _tripPhotoEditMode
+          ? 'toggleTripPhotoSelect(\'' + selKey + '\')'
+          : 'S.dayIdx=' + di + ';openDayPhotos();setTimeout(function(){openPhotoFullscreen(' + pi + ')},300)';
+        html += '<div id="tps-' + selKey + '" style="position:relative;aspect-ratio:1;overflow:hidden;border-radius:3px;background:#111;cursor:pointer" onclick="' + clickAction + '">';
+        html += '<img src="' + photo.thumb + '" style="width:100%;height:100%;object-fit:cover'+(isSelected?';opacity:.6':'')+'">';
+        if (_tripPhotoEditMode) {
+          html += '<div class="tps-check" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;border:2px solid #fff;background:'+(isSelected?'#6ec6f0':'rgba(0,0,0,.4)')+';display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff">'+(isSelected?'✓':'')+'</div>';
+        }
         html += '</div>';
       });
-      if (list.length > 8) {
-        html += '<div style="aspect-ratio:1;background:rgba(255,255,255,.08);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#c8b89a;cursor:pointer" onclick="S.dayIdx=' + di + ';openDayPhotos()">+' + (list.length - 8) + '</div>';
-      }
       html += '</div>';
     }
     html += '</div></div>';
