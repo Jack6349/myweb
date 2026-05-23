@@ -848,7 +848,7 @@ a{text-decoration:none;color:inherit;}
 </div>
 
 <script>
-var APP_VERSION = 'v20260523.6 19:15';
+var APP_VERSION = 'v20260523.7 19:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1866,18 +1866,16 @@ function renderTripTodoItem(di, ti, todo) {
 }
 
 function addTripDayTodo(di) {
-  var t = trip(); if(!t || !t.days[di]) return;
-  var d = t.days[di];
-  if(!d.todos) d.todos = [];
-  d.todos.push({text:'', done:false, id:uid()});
-  save(S.trips);
-  // 展開該天並重新渲染
-  renderTripTodoList();
-  var colId = 'trip-todo-day-' + di;
-  var el = document.getElementById(colId);
-  if(el) el.style.display = 'block';
-  var arrow = document.getElementById(colId + '-arrow');
-  if(arrow) arrow.textContent = '▴';
+  // 跳到該天的每日代辦頁新增
+  S.dayIdx = di;
+  var t = trip();
+  if(!t) return;
+  // 確保 day stops 已載入
+  if(t.days && !t.days[di].stops) t.days[di].stops = [];
+  document.getElementById('day-todo-hdr-title').textContent = 'D'+(di+1)+' 待辦事項';
+  addDayTodo();
+  renderDayTodoList();
+  goTo('sc-day-todo');
 }
 
 function setTripTodoDone(di, ti, done) {
