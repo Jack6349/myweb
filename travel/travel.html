@@ -834,7 +834,7 @@ a{text-decoration:none;color:inherit;}
 </div>
 
 <script>
-var APP_VERSION = 'v20260523.2 18:00';
+var APP_VERSION = 'v20260523.3 18:20';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1808,13 +1808,14 @@ function renderDayTodoList() {
 }
 
 function renderDayTodoItem(todo, ti) {
-  return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">' +
-    '<input type="checkbox" style="width:20px;height:20px;flex-shrink:0"' + (todo.done?' checked':'') +
+  return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">' +
+    '<input type="checkbox" style="width:20px;height:20px;flex-shrink:0;margin-top:4px"' + (todo.done?' checked':'') +
     ' onchange="setDayTodoDone(' + ti + ',this.checked)">' +
-    '<input class="fi" style="flex:1;font-size:14px;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'') +
-    '" value="' + ea(todo.text||'') + '" placeholder="代辦事項說明"' +
-    ' onchange="setDayTodoText(' + ti + ',this.value)">' +
-    '<button onclick="removeDayTodo(' + ti + ')" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:18px;flex-shrink:0">&times;</button>' +
+    '<textarea class="fta" rows="2" style="flex:1;font-size:14px;resize:none;min-height:44px;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'') +
+    '" placeholder="代辦事項說明"' +
+    ' oninput="this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\';setDayTodoText(' + ti + ',this.value)">' +
+    ea(todo.text||'') + '</textarea>' +
+    '<button onclick="removeDayTodo(' + ti + ')" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:18px;flex-shrink:0;margin-top:2px">&times;</button>' +
     '</div>';
 }
 
