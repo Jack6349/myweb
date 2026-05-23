@@ -557,7 +557,8 @@ a{text-decoration:none;color:inherit;}
 
 <!-- ══ SCREEN: DAY ══ -->
 <div class="screen" id="sc-day">
-  <div class="hdr">
+  <!-- Header 行 1：返回 + 行程名稱 -->
+  <div class="hdr" style="padding-bottom:0;border-bottom:none">
     <button class="hdr-back" onclick="goBack('sc-trip')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
@@ -565,10 +566,14 @@ a{text-decoration:none;color:inherit;}
       <div class="hdr-title" id="day-hdr-title">D1</div>
       <div class="hdr-sub" id="day-hdr-sub"></div>
     </div>
+  </div>
+  <!-- Header 行 2：功能按鈕 -->
+  <div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;padding:4px 8px 6px;background:var(--bg2);border-bottom:1px solid var(--border)">
     <button class="hdr-action" onclick="renameDayTitle()">標題</button>
     <button class="hdr-action" onclick="openTimetable()" style="color:#6ec6f0">班次</button>
     <button class="hdr-action" onclick="openDayTodo()" style="position:relative;color:#e8b84b" id="day-todo-btn">📝<span id="day-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
     <button class="hdr-action" onclick="openDayExpense()" style="color:#7bed9f">＋費用</button>
+    <button class="hdr-action" onclick="openDayPhotos()" style="color:#c8b89a">📷</button>
     <button class="hdr-btn" onclick="exportTrip()">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     </button>
@@ -848,7 +853,7 @@ a{text-decoration:none;color:inherit;}
 </div>
 
 <script>
-var APP_VERSION = 'v20260523.8 20:00';
+var APP_VERSION = 'v20260523.9 20:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1773,6 +1778,12 @@ function syncTransitTimePickers(){
 
 
 
+
+
+// ════ 照片功能（待實作）════
+function openDayPhotos() {
+  alert('📷 照片功能即將推出');
+}
 
 // ════ 代辦事項總表 ════
 
