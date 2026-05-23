@@ -1857,7 +1857,9 @@ function saveStop(){
   importStopExpenses(d, stop);
   save(S.trips);
   _stopDirty=false;
-  goBack('sc-day'); renderDayTL();
+  goBack('sc-day');
+  // 強制從 S.trips 重新讀取後渲染
+  setTimeout(function(){ renderDayTL(); }, 0);
 }
 
 function deleteStop(){
