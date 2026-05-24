@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.14 15:45';
+var APP_VERSION = 'v20260524.18 16:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2657,8 +2657,9 @@ function renderDayTodoItem(todo, ti) {
     '<div style="flex:1;min-width:0">' +
       '<textarea class="fta" rows="2" style="width:100%;font-size:14px;resize:none;min-height:44px;box-sizing:border-box;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'') +
       '" placeholder="代辦事項說明"' +
-      ' oninput="this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\';setDayTodoText(' + ti + ',this.value)">' +
+      ' oninput="this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" id="todo-ta-' + ti + '">' +
       ea(todo.text||'') + '</textarea>' +
+      '<button onclick="setDayTodoText(' + ti + ',document.getElementById(\'todo-ta-' + ti + '\').value)" style="margin-top:4px;padding:4px 14px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:6px;color:#6ec6f0;font-size:12px;cursor:pointer;align-self:flex-end">儲存</button>' +
       stopSel +
     '</div>' +
     '<button onclick="removeDayTodo(' + ti + ')" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:18px;flex-shrink:0;margin-top:2px">&times;</button>' +
@@ -2692,6 +2693,13 @@ function setDayTodoDone(ti, done) {
   save(S.trips);
   renderDayTodoList();
   updateTodoBadge();
+}
+
+
+// 返回前強制儲存所有未存的代辦文字
+function saveTodoBeforeLeave() {
+  var textareas = document.querySelectorAll('#day-todo-body textarea');
+  textareas.forEach(function(ta) { ta.blur(); });
 }
 
 function setDayTodoText(ti, text) {
@@ -3209,7 +3217,7 @@ async function syncRead() {
 
 // ── GitHub 同步：寫入 ──
 // 需要 Personal Access Token（classic，repo scope）
-async function syncWrite(trips) {
+async function syncWrite(trips, isRetry) {
   var token = localStorage.getItem(GH_TOKEN_KEY);
   if (!token) return; // 無 token 跳過
   try {
@@ -3256,10 +3264,13 @@ async function syncWrite(trips) {
     } else {
       var err = await res.json();
       // SHA 衝突時清除快取，下次重取
-      if (res.status === 409 || res.status === 422) {
+      if ((res.status === 409 || res.status === 422) && !isRetry) {
         localStorage.removeItem(GH_SHA_KEY);
-        // 重試一次
-        await syncWrite(trips);
+        // 重試一次（加旗標避免無限迴圈）
+        await syncWrite(trips, true);
+      } else if (res.status === 409 || res.status === 422) {
+        showSyncStatus('同步衝突，請稍後再試', '#ff6b6b');
+        setTimeout(function(){ showSyncStatus('',''); }, 3000);
       } else if (res.status === 401 || res.status === 403) {
         // Token 過期或無效，清除後提示重新輸入
         localStorage.removeItem(GH_TOKEN_KEY);
