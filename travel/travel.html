@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.13 15:30';
+var APP_VERSION = 'v20260524.14 15:45';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1645,7 +1645,9 @@ function renderRouteEditor(r, ri){
       '</select></div>';
     // 出發/到達站
     // 起訖站從上方 transit.fromPlace/toPlace 帶入，不需要重複顯示
-    if(!stop.transit||(!stop.transit.fromPlace&&!stop.transit.toPlace)){
+    var _curStop = S.stopIdx !== null ? ((day()&&day().stops||[])[S.stopIdx]) : null;
+    var _hasFromTo = _curStop && _curStop.transit && (_curStop.transit.fromPlace || _curStop.transit.toPlace);
+    if(!_hasFromTo){
       html+='<div class="frow" style="gap:6px">';
       html+='<div><div class="fl">\u51fa\u767c\u5730</div><input class="fi fi-sm" placeholder="\u51fa\u767c\u5730" value="'+ea(leg0.fromStop||'')+'" onchange="setManualLegField('+ri+',0,\'fromStop\',this.value)"></div>';
       html+='<div><div class="fl">\u76ee\u7684\u5730</div><input class="fi fi-sm" placeholder="\u76ee\u7684\u5730" value="'+ea(leg0.toStop||'')+'" onchange="setManualLegField('+ri+',0,\'toStop\',this.value)"></div>';
