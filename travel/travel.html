@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.9 14:30';
+var APP_VERSION = 'v20260524.10 14:40';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1299,18 +1299,24 @@ function renderDayTL(){
     html+='</div>';
 
     // 間隔時間（到達 → 出發）—— 第一個地點不顯示
-    if(!_tlCompactMode && i > 0 && (prevArrTime || depTime)) {
+    if(i > 0 && (prevArrTime || depTime)) {
       var layMins = calcLayoverMins(prevArrTime, depTime);
       var layStr = fmtLayover(layMins);
-      html += '<div class="tl-layover">';
-      if (layStr !== null) {
-        html += '⏱ 停留 <span class="tl-layover-time">' + layStr + '</span>';
-      } else if (prevArrTime && !depTime) {
-        html += '<span class="tl-layover-unknown">⏱ 抵達後出發時間未定</span>';
-      } else if (!prevArrTime && depTime) {
-        html += '<span class="tl-layover-unknown">⏱ 到達時間未定</span>';
+      // 簡化模式：只隱藏「時間未定」的提示，有具體停留時間仍顯示
+      var isUnknown = (layStr === null);
+      if (!_tlCompactMode || !isUnknown) {
+        html += '<div class="tl-layover">';
+        if (layStr !== null) {
+          html += '⏱ 停留 <span class="tl-layover-time">' + layStr + '</span>';
+        } else if (!_tlCompactMode) {
+          if (prevArrTime && !depTime) {
+            html += '<span class="tl-layover-unknown">⏱ 抵達後出發時間未定</span>';
+          } else if (!prevArrTime && depTime) {
+            html += '<span class="tl-layover-unknown">⏱ 到達時間未定</span>';
+          }
+        }
+        html += '</div>';
       }
-      html += '</div>';
     }
 
     // TRANSIT display (below stop card, above next stop)
