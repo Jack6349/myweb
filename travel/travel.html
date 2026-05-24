@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.11 14:55';
+var APP_VERSION = 'v20260524.13 15:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -3930,7 +3930,7 @@ function importStopExpenses(d, stop) {
     }
   }
 
-  // ── 住宿費用 ──
+  // ── 住宿費用（Airport 不適用，費用在交通路線方案中）──
   if (stop.type === 'hotel' && stop.hotel) {
     var hotel = stop.hotel;
     if (hotel.importFare && hotel.amount && hotel.amount > 0) {
@@ -3971,9 +3971,22 @@ function upsertExpense(d, sourceId, expData) {
 }
 
 // 移除帶入的費用（importFare 取消時）
+// 若已有分配資料則保留記錄，只清空 sourceId 讓其成為手動費用
 function removeExpenseBySourceId(d, sourceId) {
   if (!d.expenses) return;
-  d.expenses = d.expenses.filter(function(e){ return e.sourceId !== sourceId; });
+  d.expenses = d.expenses.filter(function(e) {
+    if (e.sourceId !== sourceId) return true;
+    // 檢查是否有已設定的分配
+    var hasAlloc = e.splits && e.splits.some(function(s){
+      return s.slices && s.slices.length > 0;
+    });
+    if (hasAlloc) {
+      // 保留記錄，移除 sourceId 使其成為獨立費用
+      delete e.sourceId;
+      return true;
+    }
+    return false; // 無分配資料才刪除
+  });
 }
 
 // 輔助：by member id
