@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.21 19:30';
+var APP_VERSION = 'v20260524.22 19:50';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1252,8 +1252,9 @@ function calcLayoverMins(arrTime, depTime) {
   var aMins = parseInt(a[0]) * 60 + parseInt(a[1]);
   var dMins = parseInt(d[0]) * 60 + parseInt(d[1]);
   var diff = dMins - aMins;
-  if (diff < 0) diff += 24 * 60; // 跨日
-  return diff;
+  // 只有 diff < -120 才視為跨日（避免班次衝突被誤判為23小時）
+  if (diff < -120) diff += 24 * 60;
+  return diff; // 負數表示有時間衝突
 }
 
 // 格式化間隔時間（含天數）
@@ -1325,7 +1326,9 @@ function renderDayTL(){
       var isUnknown = (layStr === null);
       if (!_tlCompactMode || !isUnknown) {
         html += '<div class="tl-layover">';
-        if (layStr !== null) {
+        if (layMins !== null && layMins < 0) {
+          html += '<span class="tl-layover-unknown" style="color:#ff6b6b">⚠️ 時間衝突：到達時間晚於下段出發時間</span>';
+        } else if (layStr !== null) {
           html += '⏱ 停留 <span class="tl-layover-time">' + layStr + '</span>';
         } else if (!_tlCompactMode) {
           if (prevArrTime && !depTime) {
@@ -1810,12 +1813,14 @@ function setAsPlanned(ri) {
       transfers: _newPlanned.transfers || 0,
       legs: _newPlanned.legs || []
     };
+    var _schedIdx = S.stopIdx;
+    var _schedFake = _fakeTimetable;
     setTimeout(function(){
       if (confirm('是否自動調整後續排程？')) {
-        var newData = runAutoSchedule(S.stopIdx, _fakeTimetable);
-        showSchedulePreview(S.stopIdx, _fakeTimetable, newData);
+        var newData = runAutoSchedule(_schedIdx, _schedFake);
+        showSchedulePreview(_schedIdx, _schedFake, newData);
       }
-    }, 300);
+    }, 500);
   }
 }
 
