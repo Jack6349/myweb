@@ -618,9 +618,9 @@ a{text-decoration:none;color:inherit;}
     <button class="hdr-back" onclick="goBack('sc-trip')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <div style="flex:1;min-width:0">
-      <div class="hdr-title" id="day-hdr-title">D1</div>
-      <div class="hdr-sub" id="day-hdr-sub"></div>
+    <div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden">
+      <div class="hdr-title" id="day-hdr-title" style="flex-shrink:0">D1</div>
+      <div class="hdr-sub" id="day-hdr-sub" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c8b89a"></div>
     </div>
   </div>
   <!-- Header 行 2：功能按鈕 -->
@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.8 14:20';
+var APP_VERSION = 'v20260524.9 14:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
