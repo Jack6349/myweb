@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.20 17:30';
+var APP_VERSION = 'v20260524.21 19:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1796,6 +1796,27 @@ function setAsPlanned(ri) {
   save(S.trips);
   _stopDirty = false;
   _refreshTransitRoutes();
+  // 若非子行程且後面還有站點，提示自動排程
+  var _t2 = trip(); var _d2 = day();
+  if (_t2 && !_t2.isSubTrip && _d2 && S.stopIdx < (_d2.stops||[]).length - 1) {
+    var _newPlanned = stop.transit.routes[0]; // 剛設為預定的那筆
+    // 轉換為 timetable 格式供排程使用
+    var _fakeTimetable = {
+      from: stop.transit.fromPlace || stop.name || '',
+      to: stop.transit.toPlace || '',
+      departTime: _newPlanned.departTime || '',
+      arriveTime: _newPlanned.arriveTime || '',
+      duration: _newPlanned.duration || 0,
+      transfers: _newPlanned.transfers || 0,
+      legs: _newPlanned.legs || []
+    };
+    setTimeout(function(){
+      if (confirm('是否自動調整後續排程？')) {
+        var newData = runAutoSchedule(S.stopIdx, _fakeTimetable);
+        showSchedulePreview(S.stopIdx, _fakeTimetable, newData);
+      }
+    }, 300);
+  }
 }
 
 function setStopRouteTag(ri,tag){
