@@ -627,6 +627,7 @@ a{text-decoration:none;color:inherit;}
   <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0;padding:2px 4px 4px;border-top:1px solid rgba(255,255,255,.06)">
     <button class="hdr-action" onclick="renameDayTitle()">標題</button>
     <button class="hdr-action" onclick="openTimetable()" style="color:#6ec6f0">班次</button>
+    <button class="hdr-action" id="tl-compact-btn" onclick="toggleTLCompact()" style="color:#c8b89a">簡化</button>
     <button class="hdr-action" onclick="openDayTodo()" style="position:relative;color:#e8b84b" id="day-todo-btn">提醒<span id="day-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
     <button class="hdr-action" onclick="openDayExpense()" style="color:#7bed9f">＋費用</button>
     <button class="hdr-action" onclick="openDayPhotos()" style="color:#c8b89a">照片</button>
@@ -911,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.6 03:00';
+var APP_VERSION = 'v20260524.7 11:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1214,7 +1215,11 @@ function openDay(idx){
   var d=t.days[idx];
   var dd=new Date(t.startDate); dd.setDate(dd.getDate()+idx);
   document.getElementById('day-hdr-title').textContent='D'+(idx+1)+(d.title?' \u30fb '+d.title:'');
-  document.getElementById('day-hdr-sub').textContent=fmtDFull(dd);
+  var _stops = d.stops||[];
+  var _first = _stops.length ? (_stops[0].name||'') : '';
+  var _last  = _stops.length>1 ? (_stops[_stops.length-1].name||'') : '';
+  var _range = _first ? (_last && _last!==_first ? _first+' → '+_last : _first) : '';
+  document.getElementById('day-hdr-sub').textContent=fmtDFull(dd)+(_range?'  '+_range:'');
   renderDayTL();
   goTo('sc-day');
 }
@@ -1248,12 +1253,20 @@ function fmtLayover(mins) {
 }
 
 // ════ DAY TIMELINE ════
+
+function toggleTLCompact() {
+  _tlCompactMode = !_tlCompactMode;
+  var btn = document.getElementById('tl-compact-btn');
+  if (btn) { btn.textContent = _tlCompactMode ? '完整' : '簡化'; btn.style.color = _tlCompactMode ? '#6ec6f0' : '#c8b89a'; }
+  renderDayTL();
+}
+
 function renderDayTL(){
   var d=day(); if(!d)return;
   var stops=d.stops||[];
   var isLastDay=trip()&&S.dayIdx===trip().days.length-1;
   var html='';
-  html+='<button class="tl-add-top" onclick="addStopAt(0)">\uff0b \u5728\u6700\u524d\u65b0\u589e\u5730\u9ede</button>';
+  if(!_tlCompactMode) html+='<button class="tl-add-top" onclick="addStopAt(0)">\uff0b \u5728\u6700\u524d\u65b0\u589e\u5730\u9ede</button>';
 
   stops.forEach(function(stop,i){
     var transit=stop.transit||null;
@@ -1284,7 +1297,7 @@ function renderDayTL(){
     html+='</div>';
 
     // 間隔時間（到達 → 出發）—— 第一個地點不顯示
-    if(i > 0 && (prevArrTime || depTime)) {
+    if(!_tlCompactMode && i > 0 && (prevArrTime || depTime)) {
       var layMins = calcLayoverMins(prevArrTime, depTime);
       var layStr = fmtLayover(layMins);
       html += '<div class="tl-layover">';
@@ -1335,7 +1348,7 @@ function renderDayTL(){
       }
     }
     html+='</div></div>';
-    html+='<button class="tl-add-stop" onclick="addStopAt('+(i+1)+')">\uff0b \u65b0\u589e\u5730\u9ede</button>';
+    if(!_tlCompactMode) html+='<button class="tl-add-stop" onclick="addStopAt('+(i+1)+')">\uff0b \u65b0\u589e\u5730\u9ede</button>';
   });
 
   if(stops.length===0){
