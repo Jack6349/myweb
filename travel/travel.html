@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.31 10:20';
+var APP_VERSION = 'v20260525.32 10:45';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -3824,10 +3824,19 @@ async function syncWrite(trips, isRetry) {
       setTimeout(function(){ showSyncStatus('',''); }, 2000);
     } else {
       var err = await res.json();
-      // SHA 衝突時清除快取，下次重取
+      // SHA 衝突：重新 fetch 最新 SHA 後重試一次
       if ((res.status === 409 || res.status === 422) && !isRetry) {
         localStorage.removeItem(GH_SHA_KEY);
-        // 重試一次（加旗標避免無限迴圈）
+        showSyncStatus('重新同步中…', 'var(--info)');
+        try {
+          var freshRes = await fetch(GITHUB_API, {
+            headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+          });
+          if (freshRes.ok) {
+            var freshMeta = await freshRes.json();
+            if (freshMeta.sha) localStorage.setItem(GH_SHA_KEY, freshMeta.sha);
+          }
+        } catch(e2) { /* ignore */ }
         await syncWrite(trips, true);
       } else if (res.status === 409 || res.status === 422) {
         showSyncStatus('同步衝突，請稍後再試', '#ff6b6b');
@@ -3894,10 +3903,15 @@ function openGhTokenSetting() {
   }
 }
 
-// Save with cloud sync
+// Save with cloud sync（debounce 1.5s，避免連續操作觸發多個 PUT）
+var _syncTimer = null;
 function save(trips){
   localStorage.setItem(STORE_KEY, JSON.stringify(trips));
-  syncWrite(trips);
+  if (_syncTimer) clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(function(){
+    _syncTimer = null;
+    syncWrite(trips);
+  }, 1500);
 }
 
 
