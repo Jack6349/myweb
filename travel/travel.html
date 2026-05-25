@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.27 21:20';
+var APP_VERSION = 'v20260524.28 21:35';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1156,7 +1156,7 @@ function renderList(){
     children.forEach(function(sub){
       var dd = new Date(sub.startDate);
       var dateStr = fmtD(sub.startDate);
-      html += '<div style="margin:-8px 0 8px 24px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px">'+
+      html += '<div style="margin:4px 0 8px 20px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;box-sizing:border-box">'+
         '<span style="font-size:18px">📄</span>'+
         '<div style="flex:1;min-width:0" onclick="openTripById(this.parentElement)" data-id="'+sub.id+'" style="cursor:pointer">'+
         '<div style="font-size:13px;font-weight:700;color:#e0d4c0">'+esc(sub.name)+'</div>'+
@@ -1421,12 +1421,24 @@ function openStop(idx){
 }
 function stopBackConfirm(){
   if(_stopDirty&&!confirm('\u78ba\u5b9a\u653e\u68c4\u4fee\u6539\uff1f'))return;
+  // 放棄修改：還原路線到進入前的狀態
+  if(_stopDirty && _originalRoutes !== null && S.stopIdx !== null) {
+    var d = day();
+    var stop = d && (d.stops||[])[S.stopIdx];
+    if (stop && stop.transit) {
+      stop.transit.routes = JSON.parse(JSON.stringify(_originalRoutes));
+      save(S.trips);
+    }
+  }
   goBack('sc-day'); renderDayTL();
 }
 
 var _tempRoutes = {};
+var _originalRoutes = null; // 進入編輯頁時的路線備份
 function renderStopForm(stop, stopIdx){
   _tempRoutes = {};
+  // 備份目前的路線（供放棄時還原）
+  _originalRoutes = stop && stop.transit ? JSON.parse(JSON.stringify(stop.transit.routes||[])) : null;
   var type=stop?stop.type:'transit';
   var STYPES=[
     {id:'transit',icon:'🚉',label:'交通站'},
@@ -1828,7 +1840,13 @@ function setStopRouteField(ri,field,val){
 function removeStopRoute(ri){
   var stop=S.stopIdx!==null?((day().stops||[])[S.stopIdx]):null;
   if(!stop||!stop.transit)return;
-  stop.transit.routes.splice(ri,1); save(S.trips); _stopDirty=true; _refreshTransitRoutes();
+  var wasPlanned = stop.transit.routes[ri] && stop.transit.routes[ri].tag === 'planned';
+  stop.transit.routes.splice(ri,1);
+  // 若刪除的是 planned，自動遞補第一個 backup 為 planned
+  if (wasPlanned && stop.transit.routes.length > 0) {
+    stop.transit.routes[0].tag = 'planned';
+  }
+  save(S.trips); _stopDirty=true; _refreshTransitRoutes();
 }
 
 // 設定手動新增路線的 leg 欄位
@@ -2972,6 +2990,8 @@ function applySchedule(changedStopIdx) {
   _scheduleResult = null;
   document.getElementById('schedule-preview').remove();
   renderDayTL();
+  // 重新整理行程列表讓子行程立即顯示
+  renderList();
   alert('排程已套用！子行程「' + sub.name + '」已建立，可在行程列表查看。');
 }
 
