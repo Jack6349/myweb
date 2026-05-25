@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.25 20:50';
+var APP_VERSION = 'v20260524.26 21:10';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2594,13 +2594,19 @@ function showScheduleWarning(stopIdx, arrTime, nextStopName, nextDepTime, type) 
 function openScheduleCheck(stopIdx) {
   var existing = document.getElementById('schedule-warning-banner');
   if (existing) existing.remove();
-  S.stopIdx = stopIdx;
+  var savedStopIdx = S.stopIdx;
   var d = day();
   if (!d) return;
   var stop = (d.stops || [])[stopIdx];
-  if (!stop || !stop.transit) return;
+  if (!stop || !stop.transit) {
+    alert('此站點無交通方案，無法執行排程檢查');
+    return;
+  }
   var planned = (stop.transit.routes || []).find(function(r){ return r.tag === 'planned'; });
-  if (!planned) return;
+  if (!planned) {
+    alert('此站點無預定交通方案，請先設定預定班次');
+    return;
+  }
   var fakeTb = {
     from: stop.transit.fromPlace || stop.name || '',
     to: stop.transit.toPlace || '',
@@ -2610,7 +2616,9 @@ function openScheduleCheck(stopIdx) {
     transfers: planned.transfers || 0,
     legs: planned.legs || []
   };
+  console.log('openScheduleCheck:', stopIdx, fakeTb, 'stops:', d.stops.length);
   var result = runAutoSchedule(stopIdx, fakeTb);
+  console.log('schedule result:', result);
   showSchedulePreview(stopIdx, fakeTb, result);
 }
 
@@ -2711,8 +2719,11 @@ function runAutoSchedule(changedStopIdx, newTimetable) {
     // 判斷交通類型
     var legs = planned.legs || [];
     var legMode = legs.length ? legs[0].mode : '';
-    var isCustom = ['walk','shuttle','car','taxi'].indexOf(legMode) >= 0;
+    // legMode 為空字串視為手動自訂交通，歸類為自訂
+    var isCustom = !legMode || ['walk','shuttle','car','taxi','car','自訂'].indexOf(legMode) >= 0;
     var isFlight = legMode === 'flight';
+    // 已有 legs 且有 line_name 的視為班次型（從班次匯入）
+    if (legs.length && legs[0].line_name) isCustom = false;
 
     if (isCustom) {
       // 自訂交通：出發 = 前站抵達 + 10分，保持原路程時長
