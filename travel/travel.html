@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.26 21:10';
+var APP_VERSION = 'v20260524.27 21:20';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1852,7 +1852,8 @@ function addManualRoute(){
   var stop=S.stopIdx!==null?((d.stops||[])[S.stopIdx]):null;
   if(!stop) return;
   if(!stop.transit) stop.transit={fromPlace:(document.getElementById('sf-transit-from')||{value:''}).value,toPlace:(document.getElementById('sf-transit-to')||{value:''}).value,routes:[]};
-  stop.transit.routes.push({id:uid(),tag:'backup',departTime:'',arriveTime:'',duration:0,transfers:0,legs:[]});
+  var hasPlanned = stop.transit.routes.some(function(r){ return r.tag==='planned'; });
+  stop.transit.routes.push({id:uid(),tag:hasPlanned?'backup':'planned',departTime:'',arriveTime:'',duration:0,transfers:0,legs:[]});
   save(S.trips); _stopDirty=true; _refreshTransitRoutes();
 }
 function addStopLeg(ri){
