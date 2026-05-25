@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.23 20:05';
+var APP_VERSION = 'v20260524.24 20:20';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -5480,7 +5480,7 @@ function renderTimetable() {
     html += '<div style="font-size:12px;font-weight:700;color:#6ec6f0;margin:8px 0 6px;padding-bottom:4px;border-bottom:1px solid rgba(110,198,240,.2)">'
       + esc(groupKey) + '</div>';
     groupItems.forEach(function(s) {
-    var idx = schedules.indexOf(s);
+    var idx = t.timetables.indexOf(s);
     // 判斷班次是否已過
     var isPast = false;
     if (s.date && s.departTime) {
@@ -5536,15 +5536,9 @@ function renderTimetable() {
 }
 
 // 刪除班次
-function deleteTimetable(idx) {
+function deleteTimetable(origIdx) {
   var t = trip(); if (!t || !t.timetables) return;
-  // 找到排序後對應的原始 index
-  var sorted = t.timetables.slice().sort(function(a, b) {
-    return (a.departTime || '').localeCompare(b.departTime || '');
-  });
-  var target = sorted[idx];
-  var origIdx = t.timetables.indexOf(target);
-  if (origIdx < 0) return;
+  if (origIdx < 0 || origIdx >= t.timetables.length) return;
   if (!confirm('刪除此班次？')) return;
   t.timetables.splice(origIdx, 1);
   save(S.trips);
