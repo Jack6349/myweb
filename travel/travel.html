@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.28 21:35';
+var APP_VERSION = 'v20260524.29 21:45';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1156,7 +1156,7 @@ function renderList(){
     children.forEach(function(sub){
       var dd = new Date(sub.startDate);
       var dateStr = fmtD(sub.startDate);
-      html += '<div style="margin:4px 0 8px 20px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;box-sizing:border-box">'+
+      html += '<div style="margin:4px 0 8px;margin-left:28px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;box-sizing:border-box">'+
         '<span style="font-size:18px">📄</span>'+
         '<div style="flex:1;min-width:0" onclick="openTripById(this.parentElement)" data-id="'+sub.id+'" style="cursor:pointer">'+
         '<div style="font-size:13px;font-weight:700;color:#e0d4c0">'+esc(sub.name)+'</div>'+
