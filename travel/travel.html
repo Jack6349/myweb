@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.32 10:45';
+var APP_VERSION = 'v20260525.33 11:10';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2743,7 +2743,7 @@ function runAutoSchedule(changedStopIdx, newTimetable) {
     if (legs.length && legs[0].line_name) isCustom = false;
 
     if (isCustom) {
-      // 自訂交通：出發 = 前站抵達 + 10分，保持原路程時長
+      // 自訂交通：出發 = 前站抵達 + 換乘緩衝，保持原路程時長
       var origDep = timeToMins(planned.departTime);
       var origArr = timeToMins(planned.arriveTime);
       var duration = (origDep !== null && origArr !== null) ? (origArr - origDep) : 0;
@@ -2751,17 +2751,22 @@ function runAutoSchedule(changedStopIdx, newTimetable) {
       var newArrMins = newDepMins + duration;
       var newDep = minsToTime(newDepMins);
       var newArr = minsToTime(newArrMins);
-      results.push({
-        stopIdx: i,
-        type: 'custom',
-        stop: stop,
-        oldDep: planned.departTime,
-        oldArr: planned.arriveTime,
-        newDep: newDep,
-        newArr: newArr,
-        planned: planned
-      });
-      currentArrTime = newArr;
+      // 時間未實際變動時不加入結果
+      if (newDep === planned.departTime && newArr === planned.arriveTime) {
+        currentArrTime = planned.arriveTime;
+      } else {
+        results.push({
+          stopIdx: i,
+          type: 'custom',
+          stop: stop,
+          oldDep: planned.departTime,
+          oldArr: planned.arriveTime,
+          newDep: newDep,
+          newArr: newArr,
+          planned: planned
+        });
+        currentArrTime = newArr;
+      }
     } else if (isFlight) {
       // 航班：不自動調整，只提示
       warnings.push({
@@ -2883,8 +2888,13 @@ function showSchedulePreview(changedStopIdx, newTimetable, scheduleData) {
 
   // 操作按鈕
   html += '<div style="display:flex;gap:8px;padding-bottom:20px">';
-  // 始終顯示套用按鈕，即使只有第一段變更
-  html += '<button onclick="applySchedule(' + changedStopIdx + ')" style="flex:1;padding:12px;background:rgba(123,237,159,.2);border:1px solid rgba(123,237,159,.4);border-radius:8px;color:#7bed9f;font-size:14px;font-weight:700;cursor:pointer">✅ 套用並儲存為子行程</button>';
+  // 只有班次型調整才需要子行程
+  var hasTimetableChange = results.some(function(r){ return r.type === 'timetable'; });
+  if (hasTimetableChange) {
+    html += '<button onclick="applySchedule(' + changedStopIdx + ')" style="flex:1;padding:12px;background:rgba(123,237,159,.2);border:1px solid rgba(123,237,159,.4);border-radius:8px;color:#7bed9f;font-size:14px;font-weight:700;cursor:pointer">✅ 套用並儲存為子行程</button>';
+  } else {
+    html += '<button onclick="applySchedule(' + changedStopIdx + ')" style="flex:1;padding:12px;background:rgba(123,237,159,.2);border:1px solid rgba(123,237,159,.4);border-radius:8px;color:#7bed9f;font-size:14px;font-weight:700;cursor:pointer">✅ 套用</button>';
+  }
   html += '<button onclick="document.getElementById(\'schedule-preview\').remove()" style="padding:12px 16px;background:none;border:1px solid var(--border2);border-radius:8px;color:#c8b89a;font-size:14px;cursor:pointer">放棄</button>';
   html += '</div>';
 
@@ -2917,8 +2927,9 @@ function applySchedule(changedStopIdx) {
   var d = day();
   if (!d) return;
 
-  // 先建立子行程（深拷貝現有行程）
-  var sub = createSubTrip(S.dayIdx);
+  // 只有班次型調整才需要子行程
+  var hasTimetableChange = results.some(function(r){ return r.type === 'timetable'; });
+  var sub = hasTimetableChange ? createSubTrip(S.dayIdx) : null;
 
   // 套用到母行程
   // 第一段：直接套用新班次
@@ -2988,9 +2999,12 @@ function applySchedule(changedStopIdx) {
   _scheduleResult = null;
   document.getElementById('schedule-preview').remove();
   renderDayTL();
-  // 重新整理行程列表讓子行程立即顯示
-  renderList();
-  alert('排程已套用！子行程「' + sub.name + '」已建立，可在行程列表查看。');
+  if (sub) {
+    renderList();
+    alert('排程已套用！子行程「' + sub.name + '」已建立，可在行程列表查看。');
+  } else {
+    alert('排程已套用！');
+  }
 }
 
 // ════ 子行程功能 ════
