@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.33 11:10';
+var APP_VERSION = 'v20260525.34 11:40';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2937,25 +2937,29 @@ function applySchedule(changedStopIdx) {
   if (firstStop && firstStop.transit) {
     var oldPlanned = firstStop.transit.routes.find(function(r){ return r.tag==='planned'; });
     if (oldPlanned) {
-      // 原預定降為候補
-      oldPlanned.tag = 'backup';
-      // 以新班次建立新的預定
       var nt = _scheduleResult.newTimetable;
-      var newRoute = {
-        id: uid(),
-        tag: 'planned',
-        departTime: nt.departTime,
-        arriveTime: nt.arriveTime,
-        duration: nt.duration || 0,
-        transfers: nt.transfers || 0,
-        fare: nt.fare || 0,
-        fareCurrency: nt.fareCurrency || 'JPY',
-        importFare: false,
-        legs: (nt.legs || []).map(function(leg){ return Object.assign({},leg); })
-      };
-      // 重新排序：新預定在最前
-      firstStop.transit.routes = firstStop.transit.routes.filter(function(r){ return r.tag!=='planned'; });
-      firstStop.transit.routes.unshift(newRoute);
+      // 若新班次和現有 planned 完全相同，不需要重複新增
+      var isDuplicate = (oldPlanned.departTime === nt.departTime && oldPlanned.arriveTime === nt.arriveTime);
+      if (!isDuplicate) {
+        // 原預定降為候補
+        oldPlanned.tag = 'backup';
+        // 以新班次建立新的預定
+        var newRoute = {
+          id: uid(),
+          tag: 'planned',
+          departTime: nt.departTime,
+          arriveTime: nt.arriveTime,
+          duration: nt.duration || 0,
+          transfers: nt.transfers || 0,
+          fare: nt.fare || 0,
+          fareCurrency: nt.fareCurrency || 'JPY',
+          importFare: false,
+          legs: (nt.legs || []).map(function(leg){ return Object.assign({},leg); })
+        };
+        // 重新排序：新預定在最前
+        firstStop.transit.routes = firstStop.transit.routes.filter(function(r){ return r.tag!=='planned'; });
+        firstStop.transit.routes.unshift(newRoute);
+      }
     }
   }
 
@@ -2975,23 +2979,26 @@ function applySchedule(changedStopIdx) {
         planned.legs[0].arriveTime = r.newArr;
       }
     } else if (r.type === 'timetable') {
-      // 班次型：原預定降為候補，新班次為預定
-      planned.tag = 'backup';
+      // 班次型：若新班次和現有 planned 不同才替換
       var nt2 = r.newTimetable;
-      var newRoute2 = {
-        id: uid(),
-        tag: 'planned',
-        departTime: nt2.departTime,
-        arriveTime: nt2.arriveTime,
-        duration: nt2.duration || 0,
-        transfers: nt2.transfers || 0,
-        fare: nt2.fare || 0,
-        fareCurrency: nt2.fareCurrency || 'JPY',
-        importFare: false,
-        legs: (nt2.legs || []).map(function(leg){ return Object.assign({},leg); })
-      };
-      stop.transit.routes = stop.transit.routes.filter(function(rt){ return rt.tag!=='planned'; });
-      stop.transit.routes.unshift(newRoute2);
+      var isSame = (planned.departTime === nt2.departTime && planned.arriveTime === nt2.arriveTime);
+      if (!isSame) {
+        planned.tag = 'backup';
+        var newRoute2 = {
+          id: uid(),
+          tag: 'planned',
+          departTime: nt2.departTime,
+          arriveTime: nt2.arriveTime,
+          duration: nt2.duration || 0,
+          transfers: nt2.transfers || 0,
+          fare: nt2.fare || 0,
+          fareCurrency: nt2.fareCurrency || 'JPY',
+          importFare: false,
+          legs: (nt2.legs || []).map(function(leg){ return Object.assign({},leg); })
+        };
+        stop.transit.routes = stop.transit.routes.filter(function(rt){ return rt.tag!=='planned'; });
+        stop.transit.routes.unshift(newRoute2);
+      }
     }
   });
 
@@ -5364,7 +5371,14 @@ function applyTimetable(origIdx) {
   stop.transit.fromPlace = s.from || stop.transit.fromPlace;
   stop.transit.toPlace = s.to || stop.transit.toPlace;
 
-  // 第一筆為 planned，後續為 backup
+  // 第一筆為 planned，後續為 backup；若已存在相同時間則跳過
+  var alreadyExists = stop.transit.routes.some(function(r) {
+    return r.departTime === (s.departTime || '') && r.arriveTime === (s.arriveTime || '');
+  });
+  if (alreadyExists) {
+    alert('此班次已存在，不重複新增');
+    return;
+  }
   var newTag = (stop.transit.routes && stop.transit.routes.length > 0) ? 'backup' : 'planned';
 
   stop.transit.routes.push({
