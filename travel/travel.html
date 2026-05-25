@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.24 20:20';
+var APP_VERSION = 'v20260524.24d 20:25';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -5537,8 +5537,11 @@ function renderTimetable() {
 
 // 刪除班次
 function deleteTimetable(origIdx) {
-  var t = trip(); if (!t || !t.timetables) return;
-  if (origIdx < 0 || origIdx >= t.timetables.length) return;
+  console.log('deleteTimetable called, origIdx:', origIdx);
+  var t = trip();
+  console.log('trip:', t ? t.name : 'null', 'timetables:', t ? (t.timetables||[]).length : 0);
+  if (!t || !t.timetables) { console.log('no timetables'); return; }
+  if (origIdx < 0 || origIdx >= t.timetables.length) { console.log('idx out of range'); return; }
   if (!confirm('刪除此班次？')) return;
   t.timetables.splice(origIdx, 1);
   save(S.trips);
