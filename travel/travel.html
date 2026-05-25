@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.34 11:40';
+var APP_VERSION = 'v20260525.35 12:10';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2348,6 +2348,38 @@ function renderTripTodoList() {
   var html = '<div style="padding:8px 0">';
   var totalPending = 0;
 
+  // ── 全程備忘區塊 ──
+  var tripTodos = t.tripTodos || [];
+  var tripPending = tripTodos.filter(function(td){ return !td.done && td.text; });
+  var tripColId = 'trip-todo-global';
+  totalPending += tripPending.length;
+
+  html += '<div style="border-bottom:2px solid var(--accent);margin-bottom:2px">';
+  html += '<div onclick="toggleCatDetail(\'' + tripColId + '\')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer">';
+  html += '<div style="display:flex;align-items:center;gap:8px">';
+  html += '<span style="font-size:14px;font-weight:800;color:var(--accent)">🗒 全程備忘</span>';
+  if (tripPending.length > 0) {
+    html += '<span style="font-size:10px;background:#ff6b6b;color:#fff;border-radius:50%;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px">' + tripPending.length + '</span>';
+  }
+  html += '</div>';
+  html += '<div style="display:flex;align-items:center;gap:8px">';
+  html += '<button onclick="event.stopPropagation();addTripGlobalTodo()" style="font-size:11px;padding:2px 8px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:6px;color:#6ec6f0;cursor:pointer">＋</button>';
+  if (tripTodos.length > 0) {
+    html += '<span style="font-size:11px;color:#c8b89a">' + (tripPending.length ? tripPending.length + '件未完成' : '已全部完成') + '</span>';
+  }
+  html += '<span style="font-size:14px;color:#c8b89a" id="' + tripColId + '-arrow">▾</span>';
+  html += '</div></div>';
+
+  html += '<div id="' + tripColId + '" style="display:none;padding:0 16px 8px">';
+  if (!tripTodos.length) {
+    html += '<div style="font-size:12px;color:#c8b89a;padding:8px 0">尚無全程備忘</div>';
+  } else {
+    tripTodos.forEach(function(todo, ti) {
+      html += renderTripGlobalTodoItem(ti, todo);
+    });
+  }
+  html += '</div></div>';
+
   (t.days || []).forEach(function(d, di) {
     var todos = d.todos || [];
     var pending = todos.filter(function(td){ return !td.done && td.text; });
@@ -2479,6 +2511,61 @@ function removeTripTodo(di, ti) {
   updateTodoBadge();
 }
 
+// ── 全程備忘（不屬於特定日或站點）──
+
+function renderTripGlobalTodoItem(ti, todo) {
+  return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+    '<input type="checkbox" style="width:20px;height:20px;flex-shrink:0;margin-top:3px"' + (todo.done?' checked':'') +
+    ' onchange="setTripGlobalTodoDone(' + ti + ',this.checked)">' +
+    '<div style="flex:1;min-width:0">' +
+      '<div style="font-size:14px;' + (todo.done?'text-decoration:line-through;color:#c8b89a':'color:#e0d4c0') + '">' + esc(todo.text||'（未填寫）') + '</div>' +
+    '</div>' +
+    '<button onclick="removeTripGlobalTodo(' + ti + ')" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:18px;flex-shrink:0;margin-top:2px">&times;</button>' +
+    '</div>';
+}
+
+function addTripGlobalTodo() {
+  var text = prompt('新增全程備忘：');
+  if (text === null) return;
+  text = text.trim();
+  if (!text) return;
+  var t = trip(); if (!t) return;
+  if (!t.tripTodos) t.tripTodos = [];
+  t.tripTodos.push({ id: uid(), text: text, done: false });
+  save(S.trips);
+  renderTripTodoList();
+  // 展開全程備忘區塊
+  var el = document.getElementById('trip-todo-global');
+  if (el) el.style.display = 'block';
+  var arrow = document.getElementById('trip-todo-global-arrow');
+  if (arrow) arrow.textContent = '▴';
+}
+
+function setTripGlobalTodoDone(ti, done) {
+  var t = trip(); if (!t) return;
+  var todos = t.tripTodos || [];
+  if (!todos[ti]) return;
+  todos[ti].done = done;
+  save(S.trips);
+  renderTripTodoList();
+  var el = document.getElementById('trip-todo-global');
+  if (el) el.style.display = 'block';
+  var arrow = document.getElementById('trip-todo-global-arrow');
+  if (arrow) arrow.textContent = '▴';
+}
+
+function removeTripGlobalTodo(ti) {
+  var t = trip(); if (!t) return;
+  if (!t.tripTodos) return;
+  t.tripTodos.splice(ti, 1);
+  save(S.trips);
+  renderTripTodoList();
+  var el = document.getElementById('trip-todo-global');
+  if (el) el.style.display = 'block';
+  var arrow = document.getElementById('trip-todo-global-arrow');
+  if (arrow) arrow.textContent = '▴';
+}
+
 function updateTripTodoBadge() {
   var badge = document.getElementById('trip-todo-badge');
   if(!badge) return;
@@ -2487,6 +2574,8 @@ function updateTripTodoBadge() {
   (t.days||[]).forEach(function(d){
     (d.todos||[]).forEach(function(td){ if(!td.done && td.text) count++; });
   });
+  // 加入全程備忘未完成數
+  (t.tripTodos||[]).forEach(function(td){ if(!td.done && td.text) count++; });
   if(count > 0) {
     badge.textContent = count > 9 ? '9+' : count;
     badge.style.display = 'inline-block';
