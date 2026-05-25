@@ -912,7 +912,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260524.24d 20:25';
+var APP_VERSION = 'v20260524.25 20:50';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1585,6 +1585,14 @@ function buildStopFields(stop,type,isLast,nextStop){
     html+='<div style="padding:0 16px 8px">'+
       '<button onclick="addManualRoute()" style="width:100%;padding:9px;border:1px dashed var(--border2);border-radius:var(--radius-sm);background:none;color:#c8b89a;font-size:12px;cursor:pointer">+ \u65b0\u589e\u65b9\u6848</button>'+
     '</div>';
+  // 「檢查後續排程」按鈕（非子行程且後面有站點才顯示）
+  var _tp = trip();
+  var _td = day();
+  if (_tp && !_tp.isSubTrip && _td && S.stopIdx !== null && S.stopIdx < (_td.stops||[]).length - 1) {
+    html += '<div style="padding:0 16px 8px">' +
+      '<button onclick="openScheduleCheck(' + S.stopIdx + ')" style="width:100%;padding:9px;border:1px solid rgba(232,184,75,.3);border-radius:var(--radius-sm);background:rgba(232,184,75,.08);color:#e8b84b;font-size:12px;cursor:pointer">🔄 檢查後續排程</button>' +
+    '</div>';
+  }
   }
   return html;
 }
@@ -1799,29 +1807,6 @@ function setAsPlanned(ri) {
   save(S.trips);
   _stopDirty = false;
   _refreshTransitRoutes();
-  // 若非子行程且後面還有站點，提示自動排程
-  var _t2 = trip(); var _d2 = day();
-  if (_t2 && !_t2.isSubTrip && _d2 && S.stopIdx < (_d2.stops||[]).length - 1) {
-    var _newPlanned = stop.transit.routes[0]; // 剛設為預定的那筆
-    // 轉換為 timetable 格式供排程使用
-    var _fakeTimetable = {
-      from: stop.transit.fromPlace || stop.name || '',
-      to: stop.transit.toPlace || '',
-      departTime: _newPlanned.departTime || '',
-      arriveTime: _newPlanned.arriveTime || '',
-      duration: _newPlanned.duration || 0,
-      transfers: _newPlanned.transfers || 0,
-      legs: _newPlanned.legs || []
-    };
-    var _schedIdx = S.stopIdx;
-    var _schedFake = _fakeTimetable;
-    setTimeout(function(){
-      if (confirm('是否自動調整後續排程？')) {
-        var newData = runAutoSchedule(_schedIdx, _schedFake);
-        showSchedulePreview(_schedIdx, _schedFake, newData);
-      }
-    }, 500);
-  }
 }
 
 function setStopRouteTag(ri,tag){
@@ -2550,6 +2535,84 @@ function deleteTripSelectedPhotos() {
 }
 
 
+
+
+// 儲存後靜默檢查後段衝突，有衝突則顯示警示
+function checkNextSegmentConflict(stopIdx, d) {
+  if (!d || stopIdx === null) return;
+  var stops = d.stops || [];
+  var stop = stops[stopIdx];
+  if (!stop || !stop.transit) return;
+
+  var planned = (stop.transit.routes || []).find(function(r){ return r.tag === 'planned'; });
+  if (!planned || !planned.arriveTime) return;
+
+  var arrTime = planned.arriveTime;
+  var nextStop = stops[stopIdx + 1];
+  if (!nextStop || !nextStop.transit) return;
+
+  var nextPlanned = (nextStop.transit.routes || []).find(function(r){ return r.tag === 'planned'; });
+  if (!nextPlanned || !nextPlanned.departTime) return;
+
+  var legs = nextPlanned.legs || [];
+  var nextMode = legs.length ? legs[0].mode : '';
+  var isCustom = ['walk','shuttle','car','taxi'].indexOf(nextMode) >= 0;
+  if (isCustom) return; // 自訂交通不警示
+
+  var arrM = timeToMins(arrTime);
+  var depM = timeToMins(nextPlanned.departTime);
+  if (arrM === null || depM === null) return;
+  var gap = depM - arrM;
+  if (gap < -120) gap += 1440;
+
+  if (gap < 0) {
+    showScheduleWarning(stopIdx, arrTime, nextStop.name, nextPlanned.departTime, '衝突');
+  } else if (gap < _scheduleTransferMins) {
+    showScheduleWarning(stopIdx, arrTime, nextStop.name, nextPlanned.departTime, '時間緊迫');
+  }
+}
+
+// 顯示排程衝突警示（在時間軸下方）
+function showScheduleWarning(stopIdx, arrTime, nextStopName, nextDepTime, type) {
+  var existing = document.getElementById('schedule-warning-banner');
+  if (existing) existing.remove();
+  var msg = type === '衝突'
+    ? '⚠️ 班次衝突：抵達 ' + arrTime + '，但「' + nextStopName + '」' + nextDepTime + ' 出發，時間不足'
+    : '⚠️ 換乘時間緊迫：抵達 ' + arrTime + '，下段 ' + nextDepTime + ' 出發';
+  var el = document.createElement('div');
+  el.id = 'schedule-warning-banner';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(232,184,75,.15);border-top:1px solid rgba(232,184,75,.4);padding:10px 16px;z-index:100;display:flex;align-items:center;justify-content:space-between;gap:8px';
+  el.innerHTML = '<span style="font-size:12px;color:#e8b84b;flex:1">' + msg + '</span>' +
+    '<button onclick="openScheduleCheck(' + stopIdx + ')" style="font-size:12px;padding:5px 10px;background:rgba(232,184,75,.2);border:1px solid rgba(232,184,75,.4);border-radius:6px;color:#e8b84b;cursor:pointer;white-space:nowrap">🔄 檢查排程</button>' +
+    '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:16px">✕</button>';
+  document.body.appendChild(el);
+  // 10秒後自動消失
+  setTimeout(function(){ if(el.parentElement) el.remove(); }, 10000);
+}
+
+// 手動觸發完整排程檢查
+function openScheduleCheck(stopIdx) {
+  var existing = document.getElementById('schedule-warning-banner');
+  if (existing) existing.remove();
+  S.stopIdx = stopIdx;
+  var d = day();
+  if (!d) return;
+  var stop = (d.stops || [])[stopIdx];
+  if (!stop || !stop.transit) return;
+  var planned = (stop.transit.routes || []).find(function(r){ return r.tag === 'planned'; });
+  if (!planned) return;
+  var fakeTb = {
+    from: stop.transit.fromPlace || stop.name || '',
+    to: stop.transit.toPlace || '',
+    departTime: planned.departTime || '',
+    arriveTime: planned.arriveTime || '',
+    duration: planned.duration || 0,
+    transfers: planned.transfers || 0,
+    legs: planned.legs || []
+  };
+  var result = runAutoSchedule(stopIdx, fakeTb);
+  showSchedulePreview(stopIdx, fakeTb, result);
+}
 
 // ════ 自動排程 ════
 
@@ -3381,7 +3444,12 @@ function saveStop(){
   _stopDirty=false;
   goBack('sc-day');
   // 強制從 S.trips 重新讀取後渲染
-  setTimeout(function(){ renderDayTL(); updateTodoBadge(); }, 0);
+  var _savedStopIdx = S.stopIdx;
+  setTimeout(function(){
+    renderDayTL();
+    updateTodoBadge();
+    checkNextSegmentConflict(_savedStopIdx, day());
+  }, 0);
 }
 
 function deleteStop(){
@@ -4971,6 +5039,7 @@ function onChangeCalcDuration(ri){
 // ════ 班次選擇器 ════
 
 var _ttSelectorStopIdx = null;
+var _prevArrTime = null; // 前段交通的到達時間，供班次選擇器衝突檢查
 var _ttSelectorMulti = false;   // 是否為多選模式
 var _ttSelectedIdxs = [];        // 已選班次的 index 陣列
  // 當前正在編輯的 stop index
@@ -4981,6 +5050,15 @@ function openTimetableSelector() {
   // 取得當前 stop index
   _ttSelectorStopIdx = S.stopIdx;
   var stop = (d.stops || [])[_ttSelectorStopIdx];
+  // 計算前段到達時間（此站的前一個站點的交通方案）
+  _prevArrTime = null;
+  if (_ttSelectorStopIdx > 0) {
+    var prevStop = (d.stops || [])[_ttSelectorStopIdx - 1];
+    if (prevStop && prevStop.transit) {
+      var prevPlanned = (prevStop.transit.routes || []).find(function(r){ return r.tag === 'planned'; });
+      if (prevPlanned) _prevArrTime = prevPlanned.arriveTime || null;
+    }
+  }
 
   // 單選模式
   _ttSelectorMulti = false;
@@ -5097,6 +5175,18 @@ function renderTimetableSelector(d) {
     var alreadyTag = selectedMap[origIdx] || null;
     var isDisabled = !!alreadyTag;
     var cat2 = classifyTransport(s);
+    // 檢查前段到達時間衝突
+    var prevConflict = '';
+    if (s.departTime && _prevArrTime) {
+      var depM = timeToMins(s.departTime);
+      var prevM = timeToMins(_prevArrTime);
+      if (depM !== null && prevM !== null) {
+        var gap = depM - prevM;
+        if (gap < -120) gap += 1440;
+        if (gap < 0) prevConflict = '⚠️ 與前段到達時間衝突（' + _prevArrTime + ' 到）';
+        else if (gap < _scheduleTransferMins) prevConflict = '⚠️ 換乘時間僅 ' + gap + ' 分，可能不足';
+      }
+    }
     html += '<div ' + (isDisabled ? '' : 'onclick="toggleTimetableSelect(' + origIdx + ')"') + ' style="background:' + (isDisabled ? 'var(--bg2)' : 'var(--bg3)') + ';border:2px solid ' + (isDisabled ? 'var(--border)' : isSelected ? '#6ec6f0' : 'rgba(110,198,240,.25)') + ';border-radius:12px;padding:14px 16px;margin-bottom:10px;' + (isDisabled ? 'opacity:.45' : 'cursor:pointer') + ';position:relative">' +
       (alreadyTag ? '<div style="position:absolute;top:10px;right:12px;font-size:10px;padding:2px 7px;border-radius:6px;background:rgba(110,198,240,.15);color:#6ec6f0;border:1px solid rgba(110,198,240,.3)">' + alreadyTag + '</div>' : '') +
       (!isDisabled && isSelected ? '<div style="position:absolute;top:10px;right:12px;width:18px;height:18px;background:#6ec6f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#0f1923">✓</div>' : '') +
@@ -5115,6 +5205,7 @@ function renderTimetableSelector(d) {
       (fareHtml ? '<div style="font-size:12px;color:#c8b89a;margin-bottom:2px">' + fareHtml + '</div>' : '') +
       // Legs 詳情
       legsHtml +
+      (prevConflict ? '<div style="margin-top:6px;padding:4px 8px;background:rgba(232,184,75,.12);border:1px solid rgba(232,184,75,.3);border-radius:6px;font-size:11px;color:#e8b84b">' + prevConflict + '</div>' : '') +
     '</div>';
   });
 
@@ -5252,17 +5343,6 @@ function applyTimetable(origIdx) {
   goBack('sc-stop');
   // 重新渲染地點編輯頁
   renderStopForm(stop, _ttSelectorStopIdx);
-  // 若非子行程且後面還有站點，提示自動排程
-  var t2 = trip();
-  var d2 = day();
-  if (t2 && !t2.isSubTrip && d2 && _ttSelectorStopIdx < (d2.stops||[]).length - 1) {
-    setTimeout(function(){
-      if (confirm('是否自動調整後續排程？')) {
-        var newData = runAutoSchedule(_ttSelectorStopIdx, s);
-        showSchedulePreview(_ttSelectorStopIdx, s, newData);
-      }
-    }, 300);
-  }
 }
 
 // 重新選擇（清除已選班次）
