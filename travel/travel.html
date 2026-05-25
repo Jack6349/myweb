@@ -126,9 +126,10 @@
 .day-mode *[style*='color:var(--text2)']{ color:#1a3045 !important; }
 .day-mode *[style*='color:var(--text)']{ color:#0d1b27 !important; }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden;}
-button,input,select,textarea{font-family:var(--font);}
-a{text-decoration:none;color:inherit;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden;font-size:16px;}
+/* 行程列表卡片 */
+.card-title{font-size:16px;font-weight:700;}
+.card-sub{font-size:13px;color:#e0d4c0;margin-top:2px;}button,input,select,textarea{font-family:var(--font);}a{text-decoration:none;color:inherit;}
 
 /* ── SCREENS ── */
 .screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;
@@ -139,8 +140,8 @@ a{text-decoration:none;color:inherit;}
 .hdr{height:var(--hdr);background:var(--bg2);border-bottom:1px solid var(--border);
   display:flex;align-items:center;padding:0 8px 0 4px;gap:4px;flex-shrink:0;}
 .hdr-back{background:none;border:none;color:var(--text);cursor:pointer;padding:8px;display:flex;align-items:center;}
-.hdr-title{font-size:17px;font-weight:700;flex:1;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.hdr-sub{font-size:11px;color:#c8b89a;}
+.hdr-title{font-size:18px;font-weight:700;flex:1;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hdr-sub{font-size:12px;color:#c8b89a;}
 .hdr-btn{background:none;border:none;color:#e0d4c0;cursor:pointer;padding:8px;display:flex;align-items:center;}
 .hdr-action{background:none;border:none;color:var(--info);cursor:pointer;font-size:13px;font-weight:600;padding:8px 10px;}
 .hdr-action.primary{color:var(--accent);}
@@ -161,8 +162,6 @@ a{text-decoration:none;color:inherit;}
 .card-top{display:flex;align-items:center;gap:12px;}
 .card-icon{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .card-info{flex:1;min-width:0;}
-.card-title{font-size:15px;font-weight:700;}
-.card-sub{font-size:12px;color:#e0d4c0;margin-top:2px;}
 .card-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
 .chip{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--bg4);color:#e0d4c0;}
 .chip.green{color:#7bed9f;background:rgba(123,237,159,.12);}
@@ -178,7 +177,7 @@ a{text-decoration:none;color:inherit;}
 .tl{padding:8px 16px 80px;}
 .tl-stop{display:flex;gap:10px;margin-bottom:0;}
 .tl-stop-left{width:52px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;padding-top:10px;}
-.tl-stop-time{font-size:13px;font-weight:600;color:#c8b89a;text-align:right;line-height:1.4;}
+.tl-stop-time{font-size:14px;font-weight:600;color:#c8b89a;text-align:right;line-height:1.4;}
 .tl-stop-time .arr{color:#e0d4c0;}
 .tl-stop-time .dep{color:#f5d87a;}
 .tl-stop-right{flex:1;min-width:0;}
@@ -187,8 +186,8 @@ a{text-decoration:none;color:inherit;}
 .tl-stop-card:active{opacity:.85;}
 .tl-stop-card.anchor{border-color:rgba(232,184,75,.5);background:linear-gradient(135deg,rgba(232,184,75,.08),var(--bg3));}
 .tl-stop-card.hotel{border-color:rgba(110,198,240,.4);background:linear-gradient(135deg,rgba(110,198,240,.08),var(--bg3));}
-.tl-stop-name{font-size:16px;font-weight:700;}
-.tl-stop-sub{font-size:13px;color:#c8b89a;margin-top:2px;}
+.tl-stop-name{font-size:17px;font-weight:700;}
+.tl-stop-sub{font-size:14px;color:#c8b89a;margin-top:2px;}
 .anchor-badge{font-size:9px;font-weight:800;color:var(--accent);
   background:rgba(232,184,75,.15);border:1px solid rgba(232,184,75,.3);
   padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:middle;}
@@ -204,8 +203,8 @@ a{text-decoration:none;color:inherit;}
 .tl-seg-empty{padding:8px 12px;border:1px dashed rgba(110,198,240,.3);border-radius:var(--radius-sm);
   color:var(--info);font-size:12px;cursor:pointer;text-align:center;}
 .tl-seg-summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-.tl-seg-time{font-size:14px;font-weight:600;color:var(--text);}
-.tl-seg-dur{font-size:13px;color:#c8b89a;}
+.tl-seg-time{font-size:15px;font-weight:600;color:var(--text);}
+.tl-seg-dur{font-size:14px;color:#c8b89a;}
 .tl-seg-tag{font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px;}
 .tag-planned{color:#7bed9f;background:rgba(123,237,159,.15);}
 .tag-backup{color:#c8b89a;background:var(--bg3);}
@@ -618,9 +617,12 @@ a{text-decoration:none;color:inherit;}
     <button class="hdr-back" onclick="goBack('sc-trip')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden">
-      <div class="hdr-title" id="day-hdr-title" style="flex-shrink:0">D1</div>
-      <div class="hdr-sub" id="day-hdr-sub" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c8b89a"></div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden">
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <div class="hdr-title" id="day-hdr-title" style="flex-shrink:0;max-width:55vw">D1</div>
+        <div id="day-hdr-date" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c8b89a"></div>
+      </div>
+      <div id="day-hdr-sub" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c8b89a;padding-left:2px"></div>
     </div>
   </div>
   <!-- Header 行 2：功能按鈕 -->
@@ -912,7 +914,7 @@ a{text-decoration:none;color:inherit;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.35 12:10';
+var APP_VERSION = 'v20260525.36 13:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1233,12 +1235,15 @@ function openDay(idx){
   }
   var d=t.days[idx];
   var dd=new Date(t.startDate); dd.setDate(dd.getDate()+idx);
-  document.getElementById('day-hdr-title').textContent='D'+(idx+1)+(d.title?' \u30fb '+d.title:'');
+  document.getElementById('day-hdr-title').textContent='D'+(idx+1)+(d.title?' · '+d.title:'');
   var _stops = d.stops||[];
   var _first = _stops.length ? (_stops[0].name||'') : '';
   var _last  = _stops.length>1 ? (_stops[_stops.length-1].name||'') : '';
   var _range = _first ? (_last && _last!==_first ? _first+' → '+_last : _first) : '';
-  document.getElementById('day-hdr-sub').textContent=fmtDFull(dd)+(_range?'  '+_range:'');
+  var dateEl = document.getElementById('day-hdr-date');
+  var subEl  = document.getElementById('day-hdr-sub');
+  if (dateEl) dateEl.textContent = fmtDFull(dd);
+  if (subEl)  subEl.textContent  = _range;
   renderDayTL();
   goTo('sc-day');
 }
@@ -3702,7 +3707,7 @@ function exportTrip(){
 function renameDayTitle(){
   var d=day(); if(!d)return;
   var t=prompt('\u4fee\u6539\u5929\u6578\u6a19\u984c',d.title||'');
-  if(t!==null){d.title=t;save(S.trips);document.getElementById('day-hdr-title').textContent='D'+(S.dayIdx+1)+(t?' \u30fb '+t:'');renderTripDays();}
+  if(t!==null){d.title=t;save(S.trips);document.getElementById('day-hdr-title').textContent='D'+(S.dayIdx+1)+(t?' · '+t:'');renderTripDays();}
 }
 
 // ════ AI IMPORT ════
