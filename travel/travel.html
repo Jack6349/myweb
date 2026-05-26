@@ -914,7 +914,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.36 13:00';
+var APP_VERSION = 'v20260525.37 13:20';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1181,6 +1181,7 @@ function openTrip(id){
   S.tripId=id; var t=trip(); if(!t)return;
   document.getElementById('trip-hdr-title').textContent=t.name;
   renderTripDays();
+  updateTripTodoBadge();
   goTo('sc-trip');
 }
 
@@ -1245,6 +1246,7 @@ function openDay(idx){
   if (dateEl) dateEl.textContent = fmtDFull(dd);
   if (subEl)  subEl.textContent  = _range;
   renderDayTL();
+  updateTodoBadge();
   goTo('sc-day');
 }
 
