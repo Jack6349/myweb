@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.49 18:25';
+var APP_VERSION = 'v20260525.51 19:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2922,20 +2922,29 @@ function runAutoSchedule(changedStopIdx, newTimetable) {
     var planned = transit.routes.find(function(r){ return r.tag === 'planned'; });
     if (!planned) continue;
 
-    // 遇到錨點停止
+    // 遇到錨點：三段式判斷後停止
     if (stop.anchor) {
-      // 檢查能否在錨點時間前抵達
       var anchorDepTime = planned.departTime || (stop.hotel && stop.hotel.checkIn);
       if (anchorDepTime && currentArrTime) {
-        var arrMins = timeToMins(currentArrTime);
+        var arrMins   = timeToMins(currentArrTime);
         var anchorMins = timeToMins(anchorDepTime);
+        var gapToAnchor = anchorMins - arrMins;
         if (arrMins > anchorMins) {
+          // 狀況 3：抵達時間超過錨點出發 → 衝突，阻止套用
           errors.push({
             type: 'anchor',
             stopName: stop.name,
-            message: '無法在錨點時間（' + anchorDepTime + '）前抵達「' + stop.name + '」（預計抵達：' + currentArrTime + '）'
+            message: '抵達「' + stop.name + '」預計 ' + currentArrTime + '，已超過錨點出發時間（' + anchorDepTime + '），無法銜接'
+          });
+        } else if (gapToAnchor < _scheduleTransferMins) {
+          // 狀況 2：緩衝時間不足（抵達趕得上但換乘緊張）→ 警告
+          warnings.push({
+            type: 'anchor_buffer',
+            stopName: stop.name,
+            message: '抵達「' + stop.name + '」預計 ' + currentArrTime + '，距離錨點出發（' + anchorDepTime + '）僅剩 ' + gapToAnchor + ' 分鐘，換乘緩衝不足'
           });
         }
+        // 狀況 1：時間充裕 → 無動作，直接 break
       }
       break; // 錨點後停止調整
     }
@@ -3115,7 +3124,12 @@ function showSchedulePreview(changedStopIdx, newTimetable, scheduleData) {
   if (warnings.length) {
     html += '<div style="font-size:12px;font-weight:700;color:#e8b84b;margin:8px 0">⚠️ 警告</div>';
     warnings.forEach(function(w) {
-      html += '<div style="background:rgba(232,184,75,.1);border:1px solid rgba(232,184,75,.3);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:#e8b84b">' + w.message + '</div>';
+      var isAnchorWarn = w.type === 'anchor_buffer';
+      var bg  = isAnchorWarn ? 'rgba(255,140,0,.15)' : 'rgba(232,184,75,.1)';
+      var bdr = isAnchorWarn ? 'rgba(255,140,0,.4)'  : 'rgba(232,184,75,.3)';
+      var col = isAnchorWarn ? '#ff8c00'              : '#e8b84b';
+      var icon = isAnchorWarn ? '⚠️ ' : '';
+      html += '<div style="background:' + bg + ';border:1px solid ' + bdr + ';border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:' + col + '">' + icon + w.message + '</div>';
     });
   }
 
@@ -3135,12 +3149,16 @@ function showSchedulePreview(changedStopIdx, newTimetable, scheduleData) {
 
   // 操作按鈕
   html += '<div style="display:flex;gap:8px;padding-bottom:20px">';
-  // 只有「從班次表引入」的調整才需要子行程（候補切換不需要）
-  var hasTimetableChange = results.some(function(r){ return r.type === 'timetable' && !r.foundInRoutes; });
-  if (hasTimetableChange) {
-    html += '<button onclick="applySchedule(' + changedStopIdx + ')" style="flex:1;padding:12px;background:rgba(123,237,159,.2);border:1px solid rgba(123,237,159,.4);border-radius:8px;color:#7bed9f;font-size:14px;font-weight:700;cursor:pointer">✅ 套用並儲存為子行程</button>';
+  var tbChangeCount = results.filter(function(r){ return r.type === 'timetable' && !r.foundInRoutes; }).length;
+  var hasErrors = errors.length > 0;
+  if (hasErrors) {
+    // 有衝突錯誤時不可套用
+    html += '<button disabled style="flex:1;padding:12px;background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.3);border-radius:8px;color:#ff6b6b;font-size:14px;font-weight:700;cursor:not-allowed;opacity:.6">⛔ 無法套用</button>';
+  } else if (tbChangeCount >= 2) {
+    html += '<button onclick="applySchedule(' + changedStopIdx + ', true)" style="flex:1;padding:12px;background:rgba(123,237,159,.2);border:1px solid rgba(123,237,159,.4);border-radius:8px;color:#7bed9f;font-size:14px;font-weight:700;cursor:pointer">✅ 套用並儲存為子行程</button>';
+    html += '<button onclick="applySchedule(' + changedStopIdx + ', false)" style="padding:12px 16px;background:rgba(110,198,240,.1);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:14px;cursor:pointer">僅套用</button>';
   } else {
-    html += '<button onclick="applySchedule(' + changedStopIdx + ')" style="flex:1;padding:12px;background:rgba(123,237,159,.2);border:1px solid rgba(123,237,159,.4);border-radius:8px;color:#7bed9f;font-size:14px;font-weight:700;cursor:pointer">✅ 套用</button>';
+    html += '<button onclick="applySchedule(' + changedStopIdx + ', false)" style="flex:1;padding:12px;background:rgba(123,237,159,.2);border:1px solid rgba(123,237,159,.4);border-radius:8px;color:#7bed9f;font-size:14px;font-weight:700;cursor:pointer">✅ 套用</button>';
   }
   html += '<button onclick="document.getElementById(\'schedule-preview\').remove()" style="padding:12px 16px;background:none;border:1px solid var(--border2);border-radius:8px;color:#c8b89a;font-size:14px;cursor:pointer">放棄</button>';
   html += '</div>';
@@ -3168,15 +3186,15 @@ function rerunSchedule(changedStopIdx) {
 }
 
 // 套用排程並建立子行程
-function applySchedule(changedStopIdx) {
+function applySchedule(changedStopIdx, withSubTrip) {
   if (!_scheduleResult) return;
   var results = _scheduleResult.data.results;
   var d = day();
   if (!d) return;
 
-  // 只有「從班次表引入」的調整才需要子行程（候補切換不需要）
-  var hasTimetableChange = results.some(function(r){ return r.type === 'timetable' && !r.foundInRoutes; });
-  var sub = hasTimetableChange ? createSubTrip(S.dayIdx) : null;
+  // ≥ 2 站班次型（從班次表引入）調整才需建子行程
+  var tbChangeCount = results.filter(function(r){ return r.type === 'timetable' && !r.foundInRoutes; }).length;
+  var sub = (tbChangeCount >= 2 && withSubTrip !== false) ? createSubTrip(S.dayIdx) : null;
 
   // 套用到母行程
   // 第一段：直接套用新班次
