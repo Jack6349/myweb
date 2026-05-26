@@ -127,6 +127,27 @@
 .day-mode *[style*='color:var(--text)']{ color:#0d1b27 !important; }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden;font-size:16px;}
+
+/* ── 桌面外框 ── */
+@media(min-width:768px){
+  body{
+    background:#0a1118;
+    display:flex;
+    align-items:stretch;
+    justify-content:center;
+    overflow:auto;
+  }
+  #app-shell{
+    position:relative;
+    width:420px;
+    min-width:420px;
+    height:100vh;
+    min-height:100vh;
+    overflow:hidden;
+    flex-shrink:0;
+    box-shadow:0 0 60px rgba(0,0,0,.6);
+  }
+}
 /* 行程列表卡片 */
 .card-title{font-size:16px;font-weight:700;}
 .card-sub{font-size:13px;color:#e0d4c0;margin-top:2px;}button,input,select,textarea{font-family:var(--font);}a{text-decoration:none;color:inherit;}
@@ -135,6 +156,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;
   transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);z-index:10;}
 .screen.active{transform:translateX(0);}
+
+@media(min-width:768px){
+  .screen{position:absolute;}
+}
 
 /* ── HEADER ── */
 .hdr{height:var(--hdr);background:var(--bg2);border-bottom:1px solid var(--border);
@@ -473,13 +498,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .day-preview{padding:0 14px 10px;display:flex;gap:6px;flex-wrap:wrap;}
 .prev-chip{font-size:11px;color:#e0d4c0;display:flex;align-items:center;gap:3px;}
 
-/* ── PC ── */
 @media(min-width:768px){
-  .screen{flex-direction:row;}
-  .pc-side{width:320px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-  .pc-main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  .tpm-overlay{position:absolute;}
+  .fab{position:absolute;}
+  .overlay{position:absolute;}
   .overlay{align-items:center;}
-  .modal{max-width:540px;margin:0 auto;border-radius:20px;max-height:85vh;}
+  .modal{max-width:400px;margin:0 auto;border-radius:20px;max-height:85vh;}
 }
 @keyframes spin{to{transform:rotate(360deg);}}
 .spin{animation:spin .8s linear infinite;}
@@ -487,6 +511,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 </head>
 <body>
+<div id="app-shell">
 
 <!-- ══ SCREEN: LIST ══ -->
 <div class="screen active" id="sc-list">
@@ -914,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.38 13:40';
+var APP_VERSION = 'v20260525.39 14:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1070,6 +1095,10 @@ function buildTimePicker(id, label, value, onChangeFn) {
 function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'[]'); }catch(e){ return []; } }
 function _saveLocal(trips){ localStorage.setItem(STORE_KEY, JSON.stringify(trips)); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
+// overlay/modal 掛點：桌面模式下掛在 #app-shell，手機掛在 body
+function appRoot(){ return document.getElementById('app-shell') || document.body; }
+// 動態 overlay 的 position 值：桌面用 absolute，手機用 fixed
+function ovPos(){ return window.innerWidth >= 768 ? 'absolute' : 'fixed'; }
 
 // ════ STATE ════
 var S = {
@@ -2193,7 +2222,15 @@ function openPhotoFullscreen(pi) {
   _photoFsList = (photosData.photos && photosData.photos[_photoDayKey]) || [];
   _photoFsIdx = pi;
   var fs = document.getElementById('photo-fullscreen');
-  if (fs) fs.style.display = 'flex';
+  if (fs) {
+    // 桌面模式下改用 absolute 讓全螢幕限在 app-shell 內
+    if (window.innerWidth >= 768) {
+      fs.style.position = 'absolute';
+    } else {
+      fs.style.position = 'fixed';
+    }
+    fs.style.display = 'flex';
+  }
   updatePhotoFs();
   // 滑動支援
   var img = document.getElementById('photo-fs-img');
@@ -2345,7 +2382,7 @@ function showPhotoStopSelector(photos, stops) {
   _pendingPhotos = photos;
   var opts = '<option value="">— 無關聯站點 —</option>' +
     stops.map(function(s){ return '<option value="' + s.id + '">' + stopTypeIcon(s.type) + ' ' + esc(s.name) + '</option>'; }).join('');
-  var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:flex-end">' +
+  var html = '<div style="position:'+ovPos()+';inset:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:flex-end">' +
     '<div style="width:100%;background:var(--bg2);border-radius:16px 16px 0 0;padding:20px 16px">' +
     '<div style="font-size:14px;font-weight:700;color:#e0d4c0;margin-bottom:12px">選擇關聯站點（選填）</div>' +
     '<div style="font-size:12px;color:#c8b89a;margin-bottom:8px">已選 ' + photos.length + ' 張照片</div>' +
@@ -2357,7 +2394,7 @@ function showPhotoStopSelector(photos, stops) {
   var el = document.createElement('div');
   el.id = 'photo-stop-overlay';
   el.innerHTML = html;
-  document.body.appendChild(el);
+  appRoot().appendChild(el);
 }
 
 function handleUnclassifiedUpload(input) {
@@ -2745,7 +2782,7 @@ function showScheduleWarning(stopIdx, arrTime, nextStopName, nextDepTime, type) 
   el.innerHTML = '<span style="font-size:12px;color:#e8b84b;flex:1">' + msg + '</span>' +
     '<button onclick="openScheduleCheck(' + stopIdx + ')" style="font-size:12px;padding:5px 10px;background:rgba(232,184,75,.2);border:1px solid rgba(232,184,75,.4);border-radius:6px;color:#e8b84b;cursor:pointer;white-space:nowrap">🔄 檢查排程</button>' +
     '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:#c8b89a;cursor:pointer;font-size:16px">✕</button>';
-  document.body.appendChild(el);
+  appRoot().appendChild(el);
   // 10秒後自動消失
   setTimeout(function(){ if(el.parentElement) el.remove(); }, 10000);
 }
@@ -2972,7 +3009,7 @@ function showSchedulePreview(changedStopIdx, newTimetable, scheduleData) {
   var warnings = scheduleData.warnings;
   var errors = scheduleData.errors;
 
-  var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:flex-end">' +
+  var html = '<div style="position:'+ovPos()+';inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:flex-end">' +
     '<div style="width:100%;max-height:85vh;background:var(--bg2);border-radius:16px 16px 0 0;overflow-y:auto">' +
     '<div style="padding:16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">' +
     '<div style="font-size:15px;font-weight:700;color:#e0d4c0">🔄 排程預覽</div>' +
@@ -3044,7 +3081,7 @@ function showSchedulePreview(changedStopIdx, newTimetable, scheduleData) {
   var el = document.createElement('div');
   el.id = 'schedule-preview';
   el.innerHTML = html;
-  document.body.appendChild(el);
+  appRoot().appendChild(el);
 
   // 儲存排程資料供套用使用
   _scheduleResult = { changedStopIdx: changedStopIdx, newTimetable: newTimetable, data: scheduleData };
@@ -4427,7 +4464,7 @@ function showSplitPopup(mid, pid, remaining){
   var RATIOS=[{l:'\u5168\u90e8',r:1},{l:'½',r:.5},{l:'⅓',r:1/3},{l:'¼',r:.25},{l:'⅔',r:2/3},{l:'¾',r:.75}];
   var tm = members[pidx]||{name:'?'}, bm = members[midx]||{name:'?'};
   var ov = document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center;z-index:500';
+  ov.style.cssText='position:'+ovPos()+';inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center;z-index:500';
   ov.onclick=function(e){if(e.target===ov)ov.remove();};
   var box = document.createElement('div');
   box.style.cssText='background:#1e2d3d;border-radius:18px 18px 0 0;width:100%;max-width:420px;padding:18px 16px 28px';
@@ -4450,7 +4487,7 @@ function showSplitPopup(mid, pid, remaining){
     rg.appendChild(btn);
   });
   ov.appendChild(box);
-  document.body.appendChild(ov);
+  appRoot().appendChild(ov);
 }
 
 function checkSplitCustom(remaining){
@@ -5860,5 +5897,6 @@ initDayMode();
 migrateImportFareOnce();
 
 </script>
+</div><!-- #app-shell -->
 </body>
 </html>
