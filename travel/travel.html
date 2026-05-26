@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260526.54 09:00';
+var APP_VERSION = 'v20260526.55 09:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -5061,6 +5061,16 @@ function renderExpenseList() {
 }
 
 
+// 更新台幣匯率並即時重算
+function updateTwdRate(cur, val) {
+  var rates = JSON.parse(localStorage.getItem('twd_rates') || '{}');
+  val = parseFloat(val) || 0;
+  if (val > 0) rates[cur] = val; else delete rates[cur];
+  localStorage.setItem('twd_rates', JSON.stringify(rates));
+  // 重新渲染報表
+  renderReport();
+}
+
 // 從費用報表開啟費用編輯
 function openExpenseFromReport(dayIdx, expIdx, stopIdx) {
   S.dayIdx = dayIdx;
@@ -5134,14 +5144,53 @@ function renderTotalReport(exps, curs){
 
   // By currency totals
   html += '<div class="report-section">';
+  var curTotals = {};
   curs.forEach(function(cur){
     var total = exps.filter(function(e){return e.currency===cur;}).reduce(function(s,e){return s+e.amount;},0);
     if(!total) return;
+    curTotals[cur] = total;
     html += '<div class="report-total-bar">'+
       '<span style="font-size:13px;font-weight:700;color:#e0d4c0">'+cur+' \u7e3d\u8cbb\u7528</span>'+
       '<span style="font-size:20px;font-weight:800;color:var(--accent)">'+fmtReportAmt(total,cur)+'</span>'+
     '</div>';
   });
+
+  // ── 台幣換算區塊 ──
+  var savedRates = JSON.parse(localStorage.getItem('twd_rates') || '{}');
+  var twdTotal = 0;
+  var rateInputsHtml = '';
+  Object.keys(curTotals).forEach(function(cur) {
+    if (cur === 'TWD') { twdTotal += curTotals[cur]; return; }
+    var savedRate = savedRates[cur] || '';
+    var rate = parseFloat(savedRate) || 0;
+    twdTotal += curTotals[cur] * rate;
+    rateInputsHtml +=
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+        '<span style="font-size:13px;color:#c8b89a;width:48px;flex-shrink:0">'+cur+'</span>' +
+        '<span style="font-size:12px;color:#c8b89a">1 '+cur+' =</span>' +
+        '<input type="number" min="0" step="0.01" value="'+esc(savedRate)+'" ' +
+          'placeholder="匯率" ' +
+          'onchange="updateTwdRate(\''+cur+'\',this.value)" ' +
+          'style="width:90px;padding:6px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;text-align:right">' +
+        '<span style="font-size:12px;color:#c8b89a">TWD</span>' +
+        '<span style="font-size:13px;color:#e8b84b;margin-left:auto">' +
+          (rate > 0 ? '≈ TWD ' + Math.round(curTotals[cur] * rate).toLocaleString() : '—') +
+        '</span>' +
+      '</div>';
+  });
+
+  html +=
+    '<div style="margin-top:10px;padding:12px 14px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">' +
+      '<div style="font-size:12px;font-weight:700;color:#6ec6f0;margin-bottom:10px">💱 換算台幣</div>' +
+      rateInputsHtml +
+      '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px;display:flex;justify-content:space-between;align-items:center">' +
+        '<span style="font-size:13px;font-weight:700;color:#e0d4c0">台幣合計</span>' +
+        '<span id="twd-total-display" style="font-size:22px;font-weight:800;color:#7bed9f">' +
+          (twdTotal > 0 ? 'TWD ' + Math.round(twdTotal).toLocaleString() : '—') +
+        '</span>' +
+      '</div>' +
+    '</div>';
+
   html += '</div>';
 
   // By category
