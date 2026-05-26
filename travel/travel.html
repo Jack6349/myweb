@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.40 15:00';
+var APP_VERSION = 'v20260525.41 16:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2961,13 +2961,29 @@ function runAutoSchedule(changedStopIdx, newTimetable) {
       var found = findNextTimetable(fromName, toName, currentArrTime, dayDate);
 
       if (!found) {
+        var needAfterMins = timeToMins(currentArrTime);
+        var needAfter = needAfterMins !== null ? minsToTime(needAfterMins + _scheduleTransferMins) : '';
+        var curArrValid = currentArrTime && needAfterMins !== null;
+        var existingDep = planned.departTime;
+        var gapMins = (curArrValid && existingDep && timeToMins(existingDep) !== null)
+          ? timeToMins(existingDep) - needAfterMins : null;
+        var errMsg;
+        if (curArrValid && existingDep && gapMins !== null && gapMins >= 0 && gapMins < _scheduleTransferMins) {
+          errMsg = '抵達「' + fromName + '」預計 ' + currentArrTime + '，距下一班次（' + existingDep + '）僅剩 ' + gapMins + ' 分鐘，不足換乘緩衝 ' + _scheduleTransferMins + ' 分鐘';
+        } else if (curArrValid && existingDep && gapMins !== null && gapMins < 0) {
+          errMsg = '抵達「' + fromName + '」預計 ' + currentArrTime + '，已超過下一班次出發時間（' + existingDep + '），無法搭乘';
+        } else if (curArrValid) {
+          errMsg = '「' + fromName + ' → ' + toName + '」在 ' + needAfter + ' 後無可銜接班次，請匯入更多班次或手動調整';
+        } else {
+          errMsg = '「' + fromName + ' → ' + toName + '」無法計算換乘時間，請確認前一段交通的抵達時間已設定';
+        }
         errors.push({
           type: 'notfound',
           stopIdx: i,
           fromName: fromName,
           toName: toName,
-          afterTime: minsToTime(timeToMins(currentArrTime) + _scheduleTransferMins),
-          message: '「' + fromName + ' → ' + toName + '」在 ' + minsToTime(timeToMins(currentArrTime) + _scheduleTransferMins) + ' 後無可銜接班次，請匯入更多班次或手動調整'
+          afterTime: needAfter,
+          message: errMsg
         });
         break; // 停止後續調整
       }
@@ -5779,8 +5795,9 @@ function classifyTransport(s) {
     flight:   { icon: '✈️', label: '航班' },
   };
   if (modeMap[legMode]) return modeMap[legMode];
-  // 用路線名稱判斷（匯入班次）
-  var orig = (s.trainName || '') + ' ' + (s.legs && s.legs[0] ? (s.legs[0].line_name || '') : '');
+  // 用路線名稱判斷（匯入班次）— 同時檢查 line_name 和 line（顯示用欄位）
+  var leg0 = s.legs && s.legs[0] ? s.legs[0] : null;
+  var orig = (s.trainName || '') + ' ' + (leg0 ? (leg0.line_name || '') + ' ' + (leg0.line || '') : '');
   if (/高速バス|高速巴士|highwaybus/i.test(orig)) return { icon: '🚌', label: '高速巴士' };
   if (/新幹線|はやぶさ|のぞみ|こまち|やまびこ|つばさ|かがやき|はくたか|あさま/i.test(orig)) return { icon: '🚄', label: '新幹線' };
   if (/特急|limited express/i.test(orig)) return { icon: '🚆', label: '特急' };
