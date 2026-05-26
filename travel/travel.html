@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.51 19:30';
+var APP_VERSION = 'v20260525.52 20:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -3208,19 +3208,9 @@ function applySchedule(changedStopIdx, withSubTrip) {
       if (!isDuplicate) {
         // 原預定降為候補
         oldPlanned.tag = 'backup';
-        // 以新班次建立新的預定
-        var newRoute = {
-          id: uid(),
-          tag: 'planned',
-          departTime: nt.departTime,
-          arriveTime: nt.arriveTime,
-          duration: nt.duration || 0,
-          transfers: nt.transfers || 0,
-          fare: nt.fare || 0,
-          fareCurrency: nt.fareCurrency || 'JPY',
-          importFare: false,
-          legs: (nt.legs || []).map(function(leg){ return Object.assign({},leg); })
-        };
+        // 以新班次建立新的預定（使用共用轉換函式，確保 leg 格式正確）
+        var newRoute = timetableToRoute(nt, 'planned');
+        newRoute.id = uid();
         // 重新排序：新預定在最前
         firstStop.transit.routes = firstStop.transit.routes.filter(function(r){ return r.tag!=='planned'; });
         firstStop.transit.routes.unshift(newRoute);
@@ -3249,18 +3239,8 @@ function applySchedule(changedStopIdx, withSubTrip) {
       var isSame = (planned.departTime === nt2.departTime && planned.arriveTime === nt2.arriveTime);
       if (!isSame) {
         planned.tag = 'backup';
-        var newRoute2 = {
-          id: uid(),
-          tag: 'planned',
-          departTime: nt2.departTime,
-          arriveTime: nt2.arriveTime,
-          duration: nt2.duration || 0,
-          transfers: nt2.transfers || 0,
-          fare: nt2.fare || 0,
-          fareCurrency: nt2.fareCurrency || 'JPY',
-          importFare: false,
-          legs: (nt2.legs || []).map(function(leg){ return Object.assign({},leg); })
-        };
+        var newRoute2 = timetableToRoute(nt2, 'planned');
+        newRoute2.id = uid();
         stop.transit.routes = stop.transit.routes.filter(function(rt){ return rt.tag!=='planned'; });
         stop.transit.routes.unshift(newRoute2);
       }
@@ -5654,6 +5634,41 @@ function applyMultiTimetable() {
   _ttSelectedIdxs = [];
   goBack('sc-stop');
   renderStopForm(stop, _ttSelectorStopIdx);
+}
+
+// 班次表物件 → route 物件（供 applyTimetable 和 applySchedule 共用）
+function timetableToRoute(s, tag) {
+  return {
+    id: uid(),
+    tag: tag || 'planned',
+    departTime: s.departTime || '',
+    arriveTime: s.arriveTime || '',
+    duration: s.duration ? parseInt(s.duration) || 0 : 0,
+    transfers: s.transfers || 0,
+    fare: s.fare ? parseFloat(s.fare) || 0 : 0,
+    fareCurrency: s.fareCurrency || 'JPY',
+    importFare: false,
+    legs: (s.legs && s.legs.length ? s.legs : [{
+      departure_station: s.from, arrival_station: s.to,
+      departure_time: s.departTime, arrival_time: s.arriveTime,
+      line_name: s.trainName
+    }]).map(function(l) {
+      // 若 leg 已是 route 格式（有 mode 欄位）直接複製
+      if (l.mode) return Object.assign({}, l);
+      // 否則從原始 GAS 格式轉換
+      return {
+        mode: 'train',
+        fromStop: l.departure_station || l.fromStop || s.from || '',
+        toStop:   l.arrival_station  || l.toStop  || s.to   || '',
+        departTime: l.departure_time || l.departTime || '',
+        arriveTime: l.arrival_time   || l.arriveTime  || '',
+        line:      l.line_name || l.line || s.trainName || '',
+        platform:  l.departure_platform || l.platform || '',
+        arrPlatform: l.arrival_platform || l.arrPlatform || '',
+        headsign:  l.destination_for || l.headsign || ''
+      };
+    })
+  };
 }
 
 // 套用選擇的班次到地點路線方案
