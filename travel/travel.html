@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.45 17:10';
+var APP_VERSION = 'v20260525.46 17:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2853,25 +2853,47 @@ function fuzzyMatch(stopName, timetableName) {
   return a.includes(b);
 }
 
-// 從班次庫搜尋可銜接的最早班次
-function findNextTimetable(fromStop, toStop, afterTime, dayDate) {
-  var t = trip(); if (!t || !t.timetables) return null;
+// 從班次庫搜尋可銜接的最早班次（同時搜尋 t.timetables 和站點 routes 候補）
+function findNextTimetable(fromStop, toStop, afterTime, dayDate, stopRoutes) {
+  var t = trip(); if (!t) return null;
   var afterMins = timeToMins(afterTime) + _scheduleTransferMins;
-  var candidates = t.timetables.filter(function(tb) {
-    if (tb.fare === -1) return false; // 過濾不顯示班次
-    if (tb.date && tb.date !== dayDate) return false; // 日期不符
+
+  // 從 t.timetables 搜尋
+  var tbCandidates = (t.timetables || []).filter(function(tb) {
+    if (tb.fare === -1) return false;
+    if (tb.date && tb.date !== dayDate) return false;
     if (!fuzzyMatch(fromStop, tb.from)) return false;
     if (!fuzzyMatch(toStop, tb.to)) return false;
     var depMins = timeToMins(tb.departTime);
     if (depMins === null) return false;
     return depMins >= afterMins;
   });
-  if (!candidates.length) return null;
-  // 選最早出發的
-  candidates.sort(function(a, b) {
+
+  // 從站點 routes 候補搜尋（backup / planned 均納入）
+  var routeCandidates = (stopRoutes || []).filter(function(r) {
+    var depMins = timeToMins(r.departTime);
+    if (depMins === null) return false;
+    return depMins >= afterMins;
+  }).map(function(r) {
+    // 轉成 timetable 格式
+    return {
+      from: fromStop,
+      to: toStop,
+      departTime: r.departTime,
+      arriveTime: r.arriveTime,
+      duration: r.duration || 0,
+      trainName: (r.legs && r.legs[0] ? r.legs[0].line || '' : ''),
+      legs: r.legs || [],
+      _fromRoute: r  // 保留原始 route 參照
+    };
+  });
+
+  var allCandidates = tbCandidates.concat(routeCandidates);
+  if (!allCandidates.length) return null;
+  allCandidates.sort(function(a, b) {
     return timeToMins(a.departTime) - timeToMins(b.departTime);
   });
-  return candidates[0];
+  return allCandidates[0];
 }
 
 // 執行自動排程
@@ -2965,7 +2987,7 @@ function runAutoSchedule(changedStopIdx, newTimetable) {
       var prevStop = stops[i - 1];
       var fromName = transit.fromPlace || (prevStop ? prevStop.name : '');
       var toName = transit.toPlace || stop.name;
-      var found = findNextTimetable(fromName, toName, currentArrTime, dayDate);
+      var found = findNextTimetable(fromName, toName, currentArrTime, dayDate, transit.routes);
 
       if (!found) {
         // 班次表中也沒有 → 真正無班次
@@ -2986,9 +3008,9 @@ function runAutoSchedule(changedStopIdx, newTimetable) {
       }
 
       // 檢查找到的班次是否已在站點的 routes 候補中
-      var foundInRoutes = transit.routes.find(function(r) {
+      var foundInRoutes = !!(found._fromRoute) || !!(transit.routes.find(function(r) {
         return r.departTime === found.departTime && r.arriveTime === found.arriveTime;
-      });
+      }));
 
       if (found.departTime === planned.departTime && found.arriveTime === planned.arriveTime) {
         // 找到的就是現有 planned，時間吻合，直接沿用
