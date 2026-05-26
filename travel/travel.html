@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.52 20:00';
+var APP_VERSION = 'v20260525.53 20:15';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -3780,6 +3780,7 @@ function saveStop(){
   var _savedStopIdx = S.stopIdx;
   setTimeout(function(){
     renderDayTL();
+    renderTripDays();
     updateTodoBadge();
     checkNextSegmentConflict(_savedStopIdx, day());
   }, 0);
@@ -3793,7 +3794,7 @@ function deleteStop(){
   d.stops.splice(S.stopIdx,1);
   save(S.trips);
   _stopDirty=false;
-  goBack('sc-day'); renderDayTL();
+  goBack('sc-day'); renderDayTL(); renderTripDays();
 }
 
 // ════ TRIP CRUD ════
