@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.39 14:30';
+var APP_VERSION = 'v20260525.40 15:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -3558,6 +3558,8 @@ function removeStopTodo(ti) {
 // ════ SAVE STOP ════
 function saveStop(){
   var d=day(); if(!d)return;
+  // 記住修改前的舊名稱，供後續同步用
+  var _oldStopName = S.stopIdx !== null ? ((d.stops||[])[S.stopIdx]||{}).name || '' : '';
   var type=(document.querySelector('.stype-btn.sel')||{dataset:{type:'transit'}}).dataset.type;
   var name=(document.getElementById('sf-name')||{value:''}).value.trim();
   if(!name){alert('\u8acb\u8f38\u5165\u5730\u9ede\u540d\u7a31');return;}
@@ -3654,6 +3656,22 @@ function saveStop(){
       toPlace:toEl.value.trim(),
       routes:routes
     };
+
+    // ── 同步自訂交通 leg 的 fromStop / toStop ──
+    // 若站點名稱有變更，且 leg 的 fromStop/toStop 仍指向舊名稱，則一併更新
+    var d2 = day();
+    var stops2 = d2 ? (d2.stops || []) : [];
+    var nextStop2 = S.stopIdx !== null ? stops2[S.stopIdx + 1] : null;
+    var oldNextName = nextStop2 ? (nextStop2.name || '') : '';
+
+    stop.transit.routes.forEach(function(r) {
+      (r.legs || []).forEach(function(leg) {
+        var isCustom = ['walk','shuttle','car','taxi'].indexOf(leg.mode) >= 0;
+        if (!isCustom) return;
+        if (_oldStopName && leg.fromStop === _oldStopName) leg.fromStop = name;
+        if (oldNextName && leg.toStop === oldNextName) leg.toStop = toEl.value.trim();
+      });
+    });
   } else {
     // Last stop - preserve existing transit if any
     var existingStop2=S.stopIdx!==null?(d.stops||[])[S.stopIdx]:null;
@@ -3669,6 +3687,25 @@ function saveStop(){
   }
   // 帶入費用記錄
   importStopExpenses(d, stop);
+
+  // ── 同步前一站的 transit.toPlace ──
+  // 若當前站點名稱有變更，前一站的 toPlace 若仍指向舊名稱，則同步更新
+  if (S.stopIdx !== null && S.stopIdx > 0 && name !== _oldStopName) {
+    var prevStop2 = (d.stops || [])[S.stopIdx - 1];
+    if (prevStop2 && prevStop2.transit) {
+      if (prevStop2.transit.toPlace === _oldStopName) {
+        prevStop2.transit.toPlace = name;
+      }
+      // 同步 leg 的 toStop
+      (prevStop2.transit.routes || []).forEach(function(r) {
+        (r.legs || []).forEach(function(leg) {
+          var isCustom = ['walk','shuttle','car','taxi'].indexOf(leg.mode) >= 0;
+          if (isCustom && leg.toStop === _oldStopName) leg.toStop = name;
+        });
+      });
+    }
+  }
+
   save(S.trips);
   _stopDirty=false;
   goBack('sc-day');
