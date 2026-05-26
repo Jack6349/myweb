@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.41 16:00';
+var APP_VERSION = 'v20260525.42 16:20';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2804,11 +2804,19 @@ function openScheduleCheck(stopIdx) {
     alert('此站點無預定交通方案，請先設定預定班次');
     return;
   }
+
+  // 若在地點編輯頁（尚未儲存），從 DOM time picker 讀取最新值覆蓋
+  var riIdx = (stop.transit.routes || []).indexOf(planned);
+  var depDomEl = document.getElementById('tp-v-srd-' + riIdx + '-dep');
+  var arrDomEl = document.getElementById('tp-v-srd-' + riIdx + '-arr');
+  var depTime = (depDomEl && depDomEl.value) ? depDomEl.value : planned.departTime || '';
+  var arrTime = (arrDomEl && arrDomEl.value) ? arrDomEl.value : planned.arriveTime || '';
+
   var fakeTb = {
     from: stop.transit.fromPlace || stop.name || '',
     to: stop.transit.toPlace || '',
-    departTime: planned.departTime || '',
-    arriveTime: planned.arriveTime || '',
+    departTime: depTime,
+    arriveTime: arrTime,
     duration: planned.duration || 0,
     transfers: planned.transfers || 0,
     legs: planned.legs || []
