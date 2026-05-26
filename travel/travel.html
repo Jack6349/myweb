@@ -614,7 +614,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   <div style="display:flex;flex-direction:column;flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border)">
   <!-- Header 行 1：返回 + 行程名稱 -->
   <div style="display:flex;align-items:center;padding:0 8px 0 4px;gap:4px;height:var(--hdr);flex-shrink:0">
-    <button class="hdr-back" onclick="goBack('sc-trip')">
+    <button class="hdr-back" id="day-hdr-back" onclick="goBack('sc-trip')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden">
@@ -626,7 +626,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
     </div>
   </div>
   <!-- Header 行 2：功能按鈕 -->
-  <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0;padding:2px 4px 4px;border-top:1px solid rgba(255,255,255,.06)">
+  <div id="day-hdr-actions" style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0;padding:2px 4px 4px;border-top:1px solid rgba(255,255,255,.06)">
     <button class="hdr-action" onclick="renameDayTitle()">標題</button>
     <button class="hdr-action" onclick="openTimetable()" style="color:#6ec6f0">班次</button>
     <button class="hdr-action" id="tl-compact-btn" onclick="toggleTLCompact()" style="color:#c8b89a">簡化</button>
@@ -914,7 +914,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.37 13:20';
+var APP_VERSION = 'v20260525.38 13:40';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1158,11 +1158,11 @@ function renderList(){
     children.forEach(function(sub){
       var dd = new Date(sub.startDate);
       var dateStr = fmtD(sub.startDate);
-      html += '<div style="margin:4px 16px 6px 40px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px">'+
+      html += '<div style="margin:4px 16px 6px 40px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;cursor:pointer" onclick="openSubTrip(\''+sub.id+'\')">'+
         '<span style="font-size:18px">📄</span>'+
-        '<div style="flex:1;min-width:0" onclick="openTripById(this.parentElement)" data-id="'+sub.id+'" style="cursor:pointer">'+
+        '<div style="flex:1;min-width:0">'+
         '<div style="font-size:13px;font-weight:700;color:#e0d4c0">'+esc(sub.name)+'</div>'+
-        '<div style="font-size:11px;color:#c8b89a">'+dateStr+'</div>'+
+        '<div style="font-size:11px;color:#c8b89a">'+dateStr+' 備份</div>'+
         '</div>'+
         '<button onclick="event.stopPropagation();swapSubTrip(\''+sub.id+'\')" style="font-size:12px;padding:4px 10px;background:rgba(232,184,75,.12);border:1px solid rgba(232,184,75,.3);border-radius:6px;color:#e8b84b;cursor:pointer;white-space:nowrap">↕ 覆蓋</button>'+
         '<button onclick="event.stopPropagation();deleteSubTrip(\''+sub.id+'\')" style="font-size:12px;padding:4px 8px;background:none;border:1px solid var(--border2);border-radius:6px;color:#c8b89a;cursor:pointer">✕</button>'+
@@ -1183,6 +1183,46 @@ function openTrip(id){
   renderTripDays();
   updateTripTodoBadge();
   goTo('sc-trip');
+}
+
+// ── 子行程唯讀瀏覽 ──
+var _readOnly = false;
+
+function openSubTrip(subId) {
+  var sub = S.trips.find(function(t){ return t.id === subId; });
+  if (!sub || !sub.isSubTrip) return;
+  var parentId = sub.parentTripId;
+  // 暫時切換到子行程資料
+  S.tripId = subId;
+  S.dayIdx = 0;
+  _readOnly = true;
+  _applyReadOnlyUI();
+  var d = sub.days && sub.days[0];
+  var titleEl = document.getElementById('day-hdr-title');
+  var dateEl  = document.getElementById('day-hdr-date');
+  var subEl   = document.getElementById('day-hdr-sub');
+  if (titleEl) titleEl.textContent = '📄 ' + sub.name;
+  if (dateEl)  dateEl.textContent  = '';
+  if (subEl)   subEl.textContent   = '唯讀備份';
+  // 返回時回到母行程
+  var backBtn = document.getElementById('day-hdr-back');
+  if (backBtn) backBtn.onclick = function() {
+    _readOnly = false;
+    _applyReadOnlyUI();
+    S.tripId = parentId;
+    renderList();
+    goTo('sc-list');
+  };
+  renderDayTL();
+  goTo('sc-day');
+}
+
+function _applyReadOnlyUI() {
+  var actions = document.getElementById('day-hdr-actions');
+  var banner  = document.getElementById('day-todo-banner');
+  if (actions) actions.style.display = _readOnly ? 'none' : 'flex';
+  if (banner && _readOnly) banner.style.display = 'none';
+  // 時間軸內的編輯區域由 renderDayTL 依 _readOnly 判斷
 }
 
 // ════ TRIP DAYS ════
@@ -1229,6 +1269,10 @@ function openDayByEl(el){
 }
 function openDay(idx){
   var t=trip(); if(!t)return;
+  _readOnly = false;
+  _applyReadOnlyUI();
+  var backBtn = document.getElementById('day-hdr-back');
+  if (backBtn) backBtn.onclick = function(){ goBack('sc-trip'); };
   S.dayIdx=idx;
   if(!t.days) t.days=[];
   while(t.days.length<=idx){
@@ -1295,7 +1339,7 @@ function renderDayTL(){
   var stops=d.stops||[];
   var isLastDay=trip()&&S.dayIdx===trip().days.length-1;
   var html='';
-  if(!_tlCompactMode) html+='<button class="tl-add-top" onclick="addStopAt(0)">\uff0b \u5728\u6700\u524d\u65b0\u589e\u5730\u9ede</button>';
+  if(!_tlCompactMode && !_readOnly) html+='<button class="tl-add-top" onclick="addStopAt(0)">\uff0b \u5728\u6700\u524d\u65b0\u589e\u5730\u9ede</button>';
 
   stops.forEach(function(stop,i){
     var transit=stop.transit||null;
@@ -1385,7 +1429,7 @@ function renderDayTL(){
       }
     }
     html+='</div></div>';
-    if(!_tlCompactMode) html+='<button class="tl-add-stop" onclick="addStopAt('+(i+1)+')">\uff0b \u65b0\u589e\u5730\u9ede</button>';
+    if(!_tlCompactMode && !_readOnly) html+='<button class="tl-add-stop" onclick="addStopAt('+(i+1)+'">\uff0b \u65b0\u589e\u5730\u9ede</button>';
   });
 
   if(stops.length===0){
@@ -1404,6 +1448,7 @@ function getPlannedRoute(transit){
 }
 
 function openStopByEl(el){
+  if (_readOnly) return;
   var idx=parseInt(el.dataset?el.dataset.stopidx:el.getAttribute('data-stopidx'));
   if(!isNaN(idx)) openStop(idx);
 }
