@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.53 20:15';
+var APP_VERSION = 'v20260526.54 09:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -1393,7 +1393,9 @@ function renderDayTL(){
     html+='</div></div>';
     html+='<div class="tl-stop-right">';
     html+='<div class="tl-stop-card'+(stop.anchor?' anchor':'')+(stop.type==='hotel'?' hotel':'')+'" data-stopidx="'+i+'" onclick="openStopByEl(this)">';
-    html+='<div class="tl-stop-name">'+stopTypeIcon(stop.type)+' '+esc(stop.name||'\uff08\u672a\u547d\u540d\uff09')+(stop.anchor?'<span class="anchor-badge">\u9328\u9ede</span>':'')+' </div>';
+    html+='<div class="tl-stop-name">'+stopTypeIcon(stop.type)+' '+esc(stop.name||'\uff08\u672a\u547d\u540d\uff09')+(stop.anchor?'<span class="anchor-badge">\u9328\u9ede</span>':'')+
+      (stop.name ? ' <button onclick="event.stopPropagation();openGoogleMap(\''+esc(stop.name.replace(/'/g,"\\'"))+'\')" style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;opacity:.7;vertical-align:middle" title="在 Google Maps 開啟">📍</button>' : '')+
+      '</div>';
     if(stop.note) html+='<div class="tl-stop-sub">'+esc(stop.note)+'</div>';
     html+='</div>';
 
@@ -1577,7 +1579,9 @@ function buildStopFields(stop,type,isLast,nextStop){
   var html='';
   // Name
   html+='<div class="fs"><div class="fl">\u5730\u9ede\u540d\u7a31</div>'+
-    '<input class="fi" id="sf-name" placeholder="\u4f8b\uff1a\u4ed9\u53f0\u6a5f\u5834\u8eca\u7ad9\u3001APA \u98ef\u5e97" value="'+ea(stop?stop.name||'':'')+'" oninput="_stopDirty=true"></div>';
+    '<input class="fi" id="sf-name" placeholder="\u4f8b\uff1a\u4ed9\u53f0\u6a5f\u5834\u8eca\u7ad9\u3001APA \u98ef\u5e97" value="'+ea(stop?stop.name||'':'')+'" oninput="_stopDirty=true">' +
+    '<button onclick="openGoogleMap(document.getElementById(\'sf-name\').value.trim())" style="margin-top:6px;width:100%;padding:8px;background:rgba(66,133,244,.12);border:1px solid rgba(66,133,244,.3);border-radius:8px;color:#4285f4;font-size:13px;cursor:pointer">📍 在 Google Maps 中開啟</button>' +
+    '</div>';
   // Anchor
   html+='<div class="fs" style="display:flex;align-items:center;gap:10px;padding:2px 0">'+
     '<input type="checkbox" id="sf-anchor" style="width:18px;height:18px"'+(stop&&stop.anchor?' checked':'')+' onchange="_stopDirty=true">'+
@@ -6015,6 +6019,28 @@ function deleteTimetable(origIdx) {
   t.timetables.splice(origIdx, 1);
   save(S.trips);
   renderTimetable();
+}
+
+// 開啟 Google Maps（自動判斷手機/PC）
+function openGoogleMap(name) {
+  if (!name) return;
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var q = encodeURIComponent(name);
+  if (isMobile) {
+    // 嘗試呼叫 Google Maps App，若未安裝則 fallback 到網頁版
+    var appUrl = 'comgooglemaps://?q=' + q + '&zoom=16';
+    var webUrl = 'https://maps.google.com/maps?q=' + q;
+    var start = Date.now();
+    window.location.href = appUrl;
+    setTimeout(function() {
+      // 若 App 沒有開啟（頁面仍在前景），fallback 到網頁版
+      if (Date.now() - start < 2000) {
+        window.open(webUrl, '_blank');
+      }
+    }, 1200);
+  } else {
+    window.open('https://www.google.com/maps/search/' + q, '_blank');
+  }
 }
 
 // 開啟 NAVItime（自動判斷手機/PC）
