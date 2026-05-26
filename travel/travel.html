@@ -939,7 +939,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260525.48 18:10';
+var APP_VERSION = 'v20260525.49 18:25';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -2858,30 +2858,9 @@ function findNextTimetable(fromStop, toStop, afterTime, dayDate, stopRoutes) {
   var t = trip(); if (!t) return null;
   var afterMins = timeToMins(afterTime) + _scheduleTransferMins;
 
-  // ── 診斷輸出 ──
-  var diagLines = [
-    '🔍 findNextTimetable',
-    '  fromStop: [' + fromStop + ']',
-    '  toStop:   [' + toStop + ']',
-    '  afterTime: ' + afterTime + '  afterMins: ' + afterMins,
-    '  dayDate: ' + dayDate,
-    '  t.timetables 筆數: ' + (t.timetables ? t.timetables.length : 0)
-  ];
-  (t.timetables || []).slice(0,12).forEach(function(tb, i) {
-    var fareOk = tb.fare !== -1;
-    var fmOk = fuzzyMatch(fromStop, tb.from);
-    var toOk = fuzzyMatch(toStop, tb.to);
-    var depMins = timeToMins(tb.departTime);
-    var timeOk = depMins !== null && depMins >= afterMins;
-    var dateOk = !tb.date || tb.date === dayDate;
-    diagLines.push('  [' + i + '] from:[' + tb.from + '] to:[' + tb.to + '] dep:' + tb.departTime + ' date:' + (tb.date||'無') + ' fare:' + tb.fare +
-      ' | fareOk:' + fareOk + ' fmMatch:' + fmOk + ' toMatch:' + toOk + ' timeOk:' + timeOk + ' dateOk:' + dateOk);
-  });
-  console.log(diagLines.join('\n'));
 
-  // 從 t.timetables 搜尋
+  // 從 t.timetables 搜尋（fare:-1 僅影響顯示列表，不影響排程搜尋）
   var tbCandidates = (t.timetables || []).filter(function(tb) {
-    if (tb.fare === -1) return false;
     if (tb.date && tb.date !== dayDate) return false;
     if (!fuzzyMatch(fromStop, tb.from)) return false;
     if (!fuzzyMatch(toStop, tb.to)) return false;
