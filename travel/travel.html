@@ -564,6 +564,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
     <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0;padding:2px 4px 4px;border-top:1px solid rgba(255,255,255,.06)">
       <button class="hdr-action" onclick="openExpenseReport()" style="color:#7bed9f">費用</button>
       <button class="hdr-action" onclick="openTripExpense()" style="color:#6ec6f0">＋費用</button>
+      <button class="hdr-action" onclick="openTripDocs()" style="color:#c8b89a">文件</button>
       <button class="hdr-action" onclick="openTripPhotos()" style="color:#c8b89a">照片</button>
       <button class="hdr-action" onclick="openTripTodo()" style="position:relative;color:#e8b84b" id="trip-todo-btn">提醒<span id="trip-todo-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;font-size:9px;font-weight:700;border-radius:50%;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
     </div>
@@ -683,6 +684,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       <div class="hdr-title">代辦事項總表</div>
     </div>
     <div class="body no-nav" id="trip-todo-body"></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: TRIP DOCS ══ -->
+<div class="screen" id="sc-trip-docs">
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
+    <div class="hdr">
+      <button class="hdr-back" onclick="goBack('sc-trip')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hdr-title">行程文件</div>
+    </div>
+    <!-- 分頁列 -->
+    <div id="docs-tabs" style="display:flex;overflow-x:auto;padding:6px 8px;gap:4px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0"></div>
+    <div class="body no-nav" id="docs-body"></div>
   </div>
 </div>
 
@@ -943,7 +959,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260526.56 10:10';
+var APP_VERSION = 'v20260526.57 11:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -960,6 +976,11 @@ var GITHUB_PHOTOS_FILE = 'travel/photos.json';
 var GITHUB_PHOTOS_API  = 'https://api.github.com/repos/' + GITHUB_REPO + '/contents/' + GITHUB_PHOTOS_FILE;
 var GH_PHOTOS_SHA_KEY  = 'gh_photos_sha';
 var PHOTOS_STORE_KEY   = 'travel_photos';
+
+var GITHUB_DOCS_FILE   = 'travel/docs.json';
+var GITHUB_DOCS_API    = 'https://api.github.com/repos/' + GITHUB_REPO + '/contents/' + GITHUB_DOCS_FILE;
+var GH_DOCS_SHA_KEY    = 'gh_docs_sha';
+var DOCS_STORE_KEY     = 'travel_docs';
 
 
 var STORE_KEY = 'travel_v2';
@@ -6074,6 +6095,240 @@ function deleteTimetable(origIdx) {
   renderTimetable();
 }
 
+// ════ 文件管理系統 ════
+
+function getDocs() {
+  try { return JSON.parse(localStorage.getItem(DOCS_STORE_KEY) || 'null') || {docs:{}}; }
+  catch(e) { return {docs:{}}; }
+}
+
+function saveDocs(data) {
+  localStorage.setItem(DOCS_STORE_KEY, JSON.stringify(data));
+  syncWriteDocs(data);
+}
+
+async function syncWriteDocs(data) {
+  var token = localStorage.getItem(GH_TOKEN_KEY);
+  if (!token) return;
+  try {
+    var sha = localStorage.getItem(GH_DOCS_SHA_KEY) || '';
+    if (!sha) {
+      var metaRes = await fetch(GITHUB_DOCS_API, {
+        headers: {'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}
+      });
+      if (metaRes.ok) {
+        var metaData = await metaRes.json();
+        if (metaData.sha) { sha = metaData.sha; localStorage.setItem(GH_DOCS_SHA_KEY, sha); }
+      }
+    }
+    var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    var body = {message:'Update docs', content: encoded};
+    if (sha) body.sha = sha;
+    var res = await fetch(GITHUB_DOCS_API, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json','Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'},
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      var result = await res.json();
+      if (result.content && result.content.sha) localStorage.setItem(GH_DOCS_SHA_KEY, result.content.sha);
+      showSyncStatus('文件已同步','var(--success)');
+      setTimeout(function(){ showSyncStatus('',''); }, 2000);
+    } else if (res.status === 409) {
+      localStorage.removeItem(GH_DOCS_SHA_KEY);
+      setTimeout(function(){ syncWriteDocs(data); }, 500);
+    }
+  } catch(e) { console.log('docs write error:', e); }
+}
+
+async function syncReadDocs() {
+  try {
+    var token = localStorage.getItem(GH_TOKEN_KEY);
+    var headers = {'Accept':'application/vnd.github.v3+json'};
+    if (token) headers['Authorization'] = 'token '+token;
+    var res = await fetch(GITHUB_DOCS_API, {headers:headers});
+    if (!res.ok) return null;
+    var meta = await res.json();
+    if (meta.sha) localStorage.setItem(GH_DOCS_SHA_KEY, meta.sha);
+    var content = meta.content ? decodeURIComponent(escape(atob(meta.content.replace(/\n/g,'')))) : null;
+    if (!content) return null;
+    var data = JSON.parse(content);
+    localStorage.setItem(DOCS_STORE_KEY, JSON.stringify(data));
+    return data;
+  } catch(e) { return null; }
+}
+
+// ── 文件分頁 key ──
+// 'trip' = 行程層級，'day_N' = 第N天（0-indexed）
+var _docsTabKey = 'trip';
+
+function openTripDocs() {
+  syncReadDocs();
+  _docsTabKey = 'trip';
+  renderDocsTabs();
+  renderDocsBody();
+  goTo('sc-trip-docs');
+}
+
+function renderDocsTabs() {
+  var t = trip(); if (!t) return;
+  var tabs = document.getElementById('docs-tabs');
+  if (!tabs) return;
+  var keys = ['trip'].concat((t.days||[]).map(function(_,i){ return 'day_'+i; }));
+  var labels = ['總行程'].concat((t.days||[]).map(function(d,i){
+    return 'D'+(i+1)+(d.title?' '+d.title.slice(0,6):'');
+  }));
+  tabs.innerHTML = keys.map(function(k, i) {
+    var sel = k === _docsTabKey;
+    return '<button onclick="setDocsTab(\''+k+'\')" style="white-space:nowrap;padding:5px 12px;font-size:12px;font-weight:700;border-radius:16px;border:1px solid '+(sel?'var(--accent)':'var(--border2)')+';background:'+(sel?'rgba(232,184,75,.2)':'none')+';color:'+(sel?'var(--accent)':'#c8b89a')+';cursor:pointer">'+labels[i]+'</button>';
+  }).join('');
+}
+
+function setDocsTab(key) {
+  _docsTabKey = key;
+  renderDocsTabs();
+  renderDocsBody();
+}
+
+function renderDocsBody() {
+  var body = document.getElementById('docs-body');
+  if (!body) return;
+  var t = trip(); if (!t) return;
+  var data = getDocs();
+  var tripId = t.id;
+  var bucketKey = tripId + '_' + _docsTabKey;
+  var docs = (data.docs && data.docs[bucketKey]) || [];
+
+  var tabLabel = _docsTabKey === 'trip' ? '總行程' : ('D'+(parseInt(_docsTabKey.split('_')[1])+1));
+
+  var html = '<div style="padding:16px">';
+
+  // 上傳區
+  html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px">';
+  html += '<div style="font-size:13px;font-weight:700;color:#e0d4c0;margin-bottom:10px">📎 新增文件 — ' + tabLabel + '</div>';
+  html += '<input type="file" id="docs-file-input" accept=".pdf,image/*" onchange="onDocsFileSelected(this)" style="display:block;width:100%;font-size:13px;color:#c8b89a;margin-bottom:10px">';
+  html += '<input class="fi" id="docs-file-name" placeholder="文件名稱（選填，預設用檔名）" style="margin-bottom:8px">';
+  html += '<select id="docs-file-cat" class="fsel" style="margin-bottom:10px">';
+  html += '<option value="reservation">預約確認書</option>';
+  html += '<option value="ticket">票券/Pass</option>';
+  html += '<option value="voucher">憑單/優惠券</option>';
+  html += '<option value="other">其他</option>';
+  html += '</select>';
+  html += '<div id="docs-file-info" style="font-size:12px;color:#c8b89a;margin-bottom:8px"></div>';
+  html += '<button onclick="uploadDoc()" id="docs-upload-btn" disabled style="width:100%;padding:10px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:14px;font-weight:700;cursor:not-allowed;opacity:.5">上傳文件</button>';
+  html += '</div>';
+
+  // 文件列表
+  if (!docs.length) {
+    html += '<div style="text-align:center;padding:24px;color:#c8b89a;font-size:13px">尚無文件</div>';
+  } else {
+    var catLabels = {reservation:'預約確認書', ticket:'票券/Pass', voucher:'憑單/優惠券', other:'其他'};
+    docs.forEach(function(doc, di) {
+      var icon = doc.type === 'pdf' ? '📄' : '🖼️';
+      html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">';
+      html += '<div style="display:flex;align-items:center;gap:8px">';
+      html += '<span style="font-size:22px;flex-shrink:0">'+icon+'</span>';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:14px;font-weight:700;color:#e0d4c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(doc.name)+'</div>';
+      html += '<div style="font-size:11px;color:#c8b89a;margin-top:2px">'+esc(catLabels[doc.cat]||doc.cat)+' · '+(doc.size ? (doc.size>1024*1024?((doc.size/1024/1024).toFixed(1)+'MB'):(Math.round(doc.size/1024)+'KB')) : '')+'</div>';
+      html += '</div>';
+      html += '<button onclick="viewDoc(\''+bucketKey+'\','+di+')" style="font-size:12px;padding:5px 10px;background:rgba(110,198,240,.12);border:1px solid rgba(110,198,240,.3);border-radius:6px;color:#6ec6f0;cursor:pointer;margin-left:4px">檢視</button>';
+      html += '<button onclick="deleteDoc(\''+bucketKey+'\','+di+')" style="font-size:18px;padding:2px 6px;background:none;border:none;color:#c8b89a;cursor:pointer">×</button>';
+      html += '</div></div>';
+    });
+  }
+
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+// 選擇檔案後顯示資訊
+var _docsPendingFile = null;
+function onDocsFileSelected(input) {
+  var file = input.files && input.files[0];
+  var infoEl = document.getElementById('docs-file-info');
+  var btnEl  = document.getElementById('docs-upload-btn');
+  _docsPendingFile = null;
+  if (!file) { infoEl.textContent=''; btnEl.disabled=true; btnEl.style.opacity='.5'; btnEl.style.cursor='not-allowed'; return; }
+  var sizeMB = file.size / 1024 / 1024;
+  var warn = sizeMB > 1 ? ' ⚠️ 檔案超過 1MB，上傳可能較慢或失敗' : '';
+  infoEl.innerHTML = '檔案：'+esc(file.name)+'　大小：'+(sizeMB>1?(sizeMB.toFixed(1)+'MB'):(Math.round(file.size/1024)+'KB'))+
+    (warn ? '<br><span style="color:#ff8c00">'+warn+'</span>' : '');
+  // 自動填入檔名（若名稱欄空白）
+  var nameEl = document.getElementById('docs-file-name');
+  if (nameEl && !nameEl.value) nameEl.value = file.name.replace(/\.[^.]+$/,'');
+  _docsPendingFile = file;
+  btnEl.disabled = false; btnEl.style.opacity='1'; btnEl.style.cursor='pointer';
+}
+
+function uploadDoc() {
+  if (!_docsPendingFile) return;
+  var file = _docsPendingFile;
+  var btnEl = document.getElementById('docs-upload-btn');
+  btnEl.textContent = '上傳中…'; btnEl.disabled = true;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = e.target.result; // data:...;base64,xxxx
+    var t = trip(); if (!t) return;
+    var data = getDocs();
+    var tripId = t.id;
+    var bucketKey = tripId + '_' + _docsTabKey;
+    if (!data.docs) data.docs = {};
+    if (!data.docs[bucketKey]) data.docs[bucketKey] = [];
+    var nameEl = document.getElementById('docs-file-name');
+    var catEl  = document.getElementById('docs-file-cat');
+    var ext = file.name.split('.').pop().toLowerCase();
+    var docType = ext === 'pdf' ? 'pdf' : 'image';
+    data.docs[bucketKey].push({
+      id: uid(),
+      name: (nameEl && nameEl.value.trim()) || file.name,
+      cat:  (catEl && catEl.value) || 'other',
+      type: docType,
+      size: file.size,
+      data: base64,
+      date: new Date().toISOString().slice(0,10)
+    });
+    saveDocs(data);
+    _docsPendingFile = null;
+    renderDocsBody();
+  };
+  reader.readAsDataURL(file);
+}
+
+function viewDoc(bucketKey, di) {
+  var data = getDocs();
+  var doc = data.docs && data.docs[bucketKey] && data.docs[bucketKey][di];
+  if (!doc || !doc.data) return;
+  if (doc.type === 'pdf') {
+    // PDF：新分頁開啟 base64
+    var win = window.open('', '_blank');
+    win.document.write('<html><head><title>'+esc(doc.name)+'</title></head><body style="margin:0">'+
+      '<iframe src="'+doc.data+'" style="width:100%;height:100vh;border:none"></iframe></body></html>');
+  } else {
+    // 圖片：全屏覆蓋
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:'+ovPos()+';inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center';
+    ov.innerHTML = '<div style="padding:12px 16px;width:100%;display:flex;justify-content:space-between;align-items:center">'+
+      '<span style="color:#e0d4c0;font-size:14px">'+esc(doc.name)+'</span>'+
+      '<button onclick="this.closest(\'div[style*=inset]\').remove()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer">×</button>'+
+      '</div>'+
+      '<img src="'+doc.data+'" style="max-width:100%;max-height:80vh;object-fit:contain">';
+    appRoot().appendChild(ov);
+  }
+}
+
+function deleteDoc(bucketKey, di) {
+  var data = getDocs();
+  if (!data.docs || !data.docs[bucketKey]) return;
+  var doc = data.docs[bucketKey][di];
+  if (!doc) return;
+  if (!confirm('刪除文件「'+doc.name+'」？')) return;
+  data.docs[bucketKey].splice(di, 1);
+  saveDocs(data);
+  renderDocsBody();
+}
+
 // 開啟 Google Maps（自動判斷手機/PC）
 function openGoogleMap(name) {
   if (!name) return;
@@ -6114,6 +6369,7 @@ function openNavitime(from, to) {
 // ════ INIT ════
 renderList();
 initDayMode();
+syncReadDocs();
 migrateImportFareOnce();
 
 </script>
