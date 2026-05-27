@@ -696,8 +696,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       </button>
       <div class="hdr-title">行程文件</div>
     </div>
-    <!-- 分頁列 -->
-    <div id="docs-tabs" style="display:flex;overflow-x:auto;padding:6px 8px;gap:4px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0"></div>
     <div class="body no-nav" id="docs-body"></div>
   </div>
 </div>
@@ -959,7 +957,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260527.59 12:00';
+var APP_VERSION = 'v20260527.60 12:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -6191,6 +6189,8 @@ function gdTokenValid() {
   return gdToken() && Date.now() < exp - 60000;
 }
 function gdSignIn() {
+  // 儲存當前行程 ID，授權後恢復
+  if (S.tripId) localStorage.setItem('gdrive_return_trip', S.tripId);
   var params = [
     'client_id='+encodeURIComponent(GDRIVE_CLIENT_ID),
     'redirect_uri='+encodeURIComponent(GDRIVE_REDIRECT),
@@ -6198,7 +6198,6 @@ function gdSignIn() {
     'scope='+encodeURIComponent(GDRIVE_SCOPE),
     'prompt=consent'
   ].join('&');
-  localStorage.setItem('gdrive_auth_return','docs');
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?'+params;
 }
 function gdHandleCallback() {
@@ -6213,8 +6212,13 @@ function gdHandleCallback() {
     var exp = Date.now() + (parseInt(params.expires_in||'3600')*1000);
     localStorage.setItem(GDRIVE_EXPIRY_KEY, String(exp));
     history.replaceState(null,'', window.location.pathname+window.location.search);
-    var returnTo = localStorage.getItem('gdrive_auth_return');
-    if (returnTo === 'docs') { openTripDocs(); }
+    // 恢復授權前的行程 ID
+    var savedTripId = localStorage.getItem('gdrive_return_trip');
+    if (savedTripId) { S.tripId = savedTripId; localStorage.removeItem('gdrive_return_trip'); }
+    localStorage.removeItem('gdrive_auth_return');
+    if (S.tripId) {
+      openTripDocs();
+    }
   }
 }
 
@@ -6285,18 +6289,173 @@ async function gdDeleteFile(fileId) {
 }
 
 // ── UI ──
-var _docsTabKey = 'trip';
 var _docsPendingFile = null;
 var _docsUploadOpen = false;
 
 function openTripDocs() {
   if (!gdTokenValid()) { gdSignIn(); return; }
   syncReadDocs();
-  _docsTabKey = 'trip';
-  renderDocsTabs();
+  _docsUploadOpen = false;
+  _docsPendingFile = null;
   renderDocsBody();
   goTo('sc-trip-docs');
 }
+
+function renderDocsBody() {
+  var body = document.getElementById('docs-body');
+  if (!body) return;
+  var t = trip(); if (!t) return;
+  var data = getDocs();
+  var bucketKey = t.id;
+  var docs = (data.docs && data.docs[bucketKey]) || [];
+  var catLabels = {reservation:'預約確認書', ticket:'票券/Pass', voucher:'憑單/優惠券', other:'其他'};
+
+  var html = '<div style="padding:16px">';
+
+  // ── 新增文件（折疊，置頂）──
+  html += '<div style="margin-bottom:14px">';
+  if (!_docsUploadOpen) {
+    html += '<button onclick="_docsUploadOpen=true;renderDocsBody()" style="width:100%;padding:10px;background:rgba(110,198,240,.1);border:1px dashed rgba(110,198,240,.3);border-radius:10px;color:#6ec6f0;font-size:14px;cursor:pointer">＋ 新增文件</button>';
+  } else {
+    // 建立站點選單選項
+    var stopOptions = '<option value="">— 選擇相關站點（選填）—</option>';
+    (t.days||[]).forEach(function(d,di) {
+      (d.stops||[]).forEach(function(s) {
+        if (!s.name) return;
+        stopOptions += '<option value="D'+(di+1)+' '+s.name+'">D'+(di+1)+' '+esc(s.name)+'</option>';
+      });
+    });
+    html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+    html += '<span style="font-size:13px;font-weight:700;color:#e0d4c0">📎 新增文件</span>';
+    html += '<button onclick="_docsUploadOpen=false;_docsPendingFile=null;renderDocsBody()" style="background:none;border:none;color:#c8b89a;font-size:20px;cursor:pointer">×</button>';
+    html += '</div>';
+    html += '<input type="file" id="docs-file-input" accept=".pdf,image/*" onchange="onDocsFileSelected(this)" style="display:block;width:100%;font-size:13px;color:#c8b89a;margin-bottom:10px">';
+    html += '<input class="fi" id="docs-file-name" placeholder="文件名稱（選填，預設用檔名）" style="margin-bottom:8px">';
+    html += '<select id="docs-file-cat" class="fsel" style="margin-bottom:8px">';
+    html += '<option value="reservation">預約確認書</option>';
+    html += '<option value="ticket">票券/Pass</option>';
+    html += '<option value="voucher">憑單/優惠券</option>';
+    html += '<option value="other">其他</option>';
+    html += '</select>';
+    html += '<select id="docs-file-stop" class="fsel" style="margin-bottom:10px">'+stopOptions+'</select>';
+    html += '<div id="docs-file-info" style="font-size:12px;color:#c8b89a;margin-bottom:10px"></div>';
+    html += '<button onclick="uploadDoc()" id="docs-upload-btn" disabled style="width:100%;padding:11px;background:rgba(110,198,240,.15);border:1px solid rgba(110,198,240,.3);border-radius:8px;color:#6ec6f0;font-size:14px;font-weight:700;cursor:not-allowed;opacity:.5">上傳到 Google Drive</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // ── 文件列表 ──
+  if (!docs.length) {
+    html += '<div style="text-align:center;padding:24px 0;color:#c8b89a;font-size:13px">尚無文件</div>';
+  } else {
+    docs.forEach(function(doc, di) {
+      var icon = doc.mimeType === 'application/pdf' ? '📄' : '🖼️';
+      var sizeStr = doc.size ? (doc.size > 1048576 ? (doc.size/1048576).toFixed(1)+'MB' : Math.round(doc.size/1024)+'KB') : '';
+      var meta = [catLabels[doc.cat]||doc.cat||'', doc.stop||'', sizeStr].filter(Boolean).join(' · ');
+      html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">';
+      html += '<div style="display:flex;align-items:center;gap:8px">';
+      html += '<span style="font-size:22px;flex-shrink:0">'+icon+'</span>';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:14px;font-weight:700;color:#e0d4c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(doc.name)+'</div>';
+      html += '<div style="font-size:11px;color:#c8b89a;margin-top:2px">'+esc(meta)+'</div>';
+      html += '</div>';
+      html += '<button onclick="viewDoc(\''+bucketKey+'\','+di+')" style="font-size:12px;padding:5px 10px;background:rgba(110,198,240,.12);border:1px solid rgba(110,198,240,.3);border-radius:6px;color:#6ec6f0;cursor:pointer;flex-shrink:0">檢視</button>';
+      html += '<button onclick="deleteDoc(\''+bucketKey+'\','+di+')" style="font-size:18px;padding:2px 6px;background:none;border:none;color:#c8b89a;cursor:pointer;flex-shrink:0">×</button>';
+      html += '</div></div>';
+    });
+  }
+
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+function onDocsFileSelected(input) {
+  var file = input.files && input.files[0];
+  var infoEl = document.getElementById('docs-file-info');
+  var btnEl  = document.getElementById('docs-upload-btn');
+  _docsPendingFile = null;
+  if (!file) { if(infoEl) infoEl.textContent=''; if(btnEl){btnEl.disabled=true;btnEl.style.opacity='.5';btnEl.style.cursor='not-allowed';} return; }
+  var sizeMB = file.size/1024/1024;
+  var warn = sizeMB > 1 ? '<br><span style="color:#ff8c00">⚠️ 檔案超過 1MB，上傳可能較慢</span>' : '';
+  if (infoEl) infoEl.innerHTML = '檔案：'+esc(file.name)+'　大小：'+(sizeMB>1?sizeMB.toFixed(1)+'MB':Math.round(file.size/1024)+'KB')+warn;
+  var nameEl = document.getElementById('docs-file-name');
+  if (nameEl && !nameEl.value) nameEl.value = file.name.replace(/\.[^.]+$/,'');
+  _docsPendingFile = file;
+  if (btnEl) { btnEl.disabled=false; btnEl.style.opacity='1'; btnEl.style.cursor='pointer'; }
+}
+
+async function uploadDoc() {
+  if (!_docsPendingFile) return;
+  if (!gdTokenValid()) { gdSignIn(); return; }
+  var file = _docsPendingFile;
+  var btnEl  = document.getElementById('docs-upload-btn');
+  var infoEl = document.getElementById('docs-file-info');
+  if (btnEl) { btnEl.textContent='上傳中…'; btnEl.disabled=true; }
+  try {
+    var t = trip(); if (!t) throw new Error('no trip');
+    var bucketKey = t.id;
+    // 取得或建立行程資料夾
+    var rootId = localStorage.getItem(GDRIVE_FOLDER_KEY);
+    if (!rootId) {
+      rootId = await gdEnsureFolder('旅行行程文件', null);
+      localStorage.setItem(GDRIVE_FOLDER_KEY, rootId);
+    }
+    var tripFolderId = await gdEnsureFolder(t.name || '行程', rootId);
+    var gdFile = await gdUploadFile(file, tripFolderId);
+    var data = getDocs();
+    if (!data.docs) data.docs = {};
+    if (!data.docs[bucketKey]) data.docs[bucketKey] = [];
+    var nameEl = document.getElementById('docs-file-name');
+    var catEl  = document.getElementById('docs-file-cat');
+    var stopEl = document.getElementById('docs-file-stop');
+    data.docs[bucketKey].push({
+      id:       uid(),
+      name:     (nameEl && nameEl.value.trim()) || file.name,
+      cat:      (catEl && catEl.value) || 'other',
+      stop:     (stopEl && stopEl.value) || '',
+      mimeType: file.type,
+      size:     file.size,
+      fileId:   gdFile.id,
+      viewLink: gdFile.webViewLink,
+      date:     new Date().toISOString().slice(0,10)
+    });
+    saveDocs(data);
+    showSyncStatus('文件已上傳','var(--success)');
+    setTimeout(function(){ showSyncStatus('',''); }, 2000);
+    _docsPendingFile = null;
+    _docsUploadOpen = false;
+    renderDocsBody();
+  } catch(err) {
+    if (infoEl) infoEl.innerHTML = '<span style="color:#ff6b6b">上傳失敗：'+esc(err.message)+'</span>';
+    if (btnEl) { btnEl.textContent='上傳到 Google Drive'; btnEl.disabled=false; }
+  }
+}
+
+function viewDoc(bucketKey, di) {
+  var data = getDocs();
+  var doc = data.docs && data.docs[bucketKey] && data.docs[bucketKey][di];
+  if (!doc) return;
+  var url = doc.viewLink || (doc.fileId ? 'https://drive.google.com/file/d/'+doc.fileId+'/view' : null);
+  if (!url) { alert('找不到檔案連結'); return; }
+  window.open(url, '_blank');
+}
+
+async function deleteDoc(bucketKey, di) {
+  var data = getDocs();
+  if (!data.docs || !data.docs[bucketKey]) return;
+  var doc = data.docs[bucketKey][di];
+  if (!doc) return;
+  if (!confirm('刪除文件「'+doc.name+'」？\n（同時從 Google Drive 刪除）')) return;
+  if (doc.fileId && gdTokenValid()) {
+    try { await gdDeleteFile(doc.fileId); } catch(e) {}
+  }
+  data.docs[bucketKey].splice(di, 1);
+  saveDocs(data);
+  renderDocsBody();
+}
+
+
 
 function renderDocsTabs() {
   var t = trip(); if (!t) return;
