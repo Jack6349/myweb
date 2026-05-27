@@ -959,7 +959,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260527.58 11:30';
+var APP_VERSION = 'v20260527.59 12:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -6111,9 +6111,30 @@ function getDocs() {
   try { return JSON.parse(localStorage.getItem(DOCS_STORE_KEY) || 'null') || {docs:{}}; }
   catch(e) { return {docs:{}}; }
 }
+
+// 存入前移除 base64 data 欄位（Drive 版只存 metadata）
+function _docsMetaOnly(data) {
+  var clean = {docs:{}};
+  Object.keys(data.docs || {}).forEach(function(k) {
+    clean.docs[k] = (data.docs[k] || []).map(function(doc) {
+      var d = Object.assign({}, doc);
+      delete d.data; // 移除舊版 base64
+      return d;
+    });
+  });
+  return clean;
+}
+
 function saveDocs(data) {
-  localStorage.setItem(DOCS_STORE_KEY, JSON.stringify(data));
-  syncWriteDocs(data);
+  var meta = _docsMetaOnly(data);
+  try {
+    localStorage.setItem(DOCS_STORE_KEY, JSON.stringify(meta));
+  } catch(e) {
+    // localStorage 配額不足時清除舊資料後重試
+    localStorage.removeItem(DOCS_STORE_KEY);
+    try { localStorage.setItem(DOCS_STORE_KEY, JSON.stringify(meta)); } catch(e2) {}
+  }
+  syncWriteDocs(meta);
 }
 async function syncWriteDocs(data) {
   var token = localStorage.getItem(GH_TOKEN_KEY);
@@ -6478,8 +6499,23 @@ function openNavitime(from, to) {
 // ════ INIT ════
 renderList();
 initDayMode();
+// 清除舊版 docs localStorage（含 base64，改用 Google Drive 後不需要）
+(function migrateDocs() {
+  try {
+    var raw = localStorage.getItem(DOCS_STORE_KEY);
+    if (!raw) return;
+    var data = JSON.parse(raw);
+    var hasBase64 = false;
+    Object.values(data.docs || {}).forEach(function(arr) {
+      (arr || []).forEach(function(d) { if (d.data) hasBase64 = true; });
+    });
+    if (hasBase64) {
+      localStorage.setItem(DOCS_STORE_KEY, JSON.stringify(_docsMetaOnly(data)));
+    }
+  } catch(e) { localStorage.removeItem(DOCS_STORE_KEY); }
+})();
 syncReadDocs();
-gdHandleCallback(); // 處理 Google Drive OAuth 回調
+gdHandleCallback();
 migrateImportFareOnce();
 
 </script>
