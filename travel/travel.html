@@ -957,7 +957,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260527.62 13:30';
+var APP_VERSION = 'v20260527.63 13:45';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -4789,7 +4789,19 @@ function saveExpense(){
     else stop.expenses.push(exp);
   }
   save(S.trips); _expDirty=false;
-  goBack('sc-day'); renderDayTL();
+  if (_expReturnToList) {
+    _expReturnToList = false;
+    if (_expReturnTarget === 'trip') {
+      renderTripExpenseList(); goBack('sc-trip-expense-list');
+    } else {
+      renderExpenseList(); goBack('sc-expense-list');
+    }
+  } else if (_expReturnToReport) {
+    _expReturnToReport = false;
+    renderReport(); goBack('sc-report');
+  } else {
+    goBack('sc-day'); renderDayTL();
+  }
 }
 
 function deleteExpense(){
@@ -4809,12 +4821,14 @@ function deleteExpense(){
   save(S.trips); _expDirty=false;
   if(_expReturnToList){
     _expReturnToList = false;
-    renderExpenseList();
-    goBack('sc-expense-list');
+    if (_expReturnTarget === 'trip') {
+      renderTripExpenseList(); goBack('sc-trip-expense-list');
+    } else {
+      renderExpenseList(); goBack('sc-expense-list');
+    }
   } else if(_expReturnToReport){
     _expReturnToReport = false;
-    renderReport();
-    goBack('sc-report');
+    renderReport(); goBack('sc-report');
   } else {
     goBack('sc-day'); renderDayTL();
   }
