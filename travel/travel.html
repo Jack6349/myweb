@@ -957,7 +957,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260527.61 13:00';
+var APP_VERSION = 'v20260527.62 13:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -4331,6 +4331,7 @@ function collectMembers(){
 var _expDirty = false;
 var _expCtx = null;
 var _expReturnToList = false;
+var _expReturnTarget = 'day'; // 'day' | 'trip'
 var _todoReturnToTripTodo = false;
 var _expReturnToReport = false;  // {source:'day'|'stop', dayIdx, stopIdx, expIdx}
 var _expSplitSelected = null;  // block mid being assigned
@@ -4407,8 +4408,13 @@ function expenseBackConfirm(){
   if(_expDirty&&!confirm('\u78ba\u5b9a\u653e\u68c4\u4fee\u6539\uff1f'))return;
   if(_expReturnToList){
     _expReturnToList = false;
-    renderExpenseList();
-    goBack('sc-expense-list');
+    if (_expReturnTarget === 'trip') {
+      renderTripExpenseList();
+      goBack('sc-trip-expense-list');
+    } else {
+      renderExpenseList();
+      goBack('sc-expense-list');
+    }
   } else if(_expReturnToReport){
     _expReturnToReport = false;
     renderReport();
@@ -5019,6 +5025,7 @@ function renderTripExpenseList() {
 
 function openTripExpenseEdit(ei) {
   _expReturnToList = true;
+  _expReturnTarget = 'trip';
   openExpense({source: 'trip', expIdx: ei});
 }
 
@@ -5114,9 +5121,9 @@ function openExpenseFromReport(dayIdx, expIdx, stopIdx) {
 }
 
 function openExpenseEdit(ei) {
-  openExpense({source:'day', dayIdx:S.dayIdx, expIdx:ei});
-  // 返回時回到列表
   _expReturnToList = true;
+  _expReturnTarget = 'day';
+  openExpense({source:'day', dayIdx:S.dayIdx, expIdx:ei});
 }
 
 // ════ EXPENSE REPORT ════
