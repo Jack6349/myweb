@@ -957,7 +957,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260527.60 12:30';
+var APP_VERSION = 'v20260527.61 13:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -4470,6 +4470,16 @@ function renderExpenseForm(exp){
   });
   html += '</div></div>';
 
+  // Payment method
+  var payMethod = exp ? (exp.payMethod || '') : '';
+  var pmNames = {'':'\u2014','cash':'\u73fe\u91d1','card':'\u5237\u5361','ic':'IC\u5361'};
+  html += '<div class="fs"><div class="fl">\u4ed8\u6b3e\u65b9\u5f0f</div>' +
+    '<select class="fsel" id="ef-paymethod" onchange="_expDirty=true">' +
+    Object.keys(pmNames).map(function(v){
+      return '<option value="'+v+'"'+(payMethod===v?' selected':'')+'>'+pmNames[v]+'</option>';
+    }).join('') +
+    '</select></div>';
+
   // Share type
   html += '<div class="fs"><div class="fl">\u5206\u914d\u65b9\u5f0f</div></div>';
   html += '<div class="share-type-row">';
@@ -4739,8 +4749,9 @@ function collectExpense(){
   }
   var personalType='self';
   var proxyItems=[];
+  var payMethod=(document.getElementById('ef-paymethod')||{value:''}).value;
   return {id:uid(),category:cat,desc:desc,amount:amount,currency:currency,
-    paidBy:paidBy,shareType:shareType,splits:splits,personalType:personalType,proxyItems:proxyItems,
+    paidBy:paidBy,payMethod:payMethod,shareType:shareType,splits:splits,personalType:personalType,proxyItems:proxyItems,
     date:expDate||''};
 }
 
