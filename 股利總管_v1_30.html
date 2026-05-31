@@ -2285,7 +2285,7 @@ async function loadStockValue(forceRefresh) {
     if (stickyEl) {
       stickyEl.style.display = 'block';
       stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0">' +
-        '<div style="display:flex;align-items:flex-start;gap:32px;flex-wrap:nowrap">' +
+        '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;justify-content:space-between">' +
           '<div>' +
             '<div class="div-total-label">持股總現値</div>' +
             '<div class="div-total-amount" style="color:var(--accent2)">$ ' + grandTotal.toLocaleString('zh-TW') +
@@ -2857,15 +2857,15 @@ async function loadStockValue(forceRefresh) {
     if (stickyEl) {
       stickyEl.style.display = 'block';
       stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0">' +
-        '<div style="display:flex;align-items:flex-start;gap:32px;flex-wrap:nowrap">' +
+        '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;justify-content:space-between">' +
           '<div>' +
             '<div class="div-total-label">持股總現値</div>' +
-            '<div class="div-total-amount" style="color:var(--accent2)">$ ' + grandTotal.toLocaleString('zh-TW') +
+            '<div style="font-size:26px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$ ' + grandTotal.toLocaleString('zh-TW') +
             '<span class="div-total-unit"> 元</span></div>' +
           '</div>' +
           '<div>' +
             '<div class="div-total-label" style="color:#8ab4d4">含稅費現値</div>' +
-            '<div class="div-total-amount" style="color:#7bed9f">$ ' + Math.round(grandTotal * 0.997735).toLocaleString('zh-TW') +
+            '<div style="font-size:26px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#7bed9f">$ ' + Math.round(grandTotal * 0.997735).toLocaleString('zh-TW') +
             '<span class="div-total-unit"> 元</span></div>' +
           '</div>' +
         '</div>' +
