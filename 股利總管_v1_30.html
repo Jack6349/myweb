@@ -290,6 +290,17 @@
 
 <!-- ══════════════ HOME SCREEN ══════════════ -->
 <div class="screen active" id="screen-home">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0;">
+    <div style="font-size:13px;font-weight:700;color:var(--text)">股利總管</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span id="div-sync-status" style="font-size:11px;color:var(--text3)"></span>
+      <button id="div-gh-token-btn" onclick="openDivGhTokenSetting()" title="GitHub 同步設定"
+        style="background:none;border:none;cursor:pointer;padding:4px;display:flex;align-items:center;gap:4px;font-size:11px;color:#c8b89a">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        同步
+      </button>
+    </div>
+  </div>
   <div class="scroll-area">
     <div class="home-greeting">
       <h1>你好 👋<br><span>股利總管</span></h1>
@@ -693,31 +704,18 @@ function loadPortfolio() {
 }
 function savePortfolio(data) {
   localStorage.setItem(DB_KEY, JSON.stringify(data));
-  var ts = new Date().toISOString();
-  localStorage.setItem(DB_KEY + '_ts', ts);
-  syncWrite('portfolio', JSON.stringify(data), ts).then(function(){});
-}
-
-async function pullPortfolio() {
-  try {
-    var r = await syncRead('portfolio');
-    if (!r || r.error || !r.data) return;
-    var cloudTs = r.updatedAt || '', localTs = localStorage.getItem(DB_KEY + '_ts') || '';
-    if (cloudTs > localTs || portfolio.length === 0) {
-      var cd = JSON.parse(r.data);
-      localStorage.setItem(DB_KEY, JSON.stringify(cd));
-      localStorage.setItem(DB_KEY + '_ts', cloudTs);
-      portfolio = cd; renderPortfolio(); refreshHome();
-      console.log('[Sync] portfolio restored, count:', cd.length);
-    }
-  } catch(e) { console.warn('[Sync] error:', e.message); }
+  localStorage.setItem(DIV_SYNC_TS_KEY, new Date().toISOString());
+  showDivSyncStatus('儲存中…', '#f0cc7a');
+  // debounce 1.5s 避免連續操作觸發多次 PUT
+  if (_divSyncTimer) clearTimeout(_divSyncTimer);
+  _divSyncTimer = setTimeout(function() {
+    _divSyncTimer = null;
+    divGhWrite(data);
+  }, 1500);
 }
 
 // ── APP STATE ──
 let portfolio = loadPortfolio();
-document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(pullPortfolio, portfolio.length === 0 ? 500 : 1500);
-});
 let editingId = null;
 let searchedStock = null;
 
@@ -3058,42 +3056,144 @@ function updatePnlDisplay(afterTaxValue) {
   if (el2) el2.innerHTML = html;
 }
 
-// ════ 雲端同步模組 ════
-var SYNC_GAS_URL = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
-var SYNC_PENDING_KEY = 'sync_pending';
+// ════ 雲端同步模組（GitHub 直存，與旅行行程相同架構）════
+var DIV_GH_REPO  = 'Jack6349/myweb';
+var DIV_GH_FILE  = 'dividend/data.json';
+var DIV_GH_API   = 'https://api.github.com/repos/' + DIV_GH_REPO + '/contents/' + DIV_GH_FILE;
+var DIV_GH_TOKEN_KEY = 'gh_token';       // 與旅行行程共用同一個 token
+var DIV_GH_SHA_KEY   = 'div_gh_sha';
+var DIV_SYNC_TS_KEY  = 'div_sync_ts';
 
-async function syncRead(sheetName) {
-  try {
-    var res = await fetch(SYNC_GAS_URL + '?action=sync_read&sheet=' + encodeURIComponent(sheetName));
-    return await res.json();
-  } catch(e) { return { error: e.message }; }
+function showDivSyncStatus(msg, color) {
+  var el = document.getElementById('div-sync-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = color || 'var(--text3)';
 }
 
-async function syncWrite(sheetName, dataJson, updatedAt) {
+async function divGhRead() {
   try {
-    var res = await fetch(SYNC_GAS_URL + '?action=sync_write&sheet=' + encodeURIComponent(sheetName) +
-      '&data=' + encodeURIComponent(dataJson) + '&updatedAt=' + encodeURIComponent(updatedAt));
-    var r = await res.json();
-    if (r.stat === 'CONFLICT') return { conflict: true, cloudData: r.data, cloudUpdatedAt: r.updatedAt };
-    var p = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
-    delete p[sheetName]; localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(p));
-    return r;
-  } catch(e) {
-    var p = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
-    p[sheetName] = { data: dataJson, updatedAt: updatedAt };
-    localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(p));
-    return { error: e.message, pending: true };
+    var token = localStorage.getItem(DIV_GH_TOKEN_KEY);
+    var headers = { 'Accept': 'application/vnd.github.v3+json' };
+    if (token) headers['Authorization'] = 'token ' + token;
+    var res = await fetch(DIV_GH_API, { headers: headers });
+    if (!res.ok) return null;
+    var meta = await res.json();
+    if (meta.sha) localStorage.setItem(DIV_GH_SHA_KEY, meta.sha);
+    var content = meta.content ? decodeURIComponent(escape(atob(meta.content.replace(/\n/g,'')))) : null;
+    if (!content) return null;
+    return JSON.parse(content);
+  } catch(e) { return null; }
+}
+
+// debounce timer
+var _divSyncTimer = null;
+
+async function divGhWrite(data, isRetry) {
+  var token = localStorage.getItem(DIV_GH_TOKEN_KEY);
+  if (!token) return;
+  try {
+    var sha = localStorage.getItem(DIV_GH_SHA_KEY) || '';
+    if (!sha) {
+      var metaRes = await fetch(DIV_GH_API, {
+        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+      });
+      if (metaRes.ok) {
+        var metaData = await metaRes.json();
+        if (metaData.sha) { sha = metaData.sha; localStorage.setItem(DIV_GH_SHA_KEY, sha); }
+      }
+    }
+    var ts = new Date().toISOString();
+    var payload = JSON.stringify({ portfolio: data, updatedAt: ts });
+    var b64 = btoa(unescape(encodeURIComponent(payload)));
+    var body = { message: 'sync dividend: ' + ts.slice(0,16), content: b64 };
+    if (sha) body.sha = sha;
+    var res = await fetch(DIV_GH_API, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      var result = await res.json();
+      if (result.content && result.content.sha) localStorage.setItem(DIV_GH_SHA_KEY, result.content.sha);
+      localStorage.setItem(DIV_SYNC_TS_KEY, ts);
+      showDivSyncStatus('已同步', 'var(--success)');
+      setTimeout(function(){ showDivSyncStatus('', ''); }, 2000);
+    } else if ((res.status === 409 || res.status === 422) && !isRetry) {
+      localStorage.removeItem(DIV_GH_SHA_KEY);
+      showDivSyncStatus('重新同步中…', '#f0cc7a');
+      try {
+        var fr = await fetch(DIV_GH_API, { headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' } });
+        if (fr.ok) { var fm = await fr.json(); if (fm.sha) localStorage.setItem(DIV_GH_SHA_KEY, fm.sha); }
+      } catch(e2) {}
+      await divGhWrite(data, true);
+    } else if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem(DIV_GH_TOKEN_KEY);
+      showDivSyncStatus('Token 已過期，請重新設定', '#ff6b6b');
+    } else {
+      showDivSyncStatus('同步失敗', '#ff6b6b');
+      setTimeout(function(){ showDivSyncStatus('', ''); }, 3000);
+    }
+  } catch(e) { showDivSyncStatus('同步失敗', '#ff6b6b'); }
+}
+
+function openDivGhTokenSetting() {
+  var cur = localStorage.getItem(DIV_GH_TOKEN_KEY) || '';
+  var token = prompt('請輸入 GitHub Personal Access Token\n（Settings → Developer settings → Personal access tokens → classic）\n\n目前：' + (cur ? cur.slice(0,8) + '…' : '未設定'), cur);
+  if (token === null) return;
+  token = token.trim();
+  if (token) {
+    localStorage.setItem(DIV_GH_TOKEN_KEY, token);
+    localStorage.removeItem(DIV_GH_SHA_KEY);
+    var btn = document.getElementById('div-gh-token-btn');
+    if (btn) btn.style.color = '#7bed9f';
+    showDivSyncStatus('同步中…', '#f0cc7a');
+    divGhRead().then(function(remote) {
+      if (remote && remote.portfolio) {
+        var remoteTs = remote.updatedAt || '';
+        var localTs  = localStorage.getItem(DIV_SYNC_TS_KEY) || '';
+        if (!localTs || remoteTs > localTs) {
+          portfolio = remote.portfolio;
+          localStorage.setItem(DB_KEY, JSON.stringify(portfolio));
+          localStorage.setItem(DIV_SYNC_TS_KEY, remoteTs);
+          renderPortfolio(); refreshHome();
+        }
+        showDivSyncStatus('已同步', 'var(--success)');
+        setTimeout(function(){ showDivSyncStatus('', ''); }, 2000);
+      } else {
+        showDivSyncStatus('Token 已儲存', 'var(--success)');
+        setTimeout(function(){ showDivSyncStatus('', ''); }, 2000);
+      }
+    });
+  } else {
+    localStorage.removeItem(DIV_GH_TOKEN_KEY);
+    var btn2 = document.getElementById('div-gh-token-btn');
+    if (btn2) btn2.style.color = '#c8b89a';
+    showDivSyncStatus('Token 已清除', '#c8b89a');
+    setTimeout(function(){ showDivSyncStatus('', ''); }, 2000);
   }
 }
 
-async function flushPendingSync() {
-  var pending = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}');
-  for (var s of Object.keys(pending)) {
-    var r = await syncWrite(s, pending[s].data, pending[s].updatedAt);
-    if (r && !r.error) { var p2 = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || '{}'); delete p2[s]; localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(p2)); }
-  }
-}
-document.addEventListener('DOMContentLoaded', function() { setTimeout(flushPendingSync, 3000); });
+document.addEventListener('DOMContentLoaded', function() {
+  // 初始化時更新 token 按鈕顏色
+  var tok = localStorage.getItem(DIV_GH_TOKEN_KEY);
+  var btn = document.getElementById('div-gh-token-btn');
+  if (btn) btn.style.color = tok ? '#7bed9f' : '#c8b89a';
+  // 啟動後嘗試從 GitHub 拉取最新持股
+  setTimeout(function() {
+    divGhRead().then(function(remote) {
+      if (!remote || !remote.portfolio) return;
+      var remoteTs = remote.updatedAt || '';
+      var localTs  = localStorage.getItem(DIV_SYNC_TS_KEY) || '';
+      if (!localTs || remoteTs > localTs || portfolio.length === 0) {
+        portfolio = remote.portfolio;
+        localStorage.setItem(DB_KEY, JSON.stringify(portfolio));
+        localStorage.setItem(DIV_SYNC_TS_KEY, remoteTs);
+        renderPortfolio(); refreshHome();
+      }
+    });
+  }, portfolio.length === 0 ? 500 : 1500);
+});
 
 // ════ ETF 筛選器模組 ════
 var ETF_SCAN_KEY = 'etf_scan_results', ETF_EXCL_KEY = 'etf_excluded', ETF_NEW_KEY = 'etf_new_results', ETF_DATE_KEY = 'etf_scan_date', ETF_WATCH_KEY = 'etf_watchlist';
