@@ -2290,17 +2290,15 @@ async function loadStockValue(forceRefresh) {
     loading.style.display = 'none';
     if (stickyEl) {
       stickyEl.style.display = 'block';
-      stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0">' +
-        '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;justify-content:space-between">' +
-          '<div>' +
-            '<div class="div-total-label">持股總現値</div>' +
-            '<div style="font-size:22px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$ ' + grandTotal.toLocaleString('zh-TW') +
-            '<span class="div-total-unit"> 元</span></div>' +
+      stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0;padding:12px 14px">' +
+        '<div style="display:flex;align-items:flex-start;gap:10px">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="div-total-label" style="font-size:11px">持股總現値</div>' +
+            '<div style="font-size:18px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$' + grandTotal.toLocaleString('zh-TW') + '</div>' +
           '</div>' +
-          '<div>' +
-            '<div class="div-total-label" style="color:#8ab4d4">含稅費現値</div>' +
-            '<div style="font-size:22px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#7bed9f">$ ' + Math.round(grandTotal * 0.997735).toLocaleString('zh-TW') +
-            '<span class="div-total-unit"> 元</span></div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="div-total-label" style="color:#8ab4d4;font-size:11px">含稅費現値</div>' +
+            '<div style="font-size:18px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#7bed9f">$' + Math.round(grandTotal * 0.997735).toLocaleString('zh-TW') + '</div>' +
           '</div>' +
         '</div>' +
         '<div style="margin-top:10px;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px">' +
@@ -2312,7 +2310,7 @@ async function loadStockValue(forceRefresh) {
                 '<div style="display:flex;align-items:center;gap:6px">' +
                   '<input id="total-cost-input" type="text" inputmode="numeric" readonly' +
                   ' value="' + fmtCost() + '"' +
-                  ' style="background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:#f5d87a;font-size:20px;font-weight:700;width:150px;padding:4px 8px;font-family:var(--font);text-align:right"' +
+                  ' style="background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:#f5d87a;font-size:17px;font-weight:700;width:130px;padding:4px 8px;font-family:var(--font);text-align:right"' +
                   ' onkeydown="saveTotalCostConfirm(this,event)" placeholder="點編輯輸入"/>' +
                   '<button onclick="toggleCostEdit(this)" style="background:rgba(245,216,122,.15);border:1px solid rgba(245,216,122,.4);color:#f5d87a;font-size:12px;font-weight:600;padding:6px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;font-family:var(--font)">編輯</button>' +
                 '</div>' +
@@ -2880,7 +2878,7 @@ async function loadStockValue(forceRefresh) {
                 '<div style="display:flex;align-items:center;gap:6px">' +
                   '<input id="total-cost-input2" type="text" inputmode="numeric" readonly' +
                   ' value="' + fmtCost() + '"' +
-                  ' style="background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:#f5d87a;font-size:20px;font-weight:700;width:150px;padding:4px 8px;font-family:var(--font);text-align:right"' +
+                  ' style="background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:#f5d87a;font-size:17px;font-weight:700;width:130px;padding:4px 8px;font-family:var(--font);text-align:right"' +
                   ' onkeydown="saveTotalCostConfirm(this,event)" placeholder="點編輯輸入"/>' +
                   '<button onclick="toggleCostEdit(this)" style="background:rgba(245,216,122,.15);border:1px solid rgba(245,216,122,.4);color:#f5d87a;font-size:12px;font-weight:600;padding:6px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;font-family:var(--font)">編輯</button>' +
                 '</div>' +
@@ -3018,19 +3016,19 @@ function saveTotalCost(input, event) {
 
 function calcPnlHtml(afterTaxValue) {
   var cost = parseInt(localStorage.getItem(COST_KEY)||'0');
-  if (!cost || !afterTaxValue) return '<div style="color:var(--text3);font-size:12px;padding-top:22px">輸入成本後顯示</div>';
+  if (!cost || !afterTaxValue) return '<div style="color:var(--text3);font-size:12px;padding-top:18px">輸入成本後顯示</div>';
   var pnl = Math.round(afterTaxValue) - cost;
   var pnlPct = (pnl / cost * 100);
   var pnlColor = pnl >= 0 ? '#7bed9f' : '#ff7070';
   var sign = pnl >= 0 ? '+' : '';
-  return '<div style="display:flex;gap:20px;align-items:flex-start">' +
+  return '<div style="display:flex;gap:16px;align-items:flex-start">' +
     '<div>' +
-      '<div class="div-total-label" style="color:#a4b0be">損益試算</div>' +
-      '<div style="font-size:22px;font-weight:700;color:'+pnlColor+'">'+sign+pnl.toLocaleString('zh-TW')+'<span style="font-size:13px;font-weight:400"> 元</span></div>' +
+      '<div class="div-total-label" style="color:#a4b0be;font-size:11px">損益試算</div>' +
+      '<div style="font-size:17px;font-weight:700;color:'+pnlColor+';white-space:nowrap">'+sign+pnl.toLocaleString('zh-TW')+'<span style="font-size:12px;font-weight:400"> 元</span></div>' +
     '</div>' +
     '<div>' +
-      '<div class="div-total-label" style="color:#a4b0be">獲利率</div>' +
-      '<div style="font-size:22px;font-weight:700;color:'+pnlColor+'">'+sign+pnlPct.toFixed(2)+'%</div>' +
+      '<div class="div-total-label" style="color:#a4b0be;font-size:11px">獲利率</div>' +
+      '<div style="font-size:17px;font-weight:700;color:'+pnlColor+';white-space:nowrap">'+sign+pnlPct.toFixed(2)+'%</div>' +
     '</div>' +
   '</div>';
 }
