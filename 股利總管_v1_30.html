@@ -2278,7 +2278,7 @@ async function loadStockValue(forceRefresh) {
         if (priceData.date && priceData.date > latestDate) latestDate = priceData.date;
         // 最近除息日從快取取
         const latestExDate = getLatestExDate(stock.code);
-        rows.push({ stock, price, totalValue, date: priceData.date, latestExDate });
+        rows.push({ stock, price, totalValue, date: priceData.date, latestExDate, change: priceData.change, changePct: priceData.changePct });
       } catch(e) {
         rows.push({ stock, price: null, totalValue: null, date: null, latestExDate: null, error: e.message });
       }
@@ -2338,7 +2338,7 @@ async function loadStockValue(forceRefresh) {
         '</div>' +
         '<div class="value-meta" style="grid-template-columns:1fr">' +
         '<div class="value-meta-item"><div class="value-meta-label">收盤價</div>' +
-          '<div class="value-meta-val">' + (hasData ? '$ ' + r.price.toFixed(2) : '查詢失敗') + '</div></div>' +
+          '<div class="value-meta-val">' + (hasData ? '$ ' + r.price.toFixed(2) + changeHtml(r.change, r.changePct) : '查詢失敗') + '</div></div>' +
         '</div></div>';
     }
     resultEl.innerHTML = html || '<div class="div-empty">無資料</div>';
@@ -2843,7 +2843,7 @@ async function loadStockValue(forceRefresh) {
         if (priceData.date && priceData.date > latestDate) latestDate = priceData.date;
         // 最近除息日從快取取
         const latestExDate = getLatestExDate(stock.code);
-        rows.push({ stock, price, totalValue, date: priceData.date, latestExDate });
+        rows.push({ stock, price, totalValue, date: priceData.date, latestExDate, change: priceData.change, changePct: priceData.changePct });
       } catch(e) {
         rows.push({ stock, price: null, totalValue: null, date: null, latestExDate: null, error: e.message });
       }
@@ -2906,7 +2906,7 @@ async function loadStockValue(forceRefresh) {
         '</div>' +
         '<div class="value-meta" style="grid-template-columns:1fr">' +
         '<div class="value-meta-item"><div class="value-meta-label">收盤價</div>' +
-          '<div class="value-meta-val">' + (hasData ? '$ ' + r.price.toFixed(2) : '查詢失敗') + '</div></div>' +
+          '<div class="value-meta-val">' + (hasData ? '$ ' + r.price.toFixed(2) + changeHtml(r.change, r.changePct) : '查詢失敗') + '</div></div>' +
         '</div></div>';
     }
     resultEl.innerHTML = html || '<div class="div-empty">無資料</div>';
@@ -3012,6 +3012,17 @@ function saveTotalCost(input, event) {
     if (pnlEl2) afterTax = parseFloat(pnlEl2.dataset.aftertax || 0);
   }
   updatePnlDisplay(afterTax);
+}
+
+// 漲跌顯示（紅漲綠跌）
+function changeHtml(change, changePct) {
+  if (change == null || changePct == null) return '';
+  var up = change > 0, flat = change === 0;
+  var col = flat ? 'var(--text3)' : (up ? '#ff5252' : '#26d962');
+  var arrow = flat ? '—' : (up ? '▲' : '▼');
+  var sign = up ? '+' : '';
+  return '<span style="font-size:13px;font-weight:600;color:' + col + ';margin-left:8px">' +
+    arrow + ' ' + sign + change.toFixed(2) + ' (' + sign + changePct.toFixed(2) + '%)</span>';
 }
 
 function calcPnlHtml(afterTaxValue) {
