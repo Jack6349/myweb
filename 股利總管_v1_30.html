@@ -2862,20 +2862,18 @@ async function loadStockValue(forceRefresh) {
     loading.style.display = 'none';
     if (stickyEl) {
       stickyEl.style.display = 'block';
-      stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0">' +
-        '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;justify-content:space-between">' +
-          '<div>' +
-            '<div class="div-total-label">持股總現値</div>' +
-            '<div style="font-size:26px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$ ' + grandTotal.toLocaleString('zh-TW') +
-            '<span class="div-total-unit"> 元</span></div>' +
+      stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0;padding:12px 14px">' +
+        '<div style="display:flex;align-items:flex-start;gap:10px">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="div-total-label" style="font-size:11px">持股總現値</div>' +
+            '<div style="font-size:18px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$' + grandTotal.toLocaleString('zh-TW') + '</div>' +
           '</div>' +
-          '<div>' +
-            '<div class="div-total-label" style="color:#8ab4d4">含稅費現値</div>' +
-            '<div style="font-size:26px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#7bed9f">$ ' + Math.round(grandTotal * 0.997735).toLocaleString('zh-TW') +
-            '<span class="div-total-unit"> 元</span></div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="div-total-label" style="color:#8ab4d4;font-size:11px">含稅費現値</div>' +
+            '<div style="font-size:18px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#7bed9f">$' + Math.round(grandTotal * 0.997735).toLocaleString('zh-TW') + '</div>' +
           '</div>' +
         '</div>' +
-        '<div style="margin-top:14px;background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">' +
+        '<div style="margin-top:10px;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px">' +
           '<div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">' +
             '<div style="flex:0 0 auto">' +
               '<div class="div-total-label" style="color:#f5d87a;margin-bottom:4px">總付出成本</div>' +
@@ -3042,7 +3040,8 @@ function calcPnlHtml(afterTaxValue) {
   if (!cost || !afterTaxValue) return '<div style="color:var(--text3);font-size:12px;padding-top:18px">輸入成本後顯示</div>';
   var pnl = Math.round(afterTaxValue) - cost;
   var pnlPct = (pnl / cost * 100);
-  var pnlColor = pnl >= 0 ? '#7bed9f' : '#ff7070';
+  // 台股慣例：正數（獲利）紅色，負數（虧損）綠色
+  var pnlColor = pnl >= 0 ? '#ff5252' : '#26d962';
   var sign = pnl >= 0 ? '+' : '';
   return '<div style="display:flex;gap:16px;align-items:flex-start">' +
     '<div>' +
