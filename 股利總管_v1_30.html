@@ -2205,7 +2205,7 @@ function renderEstResult(stockResults, grandTotal, actualTotal, estTotal, year, 
 }
 
 // ══════════════ 當日股票損益 ══════════════
-const PRICE_CACHE_KEY = 'price_cache';
+const PRICE_CACHE_KEY = 'price_cache_v2';
 const PRICE_CACHE_TTL = 60 * 60 * 1000; // 1小時
 
 function getPriceCache() {
@@ -2338,7 +2338,13 @@ async function loadStockValue(forceRefresh) {
         '</div>' +
         '<div class="value-meta" style="grid-template-columns:1fr">' +
         '<div class="value-meta-item"><div class="value-meta-label">收盤價</div>' +
-          '<div class="value-meta-val">' + (hasData ? '$ ' + r.price.toFixed(2) + changeHtml(r.change, r.changePct) : '查詢失敗') + '</div></div>' +
+          (function(){
+            if (!hasData) return '<div class="value-meta-val">查詢失敗</div></div>';
+            var up = r.change != null && r.change > 0;
+            var down = r.change != null && r.change < 0;
+            var priceCol = up ? '#ff5252' : (down ? '#26d962' : 'var(--text)');
+            return '<div class="value-meta-val" style="color:' + priceCol + '">$ ' + r.price.toFixed(2) + changeHtml(r.change, r.changePct) + '</div></div>';
+          })() +
         '</div></div>';
     }
     resultEl.innerHTML = html || '<div class="div-empty">無資料</div>';
@@ -2906,7 +2912,13 @@ async function loadStockValue(forceRefresh) {
         '</div>' +
         '<div class="value-meta" style="grid-template-columns:1fr">' +
         '<div class="value-meta-item"><div class="value-meta-label">收盤價</div>' +
-          '<div class="value-meta-val">' + (hasData ? '$ ' + r.price.toFixed(2) + changeHtml(r.change, r.changePct) : '查詢失敗') + '</div></div>' +
+          (function(){
+            if (!hasData) return '<div class="value-meta-val">查詢失敗</div></div>';
+            var up = r.change != null && r.change > 0;
+            var down = r.change != null && r.change < 0;
+            var priceCol = up ? '#ff5252' : (down ? '#26d962' : 'var(--text)');
+            return '<div class="value-meta-val" style="color:' + priceCol + '">$ ' + r.price.toFixed(2) + changeHtml(r.change, r.changePct) + '</div></div>';
+          })() +
         '</div></div>';
     }
     resultEl.innerHTML = html || '<div class="div-empty">無資料</div>';
