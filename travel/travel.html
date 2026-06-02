@@ -801,6 +801,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       <button class="report-tab sel" id="rt-total" onclick="setReportTab('total')">總費用</button>
       <button class="report-tab" id="rt-person" onclick="setReportTab('person')">每人明細</button>
       <button class="report-tab" id="rt-day" onclick="setReportTab('day')">每日明細</button>
+      <button class="report-tab" id="rt-pay" onclick="setReportTab('pay')">付款方式</button>
     </div>
     <div class="body" id="report-body" style="padding-bottom:20px"></div>
   </div>
@@ -957,7 +958,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260527.63 13:45';
+var APP_VERSION = 'v20260602.66 14:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -4359,6 +4360,8 @@ function tripMembers(){ var t=trip(); return t&&t.members&&t.members.length?t.me
 
 // Split state
 var _splitBlocks = {};  // {mid: {totalAmt, slices:[{pid,amt,locked}]}}
+var _splitSubMode = 'equal';  // 'equal' 均分 | 'block' 方塊分配
+var _splitExcluded = {};      // {mid: true} 均分模式下不參與分攤的成員
 
 function initSplitBlocks(total, members){
   _splitBlocks = {};
@@ -4438,6 +4441,27 @@ function renderExpenseForm(exp){
     if(_splitBlocks[sl.mid]) _splitBlocks[sl.mid].slices = sl.slices||[];
   });
 
+  // 還原均分模式狀態
+  _splitExcluded = {};
+  if(exp && exp.splits && exp.shareType==='shared'){
+    // 判斷是否為「均分」：每位成員的 slices 要嘛空（不參與），要嘛只有自己一筆
+    var looksEqual = exp.splits.every(function(sl){
+      return sl.slices.length===0 || (sl.slices.length===1 && sl.slices[0].pid===sl.mid);
+    });
+    // 且至少有一人有參與
+    var hasParticipant = exp.splits.some(function(sl){ return sl.slices.length===1 && sl.slices[0].pid===sl.mid; });
+    if(looksEqual && hasParticipant){
+      _splitSubMode = 'equal';
+      exp.splits.forEach(function(sl){
+        if(sl.slices.length===0) _splitExcluded[sl.mid] = true;
+      });
+    } else {
+      _splitSubMode = 'block';
+    }
+  } else {
+    _splitSubMode = 'equal';
+  }
+
   var html = '<div style="padding:14px 0 0">';
 
   // Category
@@ -4510,11 +4534,63 @@ function renderExpenseForm(exp){
 
 function buildSplitArea(members, exp){
   var total = parseInt((document.getElementById('ef-amount')||{value:'0'}).value)||0;
-  if(members.length===0) return '<div style="padding:0 16px;font-size:12px;color:#c8b89a">\u8acb\u5148\u8a2d\u5b9a\u884c\u7a0b\u6210\u54e1</div>';
+  if(members.length===0) return '<div style="padding:0 16px;font-size:12px;color:#c8b89a">請先設定行程成員</div>';
   var html = '<div class="split-wrap">';
-  html += '<div class="split-label">\u8cbb\u7528\u5206\u914d</div>';
-  html += '<div class="split-tip">\u9ede\u9078\u8cbb\u7528\u5340\u584a\uff0c\u518d\u9ede\u4e0b\u65b9\u6210\u54e1\u982d\u50cf\u6307\u5b9a\u8ca0\u64d4\u4eba</div>';
-  // Blocks
+
+  // 子模式切換：均分 / 方塊分配
+  html += '<div style="display:flex;gap:8px;margin-bottom:12px">';
+  html += '<button class="share-btn'+(_splitSubMode==='equal'?' sel':'')+'" onclick="selSplitSubMode(\'equal\')">均分</button>';
+  html += '<button class="share-btn'+(_splitSubMode==='block'?' sel':'')+'" onclick="selSplitSubMode(\'block\')">方塊分配</button>';
+  html += '</div>';
+
+  if(_splitSubMode==='equal'){
+    html += buildEqualSplitArea(members, total);
+  } else {
+    html += buildBlockSplitArea(members, total);
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// 均分模式（可排除成員）
+function buildEqualSplitArea(members, total){
+  var participants = members.filter(function(m){ return !_splitExcluded[m.id]; });
+  var n = participants.length;
+  var perPerson = n>0 ? Math.floor(total/n) : 0;
+  var rem = n>0 ? total - perPerson*n : 0;
+  var firstPartId = participants.length ? participants[0].id : null;
+
+  var html = '<div class="split-label">參與均分的成員</div>';
+  html += '<div class="split-tip">點選頭像可切換是否參與分攤，未選取者不負擔</div>';
+  html += '<div class="split-members" id="ef-equal-members">';
+  members.forEach(function(m,i){
+    var mc = mcolor(i);
+    var excluded = _splitExcluded[m.id];
+    var amt = excluded ? 0 : (perPerson + (m.id===firstPartId ? rem : 0));
+    html += '<div class="split-head" data-mid="'+m.id+'" onclick="toggleSplitExclude(\''+m.id+'\')" id="eq-'+m.id+'" style="'+(excluded?'opacity:.35':'')+'">'+
+      '<div class="split-av" style="background:'+mc.bg+';color:'+mc.color+';border-color:'+(excluded?'transparent':mc.color)+'">'+
+        (excluded?'✕':m.name[0])+'</div>'+
+      '<div class="split-nm" style="color:'+mc.color+'">'+esc(m.name)+'</div>'+
+      '<div class="split-amt" style="color:'+(excluded?'#5a7390':mc.color)+'">'+(excluded?'不參與':(total?fmtExp(amt):'—'))+'</div>'+
+    '</div>';
+  });
+  html += '</div>';
+
+  if(n===0){
+    html += '<div style="font-size:11px;color:#ff6b6b;padding:4px 0;text-align:center">⚠ 至少需一人參與分攤</div>';
+  } else {
+    html += '<div style="font-size:12px;color:#7bed9f;padding:6px 0;text-align:center">'+
+      n+' 人均分，每人約 '+fmtExp(perPerson)+'</div>';
+  }
+  return html;
+}
+
+// 方塊分配模式（原功能）
+function buildBlockSplitArea(members, total){
+  var html = '';
+  html += '<div class="split-label">費用分配</div>';
+  html += '<div class="split-tip">點選費用區塊，再點下方成員頭像指定負擔人</div>';
   html += '<div class="split-blocks" id="ef-split-blocks">';
   members.forEach(function(m,i){
     var mc = mcolor(i);
@@ -4524,15 +4600,14 @@ function buildSplitArea(members, exp){
     html += '<div class="split-block'+(isDone?' done':'')+'" data-mid="'+m.id+'" id="sb-'+m.id+'" onclick="onSplitBlockClick(\''+m.id+'\')">'+
       '<div class="sb-name" style="color:'+mc.color+'">'+esc(m.name)+'</div>'+
       '<div class="sb-amt" style="color:'+mc.text+'">'+(total?fmtExp(b.totalAmt):'¥0')+'</div>'+
-      (isDone?'<div class="sb-tag" style="color:#7bed9f">&#10003; \u5206\u914d\u5b8c</div>':
-       rem>0&&rem<b.totalAmt?'<div class="sb-tag" style="color:var(--accent)">\u5269 '+fmtExp(rem)+'</div>':
-       '<div class="sb-tag" style="color:#c8b89a">\u672a\u5206\u914d</div>')+
+      (isDone?'<div class="sb-tag" style="color:#7bed9f">&#10003; 分配完</div>':
+       rem>0&&rem<b.totalAmt?'<div class="sb-tag" style="color:var(--accent)">剩 '+fmtExp(rem)+'</div>':
+       '<div class="sb-tag" style="color:#c8b89a">未分配</div>')+
     '</div>';
   });
   html += '</div>';
-  // Divider + heads
   html += '<div class="split-divider"></div>';
-  html += '<div class="split-label">\u7531\u8ab0\u8ca0\u64d4</div>';
+  html += '<div class="split-label">由誰負擔</div>';
   html += '<div class="split-members" id="ef-split-members">';
   members.forEach(function(m,i){
     var mc = mcolor(i);
@@ -4545,13 +4620,21 @@ function buildSplitArea(members, exp){
     '</div>';
   });
   html += '</div>';
-  // Result summary
   var unalloc = members.reduce(function(s,m){return s+splitBlockRem(m.id);},0);
   if(unalloc>0){
-    html += '<div style="font-size:11px;color:#ff6b6b;padding:4px 0">\u26a0 \u5c1a\u6709 '+fmtExp(unalloc)+' \u672a\u5206\u914d</div>';
+    html += '<div style="font-size:11px;color:#ff6b6b;padding:4px 0">⚠ 尚有 '+fmtExp(unalloc)+' 未分配</div>';
   }
-  html += '</div>';
   return html;
+}
+
+function selSplitSubMode(mode){
+  _splitSubMode = mode;
+  refreshSplitUI();
+}
+
+function toggleSplitExclude(mid){
+  _splitExcluded[mid] = !_splitExcluded[mid];
+  refreshSplitUI();
 }
 
 function buildPersonalArea(exp){
@@ -4749,9 +4832,25 @@ function collectExpense(){
   var splits=[];
   if(shareType==='shared'){
     var members=tripMembers();
-    members.forEach(function(m){
-      splits.push({mid:m.id,slices:(_splitBlocks[m.id]?_splitBlocks[m.id].slices:[])||[]});
-    });
+    if(_splitSubMode==='equal'){
+      // 均分模式：排除不參與者，剩餘者均分（第一位吸收餘數）
+      var participants=members.filter(function(m){return !_splitExcluded[m.id];});
+      var n=participants.length;
+      var per=n>0?Math.floor(amount/n):0;
+      var rem=n>0?amount-per*n:0;
+      members.forEach(function(m){
+        if(_splitExcluded[m.id]){
+          splits.push({mid:m.id,slices:[]});
+        } else {
+          var myAmt=per+(m.id===participants[0].id?rem:0);
+          splits.push({mid:m.id,slices:[{pid:m.id,amt:myAmt}]});
+        }
+      });
+    } else {
+      members.forEach(function(m){
+        splits.push({mid:m.id,slices:(_splitBlocks[m.id]?_splitBlocks[m.id].slices:[])||[]});
+      });
+    }
   }
   var personalType='self';
   var proxyItems=[];
@@ -5153,7 +5252,7 @@ function openExpenseReport(){
 
 function setReportTab(tab){
   _reportTab = tab;
-  ['total','person','day'].forEach(function(t){
+  ['total','person','day','pay'].forEach(function(t){
     document.getElementById('rt-'+t).classList.toggle('sel', t===tab);
   });
   renderReport();
@@ -5191,6 +5290,7 @@ function renderReport(){
   if(_reportTab === 'total') body.innerHTML = renderTotalReport(exps, curs);
   else if(_reportTab === 'person') body.innerHTML = renderPersonReport(exps, members, curs);
   else if(_reportTab === 'day') body.innerHTML = renderDayReport(exps, curs);
+  else if(_reportTab === 'pay') body.innerHTML = renderPayReport(exps, curs);
 }
 
 function renderTotalReport(exps, curs){
@@ -5471,6 +5571,79 @@ function fmtReportAmt(n, cur){
   if(cur==='TWD') return 'NT$'+n.toLocaleString();
   return '$'+n.toLocaleString();
 }
+
+// 付款方式統計
+function renderPayReport(exps, curs){
+  var PAY_INFO = {
+    cash: {name:'現金', icon:'💵', color:'#7bed9f'},
+    card: {name:'刷卡', icon:'💳', color:'#6ec6f0'},
+    ic:   {name:'IC卡', icon:'💳', color:'#f5d87a'},
+    none: {name:'未指定', icon:'—', color:'#c8b89a'}
+  };
+  var order = ['cash','card','ic','none'];
+  var CAT_INFO={transport:'🚃',hotel:'🏨',food:'🍽️',ticket:'🎫',shopping:'🛒',other:'📋'};
+
+  var groups = {};
+  order.forEach(function(k){ groups[k] = []; });
+  exps.forEach(function(e){
+    var pm = e.payMethod || 'none';
+    if(!groups[pm]) pm = 'none';
+    groups[pm].push(e);
+  });
+
+  var html = '';
+  order.forEach(function(pm){
+    var list = groups[pm];
+    if(!list.length) return;
+    var info = PAY_INFO[pm];
+    var totals = {};
+    list.forEach(function(e){ totals[e.currency]=(totals[e.currency]||0)+e.amount; });
+    var colId = 'pay-detail-' + pm;
+    html += '<div class="report-card">';
+    html += '<div class="report-card-hdr" onclick="toggleCatDetail(\'' + colId + '\')" style="cursor:pointer">'+
+      '<div class="report-card-hdr-left">'+
+        '<span style="font-size:18px">'+info.icon+'</span>'+
+        '<span style="font-size:14px;font-weight:700;color:'+info.color+'">'+info.name+'</span>'+
+        '<span style="font-size:11px;color:#c8b89a;margin-left:4px">'+list.length+'筆</span>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<div style="text-align:right">'+
+          Object.keys(totals).map(function(cur){
+            return '<div style="font-size:12px;font-weight:700;color:'+info.color+'">'+fmtReportAmt(totals[cur],cur)+'</div>';
+          }).join('')+
+        '</div>'+
+        '<div style="font-size:16px;color:#c8b89a" id="'+colId+'-arrow">▾</div>'+
+      '</div>'+
+    '</div>';
+    html += '<div id="'+colId+'" style="display:none">';
+    list.forEach(function(exp){
+      var member = exp.paidBy ? tripMembers().find(function(m){return m.id===exp.paidBy;}) : null;
+      var mi = member ? tripMembers().indexOf(member) : -1;
+      var mc = mi>=0 ? mcolor(mi) : {color:'#c8b89a'};
+      var clickArg = exp.source==='trip'
+        ? 'openTripExpenseEdit('+exp.expIdx+')'
+        : 'openExpenseFromReport('+exp.dayIdx+','+(exp.expIdx!==undefined?exp.expIdx:'null')+','+JSON.stringify(exp.stopIdx)+')';
+      html += '<div class="report-row" style="cursor:pointer" onclick="'+clickArg+'">'+
+        '<div class="report-row-left">'+
+          '<span class="report-cat-icon">'+(CAT_INFO[exp.category]||'📋')+'</span>'+
+          '<div class="report-desc">'+
+            '<div>'+esc(exp.desc||'無說明')+'</div>'+
+            '<div class="report-sub">'+
+              esc(exp.dayTitle||'')+(exp.stopName?' ・ '+esc(exp.stopName):'')+
+              (member?' ・ <span style="color:'+mc.color+'">'+esc(member.name)+'</span>':'')+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="report-amt" style="color:'+info.color+'">'+fmtReportAmt(exp.amount,exp.currency)+'</div>'+
+      '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  if(!html) html = '<div class="empty-report">尚無費用記錄</div>';
+  return html;
+}
+
 
 
 function onChangeCalcDuration(ri){
@@ -6467,10 +6640,16 @@ async function uploadDoc() {
 function viewDoc(bucketKey, di) {
   var data = getDocs();
   var doc = data.docs && data.docs[bucketKey] && data.docs[bucketKey][di];
-  if (!doc) return;
-  var url = doc.viewLink || (doc.fileId ? 'https://drive.google.com/file/d/'+doc.fileId+'/view' : null);
-  if (!url) { alert('找不到檔案連結'); return; }
-  window.open(url, '_blank');
+  if (!doc || !doc.fileId) { alert('找不到檔案'); return; }
+  // 下載連結（直接觸發下載，不開預覽頁）
+  var downloadUrl = 'https://drive.google.com/uc?export=download&id=' + doc.fileId;
+  var a = document.createElement('a');
+  a.href = downloadUrl;
+  a.download = doc.name || 'document';
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 async function deleteDoc(bucketKey, di) {
@@ -6629,10 +6808,16 @@ async function uploadDoc() {
 function viewDoc(bucketKey, di) {
   var data = getDocs();
   var doc = data.docs && data.docs[bucketKey] && data.docs[bucketKey][di];
-  if (!doc) return;
-  var url = doc.viewLink || (doc.fileId ? 'https://drive.google.com/file/d/'+doc.fileId+'/view' : null);
-  if (!url) { alert('找不到檔案連結'); return; }
-  window.open(url, '_blank');
+  if (!doc || !doc.fileId) { alert('找不到檔案'); return; }
+  // 下載連結（直接觸發下載，不開預覽頁）
+  var downloadUrl = 'https://drive.google.com/uc?export=download&id=' + doc.fileId;
+  var a = document.createElement('a');
+  a.href = downloadUrl;
+  a.download = doc.name || 'document';
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 async function deleteDoc(bucketKey, di) {
