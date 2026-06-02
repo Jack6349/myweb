@@ -2208,6 +2208,13 @@ function renderEstResult(stockResults, grandTotal, actualTotal, estTotal, year, 
 const PRICE_CACHE_KEY = 'price_cache_v2';
 const PRICE_CACHE_TTL = 60 * 60 * 1000; // 1小時
 
+// 今日日期字串（台灣時區），用於跨日強制失效
+function todayStr() {
+  var d = new Date();
+  var tw = new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000);
+  return tw.getFullYear() + '-' + (tw.getMonth()+1) + '-' + tw.getDate();
+}
+
 function getPriceCache() {
   try { return JSON.parse(localStorage.getItem(PRICE_CACHE_KEY)) || {}; }
   catch { return {}; }
@@ -2217,12 +2224,14 @@ function setPriceCache(data) { localStorage.setItem(PRICE_CACHE_KEY, JSON.string
 async function fetchStockPrice(code) {
   const cache = getPriceCache();
   const now = Date.now();
-  if (cache[code] && (now - cache[code].ts) < PRICE_CACHE_TTL) return cache[code].data;
+  const today = todayStr();
+  // 同一天內且未超過 TTL 才用快取；跨日強制重抓
+  if (cache[code] && cache[code].day === today && (now - cache[code].ts) < PRICE_CACHE_TTL) return cache[code].data;
   const res = await fetch(GAS_URL + '?price=' + encodeURIComponent(code));
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const json = await res.json();
   if (json.stat !== 'OK') throw new Error('查無股價');
-  cache[code] = { ts: now, data: json };
+  cache[code] = { ts: now, day: today, data: json };
   setPriceCache(cache);
   return json;
 }
@@ -2788,12 +2797,14 @@ function renderEstResult(stockResults, grandTotal, actualTotal, estTotal, year, 
 async function fetchStockPrice(code) {
   const cache = getPriceCache();
   const now = Date.now();
-  if (cache[code] && (now - cache[code].ts) < PRICE_CACHE_TTL) return cache[code].data;
+  const today = todayStr();
+  // 同一天內且未超過 TTL 才用快取；跨日強制重抓
+  if (cache[code] && cache[code].day === today && (now - cache[code].ts) < PRICE_CACHE_TTL) return cache[code].data;
   const res = await fetch(GAS_URL + '?price=' + encodeURIComponent(code));
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const json = await res.json();
   if (json.stat !== 'OK') throw new Error('查無股價');
-  cache[code] = { ts: now, data: json };
+  cache[code] = { ts: now, day: today, data: json };
   setPriceCache(cache);
   return json;
 }
