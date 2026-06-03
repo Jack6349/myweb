@@ -959,7 +959,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260603.68 15:30';
+var APP_VERSION = 'v20260603.69 16:00';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -4872,7 +4872,9 @@ function saveExpense(){
     if(ctx.expIdx!==undefined)t.expenses[ctx.expIdx]=exp;
     else t.expenses.push(exp);
     save(S.trips); _expDirty=false;
-    if(_expReturnToList){
+    if(_expReturnToReport){
+      _expReturnToReport=false; renderReport(); goBack('sc-report');
+    } else if(_expReturnToList){
       _expReturnToList=false; renderTripExpenseList(); goBack('sc-trip-expense-list');
     } else { renderTripExpenseList(); goBack('sc-trip-expense-list'); }
     return;
@@ -4909,7 +4911,12 @@ function deleteExpense(){
   if(ctx.source==='trip'&&ctx.expIdx!==undefined){
     var t=trip(); if(t&&t.expenses)t.expenses.splice(ctx.expIdx,1);
     save(S.trips); _expDirty=false;
-    renderTripExpenseList(); goBack('sc-trip-expense-list');
+    if(_expReturnToReport){
+      _expReturnToReport = false;
+      renderReport(); goBack('sc-report');
+    } else {
+      renderTripExpenseList(); goBack('sc-trip-expense-list');
+    }
     return;
   }
   var d=trip()&&trip().days?trip().days[ctx.dayIdx]:null; if(!d)return;
@@ -4949,6 +4956,20 @@ function openExpenseNew(){
 
 // ════ 帶入費用記錄 ════
 
+// 預設均分 splits（所有成員平均負擔，第一位吸收餘數）
+function defaultEqualSplits(total){
+  var members = tripMembers();
+  var n = members.length;
+  if(n===0) return [];
+  total = total||0;
+  var per = Math.floor(total/n);
+  var rem = total - per*n;
+  return members.map(function(m,i){
+    var amt = per + (i===0?rem:0);
+    return {mid:m.id, slices:[{pid:m.id, amt:amt}]};
+  });
+}
+
 // 從地點的 importFare 設定自動建立/更新費用表
 function importStopExpenses(d, stop) {
   if (!d || !stop) return;
@@ -4971,8 +4992,8 @@ function importStopExpenses(d, stop) {
         currency: planned.fareCurrency || 'JPY',
         payMethod: planned.payMethod || '',
         paidBy: planned.payerId || '',
-        splitType: 'shared',
-        splits: []
+        shareType: 'shared',
+        splits: defaultEqualSplits(planned.fare)
       });
     } else {
       // importFare=false 或無費用：移除已帶入的費用
@@ -4993,8 +5014,8 @@ function importStopExpenses(d, stop) {
         currency: hotel.currency || 'JPY',
         payMethod: hotel.payMethod || '',
         paidBy: hotel.payerId || '',
-        splitType: 'shared',
-        splits: []
+        shareType: 'shared',
+        splits: defaultEqualSplits(hotel.amount)
       });
     } else {
       removeExpenseBySourceId(d, stop.id + '_hotel');
