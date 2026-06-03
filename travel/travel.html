@@ -802,6 +802,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       <button class="report-tab" id="rt-person" onclick="setReportTab('person')">每人明細</button>
       <button class="report-tab" id="rt-day" onclick="setReportTab('day')">每日明細</button>
       <button class="report-tab" id="rt-pay" onclick="setReportTab('pay')">付款方式</button>
+      <button class="report-tab" id="rt-settle" onclick="setReportTab('settle')">費用分攤</button>
     </div>
     <div class="body" id="report-body" style="padding-bottom:20px"></div>
   </div>
@@ -958,7 +959,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260602.66 14:30';
+var APP_VERSION = 'v20260603.68 15:30';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -5233,6 +5234,20 @@ function openExpenseFromReport(dayIdx, expIdx, stopIdx) {
   openExpense({source: stopIdx != null ? 'stop' : 'day', dayIdx: dayIdx, expIdx: expIdx, stopIdx: stopIdx});
 }
 
+// 從報表開啟「行程費用」編輯，返回報表
+function openTripExpenseFromReport(expIdx) {
+  _expReturnToList = false;
+  _expReturnToReport = true;
+  openExpense({source: 'trip', expIdx: expIdx});
+}
+
+// 從報表新增費用（行程層級），返回報表
+function openNewExpenseFromReport() {
+  _expReturnToList = false;
+  _expReturnToReport = true;
+  openExpense({source: 'trip'});
+}
+
 function openExpenseEdit(ei) {
   _expReturnToList = true;
   _expReturnTarget = 'day';
@@ -5252,7 +5267,7 @@ function openExpenseReport(){
 
 function setReportTab(tab){
   _reportTab = tab;
-  ['total','person','day','pay'].forEach(function(t){
+  ['total','person','day','pay','settle'].forEach(function(t){
     document.getElementById('rt-'+t).classList.toggle('sel', t===tab);
   });
   renderReport();
@@ -5291,6 +5306,7 @@ function renderReport(){
   else if(_reportTab === 'person') body.innerHTML = renderPersonReport(exps, members, curs);
   else if(_reportTab === 'day') body.innerHTML = renderDayReport(exps, curs);
   else if(_reportTab === 'pay') body.innerHTML = renderPayReport(exps, curs);
+  else if(_reportTab === 'settle') body.innerHTML = renderSettleReport(exps, members, curs);
 }
 
 function renderTotalReport(exps, curs){
@@ -5643,6 +5659,175 @@ function renderPayReport(exps, curs){
   if(!html) html = '<div class="empty-report">尚無費用記錄</div>';
   return html;
 }
+
+// 分攤結算頁籤
+function renderSettleReport(exps, members, curs){
+  var PAY_NAME = {cash:'現金', card:'刷卡', ic:'IC卡', '':'—'};
+  var CAT_INFO = {transport:'🚃',hotel:'🏨',food:'🍽️',ticket:'🎫',shopping:'🛒',other:'📋'};
+  var memById = {};
+  members.forEach(function(m,i){ memById[m.id] = {m:m, c:mcolor(i)}; });
+  function mName(id){ return memById[id] ? memById[id].m.name : '?'; }
+  function mColor(id){ return memById[id] ? memById[id].c.color : '#c8b89a'; }
+
+  var rates = JSON.parse(localStorage.getItem('twd_rates') || '{}');
+  function toTwd(amt, cur){
+    if(cur==='TWD') return amt;
+    var r = rates[cur];
+    return r>0 ? amt*r : null; // null 表示匯率未設定
+  }
+
+  var html = '';
+
+  // ── 頂部：新增費用 ──
+  html += '<div style="padding:14px 16px 6px">';
+  html += '<button onclick="openNewExpenseFromReport()" style="width:100%;padding:11px;background:rgba(123,237,159,.12);border:1px dashed rgba(123,237,159,.4);border-radius:10px;color:#7bed9f;font-size:14px;font-weight:700;cursor:pointer">＋ 新增費用</button>';
+  html += '</div>';
+
+  // ── 匯率設定（非 TWD 幣別）──
+  var foreignCurs = curs.filter(function(c){ return c!=='TWD'; });
+  if(foreignCurs.length){
+    html += '<div style="margin:8px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px">';
+    html += '<div style="font-size:12px;font-weight:700;color:#6ec6f0;margin-bottom:10px">💱 匯率設定（換算 TWD）</div>';
+    foreignCurs.forEach(function(cur){
+      var rv = rates[cur] || '';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px">'+
+        '<span style="color:#c8b89a">1 '+cur+' =</span>'+
+        '<input type="number" step="0.0001" value="'+rv+'" placeholder="匯率" '+
+          'onchange="updateTwdRate(\''+cur+'\',this.value)" '+
+          'style="flex:1;max-width:120px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:#f5d87a;font-size:14px;font-weight:700;padding:5px 8px;text-align:right">'+
+        '<span style="color:#c8b89a">TWD</span>'+
+      '</div>';
+    });
+    html += '</div>';
+  }
+
+  // ── 計算各人共用分攤金額（只算 shareType==='shared'）──
+  // perMember[mid][cur] = 金額
+  var perMember = {};
+  members.forEach(function(m){ perMember[m.id] = {}; });
+  exps.forEach(function(e){
+    if(e.shareType!=='shared' || !e.splits) return;
+    var cur = e.currency;
+    e.splits.forEach(function(sl){
+      (sl.slices||[]).forEach(function(s){
+        if(perMember[s.pid]==null) return;
+        perMember[s.pid][cur] = (perMember[s.pid][cur]||0) + s.amt;
+      });
+    });
+  });
+
+  // ── 各人分攤彙總 ──
+  html += '<div style="padding:10px 16px 4px"><div style="font-size:12px;font-weight:700;color:var(--accent)">各人共用分攤金額</div></div>';
+  var anyShare = members.some(function(m){ return Object.keys(perMember[m.id]).length>0; });
+  if(!anyShare){
+    html += '<div style="padding:0 16px 8px;font-size:12px;color:#c8b89a">尚無共用分攤費用</div>';
+  } else {
+    members.forEach(function(m,i){
+      var byCur = perMember[m.id];
+      if(Object.keys(byCur).length===0) return;
+      var mc = mcolor(i);
+      // 各幣別原始 + TWD 換算加總
+      var twdSum = 0, hasMissingRate = false;
+      var curParts = [];
+      Object.keys(byCur).forEach(function(cur){
+        curParts.push(fmtReportAmt(byCur[cur], cur));
+        var t = toTwd(byCur[cur], cur);
+        if(t==null) hasMissingRate = true; else twdSum += t;
+      });
+      html += '<div style="margin:0 16px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+          '<div style="display:flex;align-items:center;gap:8px;min-width:0">'+
+            '<div style="width:26px;height:26px;border-radius:50%;background:'+mc.bg+';color:'+mc.color+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">'+esc(m.name[0])+'</div>'+
+            '<span style="font-size:14px;font-weight:700;color:'+mc.color+'">'+esc(m.name)+'</span>'+
+          '</div>'+
+          '<div style="text-align:right">'+
+            '<div style="font-size:15px;font-weight:800;color:#7bed9f">≈ NT$ '+Math.round(twdSum).toLocaleString()+(hasMissingRate?' +':'')+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="margin-top:6px;font-size:11px;color:#c8b89a">'+curParts.join('　·　')+
+          (hasMissingRate?'<span style="color:#e8b84b">（部分幣別待設匯率）</span>':'')+'</div>'+
+      '</div>';
+    });
+  }
+
+  // ── 費用清單：已分攤 / 未分攤 ──
+  function renderExpRow(exp){
+    var clickArg = exp.source==='trip'
+      ? 'openTripExpenseFromReport('+exp.expIdx+')'
+      : 'openExpenseFromReport('+exp.dayIdx+','+(exp.expIdx!==undefined?exp.expIdx:'null')+','+JSON.stringify(exp.stopIdx)+')';
+    var payerName = exp.paidBy ? mName(exp.paidBy) : '';
+    var payerColor = exp.paidBy ? mColor(exp.paidBy) : '#c8b89a';
+    var payMethodName = PAY_NAME[exp.payMethod||''] || '—';
+    var isShared = exp.shareType==='shared';
+
+    var h = '<div onclick="'+clickArg+'" style="margin:0 16px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px;cursor:pointer">';
+    h += '<div style="display:flex;align-items:flex-start;gap:8px">'+
+      '<span style="font-size:18px;flex-shrink:0">'+(CAT_INFO[exp.category]||'📋')+'</span>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:14px;font-weight:700;color:#e0d4c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(exp.desc||'無說明')+'</div>'+
+        '<div style="font-size:11px;color:#c8b89a;margin-top:1px">'+esc(exp.dayTitle||'')+(exp.stopName?' · '+esc(exp.stopName):'')+'</div>'+
+      '</div>'+
+      '<div style="font-size:15px;font-weight:700;color:var(--accent);white-space:nowrap">'+fmtReportAmt(exp.amount,exp.currency)+'</div>'+
+    '</div>';
+    // 付款人 · 付款方式 · 類型
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;flex-wrap:wrap">';
+    if(payerName) h += '<span style="color:#c8b89a">付款：<span style="color:'+payerColor+';font-weight:600">'+esc(payerName)+'</span></span><span style="color:#c8b89a">·</span>';
+    h += '<span style="color:#8ab4d4">'+esc(payMethodName)+'</span>';
+    h += '<span style="color:#c8b89a">·</span>';
+    if(isShared) h += '<span style="color:#7bed9f;font-weight:600">共用分攤</span>';
+    else if(exp.personalType==='proxy') h += '<span style="color:#e8b84b;font-weight:600">代購</span>';
+    else h += '<span style="color:#e8b84b;font-weight:600">個人自用</span>';
+    h += '</div>';
+    // 分攤明細
+    if(isShared && exp.splits){
+      var parts = [];
+      exp.splits.forEach(function(sl){
+        var sum = (sl.slices||[]).reduce(function(s,x){return s+x.amt;},0);
+        if(sum>0.5) parts.push({mid:sl.mid, amt:sum});
+      });
+      if(parts.length){
+        h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">';
+        parts.forEach(function(p){
+          h += '<span style="font-size:11px;background:var(--bg4);border-radius:6px;padding:3px 8px;color:'+mColor(p.mid)+'">'+esc(mName(p.mid))+' '+fmtReportAmt(p.amt,exp.currency)+'</span>';
+        });
+        h += '</div>';
+      }
+    }
+    // 代購明細
+    if(!isShared && exp.personalType==='proxy' && exp.proxyItems && exp.proxyItems.length){
+      h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">';
+      exp.proxyItems.forEach(function(it){
+        h += '<span style="font-size:11px;background:var(--bg4);border-radius:6px;padding:3px 8px;color:'+mColor(it.forId)+'">'+esc(it.name||'項目')+' → '+esc(mName(it.forId))+' '+fmtReportAmt(it.amount||0,exp.currency)+'</span>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  var sharedExps = exps.filter(function(e){ return e.shareType==='shared'; });
+  var personalExps = exps.filter(function(e){ return e.shareType!=='shared'; });
+
+  // 上半部：已分攤
+  html += '<div style="padding:12px 16px 4px"><div style="font-size:12px;font-weight:700;color:#7bed9f">已分攤項目（'+sharedExps.length+'）</div></div>';
+  if(sharedExps.length){
+    sharedExps.forEach(function(e){ html += renderExpRow(e); });
+  } else {
+    html += '<div style="padding:0 16px 8px;font-size:12px;color:#c8b89a">尚無已分攤項目</div>';
+  }
+
+  // 下半部：未分攤
+  html += '<div style="padding:12px 16px 4px"><div style="font-size:12px;font-weight:700;color:#e8b84b">未分攤項目（'+personalExps.length+'）</div>'+
+    '<div style="font-size:10px;color:#c8b89a;margin-top:2px">編輯後改為「共用分攤」即會移至上方</div></div>';
+  if(personalExps.length){
+    personalExps.forEach(function(e){ html += renderExpRow(e); });
+  } else {
+    html += '<div style="padding:0 16px 16px;font-size:12px;color:#c8b89a">無未分攤項目</div>';
+  }
+
+  return html;
+}
+
 
 
 
