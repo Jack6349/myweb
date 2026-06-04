@@ -959,7 +959,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260604.70 (server-first 同步修正)';
+var APP_VERSION = 'v20260604.71 (啟動同步修正)';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -7064,7 +7064,27 @@ function openNavitime(from, to) {
 }
 
 // ════ INIT ════
-renderList();
+renderList();  // 先顯示本機快取（載入中暫顯，避免空白）
+// server-first：啟動時從 GitHub 拉最新版當權威，成功後覆蓋並刷新畫面
+(function startupSync(){
+  if (!localStorage.getItem(GH_TOKEN_KEY)) return; // 無 token 就只用本機快取
+  showSyncStatus('載入中…', 'var(--info)');
+  syncRead().then(function(remote){
+    if (remote) {
+      S.trips = remote;
+      renderList();
+      showSyncStatus('已載入最新版', 'var(--success)');
+      setTimeout(function(){ showSyncStatus('',''); }, 2000);
+    } else {
+      // syncRead 回 null = 讀取失敗（網路問題等），保留本機快取顯示，但提示
+      showSyncStatus('無法連線 server，目前顯示本機快取', '#ff6b6b');
+      setTimeout(function(){ showSyncStatus('',''); }, 4000);
+    }
+  }).catch(function(){
+    showSyncStatus('無法連線 server，目前顯示本機快取', '#ff6b6b');
+    setTimeout(function(){ showSyncStatus('',''); }, 4000);
+  });
+})();
 initDayMode();
 // 清除舊版 docs localStorage（含 base64，改用 Google Drive 後不需要）
 (function migrateDocs() {
