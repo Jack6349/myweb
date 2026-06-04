@@ -959,7 +959,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260603.69 16:00';
+var APP_VERSION = 'v20260604.70 (server-first 同步修正)';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -4095,14 +4095,10 @@ async function syncRead() {
     if (!content) return null;
     var data = JSON.parse(content);
     if (!data || !data.trips) return null;
-    var remoteTs = data.updatedAt || '';
-    var localTs = localStorage.getItem(SYNC_KEY) || '';
-    if (!localTs || remoteTs > localTs) {
-      localStorage.setItem(STORE_KEY, JSON.stringify(data.trips));
-      localStorage.setItem(SYNC_KEY, remoteTs);
-      return data.trips;
-    }
-    return null;
+    // server-first：開啟一律以 server 為基準，覆蓋本機快取（不再用時間戳判斷）
+    localStorage.setItem(STORE_KEY, JSON.stringify(data.trips));
+    localStorage.setItem(SYNC_KEY, data.updatedAt || '');
+    return data.trips;
   } catch(e) {
     console.log('sync read error:', e);
     return null;
@@ -4157,23 +4153,12 @@ async function syncWrite(trips, isRetry) {
       setTimeout(function(){ showSyncStatus('',''); }, 2000);
     } else {
       var err = await res.json();
-      // SHA 衝突：重新 fetch 最新 SHA 後重試一次
-      if ((res.status === 409 || res.status === 422) && !isRetry) {
+      // SHA 衝突：server 已被其他設備更新 → 擋下，不強蓋（server-first）
+      if (res.status === 409 || res.status === 422) {
         localStorage.removeItem(GH_SHA_KEY);
-        showSyncStatus('重新同步中…', 'var(--info)');
-        try {
-          var freshRes = await fetch(GITHUB_API, {
-            headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
-          });
-          if (freshRes.ok) {
-            var freshMeta = await freshRes.json();
-            if (freshMeta.sha) localStorage.setItem(GH_SHA_KEY, freshMeta.sha);
-          }
-        } catch(e2) { /* ignore */ }
-        await syncWrite(trips, true);
-      } else if (res.status === 409 || res.status === 422) {
-        showSyncStatus('同步衝突，請稍後再試', '#ff6b6b');
-        setTimeout(function(){ showSyncStatus('',''); }, 3000);
+        showSyncStatus('server 已被其他設備更新，請重新載入最新版', '#ff6b6b');
+        setTimeout(function(){ showSyncStatus('',''); }, 5000);
+        alert('儲存失敗：server 上的資料已被其他設備更新。\n\n為避免覆蓋他人的修改，這次儲存已停止。\n請重新整理頁面載入最新版後，再重新編輯。');
       } else if (res.status === 401 || res.status === 403) {
         // Token 過期或無效，清除後提示重新輸入
         localStorage.removeItem(GH_TOKEN_KEY);
