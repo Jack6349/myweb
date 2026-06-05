@@ -959,7 +959,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260604.71 (啟動同步修正)';
+var APP_VERSION = 'v20260604.72 (防快取修正)';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -4082,10 +4082,11 @@ function initDayMode() {
 async function syncRead() {
   try {
     var token = localStorage.getItem(GH_TOKEN_KEY);
-    var headers = { 'Accept': 'application/vnd.github.v3+json' };
+    var headers = { 'Accept': 'application/vnd.github.v3+json', 'Cache-Control': 'no-cache, no-store, must-revalidate' };
     if (token) headers['Authorization'] = 'token ' + token;
     // 用 Contents API 讀取（支援 private repo）
-    var res = await fetch(GITHUB_API, { headers: headers });
+    // 加時間戳參數 + no-store 繞過 GitHub CDN / 瀏覽器快取，確保抓到最新
+    var res = await fetch(GITHUB_API + '?t=' + Date.now(), { headers: headers, cache: 'no-store' });
     if (!res.ok) return null;
     var meta = await res.json();
     // 快取 SHA
@@ -4117,8 +4118,9 @@ async function syncWrite(trips, isRetry) {
     // 先取最新 SHA（寫入時必須提供）
     var sha = localStorage.getItem(GH_SHA_KEY) || '';
     if (!sha) {
-      var metaRes = await fetch(GITHUB_API, {
-        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+      var metaRes = await fetch(GITHUB_API + '?t=' + Date.now(), {
+        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json', 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+        cache: 'no-store'
       });
       if (metaRes.ok) {
         var meta = await metaRes.json();
