@@ -959,7 +959,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260605.75 (CSV加付款金額欄)';
+var APP_VERSION = 'v20260606.76 (分攤人員欄)';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -5493,13 +5493,14 @@ function renderPersonReport(exps, members, curs){
     var tw = toTwd(e.amount, e.currency);
     if(tw===null) rateMissing=true;
     if(e.paidBy && paid[e.paidBy]!==undefined && tw!==null) paid[e.paidBy]+=tw;
+    var shrNames=(e.splits||[]).filter(function(sp){return (sp.slices||[]).reduce(function(a,sl){return a+(sl.amt||0);},0)>0;}).map(function(sp){return nameOf(sp.mid);}).join('\u3001');
     (e.splits||[]).forEach(function(sp){
       if(items[sp.mid]===undefined) return;
       var s=(sp.slices||[]).reduce(function(a,sl){return a+(sl.amt||0);},0);
       if(s>0){
         var stw=toTwd(s,e.currency);
         if(stw!==null) owed[sp.mid]+=stw;
-        items[sp.mid].push({dt:dateOf(e),payer:nameOf(e.paidBy),pm:PM[e.payMethod||'']||'\u672a\u6307\u5b9a',desc:e.desc||'\u7121\u8aaa\u660e',cat:e.category,amt:s,cur:e.currency,twd:stw});
+        items[sp.mid].push({dt:dateOf(e),payer:nameOf(e.paidBy),pm:PM[e.payMethod||'']||'\u672a\u6307\u5b9a',desc:e.desc||'\u7121\u8aaa\u660e',cat:e.category,total:e.amount,sharers:shrNames,amt:s,cur:e.currency,twd:stw});
       }
     });
   });
@@ -5539,6 +5540,7 @@ function renderPersonReport(exps, members, curs){
             '<div class="report-desc">'+
               '<div style="font-size:13px">'+esc(it.desc)+'</div>'+
               '<div class="report-sub">'+it.dt+' \u00b7 '+it.payer+'\u4ed8 \u00b7 '+it.pm+'</div>'+
+              '<div class="report-sub" style="color:#9aa8bd">\u5206\u64d4\uff1a'+esc(it.sharers)+'</div>'+
             '</div>'+
           '</div>'+
           '<div style="text-align:right">'+
@@ -5623,15 +5625,16 @@ function downloadPersonCSV(){
   var csv=[];
   // \u5340\u584a1\uff1a\u5171\u7528\u5206\u64d4\u660e\u7d30
   csv.push('\u3010\u5171\u7528\u5206\u64d4\u660e\u7d30\u3011');
-  csv.push(['\u6210\u54e1','\u65e5\u671f','\u4ed8\u6b3e\u4eba','\u4ed8\u6b3e\u65b9\u5f0f','\u9805\u76ee','\u5206\u985e','\u4ed8\u6b3e\u91d1\u984d','\u5206\u64d4\u91d1\u984d','\u5e63\u5225','\u63db\u7b97TWD'].map(esc).join(','));
+  csv.push(['\u6210\u54e1','\u65e5\u671f','\u4ed8\u6b3e\u4eba','\u4ed8\u6b3e\u65b9\u5f0f','\u9805\u76ee','\u5206\u985e','\u4ed8\u6b3e\u91d1\u984d','\u5206\u64d4\u4eba\u54e1','\u5206\u64d4\u91d1\u984d','\u5e63\u5225','\u63db\u7b97TWD'].map(esc).join(','));
   members.forEach(function(m){
     rows.forEach(function(r){
       var dt=r[0], e=r[1];
       if(e.shareType!=='shared') return;
+      var shrNames=(e.splits||[]).filter(function(sp){return (sp.slices||[]).reduce(function(a,sl){return a+(sl.amt||0);},0)>0;}).map(function(sp){return nameOf(sp.mid);}).join('\u3001');
       (e.splits||[]).forEach(function(sp){
         if(sp.mid!==m.id) return;
         var s=(sp.slices||[]).reduce(function(a,sl){return a+(sl.amt||0);},0);
-        if(s>0) csv.push([m.name,dt,nameOf(e.paidBy),PM[e.payMethod||'']||'\u672a\u6307\u5b9a',e.desc||'',CAT[e.category]||'\u5176\u4ed6',e.amount,s,e.currency,toTwd(s,e.currency)].map(esc).join(','));
+        if(s>0) csv.push([m.name,dt,nameOf(e.paidBy),PM[e.payMethod||'']||'\u672a\u6307\u5b9a',e.desc||'',CAT[e.category]||'\u5176\u4ed6',e.amount,shrNames,s,e.currency,toTwd(s,e.currency)].map(esc).join(','));
       });
     });
   });
