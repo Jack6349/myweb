@@ -959,7 +959,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script>
-var APP_VERSION = 'v20260605.74 (每人明細清算+CSV)';
+var APP_VERSION = 'v20260605.75 (CSV加付款金額欄)';
 
 var GAS = 'https://script.google.com/macros/s/AKfycbz8j18olygkPUIsqXEUptyrt7XwDQWEwOcoz81nrLvHCE3HJrDindFnCZ4344o4QT8N1w/exec';
 
@@ -5622,8 +5622,8 @@ function downloadPersonCSV(){
   function esc(v){ v=(''+v).replace(/"/g,'""'); return /[",\n]/.test(v)?'"'+v+'"':v; }
   var csv=[];
   // \u5340\u584a1\uff1a\u5171\u7528\u5206\u64d4\u660e\u7d30
-  csv.push('=== \u5171\u7528\u5206\u64d4\u660e\u7d30 ===');
-  csv.push(['\u6210\u54e1','\u65e5\u671f','\u4ed8\u6b3e\u4eba','\u4ed8\u6b3e\u65b9\u5f0f','\u9805\u76ee','\u5206\u985e','\u5206\u64d4\u91d1\u984d','\u5e63\u5225','\u63db\u7b97TWD'].map(esc).join(','));
+  csv.push('\u3010\u5171\u7528\u5206\u64d4\u660e\u7d30\u3011');
+  csv.push(['\u6210\u54e1','\u65e5\u671f','\u4ed8\u6b3e\u4eba','\u4ed8\u6b3e\u65b9\u5f0f','\u9805\u76ee','\u5206\u985e','\u4ed8\u6b3e\u91d1\u984d','\u5206\u64d4\u91d1\u984d','\u5e63\u5225','\u63db\u7b97TWD'].map(esc).join(','));
   members.forEach(function(m){
     rows.forEach(function(r){
       var dt=r[0], e=r[1];
@@ -5631,12 +5631,12 @@ function downloadPersonCSV(){
       (e.splits||[]).forEach(function(sp){
         if(sp.mid!==m.id) return;
         var s=(sp.slices||[]).reduce(function(a,sl){return a+(sl.amt||0);},0);
-        if(s>0) csv.push([m.name,dt,nameOf(e.paidBy),PM[e.payMethod||'']||'\u672a\u6307\u5b9a',e.desc||'',CAT[e.category]||'\u5176\u4ed6',s,e.currency,toTwd(s,e.currency)].map(esc).join(','));
+        if(s>0) csv.push([m.name,dt,nameOf(e.paidBy),PM[e.payMethod||'']||'\u672a\u6307\u5b9a',e.desc||'',CAT[e.category]||'\u5176\u4ed6',e.amount,s,e.currency,toTwd(s,e.currency)].map(esc).join(','));
       });
     });
   });
   // \u5340\u584a2\uff1a\u500b\u4eba\u8cbb\u7528
-  csv.push(''); csv.push('=== \u500b\u4eba\u8cbb\u7528 ===');
+  csv.push(''); csv.push('\u3010\u500b\u4eba\u8cbb\u7528\u3011');
   csv.push(['\u6210\u54e1','\u65e5\u671f','\u4ed8\u6b3e\u65b9\u5f0f','\u9805\u76ee','\u5206\u985e','\u91d1\u984d','\u5e63\u5225','\u63db\u7b97TWD'].map(esc).join(','));
   members.forEach(function(m){
     rows.forEach(function(r){
@@ -5646,7 +5646,7 @@ function downloadPersonCSV(){
     });
   });
   // \u5340\u584a3\uff1a\u6e05\u7b97\u7e3d\u7d50
-  csv.push(''); csv.push('=== \u6e05\u7b97\u7e3d\u7d50 ===');
+  csv.push(''); csv.push('\u3010\u6e05\u7b97\u7e3d\u7d50\u3011');
   csv.push(['\u6210\u54e1','\u4ed8\u6b3e','\u5206\u64d4','\u6de8\u984d','\u7d50\u679c'].map(esc).join(','));
   var paid={},owed={}; members.forEach(function(m){paid[m.id]=0;owed[m.id]=0;});
   rows.forEach(function(r){
