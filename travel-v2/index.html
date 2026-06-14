@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <!-- 手機寬度優先（390–430px 為主要設計/測試基準），PC/NB 等比延伸 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>旅行行程 — travel-v2 prototype</title>
+  <link rel="stylesheet" href="css/style.css?v=45">
+</head>
+<body>
+  <!-- 手機外框：在寬螢幕上以固定手機寬度置中呈現，模擬手機情境 -->
+  <div class="phone" id="phone">
+    <!-- 共用頂列（非首頁顯示返回鍵） -->
+    <header class="topbar" id="topbar">
+      <button class="topbar__back" id="btnBack" aria-label="返回">‹</button>
+      <span class="topbar__title" id="topbarTitle">標題</span>
+      <span class="topbar__right" id="topbarRight">
+        <button class="topbar__gear" id="btnSettings" aria-label="設定">⚙</button>
+        <button class="topbar__icon" id="btnTheme" aria-label="日夜模式切換">🌙</button>
+      </span>
+    </header>
+
+    <main class="stage" id="stage">
+
+      <!-- ========== P0 首頁 ========== -->
+      <section class="view view--active" id="view-home">
+        <div class="trip-switcher" id="tripSwitcher">
+          <!-- 當前工作行程名（左右滑切換、不可點擊） -->
+        </div>
+        <div class="home-cards" id="homeCards"><!-- 功能卡 --></div>
+        <div class="home-empty" id="homeEmpty" hidden>
+          <p class="home-empty__title">尚無行程</p>
+          <button class="btn btn--primary" id="btnCreateFirst">建立第一個行程</button>
+        </div>
+        <p class="me-badge">當前使用者（我）：<strong id="meBadge"></strong></p>
+      </section>
+
+      <!-- ========== P1 行程清單（選定） ========== -->
+      <section class="view" id="view-trips">
+        <div class="list" id="tripList"></div>
+        <button class="btn btn--add" id="btnAddTrip">＋ 新增行程</button>
+      </section>
+
+      <!-- ========== 使用者設定（所有使用者共用，由首頁卡片進入） ========== -->
+      <section class="view" id="view-settings">
+        <div class="settings-menu">
+          <button class="settings-item" id="btnPaletteSettings">
+            <span class="settings-item__icon">🎨</span>
+            <span class="settings-item__main">
+              <span class="settings-item__title">外觀主題與配色</span>
+              <span class="settings-item__sub">日/夜由標題列右上 🌙 / ☀️ 切換；夜間配色可在此選擇</span>
+            </span>
+            <span class="settings-item__arrow">›</span>
+          </button>
+          <button class="settings-item" disabled>
+            <span class="settings-item__icon">💱</span>
+            <span class="settings-item__main">
+              <span class="settings-item__title">預設幣別顯示</span>
+              <span class="settings-item__sub">後續開放</span>
+            </span>
+          </button>
+        </div>
+        <div class="sim-identity">
+          <label>🧪 模擬登入身分（prototype 驗證用）
+            <select id="simIdentity"></select>
+          </label>
+          <p class="day-hint">切換後可驗證不同角色／管理員的權限差異；第二階段由真實登入取代。</p>
+        </div>
+      </section>
+
+      <!-- ========== 系統管理設定（僅管理員，由 ⚙ 進入） ========== -->
+      <section class="view" id="view-admin">
+        <div class="settings-menu">
+          <button class="settings-item" data-go="view-members">
+            <span class="settings-item__icon">👥</span>
+            <span class="settings-item__main">
+              <span class="settings-item__title">成員管理</span>
+              <span class="settings-item__sub">全域帳號通訊錄（帳號 / 別名）</span>
+            </span>
+            <span class="settings-item__arrow">›</span>
+          </button>
+          <button class="settings-item" disabled>
+            <span class="settings-item__icon">🔐</span>
+            <span class="settings-item__main">
+              <span class="settings-item__title">權限政策</span>
+              <span class="settings-item__sub">角色預設值等（後續開放）</span>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ========== 成員管理（全域通訊錄，由「設定」進入） ========== -->
+      <section class="view" id="view-members">
+        <p class="day-hint">全域成員通訊錄，供各行程挑選。「我」不可刪除、可改別名。</p>
+        <div class="list" id="memberList"></div>
+        <button class="btn btn--add" id="btnAddMember">＋ 新增成員</button>
+      </section>
+
+      <!-- ========== PN 新增行程 ========== -->
+      <section class="view" id="view-newtrip">
+        <form class="form" id="newTripForm">
+          <label>行程名稱<input type="text" name="name" required placeholder="例：2026 北海道初夏"></label>
+          <label>起始日<input type="date" name="start" required></label>
+          <label>結束日<input type="date" name="end" required></label>
+          <fieldset class="form__members">
+            <legend>成員</legend>
+            <div id="newTripMembers"></div>
+          </fieldset>
+          <label>幣別
+            <select name="currency" id="newTripCurrency"></select>
+          </label>
+          <button type="submit" class="btn btn--primary" id="newTripSubmit">完成，設為當前工作行程</button>
+          <button type="button" class="btn btn--danger" id="newTripDelete" hidden>刪除此行程</button>
+        </form>
+      </section>
+
+      <!-- ========== P2 行程編輯（站點拖放） ========== -->
+      <section class="view view--editor" id="view-editor">
+        <div class="editor">
+          <div class="editor__pool" id="editorPool">
+            <div class="editor__pool-head">
+              站點規劃區
+              <button class="btn btn--mini" id="btnAddStation">＋站點</button>
+            </div>
+            <div class="pool-list" id="poolList"></div>
+          </div>
+          <div class="editor__board" id="editorBoard"></div>
+        </div>
+      </section>
+
+      <!-- ========== P3 費用（新增：手動 / 拍收據辨識） ========== -->
+      <section class="view" id="view-expense">
+        <div class="day-nav">
+          <button class="day-nav__btn" id="dayPrev" aria-label="往左">‹</button>
+          <div class="day-tabs" id="expenseDayTabs"></div>
+          <button class="day-nav__btn" id="dayNext" aria-label="往右">›</button>
+        </div>
+        <p class="day-hint" id="expenseDayHint"></p>
+        <div class="list" id="expenseList"></div>
+        <div class="expense-actions">
+          <button class="btn btn--add" id="btnScanReceipt">📷 拍收據辨識</button>
+          <button class="btn btn--add" id="btnAddExpense">＋ 手動新增</button>
+        </div>
+      </section>
+
+      <!-- ========== 結算（費用報表 + 分攤指定） ========== -->
+      <section class="view" id="view-settlement">
+        <div class="list" id="settleRates"></div>
+        <div class="seg" id="settleTabs">
+          <button class="seg__btn is-on" data-tab="total">總覽</button>
+          <button class="seg__btn" data-tab="person">每人</button>
+          <button class="seg__btn" data-tab="day">每日</button>
+          <button class="seg__btn" data-tab="pay">付款</button>
+          <button class="seg__btn" data-tab="assign">分攤指定</button>
+        </div>
+
+        <div id="settlePane-total">
+          <div class="list" id="settleTotalList"></div>
+        </div>
+
+        <div id="settlePane-person" hidden>
+          <div class="list" id="settlePersonList"></div>
+        </div>
+
+        <div id="settlePane-day" hidden>
+          <div class="list" id="settleDayList"></div>
+        </div>
+
+        <div id="settlePane-pay" hidden>
+          <div class="list" id="settlePayList"></div>
+        </div>
+
+        <div id="settlePane-assign" hidden>
+          <div class="field"><div class="field__label">費用負擔總覽（已套用分攤指定）</div>
+            <p class="day-hint">每人最終應負擔的金額，已將下方指定的分攤對象計入。</p>
+            <div class="list" id="settleSummary"></div>
+          </div>
+          <div class="field"><div class="field__label">指定分攤對象</div>
+          <p class="day-hint">選擇成員 → 勾選費用 → 指定改由誰分攤。</p>
+          <div class="field__label" style="margin-top:8px;">選擇成員</div>
+            <div class="chip-cards" id="settleMembers"></div>
+          </div>
+          <p class="day-hint" id="settleHint"></p>
+          <div class="list" id="settleList"></div>
+          <div class="field" id="settleAssignField" hidden>
+            <div class="field__label">分攤對象（這幾筆改由誰分攤）</div>
+            <div class="chip-cards" id="settleAssignTargets"></div>
+          </div>
+          <button class="btn btn--primary" id="btnSettleConfirm" hidden>確定指定</button>
+          <div class="field" style="margin-top:18px;"><div class="field__label">已指定紀錄</div></div>
+          <p class="day-hint">未指定的項目即為本人自付，不需處理。</p>
+          <div class="list" id="settledList"></div>
+        </div>
+      </section>
+
+      <!-- ========== P4 照片（旅遊行程照片紀錄） ========== -->
+      <section class="view" id="view-photo">
+        <button class="btn btn--add" id="btnAddPhoto">📷 拍照 / 選擇照片</button>
+        <p class="day-hint">此行程的照片紀錄（prototype 以圖示佔位，第二階段接相機/相簿）。</p>
+        <div class="photo-grid" id="photoGrid"></div>
+      </section>
+
+      <!-- ========== P5 文件（上傳 + 類別/日期 + 兩種檢視） ========== -->
+      <section class="view" id="view-docs">
+        <button class="btn btn--add" id="btnUploadDoc">⬆️ 上傳文件</button>
+        <div class="seg" id="docModes">
+          <button class="seg__btn is-on" data-mode="date">按日期</button>
+          <button class="seg__btn" data-mode="category">按類別</button>
+        </div>
+        <div id="docList"></div>
+      </section>
+
+      <!-- ========== 班表庫（全域共用，不分日期；交通段選班次用） ========== -->
+      <section class="view" id="view-timetable">
+        <div class="seg" id="timetableModes">
+          <button class="seg__btn is-on" data-mode="entries">班表</button>
+          <button class="seg__btn" data-mode="alias">站點別名</button>
+        </div>
+        <div id="timetableEntryPane">
+          <p class="day-hint">全域共用、不分日期；安排行程時依站點名稱自動篩選候選班次。</p>
+          <div class="list" id="timetableList"></div>
+          <button class="btn btn--add" id="btnImportTimetable">📥 貼上時刻表 JSON 匯入</button>
+        </div>
+        <div id="timetableAliasPane" hidden>
+          <p class="day-hint">同一站點的不同語系/寫法歸為一組，供班表比對；可手動修正 AI 翻譯偏差。</p>
+          <div class="list" id="aliasList"></div>
+          <button class="btn btn--add" id="btnAddAlias">＋ 新增別名群組</button>
+        </div>
+      </section>
+
+      <!-- ========== P6 提醒（CRUD + 狀態/類別/日期 + 兩種檢視） ========== -->
+      <section class="view" id="view-reminders">
+        <div class="seg" id="reminderModes">
+          <button class="seg__btn is-on" data-mode="date">按日期</button>
+          <button class="seg__btn" data-mode="category">按類別</button>
+        </div>
+        <div id="reminderList"></div>
+        <button class="btn btn--add" id="btnAddReminder">＋ 新增提醒</button>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- 簡易彈窗（新增站點/費用用） -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal__panel">
+      <div class="modal__title" id="modalTitle"></div>
+      <div class="modal__body" id="modalBody"></div>
+      <div class="modal__actions">
+        <button class="btn" id="modalCancel">取消</button>
+        <button class="btn btn--primary" id="modalOk">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全域刪除確認對話框（可疊在其他彈窗之上） -->
+  <div class="modal modal--confirm" id="confirmModal" hidden>
+    <div class="modal__panel modal__panel--sm">
+      <div class="modal__title">確認刪除</div>
+      <div class="modal__body"><p id="confirmMsg"></p></div>
+      <div class="modal__actions">
+        <button class="btn" id="confirmCancel">取消</button>
+        <button class="btn btn--danger" id="confirmOk">刪除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- toast 提示 -->
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="js/firebase-init.js"></script>
+  <script src="js/data.js?v=19"></script>
+  <script src="js/core.js?v=20"></script>
+  <script src="js/platform.js?v=19"></script>
+  <script src="js/prefs.js?v=19"></script>
+  <script src="js/receipt.js?v=19"></script>
+  <script src="js/repo.js?v=20"></script>
+  <script src="js/repo.firebase.js?v=1"></script>
+  <script src="js/firebase-sync.js?v=1"></script>
+  <script src="js/timetable.js?v=19"></script>
+  <script src="js/router.js?v=19"></script>
+  <script src="js/dragdrop.js?v=19"></script>
+  <script src="js/app.js?v=39"></script>
+</body>
+</html>
