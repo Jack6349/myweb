@@ -72,6 +72,58 @@ const RepoFirebase = (() => {
     await F.deleteDoc(memberDoc(account));
   }
 
+  // 帳號改名：搬移 members 文件，並改寫所有行程/費用/提醒中對該帳號的引用
+  async function renameMemberAccount(oldAccount, newAccount, memberObj) {
+    const { account, ...data } = memberObj;
+    await F.setDoc(memberDoc(newAccount), data);
+    await F.deleteDoc(memberDoc(oldAccount));
+
+    const allTrips = await trips();
+    for (const t of allTrips) {
+      let members = t.members || [];
+      let roles = t.roles || {};
+      let tripChanged = false;
+      if (members.includes(oldAccount)) {
+        members = members.map(a => a === oldAccount ? newAccount : a);
+        tripChanged = true;
+      }
+      if (oldAccount in roles) {
+        roles = { ...roles, [newAccount]: roles[oldAccount] };
+        delete roles[oldAccount];
+        tripChanged = true;
+      }
+      if (tripChanged) await F.updateDoc(tripDoc(t.id), { members, roles });
+
+      const expSnap = await F.getDocs(subCol(t.id, 'expenses'));
+      for (const d of expSnap.docs) {
+        const e = d.data();
+        const upd = {};
+        if (e.payer === oldAccount) upd.payer = newAccount;
+        if (Array.isArray(e.split) && e.split.includes(oldAccount)) {
+          upd.split = e.split.map(a => a === oldAccount ? newAccount : a);
+        }
+        if (Array.isArray(e.items)) {
+          let itemsChanged = false;
+          const items = e.items.map(i => {
+            if (Array.isArray(i.split) && i.split.includes(oldAccount)) {
+              itemsChanged = true;
+              return { ...i, split: i.split.map(a => a === oldAccount ? newAccount : a) };
+            }
+            return i;
+          });
+          if (itemsChanged) upd.items = items;
+        }
+        if (Object.keys(upd).length) await F.updateDoc(d.ref, upd);
+      }
+
+      const remSnap = await F.getDocs(subCol(t.id, 'reminders'));
+      for (const d of remSnap.docs) {
+        const r = d.data();
+        if (r.owner === oldAccount) await F.updateDoc(d.ref, { owner: newAccount });
+      }
+    }
+  }
+
   /* ---- 費用 Travel_trips/{tripId}/expenses/{expenseId} ---- */
   async function expenses(tripId, day) {
     const snap = await F.getDocs(subCol(tripId, 'expenses'));
@@ -179,7 +231,7 @@ const RepoFirebase = (() => {
   return {
     init,
     trips, getTrip, addTrip, deleteTrip, syncDays,
-    members, addMember, deleteMember,
+    members, addMember, deleteMember, renameMemberAccount,
     expenses, addExpense, allExpenses, photos, addPhoto,
     documents, addDocument, deleteDocument,
     reminders, pendingCount, addReminder, deleteReminder,

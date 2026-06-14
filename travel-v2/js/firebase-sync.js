@@ -105,6 +105,12 @@ const FirebaseSync = (() => {
       .catch(e => console.warn('[FirebaseSync] deleteMember failed', e));
   }
 
+  function renameMemberAccount(oldAccount, newAccount, memberObj) {
+    if (!cloudEnabled) return;
+    RepoFirebase.renameMemberAccount(oldAccount, newAccount, memberObj)
+      .catch(e => console.warn('[FirebaseSync] renameMemberAccount failed', e));
+  }
+
   function deleteReminder(tripId, id) {
     if (!cloudEnabled) return;
     // id 須為 Firestore 文件 ID（hydrate 載入的提醒、或 addReminder 已回填者皆符合）
@@ -113,5 +119,5 @@ const FirebaseSync = (() => {
       .catch(e => console.warn('[FirebaseSync] deleteReminder failed', e));
   }
 
-  return { hydrate, addExpense, addReminder, deleteReminder, addMember, updateMember, deleteMember };
+  return { hydrate, addExpense, addReminder, deleteReminder, addMember, updateMember, deleteMember, renameMemberAccount };
 })();

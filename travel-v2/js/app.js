@@ -2023,6 +2023,41 @@ const App = (() => {
     return true;
   }
 
+  // 帳號驗證：非空、不可與其他成員帳號重複（排除自己原帳號）
+  function validAccount(account, exceptAccount) {
+    if (!account) { toast('請輸入帳號'); return false; }
+    if (account !== exceptAccount && accountExists(account)) { toast('帳號已存在'); return false; }
+    return true;
+  }
+
+  // 將舊帳號在所有行程/費用/提醒中的引用改為新帳號（含「我」的登入身分）
+  function renameAccountEverywhere(oldAccount, newAccount) {
+    TRIPS.forEach(t => {
+      if (Array.isArray(t.members)) {
+        t.members = t.members.map(a => a === oldAccount ? newAccount : a);
+      }
+      if (t.roles && oldAccount in t.roles) {
+        t.roles[newAccount] = t.roles[oldAccount];
+        delete t.roles[oldAccount];
+      }
+    });
+    Object.values(EXPENSES).forEach(byDay => {
+      Object.values(byDay).forEach(list => {
+        list.forEach(e => {
+          if (e.payer === oldAccount) e.payer = newAccount;
+          if (Array.isArray(e.split)) e.split = e.split.map(a => a === oldAccount ? newAccount : a);
+          if (Array.isArray(e.items)) e.items.forEach(i => {
+            if (Array.isArray(i.split)) i.split = i.split.map(a => a === oldAccount ? newAccount : a);
+          });
+        });
+      });
+    });
+    Object.values(REMINDERS).forEach(list => {
+      list.forEach(r => { if (r.owner === oldAccount) r.owner = newAccount; });
+    });
+    if (Auth.currentAccount() === oldAccount) Auth.setAccount(newAccount);
+  }
+
   function addMember() {
     Modal.open('新增成員', `
       <label>登入帳號<input id="mm_account" placeholder="如 jack（可省略 @gmail.com）"></label>
@@ -2042,17 +2077,28 @@ const App = (() => {
   }
 
   function renameMember(m) {
-    Modal.open('修改別名', `
-      <p class="day-hint">帳號 <strong>${m.account}</strong>（不可變）。改別名後，所有畫面與歷史紀錄即時同步。</p>
+    Modal.open('編輯成員', `
+      <label>登入帳號<input id="mm_account" value="${m.account}"></label>
+      <p class="day-hint">變更帳號將同步更新此成員在所有行程／費用／提醒中的引用。</p>
       <label>別名<input id="mm_alias" value="${m.alias.replace(/"/g, '&quot;')}"></label>
     `, () => {
+      let account = $('mm_account').value.trim().toLowerCase().replace(/@gmail\.com$/i, '');
       const alias = $('mm_alias').value.trim();
+      if (!validAccount(account, m.account)) return false;
       if (!validAlias(alias, m.account)) return false;
-      m.alias = alias;               // 僅改別名；引用以帳號為鍵，故全站含歷史同步
-      FirebaseSync.updateMember(m);
+      const oldAccount = m.account;
+      if (account !== oldAccount) {
+        renameAccountEverywhere(oldAccount, account);
+        m.account = account;
+        m.alias = alias;
+        FirebaseSync.renameMemberAccount(oldAccount, account, m);
+      } else {
+        m.alias = alias;               // 僅改別名；引用以帳號為鍵，故全站含歷史同步
+        FirebaseSync.updateMember(m);
+      }
       renderMembers();
       renderHome();                  // 若改的是「我」，首頁標記同步
-      toast('已更新別名');
+      toast('已更新成員');
     });
   }
 
