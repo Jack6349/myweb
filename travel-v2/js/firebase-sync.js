@@ -86,6 +86,25 @@ const FirebaseSync = (() => {
       .catch(e => console.warn('[FirebaseSync] addReminder failed', e));
   }
 
+  function addMember(m) {
+    if (!cloudEnabled) return;
+    RepoFirebase.addMember(m)
+      .catch(e => console.warn('[FirebaseSync] addMember failed', e));
+  }
+
+  // 改別名沿用 addMember（setDoc 覆寫整份文件）
+  function updateMember(m) {
+    if (!cloudEnabled) return;
+    RepoFirebase.addMember(m)
+      .catch(e => console.warn('[FirebaseSync] updateMember failed', e));
+  }
+
+  function deleteMember(account) {
+    if (!cloudEnabled) return;
+    RepoFirebase.deleteMember(account)
+      .catch(e => console.warn('[FirebaseSync] deleteMember failed', e));
+  }
+
   function deleteReminder(tripId, id) {
     if (!cloudEnabled) return;
     // id 須為 Firestore 文件 ID（hydrate 載入的提醒、或 addReminder 已回填者皆符合）
@@ -94,5 +113,5 @@ const FirebaseSync = (() => {
       .catch(e => console.warn('[FirebaseSync] deleteReminder failed', e));
   }
 
-  return { hydrate, addExpense, addReminder, deleteReminder };
+  return { hydrate, addExpense, addReminder, deleteReminder, addMember, updateMember, deleteMember };
 })();

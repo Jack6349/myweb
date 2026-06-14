@@ -2035,6 +2035,7 @@ const App = (() => {
       if (accountExists(account)) { toast('帳號已存在'); return false; }
       if (!validAlias(alias, null)) return false;
       Repo.addMember({ account, alias });
+      FirebaseSync.addMember({ account, alias });
       renderMembers();
       toast('已新增成員');
     });
@@ -2048,6 +2049,7 @@ const App = (() => {
       const alias = $('mm_alias').value.trim();
       if (!validAlias(alias, m.account)) return false;
       m.alias = alias;               // 僅改別名；引用以帳號為鍵，故全站含歷史同步
+      FirebaseSync.updateMember(m);
       renderMembers();
       renderHome();                  // 若改的是「我」，首頁標記同步
       toast('已更新別名');
@@ -2061,6 +2063,7 @@ const App = (() => {
     if (used) { toast(`此成員已被${used}引用，無法刪除`); return; }
     Confirm.open(`確定刪除成員「${m.alias}」（帳號 ${m.account}）？`, () => {
       Repo.deleteMember(m.account);
+      FirebaseSync.deleteMember(m.account);
       renderMembers();
       toast('已刪除成員');
     });
