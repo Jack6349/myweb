@@ -1929,6 +1929,7 @@ const App = (() => {
       const label = `${m.alias}（${m.account}${m.admin ? '・管理員' : ''}）`;
       sel.appendChild(new Option(label, m.account, false, m.account === Auth.currentAccount()));
     });
+    $('btnResetSimIdentity').hidden = !Auth.isSimulating();
   }
 
   /* ---------- 登入 / 綁定帳號 ---------- */
@@ -2238,6 +2239,11 @@ const App = (() => {
       Auth.setAccount(e.target.value);    // prototype 模擬身分切換
       renderSettings();
       toast(`已切換為 ${Auth.currentAlias()}`);
+    });
+    $('btnResetSimIdentity').addEventListener('click', () => {
+      Auth.clearSimAccount();
+      renderSettings();
+      toast(`已重設為 ${Auth.currentAlias()}`);
     });
     // 費用日切換：左右箭頭捲動 + 滑動時更新箭頭狀態
     $('dayPrev').addEventListener('click', () => $('expenseDayTabs').scrollBy({ left: -160, behavior: 'smooth' }));

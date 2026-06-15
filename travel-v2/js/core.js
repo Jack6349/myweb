@@ -6,7 +6,8 @@
 // 登入身分。第二階段：Firebase Authentication（Google 登入）+ uid → account 對應。
 // acct 為 null 代表「尚未登入」或「已登入但尚未綁定成員」。
 const Auth = (() => {
-  let acct = null;     // 目前身分對應的帳號（members.account）
+  let acct = null;     // 真實登入身分對應的帳號（members.account）
+  let simAcct = null;   // 管理員模擬切換的身分（僅影響 currentAccount/Alias/isMe，不影響 isAdmin）
   let fbUser = null;    // Firebase Auth user（{ uid, email, displayName }）或 null
   let readyResolve;
   const ready = new Promise(r => { readyResolve = r; });
@@ -44,14 +45,16 @@ const Auth = (() => {
   return {
     ready,
     init,
-    currentAccount() { return acct; },
-    currentAlias() { return acct ? aliasOf(acct) : null; },
+    currentAccount() { return simAcct || acct; },
+    currentAlias() { const a = simAcct || acct; return a ? aliasOf(a) : null; },
     currentUser() { return fbUser; },
     isSignedIn() { return !!fbUser; },
     isBound() { return !!acct; },
-    isMe(account) { return account === acct; },     // 「(我)」跟隨當前登入身分
-    isAdmin() { return acct ? isAdminAccount(acct) : false; }, // 當前身分是否為系統管理員
-    setAccount(account) { acct = account; },         // 僅供 admin 除錯用的模擬身分切換
+    isMe(account) { return account === (simAcct || acct); },  // 「(我)」跟隨當前（含模擬）身分
+    isAdmin() { return acct ? isAdminAccount(acct) : false; }, // 以真實登入身分判斷，不受模擬切換影響
+    setAccount(account) { simAcct = account; },      // 僅供 admin 除錯用的模擬身分切換
+    clearSimAccount() { simAcct = null; },           // 重設為真實登入身分
+    isSimulating() { return !!simAcct && simAcct !== acct; },
     // hydrate() 可能在 MEMBERS 載入雲端資料後更新 uid 對照，需重新比對一次
     refresh() { resolveAccount(); },
     // 將目前登入的 Google 帳號綁定到指定 member（寫入 uid）
