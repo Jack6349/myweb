@@ -2205,6 +2205,7 @@ const App = (() => {
 
   async function init() {
     await Auth.init(afterAuthChange);
+    await Auth.ready; // 等待 Firebase 還原登入狀態後才繼續，避免 hydrate/refresh 時 fbUser 仍是 null
 
     // 小範圍試點：開機時嘗試從 Firestore 載入資料覆寫假資料；失敗則沿用 data.js 假資料。
     try {
