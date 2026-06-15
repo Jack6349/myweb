@@ -27,8 +27,9 @@ const Auth = (() => {
     });
   }
 
-  // app.js 開機時呼叫一次：等待 Firebase 就緒、訂閱登入狀態，並在第一次狀態確定後 resolve ready
-  async function init() {
+  // app.js 開機時呼叫一次：等待 Firebase 就緒、訂閱登入狀態，並在第一次狀態確定後 resolve ready。
+  // onChange：第一次之後的登入狀態變化（登入/登出/重新導向回來）會呼叫此 callback。
+  async function init(onChange) {
     await waitForFB();
     if (!window.FB || !window.FB.auth) { readyResolve(); return; }
     let first = true;
@@ -36,6 +37,7 @@ const Auth = (() => {
       fbUser = user;
       resolveAccount();
       if (first) { first = false; readyResolve(); }
+      else if (onChange) onChange();
     });
   }
 
@@ -61,8 +63,9 @@ const Auth = (() => {
       acct = account;
       return true;
     },
+    // GitHub Pages 預設 COOP header 會擋掉 signInWithPopup 的回傳訊息，改用導向式登入。
     signIn() {
-      return window.FB.signInWithPopup(window.FB.auth, new window.FB.GoogleAuthProvider());
+      return window.FB.signInWithRedirect(window.FB.auth, new window.FB.GoogleAuthProvider());
     },
     signOut() {
       return window.FB.signOut(window.FB.auth);

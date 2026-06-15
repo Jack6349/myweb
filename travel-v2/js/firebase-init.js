@@ -8,7 +8,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -31,7 +31,7 @@ window.FB = {
   // Firestore 常用函式一併暴露，避免重複 import
   collection, doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc,
   // Auth 常用函式
-  GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+  GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 };
 
 console.log('[firebase-init] Firebase 已初始化，projectId =', firebaseConfig.projectId);
