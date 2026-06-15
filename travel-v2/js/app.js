@@ -2008,7 +2008,7 @@ const App = (() => {
           <div class="list-item__title">${m.alias}${isMe ? ' <span class="me-tag">(我)</span>' : ''}</div>
           <div class="list-item__sub">帳號：${m.account}</div>
         </div>
-        <button class="btn btn--mini" data-act="rename">✎ 別名</button>
+        <button class="btn btn--mini" data-act="rename">✎ 編輯</button>
         ${isMe ? '' : '<button class="btn btn--mini btn--danger" data-act="del">🗑</button>'}`;
       item.querySelector('[data-act="rename"]').addEventListener('click', () => renameMember(m));
       if (!isMe) item.querySelector('[data-act="del"]').addEventListener('click', () => deleteMember(m));
