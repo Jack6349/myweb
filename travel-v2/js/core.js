@@ -3,15 +3,70 @@
  * 第二階段只需把 Auth 來源換成真實登入、加持久化，Permission 與上層 UI 不需改。
  */
 
-// 登入身分。預設 CURRENT_ACCOUNT；prototype 提供模擬切換以驗證權限。第二階段由 Firebase Auth 取代。
+// 登入身分。第二階段：Firebase Authentication（Google 登入）+ uid → account 對應。
+// acct 為 null 代表「尚未登入」或「已登入但尚未綁定成員」。
 const Auth = (() => {
-  let acct = CURRENT_ACCOUNT;
+  let acct = null;     // 目前身分對應的帳號（members.account）
+  let fbUser = null;    // Firebase Auth user（{ uid, email, displayName }）或 null
+  let readyResolve;
+  const ready = new Promise(r => { readyResolve = r; });
+
+  // 依 fbUser.uid 在 MEMBERS 中找對應帳號；找不到則 acct = null（待綁定）
+  function resolveAccount() {
+    if (!fbUser) { acct = null; return; }
+    const m = MEMBERS.find(x => x.uid === fbUser.uid);
+    acct = m ? m.account : null;
+  }
+
+  // 等待 window.FB（firebase-init.js 為 deferred module，可能晚於本檔執行）
+  function waitForFB(timeoutMs = 3000) {
+    if (window.FB) return Promise.resolve(!!window.FB);
+    return new Promise(resolve => {
+      const timer = setTimeout(() => resolve(!!window.FB), timeoutMs);
+      window.addEventListener('fb-ready', () => { clearTimeout(timer); resolve(true); }, { once: true });
+    });
+  }
+
+  // app.js 開機時呼叫一次：等待 Firebase 就緒、訂閱登入狀態，並在第一次狀態確定後 resolve ready
+  async function init() {
+    await waitForFB();
+    if (!window.FB || !window.FB.auth) { readyResolve(); return; }
+    let first = true;
+    window.FB.onAuthStateChanged(window.FB.auth, (user) => {
+      fbUser = user;
+      resolveAccount();
+      if (first) { first = false; readyResolve(); }
+    });
+  }
+
   return {
+    ready,
+    init,
     currentAccount() { return acct; },
-    currentAlias() { return aliasOf(acct); },
-    isMe(account) { return account === acct; },     // 「(我)」跟隨當前（模擬）身分
-    isAdmin() { return isAdminAccount(acct); },      // 當前身分是否為系統管理員
-    setAccount(account) { acct = account; },         // prototype 模擬身分切換（第二階段移除）
+    currentAlias() { return acct ? aliasOf(acct) : null; },
+    currentUser() { return fbUser; },
+    isSignedIn() { return !!fbUser; },
+    isBound() { return !!acct; },
+    isMe(account) { return account === acct; },     // 「(我)」跟隨當前登入身分
+    isAdmin() { return acct ? isAdminAccount(acct) : false; }, // 當前身分是否為系統管理員
+    setAccount(account) { acct = account; },         // 僅供 admin 除錯用的模擬身分切換
+    // hydrate() 可能在 MEMBERS 載入雲端資料後更新 uid 對照，需重新比對一次
+    refresh() { resolveAccount(); },
+    // 將目前登入的 Google 帳號綁定到指定 member（寫入 uid）
+    bindAccount(account) {
+      if (!fbUser) return false;
+      const m = MEMBERS.find(x => x.account === account);
+      if (!m) return false;
+      m.uid = fbUser.uid;
+      acct = account;
+      return true;
+    },
+    signIn() {
+      return window.FB.signInWithPopup(window.FB.auth, new window.FB.GoogleAuthProvider());
+    },
+    signOut() {
+      return window.FB.signOut(window.FB.auth);
+    },
   };
 })();
 

@@ -1,13 +1,11 @@
 /* travel-v2 prototype — 假資料層
- * 注意：本 prototype 不做登入機制（第二階段才接 Firebase Auth / 多人協作 / 鎖定）。
- * 但固定假設「當前使用者 = Jack」，讓費用、提醒等畫面有固定的「我」，
- * 第二階段接登入時可直接以真實使用者替換 CURRENT_USER，介面結構不需重改。
+ * 第二階段已接 Firebase Authentication（Google 登入），「我」由登入身分決定（見 core.js Auth）。
  */
 
 /* 全域成員通訊錄（假資料）— 帳號 + 別名（LINE 式）。
  * - account：登入唯一 Key（可省略 @gmail.com），不可變，作為所有引用的鍵。
  * - alias  ：顯示名稱，可改、需唯一；僅於渲染時查表，故改別名全站（含歷史）即時同步。
- * 「我」由當前登入帳號 CURRENT_ACCOUNT 判定（見 core.js Auth）。
+ * 「我」由當前登入身分（Firebase Auth uid → members.uid 對應）判定（見 core.js Auth）。
  * 重要：費用 payer/split、提醒 owner、行程 members 一律存「帳號」，不存別名。
  */
 let MEMBERS = [
@@ -16,7 +14,6 @@ let MEMBERS = [
   { account: 'ershao', alias: '二少' },
   { account: 'mi',     alias: '咪' },
 ];
-const CURRENT_ACCOUNT = 'jack';   // 本階段固定登入帳號（第二階段由 Auth 取代）
 
 // 是否為系統管理員帳號（系統管理設定僅管理員可見）
 function isAdminAccount(account) {

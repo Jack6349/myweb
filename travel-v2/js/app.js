@@ -1920,10 +1920,43 @@ const App = (() => {
 
   /* ---------- 使用者設定（所有人，由首頁卡片進入） ---------- */
   function renderSettings() {
+    const user = Auth.currentUser();
+    $('loginAccountInfo').textContent = `${Auth.currentAlias()}（${user ? user.email : ''}）`;
+    $('simIdentityBox').hidden = !Auth.isAdmin();
+
     const sel = $('simIdentity'); sel.innerHTML = '';
     Repo.members().forEach(m => {
       const label = `${m.alias}（${m.account}${m.admin ? '・管理員' : ''}）`;
       sel.appendChild(new Option(label, m.account, false, m.account === Auth.currentAccount()));
+    });
+  }
+
+  /* ---------- 登入 / 綁定帳號 ---------- */
+  function renderLogin() {
+    const signedIn = Auth.isSignedIn();
+    const bound = Auth.isBound();
+    $('btnGoogleSignIn').hidden = signedIn;
+    $('bindMemberBox').hidden = !signedIn || bound;
+    $('loginHint').textContent = signedIn
+      ? '此 Google 帳號尚未綁定成員，請選擇對應的成員：'
+      : '請使用 Google 帳號登入。';
+
+    if (!signedIn || bound) return;
+    const wrap = $('bindMemberList'); wrap.innerHTML = '';
+    Repo.members().forEach(m => {
+      const item = document.createElement('div'); item.className = 'list-item';
+      item.innerHTML = `
+        <div class="list-item__main">
+          <div class="list-item__title">${m.alias}</div>
+          <div class="list-item__sub">帳號：${m.account}</div>
+        </div>`;
+      item.addEventListener('click', () => {
+        Auth.bindAccount(m.account);
+        FirebaseSync.bindMemberUid(m.account, Auth.currentUser().uid);
+        toast(`已綁定為 ${m.alias}`);
+        afterAuthChange();
+      });
+      wrap.appendChild(item);
     });
   }
 
@@ -2161,7 +2194,19 @@ const App = (() => {
     $('btnTheme').textContent = Theme.isLight() ? '🌙' : '☀️';
   }
 
+  // 登入狀態變化（登入/登出/綁定完成）後，決定要顯示登入頁或首頁
+  function afterAuthChange() {
+    if (!Auth.isSignedIn() || !Auth.isBound()) {
+      renderLogin();
+      Router.reset('view-login');
+    } else {
+      Router.reset('view-home');
+    }
+  }
+
   async function init() {
+    await Auth.init(afterAuthChange);
+
     // 小範圍試點：開機時嘗試從 Firestore 載入資料覆寫假資料；失敗則沿用 data.js 假資料。
     try {
       const ok = await FirebaseSync.hydrate();
@@ -2169,6 +2214,7 @@ const App = (() => {
     } catch (e) {
       console.warn('[FirebaseSync] hydrate failed, fallback to local mock data', e);
     }
+    Auth.refresh();
 
     Theme.apply(Theme.get());           // 套用已記住的主題
     Palette.apply(Palette.get());       // 套用已記住的夜間配色方案
@@ -2208,11 +2254,16 @@ const App = (() => {
       b.addEventListener('click', () => { state.docMode = b.dataset.mode; renderDocs(); }));
     $('btnUploadDoc').addEventListener('click', () => openUploadDoc());
     $('btnAddPhoto').addEventListener('click', () => openAddPhoto());
+    $('btnGoogleSignIn').addEventListener('click', () => {
+      Auth.signIn().catch(e => { console.warn('[Auth] signIn failed', e); toast('登入失敗'); });
+    });
+    $('btnSignOutFromBind').addEventListener('click', () => Auth.signOut());
+    $('btnSignOut').addEventListener('click', () => Auth.signOut());
     bindNewTripForm();
     bindEditor();
     bindExpense();
     bindSettlement();
-    Router.reset('view-home');
+    afterAuthChange();
   }
 
   document.addEventListener('DOMContentLoaded', init);

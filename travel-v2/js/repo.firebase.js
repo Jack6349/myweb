@@ -72,6 +72,11 @@ const RepoFirebase = (() => {
     await F.deleteDoc(memberDoc(account));
   }
 
+  // 將目前登入的 Google 帳號 uid 綁定到指定 member（僅更新 uid 欄位）
+  async function setMemberUid(account, uid) {
+    await F.updateDoc(memberDoc(account), { uid });
+  }
+
   // 帳號改名：搬移 members 文件，並改寫所有行程/費用/提醒中對該帳號的引用
   async function renameMemberAccount(oldAccount, newAccount, memberObj) {
     const { account, ...data } = memberObj;
@@ -231,7 +236,7 @@ const RepoFirebase = (() => {
   return {
     init,
     trips, getTrip, addTrip, deleteTrip, syncDays,
-    members, addMember, deleteMember, renameMemberAccount,
+    members, addMember, deleteMember, renameMemberAccount, setMemberUid,
     expenses, addExpense, allExpenses, photos, addPhoto,
     documents, addDocument, deleteDocument,
     reminders, pendingCount, addReminder, deleteReminder,

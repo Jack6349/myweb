@@ -22,6 +22,20 @@
 
     <main class="stage" id="stage">
 
+      <!-- ========== 登入 / 綁定帳號 ========== -->
+      <section class="view" id="view-login">
+        <div class="login-box">
+          <p class="login-box__title">旅行行程</p>
+          <p class="day-hint" id="loginHint">請使用 Google 帳號登入。</p>
+          <button class="btn btn--primary" id="btnGoogleSignIn">使用 Google 帳號登入</button>
+          <div id="bindMemberBox" hidden>
+            <p class="day-hint">此 Google 帳號尚未綁定成員，請選擇對應的成員：</p>
+            <div class="list" id="bindMemberList"></div>
+            <button class="btn" id="btnSignOutFromBind" style="margin-top:14px;">登出</button>
+          </div>
+        </div>
+      </section>
+
       <!-- ========== P0 首頁 ========== -->
       <section class="view view--active" id="view-home">
         <div class="trip-switcher" id="tripSwitcher">
@@ -60,11 +74,22 @@
             </span>
           </button>
         </div>
-        <div class="sim-identity">
-          <label>🧪 模擬登入身分（prototype 驗證用）
+        <div class="settings-menu" style="margin-top:18px;">
+          <div class="settings-item" style="cursor:default;">
+            <span class="settings-item__icon">👤</span>
+            <span class="settings-item__main">
+              <span class="settings-item__title">登入帳號</span>
+              <span class="settings-item__sub" id="loginAccountInfo"></span>
+            </span>
+          </div>
+        </div>
+        <button class="btn" id="btnSignOut">登出</button>
+
+        <div class="sim-identity" id="simIdentityBox" hidden>
+          <label>🧪 模擬登入身分（管理員除錯用）
             <select id="simIdentity"></select>
           </label>
-          <p class="day-hint">切換後可驗證不同角色／管理員的權限差異；第二階段由真實登入取代。</p>
+          <p class="day-hint">切換後可驗證不同角色的權限差異，僅影響本機畫面顯示。</p>
         </div>
       </section>
 
@@ -269,17 +294,17 @@
   <div class="toast" id="toast" hidden></div>
 
   <script type="module" src="js/firebase-init.js"></script>
-  <script src="js/data.js?v=19"></script>
-  <script src="js/core.js?v=20"></script>
+  <script src="js/data.js?v=20"></script>
+  <script src="js/core.js?v=21"></script>
   <script src="js/platform.js?v=19"></script>
   <script src="js/prefs.js?v=19"></script>
   <script src="js/receipt.js?v=19"></script>
   <script src="js/repo.js?v=20"></script>
-  <script src="js/repo.firebase.js?v=1"></script>
-  <script src="js/firebase-sync.js?v=1"></script>
+  <script src="js/repo.firebase.js?v=2"></script>
+  <script src="js/firebase-sync.js?v=2"></script>
   <script src="js/timetable.js?v=19"></script>
   <script src="js/router.js?v=19"></script>
   <script src="js/dragdrop.js?v=19"></script>
-  <script src="js/app.js?v=39"></script>
+  <script src="js/app.js?v=40"></script>
 </body>
 </html>

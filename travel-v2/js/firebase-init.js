@@ -7,6 +7,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/fireba
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD-igMSQif7ekedzilp1GXbiGVdGCHZbt0",
@@ -20,12 +23,15 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
 // 暴露於 window，供 console 測試 / 之後 RepoFirebase.init(db) 使用
 window.FB = {
-  app, db,
+  app, db, auth,
   // Firestore 常用函式一併暴露，避免重複 import
   collection, doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc,
+  // Auth 常用函式
+  GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
 };
 
 console.log('[firebase-init] Firebase 已初始化，projectId =', firebaseConfig.projectId);

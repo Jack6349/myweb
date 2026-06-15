@@ -105,6 +105,12 @@ const FirebaseSync = (() => {
       .catch(e => console.warn('[FirebaseSync] deleteMember failed', e));
   }
 
+  function bindMemberUid(account, uid) {
+    if (!cloudEnabled) return;
+    RepoFirebase.setMemberUid(account, uid)
+      .catch(e => console.warn('[FirebaseSync] bindMemberUid failed', e));
+  }
+
   function renameMemberAccount(oldAccount, newAccount, memberObj) {
     if (!cloudEnabled) return;
     RepoFirebase.renameMemberAccount(oldAccount, newAccount, memberObj)
@@ -119,5 +125,5 @@ const FirebaseSync = (() => {
       .catch(e => console.warn('[FirebaseSync] deleteReminder failed', e));
   }
 
-  return { hydrate, addExpense, addReminder, deleteReminder, addMember, updateMember, deleteMember, renameMemberAccount };
+  return { hydrate, addExpense, addReminder, deleteReminder, addMember, updateMember, deleteMember, renameMemberAccount, bindMemberUid };
 })();
