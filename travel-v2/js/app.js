@@ -1388,7 +1388,7 @@ const App = (() => {
           <div class="list-item__title">${aliasOf(acc)}${Auth.isMe(acc) ? '(我)' : ''} <span style="color:var(--text-dim);font-size:12px;">${expanded ? '▾' : '▸'}</span></div>
           <div class="list-item__sub">付款 ${base} ${Math.round(paid).toLocaleString()}${paidMissing ? '+' : ''}・分攤 ${base} ${Math.round(owed).toLocaleString()}${owedMissing ? '+' : ''}</div>
         </div>
-        <div class="amount" style="color:${net >= 0 ? 'var(--ok)' : 'var(--danger)'}">${net >= 0 ? '+' : ''}${Math.round(net).toLocaleString()} ${net > 0 ? '應收' : (net < 0 ? '應付' : '打平')}</div>`;
+        <div class="amount" style="color:${net >= 0 ? 'var(--ok)' : 'var(--danger)'}">${net >= 0 ? '+' : '-'}${base} ${Math.round(Math.abs(net)).toLocaleString()} ${net > 0 ? '應收' : (net < 0 ? '應付' : '打平')}</div>`;
       head.addEventListener('click', () => {
         state.settlePersonExpanded = expanded ? null : acc;
         renderSettlement();
@@ -1488,31 +1488,52 @@ const App = (() => {
     });
   }
 
-  // ── 付款方式統計 ──
+  // ── 付款方式統計（可點開看明細，樣式比照「總覽」） ──
   function renderSettlePay(t) {
     const wrap = $('settlePayList'); wrap.innerHTML = '';
     const all = Repo.allExpenses(t.id);
     if (!all.length) { wrap.innerHTML = `<p class="day-hint">尚無費用記錄。</p>`; return; }
-    const base = HOME;
+    const dayLabel = d => d === ALL_DAY ? '全程' : 'D' + d;
     const groups = {};
     all.forEach(e => {
       const pm = e.payMethod || '未指定';
-      groups[pm] = groups[pm] || { count: 0, byCur: {} };
-      groups[pm].count++;
-      groups[pm].byCur[e.currency] = (groups[pm].byCur[e.currency] || 0) + e.amount;
+      (groups[pm] = groups[pm] || []).push(e);
     });
     addSectionTitle(wrap, '依付款方式統計');
     [...PAYMENT_METHODS, '未指定'].forEach(pm => {
-      const g = groups[pm];
-      if (!g) return;
-      const parts = Object.keys(g.byCur).map(cur => fmtAmt(g.byCur[cur], cur));
-      const item = document.createElement('div'); item.className = 'list-item';
-      item.innerHTML = `
+      const list = groups[pm];
+      if (!list) return;
+      const byCur = {};
+      list.forEach(e => { byCur[e.currency] = (byCur[e.currency] || 0) + e.amount; });
+      const parts = Object.keys(byCur).map(cur => fmtAmt(byCur[cur], cur));
+      const expanded = state.settlePayExpanded === pm;
+
+      const head = document.createElement('div'); head.className = 'list-item';
+      head.style.cursor = 'pointer';
+      head.innerHTML = `
         <div class="list-item__main">
-          <div class="list-item__title">${pm}</div>
-          <div class="list-item__sub">${g.count} 筆・${parts.join('　·　')}</div>
-        </div>`;
-      wrap.appendChild(item);
+          <div class="list-item__title">${pm} <span style="color:var(--text-dim);font-size:12px;">${expanded ? '▾' : '▸'}</span></div>
+          <div class="list-item__sub">${list.length} 筆</div>
+        </div>
+        <div class="amount">${parts.join('　·　')}</div>`;
+      head.addEventListener('click', () => {
+        state.settlePayExpanded = expanded ? null : pm;
+        renderSettlement();
+      });
+      wrap.appendChild(head);
+
+      if (expanded) {
+        list.forEach(e => {
+          const item = document.createElement('div'); item.className = 'list-item list-item--sub';
+          item.innerHTML = `
+            <div class="list-item__main">
+              <div class="list-item__title">${catIconOf(e.category)} ${e.category}${e.note ? ` <span class="exp-note">${e.note}</span>` : ''}</div>
+              <div class="list-item__sub">${dayLabel(e._day)}・付款：${aliasOf(e.payer)}${e.payer === Auth.currentAccount() ? '(我)' : ''}</div>
+            </div>
+            <div class="amount">${fmtAmt(e.amount, e.currency)}</div>`;
+          wrap.appendChild(item);
+        });
+      }
     });
   }
 
