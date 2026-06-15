@@ -1937,9 +1937,7 @@ const App = (() => {
     const bound = Auth.isBound();
     $('btnGoogleSignIn').hidden = signedIn;
     $('bindMemberBox').hidden = !signedIn || bound;
-    $('loginHint').textContent = signedIn
-      ? '此 Google 帳號尚未綁定成員，請選擇對應的成員：'
-      : '請使用 Google 帳號登入。';
+    $('loginHint').hidden = signedIn;
 
     if (!signedIn || bound) return;
     const wrap = $('bindMemberList'); wrap.innerHTML = '';
