@@ -33,9 +33,6 @@ const Auth = (() => {
   async function init(onChange) {
     await waitForFB();
     if (!window.FB || !window.FB.auth) { readyResolve(); return; }
-    // signInWithRedirect 跳轉回來後，需主動處理一次 redirect 結果，
-    // 否則某些瀏覽器（第三方 cookie / storage 隔離）onAuthStateChanged 不會立即帶出新登入狀態。
-    try { await window.FB.getRedirectResult(window.FB.auth); } catch (e) { console.warn('[Auth] getRedirectResult failed', e); }
     let first = true;
     window.FB.onAuthStateChanged(window.FB.auth, (user) => {
       fbUser = user;
@@ -69,9 +66,8 @@ const Auth = (() => {
       acct = account;
       return true;
     },
-    // GitHub Pages 預設 COOP header 會擋掉 signInWithPopup 的回傳訊息，改用導向式登入。
     signIn() {
-      return window.FB.signInWithRedirect(window.FB.auth, new window.FB.GoogleAuthProvider());
+      return window.FB.signInWithPopup(window.FB.auth, new window.FB.GoogleAuthProvider());
     },
     signOut() {
       return window.FB.signOut(window.FB.auth);
