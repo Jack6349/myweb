@@ -286,7 +286,7 @@ html.light #settleDayList .settle-group > .list-item:first-child { background: #
 .role-sel { flex: 0 0 auto; }
 .role-sel { background: var(--bg-3); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
 .role-sel:disabled { opacity: .45; }
-.sim-identity { background: var(--bg-2); border: 1px dashed var(--accent); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
+.sim-identity { background: var(--bg-2); border: 1px dashed var(--accent); border-radius: 12px; padding: 12px; margin-top: 18px; margin-bottom: 14px; }
 .sim-identity label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--accent); }
 .sim-identity select { background: var(--bg-3); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 8px; font-size: 14px; }
 
