@@ -8,14 +8,14 @@
 const Auth = (() => {
   let acct = null;     // 真實登入身分對應的帳號（members.account）
   let simAcct = null;   // 管理員模擬切換的身分（僅影響 currentAccount/Alias/isMe，不影響 isAdmin）
-  let fbUser = null;    // Firebase Auth user（{ uid, email, displayName }）或 null
+  let fbUser = null;    // Firebase Auth user（{ uid, email, displayName, ... }）或 null
   let readyResolve;
   const ready = new Promise(r => { readyResolve = r; });
 
-  // 依 fbUser.uid 在 MEMBERS 中找對應帳號；找不到則 acct = null（待綁定）
+  // 依 fbUser.email 在 MEMBERS 中找對應帳號；找不到則 acct = null（信箱未登錄）
   function resolveAccount() {
     if (!fbUser) { acct = null; return; }
-    const m = MEMBERS.find(x => x.uid === fbUser.uid);
+    const m = MEMBERS.find(x => x.email && x.email.toLowerCase() === fbUser.email.toLowerCase());
     acct = m ? m.account : null;
   }
 
@@ -57,15 +57,6 @@ const Auth = (() => {
     isSimulating() { return !!simAcct && simAcct !== acct; },
     // hydrate() 可能在 MEMBERS 載入雲端資料後更新 uid 對照，需重新比對一次
     refresh() { resolveAccount(); },
-    // 將目前登入的 Google 帳號綁定到指定 member（寫入 uid）
-    bindAccount(account) {
-      if (!fbUser) return false;
-      const m = MEMBERS.find(x => x.account === account);
-      if (!m) return false;
-      m.uid = fbUser.uid;
-      acct = account;
-      return true;
-    },
     signIn() {
       return window.FB.signInWithPopup(window.FB.auth, new window.FB.GoogleAuthProvider());
     },

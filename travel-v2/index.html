@@ -31,10 +31,9 @@
           <p class="login-box__title">旅行行程</p>
           <p class="day-hint" id="loginHint">請使用 Google 帳號登入。</p>
           <button class="btn btn--primary" id="btnGoogleSignIn">使用 Google 帳號登入</button>
-          <div id="bindMemberBox" hidden>
-            <p class="day-hint">此 Google 帳號尚未綁定成員，請選擇對應的成員：</p>
-            <div class="list" id="bindMemberList"></div>
-            <button class="btn" id="btnSignOutFromBind" style="margin-top:14px;">登出</button>
+          <div id="loginNotFoundBox" hidden>
+            <p class="day-hint" id="loginNotFoundMsg"></p>
+            <button class="btn" id="btnSignOutFromLogin" style="margin-top:14px;">登出</button>
           </div>
         </div>
       </section>
@@ -298,17 +297,17 @@
   <div class="toast" id="toast" hidden></div>
 
   <script type="module" src="js/firebase-init.js"></script>
-  <script src="js/data.js?v=20"></script>
-  <script src="js/core.js?v=25"></script>
+  <script src="js/data.js?v=21"></script>
+  <script src="js/core.js?v=26"></script>
   <script src="js/platform.js?v=19"></script>
   <script src="js/prefs.js?v=19"></script>
   <script src="js/receipt.js?v=19"></script>
   <script src="js/repo.js?v=20"></script>
-  <script src="js/repo.firebase.js?v=2"></script>
-  <script src="js/firebase-sync.js?v=2"></script>
+  <script src="js/repo.firebase.js?v=3"></script>
+  <script src="js/firebase-sync.js?v=3"></script>
   <script src="js/timetable.js?v=19"></script>
   <script src="js/router.js?v=19"></script>
   <script src="js/dragdrop.js?v=19"></script>
-  <script src="js/app.js?v=42"></script>
+  <script src="js/app.js?v=43"></script>
 </body>
 </html>

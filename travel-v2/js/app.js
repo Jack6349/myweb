@@ -1932,31 +1932,17 @@ const App = (() => {
     $('btnResetSimIdentity').hidden = !Auth.isSimulating();
   }
 
-  /* ---------- 登入 / 綁定帳號 ---------- */
+  /* ---------- 登入頁 ---------- */
   function renderLogin() {
     const signedIn = Auth.isSignedIn();
     const bound = Auth.isBound();
     $('btnGoogleSignIn').hidden = signedIn;
-    $('bindMemberBox').hidden = !signedIn || bound;
     $('loginHint').hidden = signedIn;
-
-    if (!signedIn || bound) return;
-    const wrap = $('bindMemberList'); wrap.innerHTML = '';
-    Repo.members().forEach(m => {
-      const item = document.createElement('div'); item.className = 'list-item';
-      item.innerHTML = `
-        <div class="list-item__main">
-          <div class="list-item__title">${m.alias}</div>
-          <div class="list-item__sub">帳號：${m.account}</div>
-        </div>`;
-      item.addEventListener('click', () => {
-        Auth.bindAccount(m.account);
-        FirebaseSync.bindMemberUid(m.account, Auth.currentUser().uid);
-        toast(`已綁定為 ${m.alias}`);
-        afterAuthChange();
-      });
-      wrap.appendChild(item);
-    });
+    $('loginNotFoundBox').hidden = !signedIn || bound;
+    if (signedIn && !bound) {
+      $('loginNotFoundMsg').textContent =
+        `「${Auth.currentUser().email}」尚未登錄為成員，請聯繫管理員新增。`;
+    }
   }
 
   /* ---------- 班表庫（全域共用，不分日期） ---------- */
@@ -2113,17 +2099,18 @@ const App = (() => {
 
   function addMember() {
     Modal.open('新增成員', `
-      <label>登入帳號<input id="mm_account" placeholder="如 jack（可省略 @gmail.com）"></label>
       <label>別名（顯示名稱）<input id="mm_alias" placeholder="如 Jack"></label>
+      <label>Email（Google 帳號）<input id="mm_email" type="email" placeholder="如 jack@gmail.com"></label>
+      <label>內部帳號 ID<input id="mm_account" placeholder="如 jack（不可含空格，僅供系統引用）"></label>
     `, () => {
-      let account = $('mm_account').value.trim().toLowerCase();
       const alias = $('mm_alias').value.trim();
-      account = account.replace(/@gmail\.com$/i, '');   // 登入可省略 @gmail.com
-      if (!account) { toast('請輸入登入帳號'); return false; }
-      if (accountExists(account)) { toast('帳號已存在'); return false; }
+      const email = $('mm_email').value.trim().toLowerCase();
+      const account = $('mm_account').value.trim().toLowerCase().replace(/\s/g, '');
+      if (!account) { toast('請輸入帳號 ID'); return false; }
+      if (accountExists(account)) { toast('帳號 ID 已存在'); return false; }
       if (!validAlias(alias, null)) return false;
-      Repo.addMember({ account, alias });
-      FirebaseSync.addMember({ account, alias });
+      Repo.addMember({ account, alias, email });
+      FirebaseSync.addMember({ account, alias, email });
       renderMembers();
       toast('已新增成員');
     });
@@ -2131,26 +2118,29 @@ const App = (() => {
 
   function renameMember(m) {
     Modal.open('編輯成員', `
-      <label>登入帳號<input id="mm_account" value="${m.account}"></label>
-      <p class="day-hint">變更帳號將同步更新此成員在所有行程／費用／提醒中的引用。</p>
-      <label>別名<input id="mm_alias" value="${m.alias.replace(/"/g, '&quot;')}"></label>
+      <label>別名（顯示名稱）<input id="mm_alias" value="${m.alias.replace(/"/g, '&quot;')}"></label>
+      <label>Email（Google 帳號）<input id="mm_email" type="email" value="${(m.email || '').replace(/"/g, '&quot;')}"></label>
+      <label>內部帳號 ID<input id="mm_account" value="${m.account}"></label>
+      <p class="day-hint">變更帳號 ID 將同步更新所有行程／費用／提醒中的引用。</p>
     `, () => {
-      let account = $('mm_account').value.trim().toLowerCase().replace(/@gmail\.com$/i, '');
       const alias = $('mm_alias').value.trim();
+      const email = $('mm_email').value.trim().toLowerCase();
+      const account = $('mm_account').value.trim().toLowerCase().replace(/\s/g, '');
       if (!validAccount(account, m.account)) return false;
       if (!validAlias(alias, m.account)) return false;
       const oldAccount = m.account;
+      m.email = email;
       if (account !== oldAccount) {
         renameAccountEverywhere(oldAccount, account);
         m.account = account;
         m.alias = alias;
         FirebaseSync.renameMemberAccount(oldAccount, account, m);
       } else {
-        m.alias = alias;               // 僅改別名；引用以帳號為鍵，故全站含歷史同步
+        m.alias = alias;
         FirebaseSync.updateMember(m);
       }
       renderMembers();
-      renderHome();                  // 若改的是「我」，首頁標記同步
+      renderHome();
       toast('已更新成員');
     });
   }
@@ -2262,7 +2252,7 @@ const App = (() => {
     $('btnGoogleSignIn').addEventListener('click', () => {
       Auth.signIn().catch(e => { console.warn('[Auth] signIn failed', e); toast('登入失敗'); });
     });
-    $('btnSignOutFromBind').addEventListener('click', () => Auth.signOut());
+    $('btnSignOutFromLogin').addEventListener('click', () => Auth.signOut());
     $('btnSignOut').addEventListener('click', () => Auth.signOut());
     bindNewTripForm();
     bindEditor();

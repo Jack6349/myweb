@@ -2,17 +2,18 @@
  * 第二階段已接 Firebase Authentication（Google 登入），「我」由登入身分決定（見 core.js Auth）。
  */
 
-/* 全域成員通訊錄（假資料）— 帳號 + 別名（LINE 式）。
- * - account：登入唯一 Key（可省略 @gmail.com），不可變，作為所有引用的鍵。
- * - alias  ：顯示名稱，可改、需唯一；僅於渲染時查表，故改別名全站（含歷史）即時同步。
- * 「我」由當前登入身分（Firebase Auth uid → members.uid 對應）判定（見 core.js Auth）。
+/* 全域成員通訊錄（假資料）— 帳號 + 別名 + email。
+ * - account：短 ID，不可變，作為費用/分攤/提醒等所有引用的鍵。
+ * - alias  ：App 內顯示名稱，可改、需唯一。
+ * - email  ：Google 帳號信箱（登入時用來比對身分，格式 xxx@gmail.com）。
+ * 「我」由 Firebase Auth fbUser.email 對應 members.email 判定（見 core.js Auth）。
  * 重要：費用 payer/split、提醒 owner、行程 members 一律存「帳號」，不存別名。
  */
 let MEMBERS = [
-  { account: 'jack',   alias: 'Jack', admin: true },   // 系統管理員
-  { account: 'meimei', alias: '妹妹' },
-  { account: 'ershao', alias: '二少' },
-  { account: 'mi',     alias: '咪' },
+  { account: 'jack',   alias: 'Jack', email: 'jack6349@gmail.com', admin: true },
+  { account: 'meimei', alias: '妹妹', email: '' },
+  { account: 'ershao', alias: '二少', email: '' },
+  { account: 'mi',     alias: '咪',   email: '' },
 ];
 
 // 是否為系統管理員帳號（系統管理設定僅管理員可見）
