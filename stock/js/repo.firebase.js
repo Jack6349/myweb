@@ -5,7 +5,7 @@
 //
 // 需在 Firebase Console 部署安全規則：
 //   match /databases/{db}/documents {
-//     match /users/{userId} {
+//     match /stock_portfolio/{userId} {
 //       allow read, write: if request.auth != null && request.auth.uid == userId;
 //     }
 //   }
@@ -25,7 +25,7 @@ function showDivSyncStatus(msg, color) {
 
 function fbUserDocRef() {
   if (!window.FB || !window.FB.db || !window.OWNER_UID) return null;
-  return window.FB.doc(window.FB.db, 'users', window.OWNER_UID);
+  return window.FB.doc(window.FB.db, 'stock_portfolio', window.OWNER_UID);
 }
 
 // 讀 Firestore：回傳 { portfolio, totalCost, updatedAt } 或 null

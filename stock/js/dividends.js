@@ -200,8 +200,8 @@ async function renderMonthResult(items, total, year, month, prevYear, prevMonth,
     html +=
       '<tr style="border-bottom:1px solid var(--border)">' +
       '<td style="padding:10px 10px;max-width:120px">' +
-        '<div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + item.name + manualTag + '</div>' +
-        '<div style="font-size:11px;color:var(--text3)">' + item.code + '</div>' +
+        '<div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + item.code + manualTag + '</div>' +
+        '<div style="font-size:11px;color:var(--text3)">' + (item.name || item.code) + '</div>' +
         yieldStr +
       '</td>' +
       '<td style="text-align:right;padding:10px 6px;color:var(--text);white-space:nowrap">' + item.shares.toFixed(1) + '</td>' +
