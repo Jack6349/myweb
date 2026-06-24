@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -6,9 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0f1923">
-<!-- GitHub Pages ?身? COOP: same-origin嚗??? Google ?餃 popup ???唾??荔??孵祝擛潔誑?迂 popup ?? -->
+<!-- GitHub Pages 預設送出 COOP: same-origin，會擋掉 Google 登入 popup 的回傳訊息；改寬鬆值以允許 popup 通訊 -->
 <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
-<title>?∪蝮賜恣</title>
+<title>股利總管</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/app.css?v=18">
@@ -16,31 +16,31 @@
 </head>
 <body>
 
-<!-- ?餃??嚗hase 1嚗??芯誑?砌犖撣唾??餃????恍 -->
+<!-- 登入閘門（Phase 1）：未以本人帳號登入前覆蓋全畫面 -->
 <div id="login-gate" class="login-gate">
   <div class="login-box">
-    <div class="login-logo">?∪蝮賜恣</div>
-    <div class="login-sub">蝘犖?∪撣單</div>
+    <div class="login-logo">股利總管</div>
+    <div class="login-sub">私人股利帳本</div>
     <button id="login-btn" class="login-btn">
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      雿輻 Google ?餃
+      使用 Google 登入
     </button>
     <div id="login-msg" class="login-msg"></div>
-    <button id="login-signout" class="login-signout" style="display:none">?餃</button>
+    <button id="login-signout" class="login-signout" style="display:none">登出</button>
   </div>
 </div>
 
 <div id="app-shell">
 
-<!-- ?????????????? HOME SCREEN ?????????????? -->
+<!-- ══════════════ HOME SCREEN ══════════════ -->
 <div class="screen active" id="screen-home">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 8px;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0;">
     <div>
-      <div style="font-size:15px;font-weight:700;color:var(--text)">?∪蝮賜恣</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text)">股利總管</div>
       <div style="font-size:11px;color:var(--text3)" id="greeting-date"></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
-      <!-- Firebase ?湔霈撖恬??⊿????郊嚗迨??憿舐內?芸??脣????-->
+      <!-- Firebase 直接讀寫，無需手動同步；此處僅顯示自動儲存狀態 -->
       <span id="div-sync-status" style="font-size:11px;color:var(--text3)"></span>
     </div>
   </div>
@@ -48,56 +48,56 @@
 
     <div class="summary-card" onclick="showScreen('dividends-month')" style="margin-top:12px">
       <div onclick="showScreen('dividends-month')" style="margin-bottom:10px;cursor:pointer">
-        <div style="font-size:10px;color:var(--text2);letter-spacing:.3px;">?祆????亙董</div>
-        <div id="home-monthly" style="color:#ff7070;font-size:22px;font-weight:700;letter-spacing:-.5px;">??span style="font-size:12px;color:var(--text2);margin-left:2px;">??/span></div>
+        <div style="font-size:10px;color:var(--text2);letter-spacing:.3px;">本月預計入帳</div>
+        <div id="home-monthly" style="color:#ff7070;font-size:22px;font-weight:700;letter-spacing:-.5px;">—<span style="font-size:12px;color:var(--text2);margin-left:2px;">元</span></div>
       </div>
       <div style="display:flex;gap:4px;align-items:center;">
         <div style="flex:1;cursor:pointer;" onclick="showScreen('dividends-est')">
-          <div style="font-size:9px;color:var(--text2);">撟游漲撌脤?</div>
-          <div id="home-ytd" style="color:#6ec6f0;font-size:15px;font-weight:700;white-space:nowrap;">??span style="font-size:10px;color:var(--text2);margin-left:1px;">??/span></div>
+          <div style="font-size:9px;color:var(--text2);">年度已領</div>
+          <div id="home-ytd" style="color:#6ec6f0;font-size:15px;font-weight:700;white-space:nowrap;">—<span style="font-size:10px;color:var(--text2);margin-left:1px;">元</span></div>
         </div>
         <div style="width:1px;height:28px;background:rgba(255,255,255,.1);flex-shrink:0;"></div>
         <div style="flex:1;cursor:pointer;" onclick="showScreen('dividends-est')">
-          <div style="font-size:9px;color:var(--text2);">撟游漲隡啁?</div>
-          <div id="home-est" style="color:#f5d87a;font-size:15px;font-weight:700;white-space:nowrap;">??span style="font-size:10px;color:var(--text2);margin-left:1px;">??/span></div>
+          <div style="font-size:9px;color:var(--text2);">年度估算</div>
+          <div id="home-est" style="color:#f5d87a;font-size:15px;font-weight:700;white-space:nowrap;">—<span style="font-size:10px;color:var(--text2);margin-left:1px;">元</span></div>
         </div>
       </div>
     </div>
 
-    <div class="section-title">??詨</div>
+    <div class="section-title">功能選單</div>
     <div class="func-grid">
       <div class="func-card" onclick="showScreen('dividends-month')">
         <div class="func-card-icon" style="background:rgba(76,175,130,.15);">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4caf82" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
         </div>
-        <div class="func-card-name">?嗆??舫??∪</div>
-        <div class="func-card-desc">?祆??亙董?敦??蝮?/div>
-        <div class="func-card-amount" id="card-monthly" style="color:#4caf82;margin-top:8px">??/div>
-        <div class="func-card-count" id="card-monthly-count" style="display:none;">0 ??/div>
+        <div class="func-card-name">當月可領股利</div>
+        <div class="func-card-desc">本月入帳明細與加總</div>
+        <div class="func-card-amount" id="card-monthly" style="color:#4caf82;margin-top:8px">—</div>
+        <div class="func-card-count" id="card-monthly-count" style="display:none;">0 支</div>
       </div>
       <div class="func-card" onclick="showScreen('dividends-est')">
         <div class="func-card-icon" style="background:rgba(232,184,75,.12);">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e8b84b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
-        <div class="func-card-name">撟游漲?舫?隡啁?</div>
-        <div class="func-card-desc">?芯??∪?葫閰衣?</div>
-        <div class="func-card-amount" id="card-est" style="color:#f5d87a;margin-top:8px">??/div>
+        <div class="func-card-name">年度可領估算</div>
+        <div class="func-card-desc">未來股利預測試算</div>
+        <div class="func-card-amount" id="card-est" style="color:#f5d87a;margin-top:8px">—</div>
       </div>
       <div class="func-card" onclick="showScreen('portfolio')">
         <div class="func-card-icon" style="background:rgba(180,100,220,.15);">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b464dc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
         </div>
-        <div class="func-card-name">?鞈?蝬剛風</div>
-        <div class="func-card-desc">蝞∠??皜?</div>
+        <div class="func-card-name">持股資料維護</div>
+        <div class="func-card-desc">管理持股清冊</div>
         <div class="func-card-badge" id="home-stock-count">0</div>
       </div>
       <div class="func-card" onclick="showScreen('stock-value')">
         <div class="func-card-icon" style="background:rgba(240,204,122,.12);">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f0cc7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
         </div>
-        <div class="func-card-name">?嗆?∠巨??</div>
-        <div class="func-card-desc">??曉潸??餈?舀</div>
-        <div class="func-card-amount" id="card-value" style="color:#ff9090;margin-top:8px">??/div>
+        <div class="func-card-name">當日股票損益</div>
+        <div class="func-card-desc">持股現值與最近除息日</div>
+        <div class="func-card-amount" id="card-value" style="color:#ff9090;margin-top:8px">—</div>
       </div>
     </div>
 
@@ -106,17 +106,17 @@
         <div class="func-card-icon" style="background:rgba(74,158,218,.2);">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6ec6f0" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </div>
-        <div class="func-card-name">ETF 蝑??/div>
-        <div class="func-card-desc">?典ETF閰?蝑</div>
-        <div class="func-card-amount" id="card-etf-count" style="color:#6ec6f0;">??/div>
+        <div class="func-card-name">ETF 筛選器</div>
+        <div class="func-card-desc">全台ETF評分筛選</div>
+        <div class="func-card-amount" id="card-etf-count" style="color:#6ec6f0;">—</div>
       </div>
       <div class="func-card" onclick="showScreen('etf-new')" style="background:linear-gradient(135deg,rgba(123,237,159,.18) 0%,#142010 100%);border-color:rgba(123,237,159,.55);border-width:1.5px;">
         <div class="func-card-icon" style="background:rgba(123,237,159,.2);">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7bed9f" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
         </div>
-        <div class="func-card-name">?啗?ETF閫撖?/div>
-        <div class="func-card-desc">???芣遛1撟?/div>
-        <div class="func-card-amount" id="card-etf-new-count" style="color:#7bed9f;">??/div>
+        <div class="func-card-name">新興ETF觀察</div>
+        <div class="func-card-desc">成立未滿1年</div>
+        <div class="func-card-amount" id="card-etf-new-count" style="color:#7bed9f;">—</div>
       </div>
     </div>
     <div style="height:20px;"></div>
@@ -129,27 +129,27 @@
     <button class="back-btn" onclick="showScreen('home')">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <div class="screen-title">ETF 蝑??/div>
+    <div class="screen-title">ETF 筛選器</div>
   </div>
   <div class="scroll-area">
     <div id="etf-progress-wrap" style="display:none;padding:0 16px">
       <div class="etf-progress"><div class="etf-progress-bar" id="etf-progress-bar" style="width:0%"></div></div>
-      <div class="etf-status" id="etf-status-text">皞?????/div>
+      <div class="etf-status" id="etf-status-text">準備掃描…</div>
     </div>
     <div id="etf-last-update" class="etf-last-update" style="padding:12px 16px 4px"></div>
     <div id="etf-zone-cards" style="padding:0 16px">
-      <div class="etf-empty">撠鞈?<br>隢?銝??唳???憪?/div>
+      <div class="etf-empty">尚無資料<br>請點下方「全台掃描」開始</div>
     </div>
     <div style="padding:16px">
-      <button class="etf-scan-btn primary" style="width:100%;padding:14px;font-size:14px;" onclick="startFullScan()">???典??</button>
+      <button class="etf-scan-btn primary" style="width:100%;padding:14px;font-size:14px;" onclick="startFullScan()">搜尋全台掃描</button>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
-        <button class="etf-scan-btn" onclick="showEtfExcluded()">?</button>
-        <button class="etf-scan-btn" onclick="showEtfWatchlist()" style="border-color:rgba(245,216,122,.4);color:#f5d87a">???芷</button>
-        <button class="etf-scan-btn" onclick="refreshEtfPrices()" id="etf-price-refresh-btn">?湔</button>
+        <button class="etf-scan-btn" onclick="showEtfExcluded()">排除</button>
+        <button class="etf-scan-btn" onclick="showEtfWatchlist()" style="border-color:rgba(245,216,122,.4);color:#f5d87a">★ 自選</button>
+        <button class="etf-scan-btn" onclick="refreshEtfPrices()" id="etf-price-refresh-btn">更新</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-        <button class="etf-scan-btn" onclick="rescanZone('dividend')">?? 擃??/button>
-        <button class="etf-scan-btn" onclick="rescanZone('bond')">?? ?萄??/button>
+        <button class="etf-scan-btn" onclick="rescanZone('dividend')">重掃 高息型</button>
+        <button class="etf-scan-btn" onclick="rescanZone('bond')">重掃 債券型</button>
       </div>
     </div>
   </div>
@@ -161,8 +161,8 @@
     <button class="back-btn" onclick="showScreen('etf-screener')">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <div class="screen-title" id="etf-zone-title">ETF 皜</div>
-    <button class="refresh-btn" onclick="refreshCurrentZone()" title="?湔?勗">
+    <div class="screen-title" id="etf-zone-title">ETF 清單</div>
+    <button class="refresh-btn" onclick="refreshCurrentZone()" title="更新報價">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
     </button>
   </div>
@@ -176,53 +176,53 @@
     <button class="back-btn" onclick="showScreen('home')">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <div class="screen-title">?啗? ETF 閫撖?/div>
-    <button class="refresh-btn" onclick="scanNewEtf()" title="???">
+    <div class="screen-title">新興 ETF 觀察</div>
+    <button class="refresh-btn" onclick="scanNewEtf()" title="重新掃描">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
     </button>
   </div>
   <div class="scroll-area">
-    <div style="font-size:11px;color:var(--text3);padding:8px 16px 12px">???芣遛 1 撟氬??? 3 甈∪僑?挺?拍? > 7% 璅?????/div>
+    <div style="font-size:11px;color:var(--text3);padding:8px 16px 12px">成立未滿 1 年・連續 3 次年化殼利率 > 7% 標記「潛力」</div>
     <div id="etf-new-content">
-      <div class="etf-empty">隢??瑁??典??</div>
+      <div class="etf-empty">請先執行全台掃描</div>
     </div>
   </div>
 </div>
 
-<!-- ?????????????? PORTFOLIO SCREEN ?????????????? -->
+<!-- ══════════════ PORTFOLIO SCREEN ══════════════ -->
 <div class="screen" id="screen-portfolio">
   <div class="page-header">
     <div class="header-row">
       <div>
-        <div class="page-title">?鞈?蝬剛風</div>
-        <div class="page-sub" id="portfolio-count-label">霈?葉??/div>
+        <div class="page-title">持股資料維護</div>
+        <div class="page-sub" id="portfolio-count-label">讀取中…</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button class="import-btn" onclick="openImportModal()" title="?芸??臬?">
+        <button class="import-btn" onclick="openImportModal()" title="截圖匯入持股">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          ?芸??臬
+          截圖匯入
         </button>
-        <div class="chip" id="portfolio-chip">0 ??/div>
+        <div class="chip" id="portfolio-chip">0 支</div>
       </div>
     </div>
   </div>
   <div class="scroll-area" id="portfolio-list-area">
     <!-- populated by JS -->
   </div>
-  <button class="fab" onclick="openAddModal()" title="?啣??">
+  <button class="fab" onclick="openAddModal()" title="新增持股">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button>
 </div>
 
-<!-- ?????????????? DIVIDEND MONTH SCREEN ?????????????? -->
+<!-- ══════════════ DIVIDEND MONTH SCREEN ══════════════ -->
 <div class="screen" id="screen-dividends-month">
   <div class="page-header">
     <div class="header-row">
       <div>
-        <div class="page-title">?嗆??舫??∪</div>
+        <div class="page-title">當月可領股利</div>
         <div class="page-sub" id="month-label"></div>
       </div>
-      <button class="refresh-btn" onclick="loadMonthDividends(true)" id="month-refresh-btn" title="??渡?">
+      <button class="refresh-btn" onclick="loadMonthDividends(true)" id="month-refresh-btn" title="重新整理">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       </button>
     </div>
@@ -231,7 +231,7 @@
   <div class="scroll-area">
     <div class="loading-state" id="month-loading" style="display:none">
       <div class="loading-spinner"></div>
-      <div class="loading-text">?亥岷?∪鞈?銝凌?/div>
+      <div class="loading-text">查詢股利資料中…</div>
     </div>
     <div id="month-result"></div>
   </div>
@@ -241,10 +241,10 @@
   <div class="page-header">
     <div class="header-row">
       <div>
-        <div class="page-title">撟游漲撌脤??∪</div>
+        <div class="page-title">年度已領股利</div>
         <div class="page-sub" id="ytd-label"></div>
       </div>
-      <button class="refresh-btn" onclick="loadYtdDividends(true)" id="ytd-refresh-btn" title="??渡?">
+      <button class="refresh-btn" onclick="loadYtdDividends(true)" id="ytd-refresh-btn" title="重新整理">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       </button>
     </div>
@@ -253,7 +253,7 @@
   <div class="scroll-area">
     <div class="loading-state" id="ytd-loading" style="display:none">
       <div class="loading-spinner"></div>
-      <div class="loading-text">?亥岷撟游漲?∪銝凌?/div>
+      <div class="loading-text">查詢年度股利中…</div>
     </div>
     <div id="ytd-result"></div>
   </div>
@@ -263,24 +263,24 @@
   <div class="page-header">
     <div class="header-row">
       <div>
-        <div class="page-title">撟游漲?舫?隡啁?</div>
+        <div class="page-title">年度可領估算</div>
         <div class="page-sub" id="est-label"></div>
       </div>
-      <button class="refresh-btn" onclick="loadEstDividends(true)" id="est-refresh-btn" title="??渡?">
+      <button class="refresh-btn" onclick="loadEstDividends(true)" id="est-refresh-btn" title="重新整理">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       </button>
     </div>
   </div>
   <div id="est-total-sticky" style="display:none; background:var(--bg2); flex-shrink:0;"></div>
   <div class="tab-bar">
-    <button class="tab-btn active" id="est-tab-month" onclick="switchEstTab('month')">?遢蝮質汗</button>
-    <button class="tab-btn" id="est-tab-stock" onclick="switchEstTab('stock')">??敦</button>
-    <button class="tab-btn" id="est-tab-chart" onclick="switchEstTab('chart')">?”</button>
+    <button class="tab-btn active" id="est-tab-month" onclick="switchEstTab('month')">月份總覽</button>
+    <button class="tab-btn" id="est-tab-stock" onclick="switchEstTab('stock')">個股明細</button>
+    <button class="tab-btn" id="est-tab-chart" onclick="switchEstTab('chart')">圖表</button>
   </div>
   <div class="scroll-area">
     <div class="loading-state" id="est-loading" style="display:none">
       <div class="loading-spinner"></div>
-      <div class="loading-text">閮?撟游漲隡啁?銝凌?/div>
+      <div class="loading-text">計算年度估算中…</div>
     </div>
     <div id="est-result">
       <div class="tab-pane active" id="est-pane-month"></div>
@@ -290,15 +290,15 @@
   </div>
 </div>
 
-<!-- ?????????????? STOCK VALUE SCREEN ?????????????? -->
+<!-- ══════════════ STOCK VALUE SCREEN ══════════════ -->
 <div class="screen" id="screen-stock-value">
   <div class="page-header">
     <div class="header-row">
       <div>
-        <div class="page-title">?嗆?∠巨??</div>
+        <div class="page-title">當日股票損益</div>
         <div class="page-sub" id="value-date-label"></div>
       </div>
-      <button class="refresh-btn" onclick="loadStockValue(true)" id="value-refresh-btn" title="??渡?">
+      <button class="refresh-btn" onclick="loadStockValue(true)" id="value-refresh-btn" title="重新整理">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       </button>
     </div>
@@ -307,150 +307,150 @@
   <div class="scroll-area">
     <div class="loading-state" id="value-loading" style="display:none">
       <div class="loading-spinner"></div>
-      <div class="loading-text">?亥岷?∪銝凌?/div>
+      <div class="loading-text">查詢股價中…</div>
     </div>
     <div id="value-result" style="padding:12px 0 24px"></div>
   </div>
 </div>
 
-<!-- ?????????????? BOTTOM NAV ?????????????? -->
+<!-- ══════════════ BOTTOM NAV ══════════════ -->
 <nav class="bottom-nav">
   <div class="nav-item active" onclick="showScreen('home')" id="nav-home">
     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    <span class="nav-label">擐?</span>
+    <span class="nav-label">首頁</span>
   </div>
   <div class="nav-item" onclick="showScreen('dividends-month')" id="nav-dividends-month">
     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-    <span class="nav-label">?嗆??∪</span>
+    <span class="nav-label">當月股利</span>
   </div>
   <div class="nav-item" onclick="showScreen('dividends-est')" id="nav-dividends-est">
     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    <span class="nav-label">撟游漲隡啁?</span>
+    <span class="nav-label">年度估算</span>
   </div>
   <div class="nav-item" onclick="showScreen('portfolio')" id="nav-portfolio">
     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-    <span class="nav-label">?</span>
+    <span class="nav-label">持股</span>
   </div>
   <div class="nav-item" onclick="showScreen('stock-value')" id="nav-stock-value">
     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-    <span class="nav-label">??</span>
+    <span class="nav-label">損益</span>
   </div>
 </nav>
 
-<!-- ?????????????? ADD / EDIT MODAL ?????????????? -->
+<!-- ══════════════ ADD / EDIT MODAL ══════════════ -->
 <div class="modal-overlay" id="modal-stock" onclick="handleOverlayClick(event)">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title" id="modal-stock-title">?啣??</div>
-      <button class="modal-close" onclick="closeModal('modal-stock')">??/button>
+      <div class="modal-title" id="modal-stock-title">新增持股</div>
+      <button class="modal-close" onclick="closeModal('modal-stock')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">?∠巨隞?Ⅳ</label>
+        <label class="form-label">股票代碼</label>
         <div class="form-row">
           <div class="input-wrap">
-            <input type="text" id="input-code" placeholder="靘?2330" maxlength="6" inputmode="numeric">
+            <input type="text" id="input-code" placeholder="例：2330" maxlength="6" inputmode="numeric">
           </div>
-          <button class="search-btn" onclick="searchStock()" id="search-btn">?亥岷</button>
+          <button class="search-btn" onclick="searchStock()" id="search-btn">查詢</button>
         </div>
         <div class="search-result" id="search-result"></div>
       </div>
       <div class="form-group" id="manual-name-group" style="display:none">
-        <label class="form-label">?∠巨?迂 <span style="color:var(--accent);font-weight:400">嚗?∠???隢??撓?伐?</span></label>
-        <input type="text" id="input-name" placeholder="靘??啁???>
+        <label class="form-label">股票名稱 <span style="color:var(--accent);font-weight:400">（查無結果，請手動輸入）</span></label>
+        <input type="text" id="input-name" placeholder="例：台積電">
       </div>
 
       <div class="form-group">
-        <label class="form-label">?撘菜</label>
+        <label class="form-label">持股張數</label>
         <div class="input-wrap">
-          <input type="number" id="input-shares" placeholder="靘?2.312" step="0.001" min="0.001" inputmode="decimal">
-          <span class="input-suffix">撘?/span>
+          <input type="number" id="input-shares" placeholder="例：2.312" step="0.001" min="0.001" inputmode="decimal">
+          <span class="input-suffix">張</span>
         </div>
-        <div class="shares-hint">1 撘?= 1,000 ?∴??嗉隞亙??貉”蝷綽?憒?4.312 = 4,312 ?∴?</div>
+        <div class="shares-hint">1 張 = 1,000 股，零股以小數表示（如 4.312 = 4,312 股）</div>
         <div class="shares-preview" id="shares-preview"></div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">隞? <span style="color:var(--text3);font-weight:400;margin-left:4px;font-size:12px">?詨‵</span></label>
+        <label class="form-label">付出成本 <span style="color:var(--text3);font-weight:400;margin-left:4px;font-size:12px">選填</span></label>
         <div class="input-wrap">
-          <input type="number" id="input-cost" placeholder="靘?95137" step="1" min="0" inputmode="numeric">
-          <span class="input-suffix">??/span>
+          <input type="number" id="input-cost" placeholder="例：95137" step="1" min="0" inputmode="numeric">
+          <span class="input-suffix">元</span>
         </div>
-        <div class="shares-hint">鞎琿脩蜇?嚗?潭??岫蝞??舀敺?芸??臬?芸?憛怠嚗?/div>
+        <div class="shares-hint">買進總成本，用於損益試算（可日後由截圖匯入自動填入）</div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">?憿</label>
+        <label class="form-label">配息類別</label>
         <div style="display:grid;grid-template-columns:repeat(1,1fr);gap:8px">
           <select id="select-div-type" onchange="onDivTypeChange(this.value)" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:15px;padding:12px 16px;outline:none;font-family:var(--font);">
-            <option value="">??隢????/option>
-            <option value="monthly">1. ????/option>
-            <option value="quarterly">2. 摮????/option>
-            <option value="semiannual">3. ?僑??/option>
-            <option value="annual">4. 撟湧???/option>
-            <option value="none">5. 銝???/option>
+            <option value="">— 請選擇 —</option>
+            <option value="monthly">1. 月配息</option>
+            <option value="quarterly">2. 季配息</option>
+            <option value="semiannual">3. 半年配</option>
+            <option value="annual">4. 年配息</option>
+            <option value="none">5. 不配息</option>
           </select>
         </div>
       </div>
 
       <div class="form-group" id="div-months-group" style="display:none">
         <label class="form-label">
-          ??遢
+          配息月份
           <span style="color:var(--text3);font-weight:400;margin-left:6px;font-size:12px" id="div-months-source"></span>
         </label>
-        <input type="text" id="input-div-months" placeholder="靘?1,4,7,10">
-        <div style="font-size:12px;color:var(--text2);margin-top:6px">????嚗?,4,7,10嚗????1-12嚗?/div>
+        <input type="text" id="input-div-months" placeholder="例：1,4,7,10">
+        <div style="font-size:12px;color:var(--text2);margin-top:6px">逗號分隔（1,4,7,10）或區間（1-12）</div>
       </div>
 
       <div class="form-group" id="manual-div-group" style="display:none">
-        <label class="form-label">瘥???嚗???API ??嚗?span style="color:var(--text3);font-weight:400;margin-left:4px;font-size:12px">?詨‵</span></label>
+        <label class="form-label">每股配息金額（覆蓋 API 金額）<span style="color:var(--text3);font-weight:400;margin-left:4px;font-size:12px">選填</span></label>
         <div class="input-wrap">
-          <input type="number" id="input-manual-div" placeholder="?征?蝙??API ?餈??舫?憿? step="0.0001" min="0" inputmode="decimal">
-          <span class="input-suffix">????/span>
+          <input type="number" id="input-manual-div" placeholder="留空則使用 API 最近配息金額" step="0.0001" min="0" inputmode="decimal">
+          <span class="input-suffix">元/股</span>
         </div>
       </div>
 
       <button class="btn-primary" id="save-btn" onclick="saveStock()">
-        ?脣??
+        儲存持股
       </button>
       <button class="btn-danger" id="delete-btn" style="display:none" onclick="confirmDelete()">
-        ?芷甇斗???
+        刪除此持股
       </button>
     </div>
   </div>
 </div>
 
-<!-- ?????????????? DELETE CONFIRM ?????????????? -->
+<!-- ══════════════ DELETE CONFIRM ══════════════ -->
 <div class="modal-overlay" id="modal-delete" onclick="handleOverlayClick(event)">
   <div class="delete-sheet">
-    <div class="delete-title">蝣箄??芷</div>
-    <div class="delete-sub" id="delete-confirm-text">蝣箏?閬?日???<br>甇斗?雿瘜儔??/div>
-    <button class="btn-danger" onclick="executeDelete()" style="margin-top:0;">蝣箄??芷</button>
-    <button class="btn-primary" onclick="closeModal('modal-delete')" style="background:var(--bg4);margin-top:10px;">??</button>
+    <div class="delete-title">確認刪除</div>
+    <div class="delete-sub" id="delete-confirm-text">確定要刪除這支持股嗎？<br>此操作無法復原。</div>
+    <button class="btn-danger" onclick="executeDelete()" style="margin-top:0;">確認刪除</button>
+    <button class="btn-primary" onclick="closeModal('modal-delete')" style="background:var(--bg4);margin-top:10px;">取消</button>
   </div>
 </div>
 
-<!-- ?????????????? ?芸??臬?嚗2 UI嚗??????????????? -->
+<!-- ══════════════ 截圖匯入持股（P2 UI） ══════════════ -->
 <div class="modal-overlay" id="modal-import" onclick="handleOverlayClick(event)">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">?芸??臬?</div>
-      <button class="modal-close" onclick="closeModal('modal-import')">??/button>
+      <div class="modal-title">截圖匯入持股</div>
+      <button class="modal-close" onclick="closeModal('modal-import')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="import-intro">銝?票銝???⊥??颲刻?敺?汗?⊥迤??乓?br>???憓??賭??蔣?踴?/div>
+      <div class="import-intro">上傳或貼上券商持股截圖，辨識後可預覽校正再匯入。<br>原手動新增功能不受影響。</div>
       <div id="import-dropzone" class="import-dropzone" onclick="document.getElementById('import-file').click()">
         <input type="file" id="import-file" accept="image/*" style="display:none" onchange="onImportFile(event)">
         <div id="import-placeholder" class="import-placeholder">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          <div>暺迨?豢???嚗??湔鞎潔??芸?嚗trl / ??+ V嚗?/div>
-          <div class="import-sub">???舀??找??喉?銋????唳迨</div>
+          <div>點此選擇圖片，或直接貼上截圖（Ctrl / ⌘ + V）</div>
+          <div class="import-sub">手機可拍照上傳；也可拖放圖片到此</div>
         </div>
-        <img id="import-preview" class="import-preview" style="display:none" alt="?芸??汗">
+        <img id="import-preview" class="import-preview" style="display:none" alt="截圖預覽">
       </div>
       <div id="import-actions" style="display:none">
-        <button class="btn-secondary" onclick="clearImportImage()">??豢?</button>
-        <button class="btn-primary" onclick="parseImportImage()">閫????</button>
+        <button class="btn-secondary" onclick="clearImportImage()">重新選擇</button>
+        <button class="btn-primary" onclick="parseImportImage()">解析圖片</button>
       </div>
       <div id="import-status" class="import-status"></div>
       <div id="import-result" class="import-result"></div>
@@ -460,18 +460,18 @@
 
 </div><!-- #app-shell -->
 
-<!-- ?餃??嚗hase 1嚗?-->
+<!-- 登入閘門（Phase 1） -->
 <script src="js/auth.js?v=18"></script>
-<!-- 璅∠?頛??????瑼??湛?隞亦雁??銵?摨?-->
+<!-- 模組載入順序須與原始檔一致，以維持相同執行順序 -->
 <script src="js/core.js?v=18"></script>
 <script src="js/portfolio.js?v=18"></script>
 <script src="js/api.js?v=18"></script>
 <script src="js/dividends.js?v=18"></script>
 <script src="js/estimate-value.js?v=18"></script>
-<!-- ??脩垢?郊嚗irestore -->
+<!-- 持股雲端同步：Firestore -->
 <script src="js/repo.firebase.js?v=18"></script>
 <script src="js/etf.js?v=18"></script>
-<!-- ?芸??臬?嚗emini 閬死嚗? GAS 隞??嚗?-->
+<!-- 截圖匯入持股：Gemini 視覺（經 GAS 代理） -->
 <script src="js/import-ocr.js?v=18"></script>
 </body>
 </html>
