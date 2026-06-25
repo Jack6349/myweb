@@ -574,7 +574,7 @@ async function loadStockValue(forceRefresh) {
           '</div>' +
         '</div>' +
         '<div style="margin-top:10px;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px">' +
-          '<div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">' +
+          '<div style="display:flex;align-items:flex-start;gap:12px 20px;flex-wrap:wrap">' +
             '<div style="flex:0 0 auto">' +
               '<div class="div-total-label" style="color:#f5d87a;margin-bottom:4px">總付出成本</div>' +
               '<div style="display:flex;align-items:center;gap:6px">' +
@@ -1192,7 +1192,7 @@ async function loadStockValue(forceRefresh) {
           '</div>' +
         '</div>' +
         '<div style="margin-top:10px;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px">' +
-          '<div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">' +
+          '<div style="display:flex;align-items:flex-start;gap:12px 20px;flex-wrap:wrap">' +
             '<div style="flex:0 0 auto">' +
               '<div class="div-total-label" style="color:#f5d87a;margin-bottom:4px">總付出成本</div>' +
               '<div style="display:flex;align-items:center;gap:6px">' +
@@ -1423,7 +1423,7 @@ function calcPnlHtml(afterTaxValue) {
   // 台股慣例：正數（獲利）紅色，負數（虧損）綠色
   var pnlColor = pnl >= 0 ? '#ff5252' : '#26d962';
   var sign = pnl >= 0 ? '+' : '';
-  return '<div style="display:flex;gap:16px;align-items:flex-start">' +
+  return '<div style="display:flex;gap:16px 20px;align-items:flex-start;flex-wrap:wrap">' +
     '<div>' +
       '<div class="div-total-label" style="color:#a4b0be;font-size:11px">損益試算</div>' +
       '<div style="font-size:17px;font-weight:700;color:'+pnlColor+';white-space:nowrap">'+sign+pnl.toLocaleString('zh-TW')+'<span style="font-size:12px;font-weight:400"> 元</span></div>' +
