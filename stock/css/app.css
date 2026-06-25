@@ -249,6 +249,11 @@
   .vfold-label { font-size:12px; color:var(--text3); }
   .vfold-val { font-size:12px; }
   .vcard-chev { margin-top:8px; align-self:center; background:none; border:none; color:var(--text2); cursor:pointer; padding:2px 14px; font-size:13px; line-height:1; }
+  .vtop-fold { display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+  .vtop-fold.open { display:block; }
+  .vtop-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .vtop-label { font-size:12px; color:var(--text2); }
+  .vtop-val { font-size:15px; font-weight:700; white-space:nowrap; }
   .api-note { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px; margin-top:16px; font-size:12px; color:var(--text2); line-height:1.6; }
   .api-note strong { color:var(--text); }
   /* ETF SCREENER */

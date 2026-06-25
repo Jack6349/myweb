@@ -562,40 +562,45 @@ async function loadStockValue(forceRefresh) {
     try { await ensureNavMap(); } catch (e) { /* 淨值非必要（每日快取），失敗就不顯示折溢價 */ }
 
     loading.style.display = 'none';
+    const pnlCol = (v) => v > 0 ? '#ff5252' : (v < 0 ? '#26d962' : 'var(--text3)');
+    const fmtN = (n) => Math.round(n).toLocaleString('zh-TW');
+
     if (stickyEl) {
+      const afterTax = Math.round(grandTotal * 0.997735);
+      const tcost = getTotalCost();
+      const tprofit = tcost ? afterTax - tcost : null;
+      const tprate = tcost ? tprofit / tcost * 100 : null;
       stickyEl.style.display = 'block';
       stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0;padding:12px 14px">' +
+        '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">' +
+          '<button id="value-toggle-all" onclick="toggleAllValueRows(this)" style="background:rgba(240,204,122,.12);border:1px solid rgba(240,204,122,.35);color:var(--accent2);font-size:12px;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:var(--font)">全部展開</button>' +
+        '</div>' +
         '<div style="display:flex;align-items:flex-start;gap:10px">' +
           '<div style="flex:1;min-width:0">' +
-            '<div class="div-total-label" style="font-size:11px">持股總現値</div>' +
+            '<div class="div-total-label" style="font-size:11px">持股總現值</div>' +
             '<div style="font-size:18px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$' + grandTotal.toLocaleString('zh-TW') + '</div>' +
           '</div>' +
           '<div style="flex:1;min-width:0">' +
-            '<div class="div-total-label" style="color:#8ab4d4;font-size:11px">含稅費現値</div>' +
-            '<div style="font-size:18px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#8ab4d4">$' + Math.round(grandTotal * 0.997735).toLocaleString('zh-TW') + '</div>' +
+            '<div class="div-total-label" style="color:#8ab4d4;font-size:11px">含稅費現值</div>' +
+            '<div style="font-size:18px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#8ab4d4">$' + afterTax.toLocaleString('zh-TW') + '</div>' +
           '</div>' +
         '</div>' +
-        '<div style="margin-top:10px;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px">' +
-          '<div style="display:flex;align-items:flex-start;gap:12px 20px;flex-wrap:wrap">' +
-            '<div style="flex:0 0 auto">' +
-              '<div class="div-total-label" style="color:#f5d87a;margin-bottom:4px">總付出成本</div>' +
-              '<div style="display:flex;align-items:center;gap:6px">' +
-                '<span style="color:var(--text2);font-size:14px">$</span>' +
-                '<span style="color:#f5d87a;font-size:17px;font-weight:700;white-space:nowrap">' + (fmtCost() || '—') + '</span>' +
-              '</div>' +
-              '<div style="font-size:10px;color:var(--text3);margin-top:3px">' + costHint + '</div>' +
-            '</div>' +
-            '<div id="pnl-block2" data-aftertax="' + Math.round(grandTotal * 0.997735) + '" style="flex:1;min-width:120px">' + calcPnlHtml(0.997735 * grandTotal) + '</div>' +
-          '</div>' +
+        '<div id="value-top-fold" class="vtop-fold">' +
+          '<div class="vtop-row"><span class="vtop-label">總付出成本</span>' +
+            '<span class="vtop-val" style="color:#f5d87a">' + (tcost ? '$' + tcost.toLocaleString('zh-TW') : '—') + '</span></div>' +
+          '<div style="font-size:10px;color:var(--text3);text-align:right;margin:-3px 0 6px">' + costHint + '</div>' +
+          '<div class="vtop-row"><span class="vtop-label">損益試算</span>' +
+            '<span class="vtop-val" style="color:' + (tprofit == null ? 'var(--text3)' : pnlCol(tprofit)) + '">' +
+            (tprofit == null ? '—' : (tprofit >= 0 ? '+' : '') + tprofit.toLocaleString('zh-TW') + ' 元') + '</span></div>' +
+          '<div class="vtop-row"><span class="vtop-label">獲利率</span>' +
+            '<span class="vtop-val" style="color:' + (tprate == null ? 'var(--text3)' : pnlCol(tprate)) + '">' +
+            (tprate == null ? '—' : (tprate > 0 ? '+' : '') + tprate.toFixed(2) + '%') + '</span></div>' +
         '</div>' +
         '<div class="div-total-count">共 ' + rows.length + ' 支持股｜' +
         (latestDate ? '收盤日 ' + latestDate : '') + '</div>' +
         '</div>';
     }
     document.getElementById('value-date-label').textContent = latestDate ? '收盤日：' + latestDate : '';
-
-    const pnlCol = (v) => v > 0 ? '#ff5252' : (v < 0 ? '#26d962' : 'var(--text3)');
-    const fmtN = (n) => Math.round(n).toLocaleString('zh-TW');
     const vrow = (label, valHtml) => '<div class="vfold-row"><span class="vfold-label">' + label + '</span>' + valHtml + '</div>';
 
     let cards = '';
@@ -653,9 +658,7 @@ async function loadStockValue(forceRefresh) {
     });
 
     resultEl.innerHTML = rows.length
-      ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px">' +
-          '<button id="value-toggle-all" onclick="toggleAllValueRows(this)" style="background:rgba(240,204,122,.12);border:1px solid rgba(240,204,122,.35);color:var(--accent2);font-size:12px;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:var(--font)">全部展開</button>' +
-        '</div><div class="value-grid">' + cards + '</div>'
+      ? '<div class="value-grid">' + cards + '</div>'
       : '<div class="div-empty">無資料</div>';
   } catch(err) {
     loading.style.display = 'none';
@@ -707,7 +710,6 @@ function countCostFilled() {
   if (typeof portfolio === 'undefined' || !Array.isArray(portfolio)) return 0;
   return portfolio.filter(function (s) { return parseFloat(s.cost) > 0; }).length;
 }
-function fmtCost() { var v = getTotalCost(); return v > 0 ? v.toLocaleString('zh-TW') : ''; }
 
 // ── ETF 淨值（折溢價用）：透過 GAS 既有 ?url= 代理抓 TWSE 全 ETF 淨值表，建代號→淨值對照 ──
 var _etfNavMap = null, _etfNavDay = null;
@@ -746,117 +748,34 @@ async function ensureNavMap(force) {
 }
 function getEtfNav(code) { return (_etfNavMap && _etfNavMap[String(code).toUpperCase()]) || null; }
 
-function toggleCostEdit(btn) {
-  // Find the input in the same container
-  var input = btn.previousElementSibling;
-  if (!input) return;
-  if (input.readOnly) {
-    // Enter edit mode
-    input.readOnly = false;
-    input.value = input.value.replace(/,/g, '');
-    input.style.borderColor = '#f5d87a';
-    btn.textContent = '確定';
-    btn.style.background = 'rgba(123,237,159,.2)';
-    btn.style.borderColor = 'rgba(123,237,159,.5)';
-    btn.style.color = '#7bed9f';
-    input.focus();
-    input.select();
-  } else {
-    // Confirm
-    confirmCostSave(input, btn);
-  }
+// 當日損益折疊：頂部合計卡與所有個股卡共用「全部展開/收合」；個股卡 ▼ 可同列左右單獨切換
+function _allValueFolds() {
+  var folds = Array.prototype.slice.call(document.querySelectorAll('#value-result .vcard-fold'));
+  var topFold = document.getElementById('value-top-fold');
+  if (topFold) folds.push(topFold);
+  return folds;
 }
-
-function saveTotalCostConfirm(input, event) {
-  if (event && event.key === 'Enter') {
-    var btn = input.nextElementSibling;
-    confirmCostSave(input, btn);
-  }
+function _syncValueMasterLabel() {
+  var btn = document.getElementById('value-toggle-all');
+  if (!btn) return;
+  var folds = _allValueFolds();
+  var anyClosed = folds.some(function (f) { return !f.classList.contains('open'); });
+  btn.textContent = anyClosed ? '全部展開' : '全部收合';
 }
-
-function confirmCostSave(input, btn) {
-  var raw = input.value.replace(/[^0-9]/g, '');
-  localStorage.setItem(COST_KEY, raw);
-  var formatted = parseInt(raw||'0') > 0 ? parseInt(raw).toLocaleString('zh-TW') : '';
-  input.value = formatted;
-  input.readOnly = true;
-  input.style.borderColor = '';
-  if (btn) {
-    btn.textContent = '編輯';
-    btn.style.background = 'rgba(245,216,122,.15)';
-    btn.style.borderColor = 'rgba(245,216,122,.4)';
-    btn.style.color = '#f5d87a';
-  }
-  // Sync both inputs
-  var other = input.id === 'total-cost-input'
-    ? document.getElementById('total-cost-input2')
-    : document.getElementById('total-cost-input');
-  if (other) { other.value = formatted; other.readOnly = true; }
-  // Recalculate PnL
-  var pnlEl = document.getElementById('pnl-block') || document.getElementById('pnl-block2');
-  var afterTax = pnlEl ? parseFloat(pnlEl.dataset.aftertax || 0) : 0;
-  updatePnlDisplay(afterTax);
-}
-
-function saveTotalCost(input, event) {
-  // Allow Enter key to trigger save
-  if (event && event.type === 'keydown' && event.key !== 'Enter') return;
-  var raw = input.value.replace(/[^0-9]/g, '');
-  input.value = raw ? parseInt(raw).toLocaleString('zh-TW') : '';
-  localStorage.setItem(COST_KEY, raw);
-  // Read afterTax from data attribute
-  var pnlEl = document.getElementById('pnl-block') || document.getElementById('pnl-block2');
-  var afterTax = pnlEl ? parseFloat(pnlEl.dataset.aftertax || 0) : 0;
-  if (!afterTax) {
-    // Try to read from input2 block
-    var pnlEl2 = document.getElementById('pnl-block2');
-    if (pnlEl2) afterTax = parseFloat(pnlEl2.dataset.aftertax || 0);
-  }
-  updatePnlDisplay(afterTax);
-}
-
-// 當日損益卡片折疊：同列左右兩張卡同步展開／收合
 function toggleValueRow(row) {
   var folds = document.querySelectorAll('#value-result .vcard-fold[data-row="' + row + '"]');
   if (!folds.length) return;
   var open = !folds[0].classList.contains('open');
   folds.forEach(function (f) { f.classList.toggle('open', open); });
   document.querySelectorAll('#value-result .vcard-chev[data-row="' + row + '"]').forEach(function (b) { b.textContent = open ? '▲' : '▼'; });
+  _syncValueMasterLabel();
 }
 function toggleAllValueRows(btn) {
-  var folds = document.querySelectorAll('#value-result .vcard-fold');
+  var folds = _allValueFolds();
   if (!folds.length) return;
-  var anyClosed = Array.prototype.some.call(folds, function (f) { return !f.classList.contains('open'); });
+  var anyClosed = folds.some(function (f) { return !f.classList.contains('open'); });
   folds.forEach(function (f) { f.classList.toggle('open', anyClosed); });
   document.querySelectorAll('#value-result .vcard-chev').forEach(function (b) { b.textContent = anyClosed ? '▲' : '▼'; });
   if (btn) btn.textContent = anyClosed ? '全部收合' : '全部展開';
-}
-
-function calcPnlHtml(afterTaxValue) {
-  var cost = getTotalCost();
-  if (!cost || !afterTaxValue) return '<div style="color:var(--text3);font-size:12px;padding-top:18px">填入各持股成本後顯示</div>';
-  var pnl = Math.round(afterTaxValue) - cost;
-  var pnlPct = (pnl / cost * 100);
-  // 台股慣例：正數（獲利）紅色，負數（虧損）綠色
-  var pnlColor = pnl >= 0 ? '#ff5252' : '#26d962';
-  var sign = pnl >= 0 ? '+' : '';
-  return '<div style="display:flex;gap:16px 20px;align-items:flex-start;flex-wrap:wrap">' +
-    '<div>' +
-      '<div class="div-total-label" style="color:#a4b0be;font-size:11px">損益試算</div>' +
-      '<div style="font-size:17px;font-weight:700;color:'+pnlColor+';white-space:nowrap">'+sign+pnl.toLocaleString('zh-TW')+'<span style="font-size:12px;font-weight:400"> 元</span></div>' +
-    '</div>' +
-    '<div>' +
-      '<div class="div-total-label" style="color:#a4b0be;font-size:11px">獲利率</div>' +
-      '<div style="font-size:17px;font-weight:700;color:'+pnlColor+';white-space:nowrap">'+sign+pnlPct.toFixed(2)+'%</div>' +
-    '</div>' +
-  '</div>';
-}
-
-function updatePnlDisplay(afterTaxValue) {
-  var el1 = document.getElementById('pnl-block');
-  var el2 = document.getElementById('pnl-block2');
-  var html = calcPnlHtml(afterTaxValue);
-  if (el1) el1.innerHTML = html;
-  if (el2) el2.innerHTML = html;
 }
 
