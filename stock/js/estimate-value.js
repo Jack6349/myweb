@@ -471,13 +471,26 @@ async function fetchStockPrice(code) {
 function normalizePriceResp(j) {
   if (!j) return null;
   var rows = (j.rows && j.rows.length) ? j.rows : null;
+  // rows 內偶有 close:null（當天資料尚未寫入），往前找最近一筆有效收盤
+  var lastIdx = -1;
+  if (rows) {
+    for (var i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].close != null) { lastIdx = i; break; }
+    }
+  }
   var price = (j.price != null) ? j.price
     : (j.regularMarketPrice != null ? j.regularMarketPrice
-    : (rows ? rows[rows.length - 1].close : null));
+    : (lastIdx >= 0 ? rows[lastIdx].close : null));
   if (price == null) return null;
-  var prevClose = (j.prevClose != null) ? j.prevClose
-    : (rows && rows.length >= 2 ? rows[rows.length - 2].close : null);
-  var date = j.date || (rows ? rows[rows.length - 1].date : '');
+  var prevClose = null;
+  if (j.prevClose != null) {
+    prevClose = j.prevClose;
+  } else if (rows && lastIdx > 0) {
+    for (var k = lastIdx - 1; k >= 0; k--) {
+      if (rows[k].close != null) { prevClose = rows[k].close; break; }
+    }
+  }
+  var date = j.date || (lastIdx >= 0 ? rows[lastIdx].date : '');
   var change = null, changePct = null;
   if (prevClose != null && prevClose !== 0) {
     change = Math.round((price - prevClose) * 100) / 100;
@@ -1067,13 +1080,26 @@ async function fetchStockPrice(code) {
 function normalizePriceResp(j) {
   if (!j) return null;
   var rows = (j.rows && j.rows.length) ? j.rows : null;
+  // rows 內偶有 close:null（當天資料尚未寫入），往前找最近一筆有效收盤
+  var lastIdx = -1;
+  if (rows) {
+    for (var i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].close != null) { lastIdx = i; break; }
+    }
+  }
   var price = (j.price != null) ? j.price
     : (j.regularMarketPrice != null ? j.regularMarketPrice
-    : (rows ? rows[rows.length - 1].close : null));
+    : (lastIdx >= 0 ? rows[lastIdx].close : null));
   if (price == null) return null;
-  var prevClose = (j.prevClose != null) ? j.prevClose
-    : (rows && rows.length >= 2 ? rows[rows.length - 2].close : null);
-  var date = j.date || (rows ? rows[rows.length - 1].date : '');
+  var prevClose = null;
+  if (j.prevClose != null) {
+    prevClose = j.prevClose;
+  } else if (rows && lastIdx > 0) {
+    for (var k = lastIdx - 1; k >= 0; k--) {
+      if (rows[k].close != null) { prevClose = rows[k].close; break; }
+    }
+  }
+  var date = j.date || (lastIdx >= 0 ? rows[lastIdx].date : '');
   var change = null, changePct = null;
   if (prevClose != null && prevClose !== 0) {
     change = Math.round((price - prevClose) * 100) / 100;
