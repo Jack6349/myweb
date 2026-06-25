@@ -594,30 +594,69 @@ async function loadStockValue(forceRefresh) {
     }
     document.getElementById('value-date-label').textContent = latestDate ? '收盤日：' + latestDate : '';
 
-    let html = '';
-    for (const r of rows) {
+    const pnlCol = (v) => v > 0 ? '#ff5252' : (v < 0 ? '#26d962' : 'var(--text3)');
+    const fmtN = (n) => Math.round(n).toLocaleString('zh-TW');
+    const vrow = (label, valHtml) => '<div class="vfold-row"><span class="vfold-label">' + label + '</span>' + valHtml + '</div>';
+
+    let cards = '';
+    rows.forEach((r, idx) => {
+      const rowIdx = Math.floor(idx / 2);
       const hasData = r.price != null;
-      html += '<div class="value-card">' +
-        '<div class="value-card-top">' +
-        '<div>' +
-          '<div class="value-stock-name">' + r.stock.code + '</div>' +
-          '<div class="value-stock-code">' + (r.stock.name || r.stock.code) + '</div>' +
+      const priceCol = (hasData && r.change > 0) ? '#ff5252' : ((hasData && r.change < 0) ? '#26d962' : 'var(--text)');
+
+      // 漲跌（與現價同色，常駐顯示）
+      let chgTxt = '';
+      if (hasData && r.change != null) {
+        const arrow = r.change > 0 ? '▲' : (r.change < 0 ? '▼' : '—');
+        chgTxt = arrow + ' ' + (r.change > 0 ? '+' : '') + r.change.toFixed(2) +
+          '　' + (r.changePct > 0 ? '+' : '') + r.changePct.toFixed(2) + '%';
+      }
+
+      // 折/溢價（僅 ETF 有淨值）
+      const nav = getEtfNav(r.stock.code);
+      let premVal = '<span class="vfold-val" style="color:var(--text3)">—</span>';
+      if (nav && hasData) {
+        const prem = Math.round((r.price - nav.nav) / nav.nav * 10000) / 100;
+        const plabel = prem > 0 ? '溢價 ' : (prem < 0 ? '折價 ' : '');
+        premVal = '<span class="vfold-val" style="color:' + pnlCol(prem) + '">' + plabel + (prem > 0 ? '+' : '') + prem.toFixed(2) + '%</span>';
+      }
+
+      // 成本 / 獲利
+      const cost = parseFloat(r.stock.cost);
+      const hasCost = !isNaN(cost) && cost > 0;
+      let profit = null, prate = null;
+      if (hasCost && hasData) { profit = Math.round(r.totalValue * 0.997735) - cost; prate = profit / cost * 100; }
+
+      const dash = '<span class="vfold-val" style="color:var(--text3)">—</span>';
+      const costVal = hasCost ? '<span class="vfold-val" style="color:var(--accent2)">$' + fmtN(cost) + '</span>' : dash;
+      const valueVal = hasData ? '<span class="vfold-val" style="color:#8ab4d4">$' + fmtN(r.totalValue) + '</span>' : dash;
+      const profitVal = profit == null ? dash
+        : '<span class="vfold-val" style="color:' + pnlCol(profit) + '">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</span>';
+      const prateVal = prate == null ? dash
+        : '<span class="vfold-val" style="color:' + pnlCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>';
+
+      const priceBlock = hasData
+        ? '<div class="vcard-price" style="color:' + priceCol + '">' + r.price.toFixed(2) + '</div>' +
+          '<div class="vcard-chg" style="color:' + priceCol + '">' + (chgTxt || '&nbsp;') + '</div>'
+        : '<div class="vcard-price" style="color:var(--text3);font-size:16px">查詢失敗</div>';
+
+      cards += '<div class="vcard" data-row="' + rowIdx + '">' +
+        '<div class="vcard-head"><span class="vcard-code">' + r.stock.code + '</span>' +
+          '<span class="vcard-name">' + (r.stock.name || '') + '</span></div>' +
+        priceBlock +
+        '<div class="vcard-fold" data-row="' + rowIdx + '">' +
+          vrow('折/溢價', premVal) + vrow('成本', costVal) + vrow('現值', valueVal) +
+          vrow('獲利金額', profitVal) + vrow('獲利率', prateVal) +
         '</div>' +
-        '<div class="value-total">' + (hasData ? '$ ' + r.totalValue.toLocaleString('zh-TW') : '—') + '</div>' +
-        '</div>' +
-        '<div class="value-meta" style="grid-template-columns:1fr">' +
-        '<div class="value-meta-item"><div class="value-meta-label">收盤價</div>' +
-          (function(){
-            if (!hasData) return '<div class="value-meta-val">查詢失敗</div></div>';
-            var up = r.change != null && r.change > 0;
-            var down = r.change != null && r.change < 0;
-            var priceCol = up ? '#ff5252' : (down ? '#26d962' : 'var(--text)');
-            return '<div class="value-meta-val" style="color:' + priceCol + '">$ ' + r.price.toFixed(2) + changeHtml(r.change, r.changePct) + '</div></div>';
-          })() +
-        premiumHtml(r.price, r.stock.code) +
-        '</div></div>';
-    }
-    resultEl.innerHTML = html || '<div class="div-empty">無資料</div>';
+        '<button class="vcard-chev" data-row="' + rowIdx + '" onclick="toggleValueRow(' + rowIdx + ')" aria-label="展開明細">▼</button>' +
+      '</div>';
+    });
+
+    resultEl.innerHTML = rows.length
+      ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px">' +
+          '<button id="value-toggle-all" onclick="toggleAllValueRows(this)" style="background:rgba(240,204,122,.12);border:1px solid rgba(240,204,122,.35);color:var(--accent2);font-size:12px;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:var(--font)">全部展開</button>' +
+        '</div><div class="value-grid">' + cards + '</div>'
+      : '<div class="div-empty">無資料</div>';
   } catch(err) {
     loading.style.display = 'none';
     resultEl.innerHTML = '<div class="div-empty"><div style="color:var(--danger)">' + err.message + '</div>' +
@@ -706,18 +745,6 @@ async function ensureNavMap(force) {
   return map;
 }
 function getEtfNav(code) { return (_etfNavMap && _etfNavMap[String(code).toUpperCase()]) || null; }
-// 折溢價 HTML（溢價紅、折價綠）
-function premiumHtml(price, code) {
-  var n = getEtfNav(code);
-  if (!n || price == null) return '';
-  var prem = Math.round((price - n.nav) / n.nav * 10000) / 100;
-  var col = prem > 0 ? '#ff5252' : (prem < 0 ? '#26d962' : 'var(--text3)');
-  var label = prem > 0 ? '溢價' : (prem < 0 ? '折價' : '平價');
-  var sign = prem > 0 ? '+' : '';
-  return '<div class="value-meta-item" style="margin-top:6px"><div class="value-meta-label">淨值 / 折溢價</div>' +
-    '<div class="value-meta-val">$ ' + n.nav.toFixed(2) +
-    '<span style="font-size:13px;font-weight:600;color:' + col + ';margin-left:8px">' + label + ' ' + sign + prem.toFixed(2) + '%</span></div></div>';
-}
 
 function toggleCostEdit(btn) {
   // Find the input in the same container
@@ -788,15 +815,21 @@ function saveTotalCost(input, event) {
   updatePnlDisplay(afterTax);
 }
 
-// 漲跌顯示（紅漲綠跌）
-function changeHtml(change, changePct) {
-  if (change == null || changePct == null) return '';
-  var up = change > 0, flat = change === 0;
-  var col = flat ? 'var(--text3)' : (up ? '#ff5252' : '#26d962');
-  var arrow = flat ? '—' : (up ? '▲' : '▼');
-  var sign = up ? '+' : '';
-  return '<span style="font-size:13px;font-weight:600;color:' + col + ';margin-left:8px">' +
-    arrow + ' ' + sign + change.toFixed(2) + ' (' + sign + changePct.toFixed(2) + '%)</span>';
+// 當日損益卡片折疊：同列左右兩張卡同步展開／收合
+function toggleValueRow(row) {
+  var folds = document.querySelectorAll('#value-result .vcard-fold[data-row="' + row + '"]');
+  if (!folds.length) return;
+  var open = !folds[0].classList.contains('open');
+  folds.forEach(function (f) { f.classList.toggle('open', open); });
+  document.querySelectorAll('#value-result .vcard-chev[data-row="' + row + '"]').forEach(function (b) { b.textContent = open ? '▲' : '▼'; });
+}
+function toggleAllValueRows(btn) {
+  var folds = document.querySelectorAll('#value-result .vcard-fold');
+  if (!folds.length) return;
+  var anyClosed = Array.prototype.some.call(folds, function (f) { return !f.classList.contains('open'); });
+  folds.forEach(function (f) { f.classList.toggle('open', anyClosed); });
+  document.querySelectorAll('#value-result .vcard-chev').forEach(function (b) { b.textContent = anyClosed ? '▲' : '▼'; });
+  if (btn) btn.textContent = anyClosed ? '全部收合' : '全部展開';
 }
 
 function calcPnlHtml(afterTaxValue) {
