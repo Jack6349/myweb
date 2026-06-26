@@ -23,7 +23,7 @@ function setPriceCache(data) { localStorage.setItem(PRICE_CACHE_KEY, JSON.string
 
 // 從歷史資料偵測每年預期配息月份
 function switchEstTab(tab) {
-  ['month','stock','chart'].forEach(t => {
+  ['month','stock','chart','records'].forEach(t => {
     document.getElementById('est-tab-' + t).classList.toggle('active', t === tab);
     document.getElementById('est-pane-' + t).classList.toggle('active', t === tab);
   });
@@ -274,7 +274,7 @@ async function loadEstDividends(forceRefresh) {
 
       res.actualDivs.forEach(d => { if (!monthActualCodes[d.month-1].includes(stock.code)) monthActualCodes[d.month-1].push(stock.code); });
       res.estDivs.forEach(d => { if (!monthEstCodes[d.month-1].includes(stock.code)) monthEstCodes[d.month-1].push(stock.code); });
-      stockResults.push({ stock, actualDivs: res.actualDivs, estDivs: res.estDivs, total: res.total, latestDiv: res.latestDiv });
+      stockResults.push({ stock, actualDivs: res.actualDivs, estDivs: res.estDivs, total: res.total, latestDiv: res.latestDiv, history: history });
     }
 
     stockResults.sort((a,b) => String(a.stock.code).localeCompare(String(b.stock.code), undefined, {numeric:true}));
@@ -286,6 +286,7 @@ async function loadEstDividends(forceRefresh) {
 
     loading.style.display = 'none';
     renderEstResult(stockResults, grandTotal, actualTotal, estTotal, curYear, curMonthIdx, monthActualCodes, monthEstCodes);
+    renderRecordsTab(stockResults);
   } catch(err) {
     loading.style.display = 'none';
     const ep = document.getElementById('est-pane-month');
@@ -509,6 +510,65 @@ function renderEstResult(stockResults, grandTotal, actualTotal, estTotal, year, 
   const estEl = document.getElementById('home-est');
   if (estEl) estEl.innerHTML = Math.round(grandTotal).toLocaleString('zh-TW') + '<span style="font-size:10px;color:var(--text2);margin-left:1px;">元</span>';
   var _ce=document.getElementById('card-est'); if(_ce) _ce.innerHTML=Math.round(grandTotal).toLocaleString('zh-TW')+'<span style="font-size:11px;font-weight:400;margin-left:2px">元</span>';
+}
+
+// ── Tab 4：配息紀錄（依頻率取最近 N 筆，左右兩欄，左欄較舊／右欄較新）──
+function recordCountForStock(stock, hist) {
+  const freqMap = { monthly: 12, quarterly: 4, semiannual: 2, annual: 1 };
+  if (stock.divFreqType && freqMap[stock.divFreqType] != null) return freqMap[stock.divFreqType];
+  const step = inferStepFromHistory(hist);
+  const stepMap = { 1: 12, 3: 4, 6: 2, 12: 1 };
+  return stepMap[step] || 4;
+}
+
+async function renderRecordsTab(stockResults) {
+  const pane = document.getElementById('est-pane-records');
+  if (!pane) return;
+
+  const withHistory = stockResults.filter(r => r.history && r.history.some(h => h.exDate));
+  if (withHistory.length === 0) {
+    pane.innerHTML = '<div class="div-empty"><div class="div-empty-icon" style="font-size:40px">💰</div>' +
+      '<div style="font-size:16px;color:var(--text2)">無配息紀錄</div></div>';
+    return;
+  }
+
+  const priceMap = {};
+  await Promise.all(withHistory.map(async r => {
+    try { priceMap[r.stock.code] = (await fetchStockPrice(r.stock.code)).price; } catch (e) {}
+  }));
+
+  let html = '<div class="div-section-title" style="margin-top:12px">配息紀錄</div>';
+  for (const r of withHistory) {
+    const stock = r.stock;
+    const hist = r.history.filter(h => h.exDate).sort((a, b) => a.exDate - b.exDate);
+    const count = recordCountForStock(stock, hist);
+    const recent = hist.slice(-count);
+    const half = Math.ceil(recent.length / 2);
+    const left = recent.slice(0, half);
+    const right = recent.slice(half);
+    const price = priceMap[stock.code] || 0;
+
+    const entryHtml = h => {
+      const yld = price > 0 ? (h.cashDiv / price * 100) : null;
+      return '<div style="display:flex;justify-content:space-between;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">' +
+        '<span style="color:var(--text3)">' + h.exDateStr + '</span>' +
+        '<span style="color:var(--text2)">$' + h.cashDiv.toFixed(4) + '</span>' +
+        '<span style="color:var(--accent2)">' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</span>' +
+        '</div>';
+    };
+
+    html += '<div class="div-row">' +
+      '<div class="div-row-top"><div>' +
+        '<div class="div-row-name">' + stock.code + '</div>' +
+        '<div class="div-row-code">' + (stock.name || stock.code) + '</div>' +
+      '</div></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:8px">' +
+        '<div>' + left.map(entryHtml).join('') + '</div>' +
+        '<div>' + right.map(entryHtml).join('') + '</div>' +
+      '</div></div>';
+  }
+  html += '<div class="api-note">殖利率＝該筆配息金額 ÷ 目前股價，僅供單次配息參考，非年化值。</div>';
+  pane.innerHTML = html;
 }
 
 // ══════════════ 當日股票損益 ══════════════
