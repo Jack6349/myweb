@@ -76,9 +76,50 @@ function getLatestCashDiv(history) {
   return recent.length > 0 ? recent[0].cashDiv : 0;
 }
 
+// 全年某間隔（step 月）對齊錨點月，補滿 1-12 月
+function monthsAtStep(step, anchor) {
+  if (step === 1) return Array.from({ length: 12 }, (_, i) => i + 1);
+  let start = anchor; while (start - step >= 1) start -= step;
+  const months = []; for (let m = start; m <= 12; m += step) months.push(m);
+  return months;
+}
+
+// 由配息歷史的除息日間隔推斷頻率（回傳 step 月數 1/3/6/12，或 null）。
+// 比「月份數量」可靠：新上市 ETF 只有 2 筆連續月配，count 法會誤判成半年配，gap 法可正確判月配。
+function inferStepFromHistory(history) {
+  const ex = (history || []).filter(r => r.exDate).map(r => r.exDate).sort((a, b) => a - b);
+  if (ex.length < 2) return null;
+  const gaps = [];
+  for (let i = 1; i < ex.length; i++) {
+    const g = (ex[i].getFullYear() - ex[i-1].getFullYear()) * 12 + (ex[i].getMonth() - ex[i-1].getMonth());
+    if (g > 0) gaps.push(g);
+  }
+  if (!gaps.length) return null;
+  gaps.sort((a, b) => a - b);
+  const med = gaps[Math.floor(gaps.length / 2)];
+  return med <= 1 ? 1 : (med <= 4 ? 3 : (med <= 8 ? 6 : 12));
+}
+
+// 全年配息月份（殖利率用，依頻率列出整年）。以歷史除息間隔優先（最準），錨點為最近一次入帳月；
+// 無足夠歷史才回退持股設定 divMonths / divFreq；再不行回退歷史月份偵測。
+function cadenceMonths(stock, history) {
+  const histStep = inferStepFromHistory(history);
+  if (histStep) {
+    let anchor = 1;
+    const s = history.filter(r => r.exDate).sort((a, b) => b.exDate - a.exDate);
+    if (s.length) { const pd = exToPayDate(s[0].exDate); if (pd) anchor = pd.getMonth() + 1; }
+    return monthsAtStep(histStep, anchor);
+  }
+  if (stock.divMonths) return parseDivMonths(stock.divMonths);
+  const step = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 }[stock.divFreq || stock.divFreqType];
+  if (!step) return detectExpectedMonths(history || []);
+  return monthsAtStep(step, 6);
+}
+
 // 逐檔年度配息估算（已領實際＋未領用最近一次估算）。估算頁與當日損益卡片共用，確保數字一致。
-// 回傳 { actualDivs, estDivs, total, latestDiv, annualPerShare } 或 null（不配息/無資料）。
-// total＝全年金額（含股數），annualPerShare＝全年每股配息（殖利率用）。
+// 回傳 { actualDivs, estDivs, total, latestDiv, annualPerShare, annualProjected } 或 null（不配息/無資料）。
+//   total＝今年可領金額（含股數，給估算頁）；annualPerShare＝今年可領每股加總；
+//   annualProjected＝全年逐月填補每股加總（殖利率用：全年每個配息月有實際用實際、無則用最近一次）。
 function computeStockAnnual(stock, history, now) {
   now = now || new Date();
   const curYear = now.getFullYear();
@@ -135,7 +176,24 @@ function computeStockAnnual(stock, history, now) {
   }
   const total = [...actualDivs, ...estDivs].reduce((s,d) => s + d.totalDiv, 0);
   const annualPerShare = [...actualDivs, ...estDivs].reduce((s,d) => s + d.cashDiv, 0);
-  return { actualDivs, estDivs, total, latestDiv, annualPerShare };
+
+  // 全年逐月填補（殖利率用）：依頻率列出全年配息月，每月有今年實際用實際、否則用最近一次
+  let annualProjected = 0;
+  const cad = cadenceMonths(stock, history);
+  if (cad.length) {
+    const actualByMonth = {};
+    (history || []).forEach(rec => {
+      if (!rec.exDate) return;
+      const pd = exToPayDate(rec.exDate);
+      if (!pd || pd.getFullYear() !== curYear) return;
+      const m = pd.getMonth() + 1;
+      actualByMonth[m] = (actualByMonth[m] || 0) + rec.cashDiv;
+    });
+    const fill = (stock.manualDiv && stock.manualDiv > 0) ? stock.manualDiv : latestDiv;
+    cad.forEach(m => { annualProjected += (actualByMonth[m] != null ? actualByMonth[m] : fill); });
+  }
+
+  return { actualDivs, estDivs, total, latestDiv, annualPerShare, annualProjected };
 }
 
 async function loadEstDividends(forceRefresh) {
@@ -551,7 +609,7 @@ async function loadStockValue(forceRefresh) {
           try {
             const hist = (stock.manualDiv && stock.manualDiv > 0) ? null : await fetchStockDivHistory(stock.code);
             const annual = computeStockAnnual(stock, hist, new Date());
-            if (annual && annual.annualPerShare > 0) estYield = annual.annualPerShare / price * 100;
+            if (annual && annual.annualProjected > 0) estYield = annual.annualProjected / price * 100;
           } catch(e) { /* 配息查詢失敗不影響股價顯示 */ }
         }
         rows.push({ stock, price, totalValue, date: priceData.date, latestExDate, change: priceData.change, changePct: priceData.changePct, estYield });

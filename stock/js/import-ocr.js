@@ -277,8 +277,23 @@
       var months = Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
       var n = months.length;
       if (n === 0) return null;
-      var type = n >= 11 ? 'monthly' : (n >= 3 ? 'quarterly' : (n === 2 ? 'semiannual' : 'annual'));
-      var divMonths = type === 'monthly' ? '1-12' : months.join(',');
+      // 頻率優先用「除息日間隔」推斷（gap 法）：新上市 ETF 只有 2 筆連續月配，count 法會誤判成半年配。
+      var step = (typeof inferStepFromHistory === 'function') ? inferStepFromHistory(history) : null;
+      var type, divMonths;
+      if (step) {
+        type = step === 1 ? 'monthly' : (step === 3 ? 'quarterly' : (step === 6 ? 'semiannual' : 'annual'));
+        if (type === 'monthly') {
+          divMonths = '1-12';
+        } else {
+          var sorted = history.filter(function (r) { return r.exDate; }).sort(function (a, b) { return b.exDate - a.exDate; });
+          var anchor = 1;
+          if (sorted.length) { var pd = exToPayDate(sorted[0].exDate); if (pd) anchor = pd.getMonth() + 1; }
+          divMonths = (typeof monthsAtStep === 'function') ? monthsAtStep(step, anchor).join(',') : months.join(',');
+        }
+      } else {
+        type = n >= 11 ? 'monthly' : (n >= 3 ? 'quarterly' : (n === 2 ? 'semiannual' : 'annual'));
+        divMonths = type === 'monthly' ? '1-12' : months.join(',');
+      }
       return { divFreqType: type, divMonths: divMonths, divMonthsSource: '自動偵測' };
     } catch (e) { return null; }
   }
