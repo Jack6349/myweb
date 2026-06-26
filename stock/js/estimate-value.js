@@ -193,7 +193,17 @@ function computeStockAnnual(stock, history, now) {
     cad.forEach(m => { annualProjected += (actualByMonth[m] != null ? actualByMonth[m] : fill); });
   }
 
-  return { actualDivs, estDivs, total, latestDiv, annualPerShare, annualProjected };
+  // 最近兩次配息差距（殖利率失真警示）：|最近 − 前次| / 前次 × 100 > 10% → 標記
+  let lastTwoDiffPct = null, divWarn = false;
+  if (history && history.length >= 2) {
+    const sd = history.filter(r => r.exDate && r.cashDiv > 0).sort((a, b) => b.exDate - a.exDate);
+    if (sd.length >= 2 && sd[1].cashDiv > 0) {
+      lastTwoDiffPct = Math.abs(sd[0].cashDiv - sd[1].cashDiv) / sd[1].cashDiv * 100;
+      divWarn = lastTwoDiffPct > 10;
+    }
+  }
+
+  return { actualDivs, estDivs, total, latestDiv, annualPerShare, annualProjected, divWarn, lastTwoDiffPct };
 }
 
 async function loadEstDividends(forceRefresh) {
@@ -604,15 +614,18 @@ async function loadStockValue(forceRefresh) {
         // 最近除息日從快取取
         const latestExDate = getLatestExDate(stock.code);
         // 預估年殖利率：年度可領估算（已領＋未領用最近一次）每股加總 ÷ 收盤價
-        let estYield = null;
+        let estYield = null, divWarn = false, divDiffPct = null;
         if (stock.divFreqType !== 'none' && price > 0) {
           try {
             const hist = (stock.manualDiv && stock.manualDiv > 0) ? null : await fetchStockDivHistory(stock.code);
             const annual = computeStockAnnual(stock, hist, new Date());
-            if (annual && annual.annualProjected > 0) estYield = annual.annualProjected / price * 100;
+            if (annual && annual.annualProjected > 0) {
+              estYield = annual.annualProjected / price * 100;
+              divWarn = annual.divWarn; divDiffPct = annual.lastTwoDiffPct;
+            }
           } catch(e) { /* 配息查詢失敗不影響股價顯示 */ }
         }
-        rows.push({ stock, price, totalValue, date: priceData.date, latestExDate, change: priceData.change, changePct: priceData.changePct, estYield });
+        rows.push({ stock, price, totalValue, date: priceData.date, latestExDate, change: priceData.change, changePct: priceData.changePct, estYield, divWarn, divDiffPct });
       } catch(e) {
         rows.push({ stock, price: null, totalValue: null, date: null, latestExDate: null, error: e.message, estYield: null });
       }
@@ -710,7 +723,8 @@ async function loadStockValue(forceRefresh) {
         : '<span class="vfold-val" style="color:' + pnlCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>';
 
       const yieldHtml = (r.estYield != null)
-        ? '<span class="vcard-yield">年估 ' + r.estYield.toFixed(2) + '%</span>' : '';
+        ? '<span class="vcard-yield"' + (r.divWarn ? ' title="最近兩次配息差距 ' + Math.round(r.divDiffPct) + '%，年估可能失真"' : '') + '>' +
+          (r.divWarn ? '⚠️ ' : '') + '年估 ' + r.estYield.toFixed(2) + '%</span>' : '';
       const priceBlock = hasData
         ? '<div class="vcard-priceline"><span class="vcard-price" style="color:' + priceCol + '">' + r.price.toFixed(2) + '</span>' + yieldHtml + '</div>' +
           '<div class="vcard-chg" style="color:' + priceCol + '">' + (chgTxt || '&nbsp;') + '</div>'
