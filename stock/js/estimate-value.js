@@ -542,7 +542,7 @@ async function renderRecordsTab(stockResults) {
     const stock = r.stock;
     const hist = r.history.filter(h => h.exDate).sort((a, b) => a.exDate - b.exDate);
     const count = recordCountForStock(stock, hist);
-    const recent = hist.slice(-count);
+    const recent = hist.slice(-count).reverse(); // 最近一期在前，往後排
     const half = Math.ceil(recent.length / 2);
     const left = recent.slice(0, half);
     const right = recent.slice(half);
@@ -552,15 +552,14 @@ async function renderRecordsTab(stockResults) {
       const yld = price > 0 ? (h.cashDiv / price * 100) : null;
       return '<div style="display:flex;justify-content:space-between;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">' +
         '<span style="color:var(--text3)">' + h.exDateStr + '</span>' +
-        '<span style="color:var(--text2)">$' + h.cashDiv.toFixed(4) + '</span>' +
+        '<span style="color:var(--text2)">$' + h.cashDiv.toFixed(3) + '</span>' +
         '<span style="color:var(--accent2)">' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</span>' +
         '</div>';
     };
 
     html += '<div class="div-row">' +
       '<div class="div-row-top"><div>' +
-        '<div class="div-row-name">' + stock.code + '</div>' +
-        '<div class="div-row-code">' + (stock.name || stock.code) + '</div>' +
+        '<div class="div-row-name">' + stock.code + ' <span class="div-row-code" style="font-weight:400">' + (stock.name || stock.code) + '</span></div>' +
       '</div></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:8px">' +
         '<div>' + left.map(entryHtml).join('') + '</div>' +
