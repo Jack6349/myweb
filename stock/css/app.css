@@ -241,7 +241,9 @@
   .vcard-head { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:6px; }
   .vcard-code { font-size:15px; font-weight:700; color:var(--text); }
   .vcard-name { font-size:11px; color:var(--text2); margin-left:5px; }
+  .vcard-priceline { display:flex; align-items:baseline; justify-content:space-between; gap:6px; }
   .vcard-price { font-size:25px; font-weight:700; letter-spacing:-.5px; line-height:1.1; }
+  .vcard-yield { font-size:11px; font-weight:600; color:#f5d87a; white-space:nowrap; }
   .vcard-chg { font-size:12px; margin-top:1px; }
   .vcard-fold { display:none; margin-top:9px; padding-top:9px; border-top:1px solid var(--border); }
   .vcard-fold.open { display:block; }

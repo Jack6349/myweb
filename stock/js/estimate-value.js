@@ -76,6 +76,68 @@ function getLatestCashDiv(history) {
   return recent.length > 0 ? recent[0].cashDiv : 0;
 }
 
+// 逐檔年度配息估算（已領實際＋未領用最近一次估算）。估算頁與當日損益卡片共用，確保數字一致。
+// 回傳 { actualDivs, estDivs, total, latestDiv, annualPerShare } 或 null（不配息/無資料）。
+// total＝全年金額（含股數），annualPerShare＝全年每股配息（殖利率用）。
+function computeStockAnnual(stock, history, now) {
+  now = now || new Date();
+  const curYear = now.getFullYear();
+  const curMonthIdx = now.getMonth();      // 0-based 本月
+  const lastReceivedIdx = curMonthIdx - 1; // 0-based 上月（已入帳）
+  const shares = parseFloat(stock.shares);
+  const actualDivs = [], estDivs = [];
+  let latestDiv = 0;
+
+  if (stock.manualDiv && stock.manualDiv > 0) {
+    // ── 手動設定 ──
+    const freq = stock.divFreq || 'monthly';
+    const allMonths = freq === 'monthly' ? Array.from({length:12},(_,i)=>i+1)
+                    : freq === 'quarterly' ? [1,4,7,10] : [6];
+    const months = stock.divMonths ? parseDivMonths(stock.divMonths) : allMonths;
+    for (const m of months) {
+      const totalDiv = Math.round(stock.manualDiv * shares * 1000 * 100) / 100;
+      if (m - 1 <= lastReceivedIdx) actualDivs.push({ month: m, cashDiv: stock.manualDiv, totalDiv, count: 1 });
+      else estDivs.push({ month: m, cashDiv: stock.manualDiv, totalDiv });
+    }
+    latestDiv = stock.manualDiv;
+  } else {
+    // ── API 歷史 ──
+    if (stock.divFreqType === 'none') return null;
+    if (!history || history.length === 0) return null;
+    const actualMap = new Map();
+    for (const rec of history) {
+      if (!rec.exDate) continue;
+      const payDate = exToPayDate(rec.exDate);
+      if (!payDate) continue;
+      if (payDate.getFullYear() !== curYear) continue;
+      const pm = payDate.getMonth(); // 0-based 入帳月
+      if (pm > lastReceivedIdx) continue;
+      const totalDiv = Math.round(rec.cashDiv * shares * 1000 * 100) / 100;
+      if (actualMap.has(pm)) {
+        const ex = actualMap.get(pm);
+        actualMap.set(pm, { month: pm+1, cashDiv: ex.cashDiv + rec.cashDiv,
+          totalDiv: ex.totalDiv + totalDiv, count: ex.count + 1 });
+      } else {
+        actualMap.set(pm, { month: pm+1, cashDiv: rec.cashDiv, totalDiv, count: 1 });
+      }
+    }
+    Array.from(actualMap.values()).sort((a,b) => a.month - b.month).forEach(d => actualDivs.push(d));
+    const expectedMonths = stock.divMonths && stock.divFreqType !== 'none'
+      ? parseDivMonths(stock.divMonths)
+      : detectExpectedMonths(history);
+    latestDiv = getLatestCashDiv(history);
+    for (const m of expectedMonths) {
+      if (m - 1 < curMonthIdx) continue; // 已入帳月份不再估算
+      const totalDiv = Math.round(latestDiv * shares * 1000 * 100) / 100;
+      estDivs.push({ month: m, cashDiv: latestDiv, totalDiv });
+    }
+    if (actualDivs.length === 0 && estDivs.length === 0) return null;
+  }
+  const total = [...actualDivs, ...estDivs].reduce((s,d) => s + d.totalDiv, 0);
+  const annualPerShare = [...actualDivs, ...estDivs].reduce((s,d) => s + d.cashDiv, 0);
+  return { actualDivs, estDivs, total, latestDiv, annualPerShare };
+}
+
 async function loadEstDividends(forceRefresh) {
   if (portfolio.length === 0) {
     document.getElementById('est-result').innerHTML =
@@ -127,84 +189,24 @@ async function loadEstDividends(forceRefresh) {
       if (loadingText) loadingText.textContent =
         '查詢中 (' + (i+1) + '/' + portfolio.length + ')：' + (stock.name || stock.code);
 
-      const shares = parseFloat(stock.shares);
-
-      // ── 手動設定 ──
-      if (stock.manualDiv && stock.manualDiv > 0) {
-        const freq = stock.divFreq || 'monthly';
-        const allMonths = freq === 'monthly' ? Array.from({length:12},(_,i)=>i+1)
-                        : freq === 'quarterly' ? [1,4,7,10]
-                        : [6]; // annual 預設6月
-        const divMonthsOverride = stock.divMonths ? parseDivMonths(stock.divMonths) : allMonths;
-        const actualDivs = [], estDivs = [];
-        for (const m of divMonthsOverride) {
-          const totalDiv = Math.round(stock.manualDiv * shares * 1000 * 100) / 100;
-          if (m - 1 <= lastReceivedIdx) {
-            actualDivs.push({ month: m, cashDiv: stock.manualDiv, totalDiv, count: 1 });
-            monthActualCodes[m-1].push(stock.code);
-          } else {
-            estDivs.push({ month: m, cashDiv: stock.manualDiv, totalDiv });
-            monthEstCodes[m-1].push(stock.code);
-          }
+      // 手動設定免查歷史；其餘走 API（不配息跳過）
+      let history = null;
+      if (!(stock.manualDiv && stock.manualDiv > 0)) {
+        if (stock.divFreqType === 'none') continue;
+        try {
+          history = await fetchStockDivHistory(stock.code);
+        } catch(e) {
+          console.warn('[EST]', stock.code, e.message);
+          continue;
         }
-        const total = [...actualDivs, ...estDivs].reduce((s,d) => s + d.totalDiv, 0);
-        stockResults.push({ stock, actualDivs, estDivs, total, latestDiv: stock.manualDiv });
-        continue;
       }
 
-      // 不配息直接跳過
-      if (stock.divFreqType === 'none') continue;
+      const res = computeStockAnnual(stock, history, now);
+      if (!res) continue;
 
-      // ── API 查詢 ──
-      try {
-        const history = await fetchStockDivHistory(stock.code);
-        if (history.length === 0) continue;
-
-        // 今年實際已入帳（入帳日 Jan ~ 上月，除息日在去年12月 ~ 今年上上月）
-        const actualMap = new Map();
-        for (const rec of history) {
-          if (!rec.exDate) continue;
-          const payDate = exToPayDate(rec.exDate);
-          if (!payDate) continue;
-          if (payDate.getFullYear() !== curYear) continue;
-          const pm = payDate.getMonth(); // 0-based 入帳月
-          if (pm > lastReceivedIdx) continue;
-          const totalDiv = Math.round(rec.cashDiv * shares * 1000 * 100) / 100;
-          if (actualMap.has(pm)) {
-            const ex = actualMap.get(pm);
-            actualMap.set(pm, { month: pm+1, cashDiv: ex.cashDiv + rec.cashDiv,
-              totalDiv: ex.totalDiv + totalDiv, count: ex.count + 1 });
-          } else {
-            actualMap.set(pm, { month: pm+1, cashDiv: rec.cashDiv, totalDiv, count: 1 });
-          }
-          if (!monthActualCodes[pm].includes(stock.code)) monthActualCodes[pm].push(stock.code);
-        }
-        const actualDivs = Array.from(actualMap.values()).sort((a,b) => a.month - b.month);
-
-        // 以持股設定的配息月份為主，未設定則從 API 偵測（僅作備用）
-        const expectedMonths = stock.divMonths && stock.divFreqType !== 'none'
-          ? parseDivMonths(stock.divMonths)
-          : (stock.divFreqType === 'none' ? [] : detectExpectedMonths(history));
-
-        // 最近一次配息金額（用於估算）
-        const latestDiv = getLatestCashDiv(history);
-
-        // 未來入帳月份估算（本月 ~ 12月）
-        const estDivs = [];
-        for (const m of expectedMonths) {
-          if (m - 1 < curMonthIdx) continue; // 已入帳月份不再估算
-          const totalDiv = Math.round(latestDiv * shares * 1000 * 100) / 100;
-          estDivs.push({ month: m, cashDiv: latestDiv, totalDiv });
-          if (!monthEstCodes[m-1].includes(stock.code)) monthEstCodes[m-1].push(stock.code);
-        }
-
-        const total = [...actualDivs, ...estDivs].reduce((s,d) => s + d.totalDiv, 0);
-        if (actualDivs.length > 0 || estDivs.length > 0) {
-          stockResults.push({ stock, actualDivs, estDivs, total, latestDiv });
-        }
-      } catch(e) {
-        console.warn('[EST]', stock.code, e.message);
-      }
+      res.actualDivs.forEach(d => { if (!monthActualCodes[d.month-1].includes(stock.code)) monthActualCodes[d.month-1].push(stock.code); });
+      res.estDivs.forEach(d => { if (!monthEstCodes[d.month-1].includes(stock.code)) monthEstCodes[d.month-1].push(stock.code); });
+      stockResults.push({ stock, actualDivs: res.actualDivs, estDivs: res.estDivs, total: res.total, latestDiv: res.latestDiv });
     }
 
     stockResults.sort((a,b) => String(a.stock.code).localeCompare(String(b.stock.code), undefined, {numeric:true}));
@@ -543,9 +545,18 @@ async function loadStockValue(forceRefresh) {
         if (priceData.date && priceData.date > latestDate) latestDate = priceData.date;
         // 最近除息日從快取取
         const latestExDate = getLatestExDate(stock.code);
-        rows.push({ stock, price, totalValue, date: priceData.date, latestExDate, change: priceData.change, changePct: priceData.changePct });
+        // 預估年殖利率：年度可領估算（已領＋未領用最近一次）每股加總 ÷ 收盤價
+        let estYield = null;
+        if (stock.divFreqType !== 'none' && price > 0) {
+          try {
+            const hist = (stock.manualDiv && stock.manualDiv > 0) ? null : await fetchStockDivHistory(stock.code);
+            const annual = computeStockAnnual(stock, hist, new Date());
+            if (annual && annual.annualPerShare > 0) estYield = annual.annualPerShare / price * 100;
+          } catch(e) { /* 配息查詢失敗不影響股價顯示 */ }
+        }
+        rows.push({ stock, price, totalValue, date: priceData.date, latestExDate, change: priceData.change, changePct: priceData.changePct, estYield });
       } catch(e) {
-        rows.push({ stock, price: null, totalValue: null, date: null, latestExDate: null, error: e.message });
+        rows.push({ stock, price: null, totalValue: null, date: null, latestExDate: null, error: e.message, estYield: null });
       }
     }
 
@@ -640,8 +651,10 @@ async function loadStockValue(forceRefresh) {
       const prateVal = prate == null ? dash
         : '<span class="vfold-val" style="color:' + pnlCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>';
 
+      const yieldHtml = (r.estYield != null)
+        ? '<span class="vcard-yield">年估 ' + r.estYield.toFixed(2) + '%</span>' : '';
       const priceBlock = hasData
-        ? '<div class="vcard-price" style="color:' + priceCol + '">' + r.price.toFixed(2) + '</div>' +
+        ? '<div class="vcard-priceline"><span class="vcard-price" style="color:' + priceCol + '">' + r.price.toFixed(2) + '</span>' + yieldHtml + '</div>' +
           '<div class="vcard-chg" style="color:' + priceCol + '">' + (chgTxt || '&nbsp;') + '</div>'
         : '<div class="vcard-price" style="color:var(--text3);font-size:16px">查詢失敗</div>';
 
