@@ -532,11 +532,6 @@ async function renderRecordsTab(stockResults) {
     return;
   }
 
-  const priceMap = {};
-  await Promise.all(withHistory.map(async r => {
-    try { priceMap[r.stock.code] = (await fetchStockPrice(r.stock.code)).price; } catch (e) {}
-  }));
-
   let html = '<div class="div-section-title" style="margin-top:12px">配息紀錄</div>';
   for (const r of withHistory) {
     const stock = r.stock;
@@ -546,10 +541,12 @@ async function renderRecordsTab(stockResults) {
     const half = Math.ceil(recent.length / 2);
     const left = recent.slice(0, half);
     const right = recent.slice(half);
-    const price = priceMap[stock.code] || 0;
+    const cost = parseFloat(stock.cost);
+    const shares = parseFloat(stock.shares);
+    const avgCost = (!isNaN(cost) && cost > 0 && !isNaN(shares) && shares > 0) ? cost / (shares * 1000) : null;
 
     const entryHtml = h => {
-      const yld = price > 0 ? (h.cashDiv / price * 100) : null;
+      const yld = avgCost ? (h.cashDiv / avgCost * 100) : null;
       return '<div style="display:flex;justify-content:space-between;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">' +
         '<span style="color:var(--text3)">' + h.exDateStr + '</span>' +
         '<span style="color:var(--text2)">$' + h.cashDiv.toFixed(3) + '</span>' +
@@ -566,7 +563,7 @@ async function renderRecordsTab(stockResults) {
         '<div>' + right.map(entryHtml).join('') + '</div>' +
       '</div></div>';
   }
-  html += '<div class="api-note">殖利率＝該筆配息金額 ÷ 目前股價，僅供單次配息參考，非年化值。</div>';
+  html += '<div class="api-note">殖利率＝該筆配息金額 ÷ 該股平均成本（未填成本者顯示 —），僅供單次配息參考，非年化值。</div>';
   pane.innerHTML = html;
 }
 
