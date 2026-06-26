@@ -544,6 +544,10 @@ async function renderRecordsTab(stockResults) {
     const cost = parseFloat(stock.cost);
     const shares = parseFloat(stock.shares);
     const avgCost = (!isNaN(cost) && cost > 0 && !isNaN(shares) && shares > 0) ? cost / (shares * 1000) : null;
+    const curYear = new Date().getFullYear();
+    const annualCashDiv = hist.filter(h => h.exDate.getFullYear() === curYear)
+      .reduce((s, h) => s + h.cashDiv, 0);
+    const annualPct = avgCost ? (annualCashDiv / avgCost * 100) : null;
 
     const entryHtml = h => {
       const yld = avgCost ? (h.cashDiv / avgCost * 100) : null;
@@ -555,9 +559,10 @@ async function renderRecordsTab(stockResults) {
     };
 
     html += '<div class="div-row">' +
-      '<div class="div-row-top"><div>' +
-        '<div class="div-row-name">' + stock.code + ' <span class="div-row-code" style="font-weight:400">' + (stock.name || stock.code) + '</span></div>' +
-      '</div></div>' +
+      '<div class="div-row-top" style="display:flex;justify-content:space-between;align-items:baseline">' +
+        '<div><div class="div-row-name">' + stock.code + ' <span class="div-row-code" style="font-weight:400">' + (stock.name || stock.code) + '</span></div></div>' +
+        '<div style="font-size:13px;font-weight:700;color:var(--accent2);white-space:nowrap">' + (annualPct != null ? curYear + ' 年累積 ' + annualPct.toFixed(2) + '%' : '—') + '</div>' +
+      '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:8px">' +
         '<div>' + left.map(entryHtml).join('') + '</div>' +
         '<div>' + right.map(entryHtml).join('') + '</div>' +
