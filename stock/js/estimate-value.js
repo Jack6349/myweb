@@ -429,74 +429,72 @@ function renderEstResult(stockResults, grandTotal, actualTotal, estTotal, year, 
   html += '<div class="api-note">估算月份以最近一次配息金額 × 預期月份計算，僅供參考。</div>';
   stockPane.innerHTML = html;
 
-  // ── Tab 3：直條圖 ──
+  // ── Tab 3：水平橫條圖 ──
   const chartPane = document.getElementById('est-pane-chart');
   if (!chartPane) return;
 
-  const PAD = { top:40, right:16, bottom:48, left:56 };
-  const BAR_GAP = 6;
+  const PAD = { top:8, right:48, bottom:36, left:36 };
+  const ROW_H = 18;
+  const ROW_GAP = 8;
   const containerW = chartPane.clientWidth || (window.innerWidth - 32);
   const W = containerW;
-  const H = 280;
+  const chartH = 12 * ROW_H + 11 * ROW_GAP;
+  const H = chartH + PAD.top + PAD.bottom;
   const chartW = W - PAD.left - PAD.right;
-  const chartH = H - PAD.top - PAD.bottom;
-  const barW = Math.floor((chartW - BAR_GAP * 11) / 12);
 
   const maxVal = Math.max(...monthActual.map((a,i) => a + monthEst[i]), 1);
-  // Y-axis nice scale
-  const yMax = Math.ceil(maxVal / 10000) * 10000 || 10000;
-  const yTicks = 4;
+  // X-axis nice scale
+  const xMax = Math.ceil(maxVal / 10000) * 10000 || 10000;
+  const xTicks = 4;
 
   let svgParts = [`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;overflow:visible">`];
 
-  // Y gridlines + labels
-  for (let t = 0; t <= yTicks; t++) {
-    const val = Math.round(yMax * t / yTicks);
-    const y = PAD.top + chartH - Math.round((val / yMax) * chartH);
+  // X gridlines + labels (沿底部)
+  const yBottom = PAD.top + chartH;
+  for (let t = 0; t <= xTicks; t++) {
+    const val = Math.round(xMax * t / xTicks);
+    const x = PAD.left + Math.round((val / xMax) * chartW);
     const label = val >= 10000 ? (val/10000).toFixed(0) + '萬' : val.toLocaleString();
-    svgParts.push(`<line x1="${PAD.left}" y1="${y}" x2="${W - PAD.right}" y2="${y}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>`);
-    svgParts.push(`<text x="${PAD.left - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="rgba(143,163,184,0.8)">${label}</text>`);
+    svgParts.push(`<line x1="${x}" y1="${PAD.top}" x2="${x}" y2="${yBottom}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>`);
+    svgParts.push(`<text x="${x}" y="${yBottom + 14}" text-anchor="middle" font-size="10" fill="rgba(143,163,184,0.8)">${label}</text>`);
   }
 
-  // Bars + X labels
+  // Bars + 月份標籤
   for (let m = 0; m < 12; m++) {
     const actual = monthActual[m];
     const est = monthEst[m];
     const total = actual + est;
-    const x = PAD.left + m * (barW + BAR_GAP);
+    const y = PAD.top + m * (ROW_H + ROW_GAP);
 
-    const hActual = actual > 0 ? Math.max(2, Math.round((actual / yMax) * chartH)) : 0;
-    const hEst    = est > 0    ? Math.max(2, Math.round((est    / yMax) * chartH)) : 0;
-    const hTotal  = hActual + hEst;
+    const wActual = actual > 0 ? Math.max(2, Math.round((actual / xMax) * chartW)) : 0;
+    const wEst    = est > 0    ? Math.max(2, Math.round((est    / xMax) * chartW)) : 0;
+    const wTotal  = wActual + wEst;
 
-    const yBase = PAD.top + chartH;
-
-    if (hEst > 0) {
-      svgParts.push(`<rect x="${x}" y="${yBase - hTotal}" width="${barW}" height="${hEst}" rx="3" fill="#f0cc7a" opacity="0.85"/>`);
+    if (wActual > 0) {
+      svgParts.push(`<rect x="${PAD.left}" y="${y}" width="${wActual}" height="${ROW_H}" rx="${wEst > 0 ? 0 : 3}" fill="#4caf82"/>`);
     }
-    if (hActual > 0) {
-      svgParts.push(`<rect x="${x}" y="${yBase - hActual}" width="${barW}" height="${hActual}" rx="${hEst > 0 ? 0 : 3}" fill="#4caf82"/>`);
-      if (hEst > 0) {
-        svgParts.push(`<rect x="${x}" y="${yBase - hActual}" width="${barW}" height="2" fill="#4caf82"/>`);
+    if (wEst > 0) {
+      svgParts.push(`<rect x="${PAD.left + wActual}" y="${y}" width="${wEst}" height="${ROW_H}" rx="3" fill="#f0cc7a" opacity="0.85"/>`);
+      if (wActual > 0) {
+        svgParts.push(`<rect x="${PAD.left + wActual}" y="${y}" width="2" height="${ROW_H}" fill="#4caf82"/>`);
       }
     }
 
-    // Amount label on top of bar
+    // 月份標籤（左側）
+    svgParts.push(`<text x="${PAD.left - 6}" y="${y + ROW_H/2 + 4}" text-anchor="end" font-size="11" fill="rgba(143,163,184,0.9)">${m+1}月</text>`);
+
+    // 金額標籤（條右側）
     if (total > 0) {
       const labelVal = total >= 10000 ? (total/10000).toFixed(1) + '萬' : Math.round(total).toLocaleString();
-      svgParts.push(`<text x="${x + barW/2}" y="${yBase - hTotal - 5}" text-anchor="middle" font-size="9" fill="rgba(238,242,247,0.7)">${labelVal}</text>`);
+      svgParts.push(`<text x="${PAD.left + wTotal + 5}" y="${y + ROW_H/2 + 4}" text-anchor="start" font-size="10" fill="rgba(238,242,247,0.7)">${labelVal}</text>`);
     }
-
-    // X label
-    const xLabel = x + barW / 2;
-    svgParts.push(`<text x="${xLabel}" y="${yBase + 16}" text-anchor="middle" font-size="11" fill="rgba(143,163,184,0.9)">${m+1}</text>`);
   }
 
-  // X axis line
-  svgParts.push(`<line x1="${PAD.left}" y1="${PAD.top + chartH}" x2="${W - PAD.right}" y2="${PAD.top + chartH}" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>`);
+  // Y axis line
+  svgParts.push(`<line x1="${PAD.left}" y1="${PAD.top}" x2="${PAD.left}" y2="${yBottom}" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>`);
 
   // Legend
-  const ly = H - 8;
+  const ly = H - 6;
   svgParts.push(`<rect x="${PAD.left}" y="${ly - 8}" width="10" height="10" rx="2" fill="#4caf82"/>`);
   svgParts.push(`<text x="${PAD.left + 14}" y="${ly}" font-size="11" fill="rgba(143,163,184,0.9)">已入帳</text>`);
   svgParts.push(`<rect x="${PAD.left + 68}" y="${ly - 8}" width="10" height="10" rx="2" fill="#f0cc7a"/>`);
