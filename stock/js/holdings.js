@@ -2,7 +2,7 @@
 // 資料來源：成分股經 GAS ?holdings= 代理 MoneyDJ 全量解析；ETF 清單沿用 GAS ?finmind_etflist=
 
 // ── 快取：ETF 清單（代碼↔名稱）與成分股，皆 1 天 ──
-const ETF_UNIVERSE_KEY = 'etf_universe_v1';
+const ETF_UNIVERSE_KEY = 'etf_universe_v2'; // v2：加入淨值/市價/折溢價欄位
 const HOLDINGS_CACHE_KEY = 'etf_holdings_v1';
 const HOLDINGS_TTL = 24 * 60 * 60 * 1000; // 1 天
 
@@ -31,7 +31,16 @@ async function loadEtfUniverse() {
     const r1 = await fetch(GAS_URL + '?url=' + encodeURIComponent('https://mis.twse.com.tw/stock/data/all_etf.txt'));
     const d1 = await r1.json();
     (d1.a1 || []).forEach(inst => (inst.msgArray || []).forEach(x => {
-      if (x.a && !byCode.has(x.a)) byCode.set(x.a, { code: String(x.a), name: x.b || '', market: 'twse' });
+      if (x.a && !byCode.has(x.a)) {
+        const nav = parseFloat(x.f), price = parseFloat(x.e), prem = parseFloat(x.g);
+        byCode.set(x.a, {
+          code: String(x.a), name: x.b || '', market: 'twse',
+          nav: isNaN(nav) ? null : nav,
+          price: isNaN(price) ? null : price,
+          premium: isNaN(prem) ? null : prem,
+          navDate: x.i || ''
+        });
+      }
     }));
   } catch (e) { /* 上市清單失敗不阻斷上櫃 */ }
   // 2) 上櫃 ETF（GAS finmind）
@@ -91,6 +100,28 @@ async function fetchEtfHoldings(code) {
   return data;
 }
 
+// 由已載入的 ETF 清單取淨值資訊（上市 ETF 才有；上櫃無 NAV）
+function getNavInfo(code) {
+  const uni = _etfUniverse || [];
+  const c = String(code).toUpperCase();
+  const e = uni.find(x => x.code.toUpperCase() === c);
+  return (e && e.nav != null) ? e : null;
+}
+
+// 淨值＋市價＋折溢價（同行，接在代碼/名稱右側）
+function navInlineHtml(code) {
+  const info = getNavInfo(code);
+  if (!info) return '';
+  const parts = ['淨值 ' + info.nav.toFixed(2)];
+  if (info.price != null) parts.push('市價 ' + info.price.toFixed(2));
+  if (info.premium != null) {
+    const col = info.premium > 0 ? '#ff5252' : (info.premium < 0 ? '#26d962' : 'var(--text3)');
+    const label = info.premium > 0 ? '溢' : (info.premium < 0 ? '折' : '');
+    parts.push('<span style="color:' + col + '">' + label + (info.premium > 0 ? '+' : '') + info.premium.toFixed(2) + '%</span>');
+  }
+  return '<span class="holdings-nav">' + parts.join('　') + '</span>';
+}
+
 // ── 卡片頁籤切換 ──
 function switchHoldingsTab(tab) {
   ['held', 'query'].forEach(t => {
@@ -127,8 +158,10 @@ async function renderHeldEtfHoldings() {
     const code = String(s.code).toUpperCase();
     const name = s.name || nameByCode[code] || '';
     return '<div class="vcard" style="margin-bottom:8px">' +
-      '<div class="vcard-head"><span class="vcard-code">' + code + '</span>' +
-        '<span class="vcard-name">' + name + '</span></div>' +
+      '<div class="vcard-head" style="display:flex;align-items:baseline;gap:6px">' +
+        '<span class="vcard-code">' + code + '</span>' +
+        '<span class="vcard-name">' + name + '</span>' +
+        navInlineHtml(code) + '</div>' +
       '<div class="holdings-item-summary" id="hold-meta-' + code + '">載入中…</div>' +
       '<div class="vcard-fold" id="hold-body-' + code + '"></div>' +
       '<button class="vcard-chev" id="hold-chev-' + code + '" onclick="toggleHeldItem(\'' + code + '\')">▼</button>' +
@@ -244,7 +277,8 @@ function renderHoldingsModal(data) {
   if (!titleEl || !bodyEl) return;
 
   titleEl.innerHTML = data.code +
-    (data.name ? ' <span style="font-size:13px;font-weight:400;color:var(--text2)">' + data.name + '</span>' : '');
+    (data.name ? ' <span style="font-size:13px;font-weight:400;color:var(--text2)">' + data.name + '</span>' : '') +
+    navInlineHtml(data.code);
 
   bodyEl.innerHTML =
     '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">共 ' + (data.count || (data.holdings || []).length) +
