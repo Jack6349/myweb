@@ -255,11 +255,14 @@ function renderHoldingsModal(data) {
   openModal('modal-holdings');
 }
 
-// 首頁顯示時刷新持有 ETF chips（由 showScreen patch 觸發）
+// 進入「ETF 成分股查詢」畫面時自動帶入持有 ETF 成分股（由 showScreen patch 觸發）
 if (typeof showScreen === 'function') {
   const _origShowScreenHoldings = showScreen;
   showScreen = function (name) {
     _origShowScreenHoldings(name);
-    if (name === 'home') { renderHeldEtfHoldings(); }
+    if (name === 'holdings') {
+      switchHoldingsTab('held');
+      renderHeldEtfHoldings();
+    }
   };
 }
