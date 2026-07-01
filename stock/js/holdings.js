@@ -25,41 +25,47 @@ async function loadEtfUniverse() {
     }
   } catch (e) {}
 
+  // all_etf.txt（含淨值）約半數回空；重試至多 5 次直到「上市清單成功」（＝有淨值資料）。
+  // 注意：finmind 有時單獨就 >200 但無淨值，故完整性以 all_etf 是否成功（allEtfOk）為準，不可只看筆數。
   const byCode = new Map();
-  // 1) 上市 ETF（mis.twse all_etf.txt：a=代碼、b=名稱）
-  try {
-    const r1 = await fetch(GAS_URL + '?url=' + encodeURIComponent('https://mis.twse.com.tw/stock/data/all_etf.txt'));
-    const d1 = await r1.json();
-    (d1.a1 || []).forEach(inst => (inst.msgArray || []).forEach(x => {
-      if (x.a && !byCode.has(x.a)) {
-        const nav = parseFloat(x.f), price = parseFloat(x.e), prem = parseFloat(x.g);
-        byCode.set(x.a, {
-          code: String(x.a), name: x.b || '', market: 'twse',
-          nav: isNaN(nav) ? null : nav,
-          price: isNaN(price) ? null : price,
-          premium: isNaN(prem) ? null : prem,
-          navDate: x.i || ''
-        });
-      }
-    }));
-  } catch (e) { /* 上市清單失敗不阻斷上櫃 */ }
-  // 2) 上櫃 ETF（GAS finmind）
-  try {
-    const r2 = await fetch(GAS_URL + '?finmind_etflist=1');
-    const d2 = await r2.json();
-    (d2.list || []).forEach(e => {
-      const c = String(e.code);
-      if (!byCode.has(c)) byCode.set(c, { code: c, name: e.name || '', market: e.market || 'otc' });
-    });
-  } catch (e) { /* 上櫃清單失敗不阻斷 */ }
+  let allEtfOk = false;
+  for (let attempt = 0; attempt < 5 && !allEtfOk; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 400 + 300 * attempt));
+    // 1) 上市 ETF（mis.twse all_etf.txt：a=代碼、b=名稱、e=市價、f=淨值、g=折溢價%）
+    try {
+      const r1 = await fetch(GAS_URL + '?url=' + encodeURIComponent('https://mis.twse.com.tw/stock/data/all_etf.txt'));
+      const d1 = await r1.json();
+      let added = 0;
+      (d1.a1 || []).forEach(inst => (inst.msgArray || []).forEach(x => {
+        if (x.a && !byCode.has(x.a)) {
+          const nav = parseFloat(x.f), price = parseFloat(x.e), prem = parseFloat(x.g);
+          byCode.set(x.a, {
+            code: String(x.a), name: x.b || '', market: 'twse',
+            nav: isNaN(nav) ? null : nav,
+            price: isNaN(price) ? null : price,
+            premium: isNaN(prem) ? null : prem
+          });
+          added++;
+        }
+      }));
+      if (added > 0) allEtfOk = true;
+    } catch (e) { /* 上市清單失敗則重試 */ }
+    // 2) 上櫃 ETF（GAS finmind：補上櫃代碼/名稱，無淨值）
+    try {
+      const r2 = await fetch(GAS_URL + '?finmind_etflist=1');
+      const d2 = await r2.json();
+      (d2.list || []).forEach(e => {
+        const c = String(e.code);
+        if (!byCode.has(c)) byCode.set(c, { code: c, name: e.name || '', market: e.market || 'otc' });
+      });
+    } catch (e) { /* 上櫃清單失敗不阻斷 */ }
+  }
 
   const list = Array.from(byCode.values());
-  _etfUniverse = list;
-  // 兩來源回傳偶有抖動（部分為空），清單過小不寫快取，避免凍結不完整清單一整天
-  if (list.length >= 200) {
+  // 只有「上市清單成功（含淨值）」才視為完整並快取一整天；否則不快取、_etfUniverse 不設，供背景重試
+  if (allEtfOk && list.length >= 200) {
+    _etfUniverse = list;
     try { localStorage.setItem(ETF_UNIVERSE_KEY, JSON.stringify({ day: _todayKey(), list })); } catch (e) {}
-  } else {
-    _etfUniverse = null; // 下次重抓
   }
   return list;
 }
@@ -108,12 +114,14 @@ function getNavInfo(code) {
   return (e && e.nav != null) ? e : null;
 }
 
-// 淨值＋市價＋折溢價（同行，接在代碼/名稱右側）
+// 淨值＋市價＋折溢價（同行，接在代碼/名稱右側）；市價無 e 時由淨值×(1+折溢價%)反推
 function navInlineHtml(code) {
   const info = getNavInfo(code);
   if (!info) return '';
   const parts = ['淨值 ' + info.nav.toFixed(2)];
-  if (info.price != null) parts.push('市價 ' + info.price.toFixed(2));
+  const price = (info.price != null) ? info.price
+    : (info.premium != null ? info.nav * (1 + info.premium / 100) : null);
+  if (price != null) parts.push('市價 ' + price.toFixed(2));
   if (info.premium != null) {
     const col = info.premium > 0 ? '#ff5252' : (info.premium < 0 ? '#26d962' : 'var(--text3)');
     const label = info.premium > 0 ? '溢' : (info.premium < 0 ? '折' : '');
@@ -141,27 +149,23 @@ async function renderHeldEtfHoldings() {
   const hideToggle = () => { if (toggleAllBtn) toggleAllBtn.style.display = 'none'; };
   if (!portfolio.length) { wrap.innerHTML = '<span class="holdings-hint">尚無持股</span>'; hideToggle(); return; }
 
-  let uni;
-  try { uni = await loadEtfUniverse(); } catch (e) { wrap.innerHTML = '<span class="holdings-hint">ETF 清單載入失敗</span>'; hideToggle(); return; }
-  const etfCodes = new Set(uni.map(e => e.code.toUpperCase()));
-  const nameByCode = {};
-  uni.forEach(e => { nameByCode[e.code.toUpperCase()] = e.name; });
+  // ETF 判定用代碼慣例（台股 ETF 代碼以 0 開頭；個股為 4 碼非 0 開頭），不依賴會抖動的清單來源
   const heldEtfs = portfolio
-    .filter(s => etfCodes.has(String(s.code).toUpperCase()))
+    .filter(s => /^0\d/.test(String(s.code)))
     .sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }));
   if (!heldEtfs.length) { wrap.innerHTML = '<span class="holdings-hint">持股中無 ETF</span>'; hideToggle(); return; }
 
   _heldHoldingsLoading = true;
   if (toggleAllBtn) toggleAllBtn.style.display = '';
-  // 先畫出各檔骨架（vcard 折疊），再逐檔補上資料
+  // 先畫出各檔骨架（成分股用可靠的 ?holdings=，先渲染；NAV 走會抖動的清單，背景補上）
   wrap.innerHTML = heldEtfs.map(s => {
     const code = String(s.code).toUpperCase();
-    const name = s.name || nameByCode[code] || '';
+    const name = s.name || '';
     return '<div class="vcard" style="margin-bottom:8px">' +
       '<div class="vcard-head" style="display:flex;align-items:baseline;gap:6px">' +
         '<span class="vcard-code">' + code + '</span>' +
-        '<span class="vcard-name">' + name + '</span>' +
-        navInlineHtml(code) + '</div>' +
+        '<span class="vcard-name" id="hold-name-' + code + '">' + name + '</span>' +
+        '<span class="holdings-nav-slot" id="hold-nav-' + code + '">' + navInlineHtml(code) + '</span></div>' +
       '<div class="holdings-item-summary" id="hold-meta-' + code + '">載入中…</div>' +
       '<div class="vcard-fold" id="hold-body-' + code + '"></div>' +
       '<button class="vcard-chev" id="hold-chev-' + code + '" onclick="toggleHeldItem(\'' + code + '\')">▼</button>' +
@@ -184,6 +188,29 @@ async function renderHeldEtfHoldings() {
     }
   }
   _heldHoldingsLoading = false;
+
+  // 背景載入 ETF 清單 → 補上 NAV 與缺漏的名稱（清單抖動不影響已顯示的成分股）。
+  // all_etf 來源約半數回空，背景多輪重試直到取得完整清單（成功即快取整天）。
+  (async () => {
+    for (let round = 0; round < 8; round++) {
+      let uni = [];
+      try { uni = await loadEtfUniverse(); } catch (e) {}
+      // _etfUniverse 僅在「上市清單成功（含淨值）」時被設定；以此為 NAV 就緒判準
+      if (_etfUniverse) {
+        const nameByCode = {};
+        uni.forEach(e => { nameByCode[e.code.toUpperCase()] = e.name; });
+        heldEtfs.forEach(s => {
+          const code = String(s.code).toUpperCase();
+          const navSlot = document.getElementById('hold-nav-' + code);
+          if (navSlot) navSlot.innerHTML = navInlineHtml(code);
+          const nameEl = document.getElementById('hold-name-' + code);
+          if (nameEl && !nameEl.textContent && nameByCode[code]) nameEl.textContent = nameByCode[code];
+        });
+        return;
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  })();
   _syncHeldToggleLabel();
 }
 
