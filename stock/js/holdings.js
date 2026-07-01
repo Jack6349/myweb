@@ -2,7 +2,7 @@
 // 資料來源：成分股經 GAS ?holdings= 代理 MoneyDJ 全量解析；ETF 清單沿用 GAS ?finmind_etflist=
 
 // ── 快取：ETF 清單（代碼↔名稱）與成分股，皆 1 天 ──
-const ETF_UNIVERSE_KEY = 'etf_universe_v2'; // v2：加入淨值/市價/折溢價欄位
+const ETF_UNIVERSE_KEY = 'etf_universe_v3'; // v3：只快取含淨值的完整清單（淘汰舊的無淨值快取）
 const HOLDINGS_CACHE_KEY = 'etf_holdings_v1';
 const HOLDINGS_TTL = 24 * 60 * 60 * 1000; // 1 天
 
@@ -19,7 +19,9 @@ async function loadEtfUniverse() {
   if (_etfUniverse) return _etfUniverse;
   try {
     const cached = JSON.parse(localStorage.getItem(ETF_UNIVERSE_KEY) || 'null');
-    if (cached && cached.day === _todayKey() && Array.isArray(cached.list) && cached.list.length) {
+    // 只採用「當日且含淨值」的快取；無淨值（僅 finmind）則忽略、重新抓
+    if (cached && cached.day === _todayKey() && Array.isArray(cached.list) &&
+        cached.list.some(e => e && e.nav != null)) {
       _etfUniverse = cached.list;
       return _etfUniverse;
     }
