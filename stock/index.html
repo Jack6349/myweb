@@ -104,15 +104,25 @@
     <!-- ETF 成分股查詢 -->
     <div class="section-title">ETF 成分股查詢</div>
     <div class="holdings-card">
-      <div class="holdings-held-label">持有 ETF（自動帶入，隔日更新）</div>
-      <div class="holdings-held-list" id="holdings-held-list"></div>
-      <div class="holdings-search-label">查詢其他 ETF</div>
-      <div class="holdings-search">
-        <input type="text" id="holdings-input" class="holdings-input" placeholder="輸入 ETF 代碼或名稱（如 00900、高股息）"
-          onkeydown="if(event.key==='Enter')queryHoldings()">
-        <button class="holdings-btn" onclick="queryHoldings()">查詢</button>
+      <div class="holdings-tabbar">
+        <button class="holdings-tab active" id="holdings-tab-held" onclick="switchHoldingsTab('held')">持有</button>
+        <button class="holdings-tab" id="holdings-tab-query" onclick="switchHoldingsTab('query')">查詢</button>
       </div>
-      <div class="holdings-status" id="holdings-status"></div>
+      <div class="holdings-pane active" id="holdings-pane-held">
+        <div class="holdings-held-toolbar">
+          <span class="holdings-held-note">自動帶入，隔日更新</span>
+          <button class="holdings-toggle-all" id="holdings-toggle-all" onclick="toggleAllHeld(this)" style="display:none">全部展開</button>
+        </div>
+        <div class="holdings-held-list" id="holdings-held-list"></div>
+      </div>
+      <div class="holdings-pane" id="holdings-pane-query">
+        <div class="holdings-search">
+          <input type="text" id="holdings-input" class="holdings-input" placeholder="輸入 ETF 代碼或名稱（如 00900、高股息）"
+            onkeydown="if(event.key==='Enter')queryHoldings()">
+          <button class="holdings-btn" onclick="queryHoldings()">查詢</button>
+        </div>
+        <div class="holdings-status" id="holdings-status"></div>
+      </div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 0 0">

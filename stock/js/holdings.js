@@ -91,36 +91,47 @@ async function fetchEtfHoldings(code) {
   return data;
 }
 
-// ── 首頁卡片：持有 ETF 自動帶入成分股（快取、隔日更新），可折疊 ──
+// ── 卡片頁籤切換 ──
+function switchHoldingsTab(tab) {
+  ['held', 'query'].forEach(t => {
+    const btn = document.getElementById('holdings-tab-' + t);
+    const pane = document.getElementById('holdings-pane-' + t);
+    if (btn) btn.classList.toggle('active', t === tab);
+    if (pane) pane.classList.toggle('active', t === tab);
+  });
+}
+
+// ── 頁籤「持有」：持有 ETF 自動帶入成分股（快取、隔日更新），比照當日損益折疊卡片 ──
 let _heldHoldingsLoading = false;
 async function renderHeldEtfHoldings() {
   const wrap = document.getElementById('holdings-held-list');
   if (!wrap || _heldHoldingsLoading) return;
-  if (!portfolio.length) { wrap.innerHTML = '<span class="holdings-hint">尚無持股</span>'; return; }
+  const toggleAllBtn = document.getElementById('holdings-toggle-all');
+  const hideToggle = () => { if (toggleAllBtn) toggleAllBtn.style.display = 'none'; };
+  if (!portfolio.length) { wrap.innerHTML = '<span class="holdings-hint">尚無持股</span>'; hideToggle(); return; }
 
   let uni;
-  try { uni = await loadEtfUniverse(); } catch (e) { wrap.innerHTML = '<span class="holdings-hint">ETF 清單載入失敗</span>'; return; }
+  try { uni = await loadEtfUniverse(); } catch (e) { wrap.innerHTML = '<span class="holdings-hint">ETF 清單載入失敗</span>'; hideToggle(); return; }
   const etfCodes = new Set(uni.map(e => e.code.toUpperCase()));
   const nameByCode = {};
   uni.forEach(e => { nameByCode[e.code.toUpperCase()] = e.name; });
   const heldEtfs = portfolio
     .filter(s => etfCodes.has(String(s.code).toUpperCase()))
     .sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }));
-  if (!heldEtfs.length) { wrap.innerHTML = '<span class="holdings-hint">持股中無 ETF</span>'; return; }
+  if (!heldEtfs.length) { wrap.innerHTML = '<span class="holdings-hint">持股中無 ETF</span>'; hideToggle(); return; }
 
   _heldHoldingsLoading = true;
-  // 先畫出各檔骨架（載入中），再逐檔補上資料
+  if (toggleAllBtn) toggleAllBtn.style.display = '';
+  // 先畫出各檔骨架（vcard 折疊），再逐檔補上資料
   wrap.innerHTML = heldEtfs.map(s => {
     const code = String(s.code).toUpperCase();
     const name = s.name || nameByCode[code] || '';
-    return '<div class="holdings-item" id="hold-item-' + code + '">' +
-      '<button class="holdings-item-head" onclick="toggleHeldItem(\'' + code + '\')">' +
-        '<span class="holdings-item-code">' + code +
-          '<span class="holdings-chip-name">' + name + '</span></span>' +
-        '<span class="holdings-item-meta" id="hold-meta-' + code + '">載入中…</span>' +
-        '<span class="holdings-item-chev" id="hold-chev-' + code + '">▼</span>' +
-      '</button>' +
-      '<div class="holdings-item-body" id="hold-body-' + code + '"></div>' +
+    return '<div class="vcard" style="margin-bottom:8px">' +
+      '<div class="vcard-head"><span class="vcard-code">' + code + '</span>' +
+        '<span class="vcard-name">' + name + '</span></div>' +
+      '<div class="holdings-item-summary" id="hold-meta-' + code + '">載入中…</div>' +
+      '<div class="vcard-fold" id="hold-body-' + code + '"></div>' +
+      '<button class="vcard-chev" id="hold-chev-' + code + '" onclick="toggleHeldItem(\'' + code + '\')">▼</button>' +
     '</div>';
   }).join('');
 
@@ -130,14 +141,17 @@ async function renderHeldEtfHoldings() {
       const data = await fetchEtfHoldings(code);
       const meta = document.getElementById('hold-meta-' + code);
       const body = document.getElementById('hold-body-' + code);
-      if (meta) meta.textContent = '共 ' + data.count + ' 檔' + (data.date ? '｜' + data.date : '');
+      if (meta) meta.textContent = '共 ' + data.count + ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '');
       if (body) body.innerHTML = holdingsTableHtml(data);
     } catch (e) {
       const meta = document.getElementById('hold-meta-' + code);
+      const chev = document.getElementById('hold-chev-' + code);
       if (meta) meta.innerHTML = '<span style="color:var(--danger)">' + (e.stat === 'NODATA' ? '無成分股' : '載入失敗') + '</span>';
+      if (chev) chev.style.display = 'none';
     }
   }
   _heldHoldingsLoading = false;
+  _syncHeldToggleLabel();
 }
 
 function toggleHeldItem(code) {
@@ -147,6 +161,26 @@ function toggleHeldItem(code) {
   const open = !body.classList.contains('open');
   body.classList.toggle('open', open);
   if (chev) chev.textContent = open ? '▲' : '▼';
+  _syncHeldToggleLabel();
+}
+
+function _heldFolds() {
+  return Array.prototype.slice.call(document.querySelectorAll('#holdings-held-list .vcard-fold'));
+}
+function _syncHeldToggleLabel() {
+  const btn = document.getElementById('holdings-toggle-all');
+  if (!btn) return;
+  const folds = _heldFolds();
+  const anyClosed = folds.some(f => !f.classList.contains('open'));
+  btn.textContent = anyClosed ? '全部展開' : '全部收合';
+}
+function toggleAllHeld(btn) {
+  const folds = _heldFolds();
+  if (!folds.length) return;
+  const anyClosed = folds.some(f => !f.classList.contains('open'));
+  folds.forEach(f => f.classList.toggle('open', anyClosed));
+  document.querySelectorAll('#holdings-held-list .vcard-chev').forEach(b => { b.textContent = anyClosed ? '▲' : '▼'; });
+  if (btn) btn.textContent = anyClosed ? '全部收合' : '全部展開';
 }
 
 // 成分股表格 HTML（持有折疊區與 modal 共用）
