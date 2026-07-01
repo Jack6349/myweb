@@ -91,22 +91,84 @@ async function fetchEtfHoldings(code) {
   return data;
 }
 
-// ── 首頁卡片：持有 ETF 快捷 chips ──
-async function renderHeldEtfChips() {
-  const wrap = document.getElementById('holdings-held-chips');
-  if (!wrap) return;
+// ── 首頁卡片：持有 ETF 自動帶入成分股（快取、隔日更新），可折疊 ──
+let _heldHoldingsLoading = false;
+async function renderHeldEtfHoldings() {
+  const wrap = document.getElementById('holdings-held-list');
+  if (!wrap || _heldHoldingsLoading) return;
   if (!portfolio.length) { wrap.innerHTML = '<span class="holdings-hint">尚無持股</span>'; return; }
+
   let uni;
-  try { uni = await loadEtfUniverse(); } catch (e) { wrap.innerHTML = ''; return; }
+  try { uni = await loadEtfUniverse(); } catch (e) { wrap.innerHTML = '<span class="holdings-hint">ETF 清單載入失敗</span>'; return; }
   const etfCodes = new Set(uni.map(e => e.code.toUpperCase()));
+  const nameByCode = {};
+  uni.forEach(e => { nameByCode[e.code.toUpperCase()] = e.name; });
   const heldEtfs = portfolio
     .filter(s => etfCodes.has(String(s.code).toUpperCase()))
     .sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }));
   if (!heldEtfs.length) { wrap.innerHTML = '<span class="holdings-hint">持股中無 ETF</span>'; return; }
-  wrap.innerHTML = heldEtfs.map(s =>
-    '<button class="holdings-chip" onclick="queryHoldings(\'' + s.code + '\')">' + s.code +
-    '<span class="holdings-chip-name">' + (s.name || '') + '</span></button>'
+
+  _heldHoldingsLoading = true;
+  // 先畫出各檔骨架（載入中），再逐檔補上資料
+  wrap.innerHTML = heldEtfs.map(s => {
+    const code = String(s.code).toUpperCase();
+    const name = s.name || nameByCode[code] || '';
+    return '<div class="holdings-item" id="hold-item-' + code + '">' +
+      '<button class="holdings-item-head" onclick="toggleHeldItem(\'' + code + '\')">' +
+        '<span class="holdings-item-code">' + code +
+          '<span class="holdings-chip-name">' + name + '</span></span>' +
+        '<span class="holdings-item-meta" id="hold-meta-' + code + '">載入中…</span>' +
+        '<span class="holdings-item-chev" id="hold-chev-' + code + '">▼</span>' +
+      '</button>' +
+      '<div class="holdings-item-body" id="hold-body-' + code + '"></div>' +
+    '</div>';
+  }).join('');
+
+  for (const s of heldEtfs) {
+    const code = String(s.code).toUpperCase();
+    try {
+      const data = await fetchEtfHoldings(code);
+      const meta = document.getElementById('hold-meta-' + code);
+      const body = document.getElementById('hold-body-' + code);
+      if (meta) meta.textContent = '共 ' + data.count + ' 檔' + (data.date ? '｜' + data.date : '');
+      if (body) body.innerHTML = holdingsTableHtml(data);
+    } catch (e) {
+      const meta = document.getElementById('hold-meta-' + code);
+      if (meta) meta.innerHTML = '<span style="color:var(--danger)">' + (e.stat === 'NODATA' ? '無成分股' : '載入失敗') + '</span>';
+    }
+  }
+  _heldHoldingsLoading = false;
+}
+
+function toggleHeldItem(code) {
+  const body = document.getElementById('hold-body-' + code);
+  const chev = document.getElementById('hold-chev-' + code);
+  if (!body) return;
+  const open = !body.classList.contains('open');
+  body.classList.toggle('open', open);
+  if (chev) chev.textContent = open ? '▲' : '▼';
+}
+
+// 成分股表格 HTML（持有折疊區與 modal 共用）
+function holdingsTableHtml(data) {
+  const rows = (data.holdings || []).map((h, i) =>
+    '<tr style="border-bottom:1px solid var(--border)">' +
+      '<td style="padding:6px 6px;color:var(--text3);text-align:right;width:28px">' + (i + 1) + '</td>' +
+      '<td style="padding:6px 6px;white-space:nowrap">' +
+        '<span style="font-weight:600">' + h.code + '</span>' +
+        '<span style="color:var(--text2);margin-left:6px">' + h.name + '</span></td>' +
+      '<td style="padding:6px 6px;text-align:right;color:var(--accent2);font-weight:600;white-space:nowrap">' + h.weight.toFixed(2) + '%</td>' +
+      '<td style="padding:6px 6px;text-align:right;color:var(--text2);white-space:nowrap">' + h.shares.toLocaleString('zh-TW') + '</td>' +
+    '</tr>'
   ).join('');
+  return '<div style="overflow-x:auto">' +
+    '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+    '<thead><tr style="border-bottom:2px solid var(--border)">' +
+      '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">#</th>' +
+      '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:left">成分股</th>' +
+      '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">權重</th>' +
+      '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">持股數</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 // ── 查詢入口：直接帶代碼，或讀輸入框 ──
@@ -150,28 +212,10 @@ function renderHoldingsModal(data) {
   titleEl.innerHTML = data.code +
     (data.name ? ' <span style="font-size:13px;font-weight:400;color:var(--text2)">' + data.name + '</span>' : '');
 
-  const rows = (data.holdings || []).map((h, i) =>
-    '<tr style="border-bottom:1px solid var(--border)">' +
-      '<td style="padding:7px 8px;color:var(--text3);text-align:right;width:32px">' + (i + 1) + '</td>' +
-      '<td style="padding:7px 8px;white-space:nowrap">' +
-        '<span style="font-weight:600">' + h.code + '</span>' +
-        '<span style="color:var(--text2);margin-left:6px">' + h.name + '</span></td>' +
-      '<td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600;white-space:nowrap">' + h.weight.toFixed(2) + '%</td>' +
-      '<td style="padding:7px 8px;text-align:right;color:var(--text2);white-space:nowrap">' + h.shares.toLocaleString('zh-TW') + '</td>' +
-    '</tr>'
-  ).join('');
-
   bodyEl.innerHTML =
     '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">共 ' + (data.count || (data.holdings || []).length) +
       ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') + '</div>' +
-    '<div style="overflow-x:auto">' +
-    '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
-    '<thead><tr style="border-bottom:2px solid var(--border)">' +
-      '<th style="padding:7px 8px;color:var(--text3);font-weight:600;text-align:right">#</th>' +
-      '<th style="padding:7px 8px;color:var(--text3);font-weight:600;text-align:left">成分股</th>' +
-      '<th style="padding:7px 8px;color:var(--text3);font-weight:600;text-align:right">權重</th>' +
-      '<th style="padding:7px 8px;color:var(--text3);font-weight:600;text-align:right">持股數</th>' +
-    '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    holdingsTableHtml(data) +
     '<div class="api-note" style="margin-top:10px">資料來源：MoneyDJ 理財網。權重與持股數每日更新。</div>';
 
   openModal('modal-holdings');
@@ -182,6 +226,6 @@ if (typeof showScreen === 'function') {
   const _origShowScreenHoldings = showScreen;
   showScreen = function (name) {
     _origShowScreenHoldings(name);
-    if (name === 'home') { renderHeldEtfChips(); }
+    if (name === 'home') { renderHeldEtfHoldings(); }
   };
 }

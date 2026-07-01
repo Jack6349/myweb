@@ -199,12 +199,22 @@
   .holdings-input:focus { outline:none; border-color:var(--accent); }
   .holdings-btn { flex-shrink:0; background:var(--accent); border:none; border-radius:var(--radius-sm); color:#fff; font-size:14px; font-weight:600; font-family:var(--font); padding:0 16px; cursor:pointer; }
   .holdings-status { font-size:12px; color:var(--text2); margin-top:8px; min-height:0; }
-  .holdings-held-label { font-size:11px; color:var(--text3); margin:12px 0 6px; }
-  .holdings-held-chips, .holdings-cands { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .holdings-held-label { font-size:11px; color:var(--text3); margin:0 0 8px; }
+  .holdings-search-label { font-size:11px; color:var(--text3); margin:14px 0 6px; }
+  .holdings-cands { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
   .holdings-chip { background:var(--bg4); border:1px solid var(--border); border-radius:20px; color:var(--text); font-size:13px; font-weight:600; font-family:var(--font); padding:6px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
   .holdings-chip:hover { border-color:var(--accent); }
-  .holdings-chip-name { font-size:11px; font-weight:400; color:var(--text3); }
+  .holdings-chip-name { font-size:11px; font-weight:400; color:var(--text3); margin-left:6px; }
   .holdings-hint { font-size:12px; color:var(--text3); }
+  /* 持有 ETF 折疊項 */
+  .holdings-held-list { display:flex; flex-direction:column; gap:8px; }
+  .holdings-item { background:var(--bg4); border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; }
+  .holdings-item-head { width:100%; display:flex; align-items:center; gap:8px; background:none; border:none; color:var(--text); font-family:var(--font); padding:10px 12px; cursor:pointer; text-align:left; }
+  .holdings-item-code { font-size:14px; font-weight:700; display:flex; align-items:center; flex-shrink:0; }
+  .holdings-item-meta { font-size:11px; color:var(--text3); margin-left:auto; white-space:nowrap; }
+  .holdings-item-chev { font-size:10px; color:var(--text3); flex-shrink:0; }
+  .holdings-item-body { display:none; padding:0 12px 12px; }
+  .holdings-item-body.open { display:block; }
 
   /* ── DIVIDEND ROW ── */
   .div-section-title { font-size:12px; font-weight:600; color:var(--text3); letter-spacing:.8px; text-transform:uppercase; margin:20px 0 10px; }

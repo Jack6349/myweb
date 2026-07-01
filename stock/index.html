@@ -101,6 +101,20 @@
       </div>
     </div>
 
+    <!-- ETF 成分股查詢 -->
+    <div class="section-title">ETF 成分股查詢</div>
+    <div class="holdings-card">
+      <div class="holdings-held-label">持有 ETF（自動帶入，隔日更新）</div>
+      <div class="holdings-held-list" id="holdings-held-list"></div>
+      <div class="holdings-search-label">查詢其他 ETF</div>
+      <div class="holdings-search">
+        <input type="text" id="holdings-input" class="holdings-input" placeholder="輸入 ETF 代碼或名稱（如 00900、高股息）"
+          onkeydown="if(event.key==='Enter')queryHoldings()">
+        <button class="holdings-btn" onclick="queryHoldings()">查詢</button>
+      </div>
+      <div class="holdings-status" id="holdings-status"></div>
+    </div>
+
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 0 0">
       <div class="func-card" onclick="showScreen('etf-screener')" style="background:linear-gradient(135deg,rgba(74,158,218,.18) 0%,#141e2e 100%);border-color:rgba(74,158,218,.55);border-width:1.5px;">
         <div class="func-card-icon" style="background:rgba(74,158,218,.2);">
@@ -118,19 +132,6 @@
         <div class="func-card-desc">成立未滿1年</div>
         <div class="func-card-amount" id="card-etf-new-count" style="color:#7bed9f;">—</div>
       </div>
-    </div>
-
-    <!-- ETF 成分股查詢 -->
-    <div class="section-title">ETF 成分股查詢</div>
-    <div class="holdings-card">
-      <div class="holdings-search">
-        <input type="text" id="holdings-input" class="holdings-input" placeholder="輸入 ETF 代碼或名稱（如 00900、高股息）"
-          onkeydown="if(event.key==='Enter')queryHoldings()">
-        <button class="holdings-btn" onclick="queryHoldings()">查詢</button>
-      </div>
-      <div class="holdings-status" id="holdings-status"></div>
-      <div class="holdings-held-label">持有 ETF</div>
-      <div class="holdings-held-chips" id="holdings-held-chips"></div>
     </div>
 
     <div style="height:20px;"></div>
