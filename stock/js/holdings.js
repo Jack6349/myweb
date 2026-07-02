@@ -116,14 +116,24 @@ function getNavInfo(code) {
   return (e && e.nav != null) ? e : null;
 }
 
-// 淨值＋市價＋折溢價（同行，接在代碼/名稱右側）；市價無 e 時由淨值×(1+折溢價%)反推
-function navInlineHtml(code) {
+// 淨值（橘黃）＋市價（依當日漲跌紅漲綠跌）＋折溢價（溢紅折綠），同行接在代碼/名稱右側。
+// 數值取自 all_etf（淨值/市價/折溢價同一快照）；市價漲跌方向另取 GAS ?price=（與當日損益同源）。
+async function buildNavLineHtml(code) {
   const info = getNavInfo(code);
   if (!info) return '';
-  const parts = ['淨值 ' + info.nav.toFixed(2)];
+  let changePct = null;
+  try {
+    const p = await fetchStockPrice(code);
+    if (p && p.changePct != null) changePct = p.changePct;
+  } catch (e) { /* 漲跌方向取不到就不上色 */ }
+
+  const parts = ['<span style="color:var(--accent2)">淨值 ' + info.nav.toFixed(2) + '</span>'];
   const price = (info.price != null) ? info.price
     : (info.premium != null ? info.nav * (1 + info.premium / 100) : null);
-  if (price != null) parts.push('市價 ' + price.toFixed(2));
+  if (price != null) {
+    const pc = changePct > 0 ? '#ff5252' : (changePct < 0 ? '#26d962' : 'var(--text2)');
+    parts.push('<span style="color:' + pc + '">市價 ' + price.toFixed(2) + '</span>');
+  }
   if (info.premium != null) {
     const col = info.premium > 0 ? '#ff5252' : (info.premium < 0 ? '#26d962' : 'var(--text3)');
     const label = info.premium > 0 ? '溢' : (info.premium < 0 ? '折' : '');
@@ -164,10 +174,10 @@ async function renderHeldEtfHoldings() {
     const code = String(s.code).toUpperCase();
     const name = s.name || '';
     return '<div class="vcard" style="margin-bottom:8px">' +
-      '<div class="vcard-head" style="display:flex;align-items:baseline;gap:6px">' +
+      '<div class="vcard-head" style="display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;white-space:normal;overflow:visible">' +
         '<span class="vcard-code">' + code + '</span>' +
         '<span class="vcard-name" id="hold-name-' + code + '">' + name + '</span>' +
-        '<span class="holdings-nav-slot" id="hold-nav-' + code + '">' + navInlineHtml(code) + '</span></div>' +
+        '<span class="holdings-nav-slot" id="hold-nav-' + code + '"></span></div>' +
       '<div class="holdings-item-summary" id="hold-meta-' + code + '">載入中…</div>' +
       '<div class="vcard-fold" id="hold-body-' + code + '"></div>' +
       '<button class="vcard-chev" id="hold-chev-' + code + '" onclick="toggleHeldItem(\'' + code + '\')">▼</button>' +
@@ -201,13 +211,13 @@ async function renderHeldEtfHoldings() {
       if (_etfUniverse) {
         const nameByCode = {};
         uni.forEach(e => { nameByCode[e.code.toUpperCase()] = e.name; });
-        heldEtfs.forEach(s => {
+        for (const s of heldEtfs) {
           const code = String(s.code).toUpperCase();
-          const navSlot = document.getElementById('hold-nav-' + code);
-          if (navSlot) navSlot.innerHTML = navInlineHtml(code);
           const nameEl = document.getElementById('hold-name-' + code);
           if (nameEl && !nameEl.textContent && nameByCode[code]) nameEl.textContent = nameByCode[code];
-        });
+          const navSlot = document.getElementById('hold-nav-' + code);
+          if (navSlot) navSlot.innerHTML = await buildNavLineHtml(code);
+        }
         return;
       }
       await new Promise(r => setTimeout(r, 1500));
@@ -293,21 +303,26 @@ async function queryHoldings(codeOrInput) {
     if (statusEl) statusEl.textContent = '載入 ' + etf.code + ' 成分股…';
     const data = await fetchEtfHoldings(etf.code);
     data.name = etf.name;
-    renderHoldingsModal(data);
+    const navHtml = await buildNavLineHtml(etf.code);
+    renderHoldingsModal(data, navHtml);
     if (statusEl) statusEl.textContent = '';
   } catch (e) {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">' + (e.message || '查詢失敗') + '</span>';
   }
 }
 
-function renderHoldingsModal(data) {
+function renderHoldingsModal(data, navHtml) {
   const titleEl = document.getElementById('modal-holdings-title');
   const bodyEl = document.getElementById('modal-holdings-body');
   if (!titleEl || !bodyEl) return;
 
-  titleEl.innerHTML = data.code +
-    (data.name ? ' <span style="font-size:13px;font-weight:400;color:var(--text2)">' + data.name + '</span>' : '') +
-    navInlineHtml(data.code);
+  titleEl.style.display = 'flex';
+  titleEl.style.flexWrap = 'wrap';
+  titleEl.style.alignItems = 'baseline';
+  titleEl.style.gap = '2px 6px';
+  titleEl.innerHTML = '<span>' + data.code + '</span>' +
+    (data.name ? '<span style="font-size:13px;font-weight:400;color:var(--text2)">' + data.name + '</span>' : '') +
+    (navHtml || '');
 
   bodyEl.innerHTML =
     '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">共 ' + (data.count || (data.holdings || []).length) +
