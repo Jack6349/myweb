@@ -773,8 +773,14 @@ async function loadStockValue(forceRefresh) {
       let profit = null, prate = null;
       if (hasCost && hasData) { profit = Math.round(r.totalValue * 0.997735) - cost; prate = profit / cost * 100; }
 
+      // 成本均價 = 成本 / 持有股數（股數＝張數×1000）
+      const shares = parseFloat(r.stock.shares);
+      const avgCost = (hasCost && !isNaN(shares) && shares > 0) ? cost / (shares * 1000) : null;
+
       const dash = '<span class="vfold-val" style="color:var(--text3)">—</span>';
       const costVal = hasCost ? '<span class="vfold-val" style="color:var(--accent2)">$' + fmtN(cost) + '</span>' : dash;
+      const avgCostVal = avgCost == null ? dash
+        : '<span class="vfold-val" style="color:var(--accent2)">$' + avgCost.toFixed(2) + '</span>';
       const valueVal = hasData ? '<span class="vfold-val" style="color:#8ab4d4">$' + fmtN(r.totalValue) + '</span>' : dash;
       const profitVal = profit == null ? dash
         : '<span class="vfold-val" style="color:' + pnlCol(profit) + '">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</span>';
@@ -794,7 +800,7 @@ async function loadStockValue(forceRefresh) {
           '<span class="vcard-name">' + (r.stock.name || '') + '</span></div>' +
         priceBlock +
         '<div class="vcard-fold" data-row="' + rowIdx + '">' +
-          vrow('折/溢價', premVal) + vrow('成本', costVal) + vrow('現值', valueVal) +
+          vrow('折/溢價', premVal) + vrow('成本', costVal) + vrow('成本均價', avgCostVal) + vrow('現值', valueVal) +
           vrow('獲利金額', profitVal) + vrow('獲利率', prateVal) +
         '</div>' +
         '<button class="vcard-chev" data-row="' + rowIdx + '" onclick="toggleValueRow(' + rowIdx + ')" aria-label="展開明細">▼</button>' +
