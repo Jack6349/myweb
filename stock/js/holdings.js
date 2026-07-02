@@ -174,9 +174,9 @@ async function renderHeldEtfHoldings() {
     const code = String(s.code).toUpperCase();
     const name = s.name || '';
     return '<div class="vcard" style="margin-bottom:8px">' +
-      '<div class="vcard-head" style="display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;white-space:normal;overflow:visible">' +
-        '<span class="vcard-code">' + code + '</span>' +
-        '<span class="vcard-name" id="hold-name-' + code + '">' + name + '</span>' +
+      '<div class="vcard-head" style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;overflow:hidden">' +
+        '<span class="vcard-code" style="flex-shrink:0">' + code + '</span>' +
+        '<span class="vcard-name" id="hold-name-' + code + '" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">' + name + '</span>' +
         '<span class="holdings-nav-slot" id="hold-nav-' + code + '"></span></div>' +
       '<div class="holdings-item-summary" id="hold-meta-' + code + '">載入中…</div>' +
       '<div class="vcard-fold" id="hold-body-' + code + '"></div>' +
@@ -317,11 +317,12 @@ function renderHoldingsModal(data, navHtml) {
   if (!titleEl || !bodyEl) return;
 
   titleEl.style.display = 'flex';
-  titleEl.style.flexWrap = 'wrap';
+  titleEl.style.flexWrap = 'nowrap';
   titleEl.style.alignItems = 'baseline';
-  titleEl.style.gap = '2px 6px';
-  titleEl.innerHTML = '<span>' + data.code + '</span>' +
-    (data.name ? '<span style="font-size:13px;font-weight:400;color:var(--text2)">' + data.name + '</span>' : '') +
+  titleEl.style.gap = '6px';
+  titleEl.style.overflow = 'hidden';
+  titleEl.innerHTML = '<span style="flex-shrink:0">' + data.code + '</span>' +
+    (data.name ? '<span style="font-size:13px;font-weight:400;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + data.name + '</span>' : '') +
     (navHtml || '');
 
   bodyEl.innerHTML =
