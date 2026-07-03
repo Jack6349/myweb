@@ -783,7 +783,13 @@ async function loadStockValue(forceRefresh) {
       const shares = parseFloat(r.stock.shares);
       const avgCost = (hasCost && !isNaN(shares) && shares > 0) ? cost / (shares * 1000) : null;
 
+      // 持有張數（零股以小數表示，整張不顯示多餘的 0）
+      const sharesStr = (!isNaN(shares) && shares > 0)
+        ? shares.toFixed(3).replace(/\.?0+$/, '') : null;
+
       const dash = '<span class="vfold-val" style="color:var(--text3)">—</span>';
+      const sharesVal = sharesStr == null ? dash
+        : '<span class="vfold-val" style="color:var(--text)">' + sharesStr + ' 張</span>';
       const costVal = hasCost ? '<span class="vfold-val" style="color:var(--accent2)">$' + fmtN(cost) + '</span>' : dash;
       const avgCostVal = avgCost == null ? dash
         : '<span class="vfold-val" style="color:var(--accent2)">$' + avgCost.toFixed(2) + '</span>';
@@ -806,7 +812,7 @@ async function loadStockValue(forceRefresh) {
           '<span class="vcard-name">' + (r.stock.name || '') + '</span></div>' +
         priceBlock +
         '<div class="vcard-fold" data-row="' + rowIdx + '">' +
-          vrow('折/溢價', premVal) + vrow('成本', costVal) + vrow('成本均價', avgCostVal) + vrow('現值', valueVal) +
+          vrow('折/溢價', premVal) + vrow('持有張數', sharesVal) + vrow('成本', costVal) + vrow('成本均價', avgCostVal) + vrow('現值', valueVal) +
           vrow('獲利金額', profitVal) + vrow('獲利率', prateVal) +
         '</div>' +
         '<button class="vcard-chev" data-row="' + rowIdx + '" onclick="toggleValueRow(' + rowIdx + ')" aria-label="展開明細">▼</button>' +
