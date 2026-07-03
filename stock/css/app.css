@@ -269,6 +269,13 @@
   .vfold-label { font-size:12px; color:var(--text3); }
   .vfold-val { font-size:12px; }
   .vcard-chev { margin-top:8px; align-self:center; background:none; border:none; color:var(--text2); cursor:pointer; padding:2px 14px; font-size:13px; line-height:1; }
+  /* 漲停/跌停：整張卡片套色（漲停紅底、跌停綠底、白字） */
+  .vcard.limit-up { background:#c40000; border-color:#e64545; }
+  .vcard.limit-down { background:#0f9d58; border-color:#17b268; }
+  .vcard.limit-up .vcard-code, .vcard.limit-up .vcard-name, .vcard.limit-up .vcard-chev,
+  .vcard.limit-down .vcard-code, .vcard.limit-down .vcard-name, .vcard.limit-down .vcard-chev { color:#fff; }
+  .vcard.limit-up .vcard-fold, .vcard.limit-down .vcard-fold { background:rgba(0,0,0,.22); border-radius:8px; border-top-color:rgba(255,255,255,.25); padding:8px 10px; }
+  .vcard.limit-up .vfold-label, .vcard.limit-down .vfold-label { color:rgba(255,255,255,.75); }
   .vtop-fold { display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
   .vtop-fold.open { display:block; }
   .vtop-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }

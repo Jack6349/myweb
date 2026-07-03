@@ -748,7 +748,13 @@ async function loadStockValue(forceRefresh) {
     rows.forEach((r, idx) => {
       const rowIdx = Math.floor(idx / 2);
       const hasData = r.price != null;
-      const priceCol = (hasData && r.change > 0) ? '#ff5252' : ((hasData && r.change < 0) ? '#26d962' : 'var(--text)');
+      // 漲停/跌停（台股上下限 ±10%）：整張卡片套色，漲停紅底、跌停綠底、白字
+      const isLimitUp = hasData && r.changePct != null && r.changePct >= 9.9;
+      const isLimitDown = hasData && r.changePct != null && r.changePct <= -9.9;
+      const isLimit = isLimitUp || isLimitDown;
+      const limitClass = isLimitUp ? ' limit-up' : (isLimitDown ? ' limit-down' : '');
+      const priceCol = isLimit ? '#fff'
+        : (hasData && r.change > 0) ? '#ff5252' : ((hasData && r.change < 0) ? '#26d962' : 'var(--text)');
 
       // 漲跌（與現價同色，常駐顯示）
       let chgTxt = '';
@@ -795,7 +801,7 @@ async function loadStockValue(forceRefresh) {
           '<div class="vcard-chg" style="color:' + priceCol + '">' + (chgTxt || '&nbsp;') + '</div>'
         : '<div class="vcard-price" style="color:var(--text3);font-size:16px">查詢失敗</div>';
 
-      cards += '<div class="vcard" data-row="' + rowIdx + '">' +
+      cards += '<div class="vcard' + limitClass + '" data-row="' + rowIdx + '">' +
         '<div class="vcard-head"><span class="vcard-code">' + r.stock.code + '</span>' +
           '<span class="vcard-name">' + (r.stock.name || '') + '</span></div>' +
         priceBlock +
