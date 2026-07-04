@@ -213,8 +213,14 @@ async function renderHeldEtfHoldings() {
         priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
         est = computeEstNav(code, data.holdings, priceData);
       }
-      if (meta) meta.innerHTML = '共 ' + data.count + ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') +
-        (est ? '｜<span style="color:var(--accent2)">估算淨值 ' + est.estNav.toFixed(2) + '</span>' : '');
+      let estTag = '';
+      if (est) {
+        const pc = est.estChangePct;
+        const col = pc > 0 ? '#ff5252' : (pc < 0 ? '#26d962' : 'var(--text2)');
+        const ar = pc > 0 ? '▲' : (pc < 0 ? '▼' : '—');
+        estTag = '｜<span style="color:' + col + ';font-weight:700">估算 ' + ar + (pc > 0 ? '+' : '') + pc.toFixed(2) + '%</span>';
+      }
+      if (meta) meta.innerHTML = '共 ' + data.count + ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') + estTag;
       if (body) body.innerHTML = holdingsTableHtml(data, priceData);
     } catch (e) {
       const meta = document.getElementById('hold-meta-' + code);
@@ -366,19 +372,22 @@ function computeEstNav(etfCode, holdings, priceData) {
     }
   });
   if (covered < 50) return null; // 覆蓋率太低不估
-  return { estNav: info.nav * (1 + wret), officialNav: info.nav, coveredPct: Math.round(covered) };
+  return { estNav: info.nav * (1 + wret), officialNav: info.nav, estChangePct: wret * 100, coveredPct: Math.round(covered) };
 }
 
-// 估算淨值表頭 HTML
+// 估算表頭 HTML：估算漲跌幅為主（開盤前預估趨勢），估算/官方淨值為輔
 function estNavHeaderHtml(est) {
   if (!est) return '';
-  const diff = est.estNav - est.officialNav;
-  const col = diff > 0 ? '#ff5252' : (diff < 0 ? '#26d962' : 'var(--text2)');
-  return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px;padding:8px 10px;background:var(--bg4);border-radius:8px">' +
-    '<div><div style="font-size:10px;color:var(--text3)">估算淨值</div>' +
-      '<div style="font-size:18px;font-weight:700;color:' + col + '">' + est.estNav.toFixed(2) + '</div></div>' +
-    '<div style="text-align:right"><div style="font-size:10px;color:var(--text3)">官方淨值</div>' +
-      '<div style="font-size:14px;font-weight:600;color:var(--accent2)">' + est.officialNav.toFixed(2) + '</div></div>' +
+  const pct = est.estChangePct;
+  const col = pct > 0 ? '#ff5252' : (pct < 0 ? '#26d962' : 'var(--text2)');
+  const arrow = pct > 0 ? '▲' : (pct < 0 ? '▼' : '—');
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;padding:10px 12px;background:var(--bg4);border-radius:8px">' +
+    '<div><div style="font-size:10px;color:var(--text3)">估算漲跌（開盤前預估）</div>' +
+      '<div style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:' + col + '">' + arrow + ' ' +
+      (pct > 0 ? '+' : '') + pct.toFixed(2) + '%</div></div>' +
+    '<div style="text-align:right">' +
+      '<div style="font-size:11px;color:' + col + '">估算淨值 ' + est.estNav.toFixed(2) + '</div>' +
+      '<div style="font-size:11px;color:var(--text3)">官方淨值 ' + est.officialNav.toFixed(2) + '</div></div>' +
     '</div>';
 }
 
