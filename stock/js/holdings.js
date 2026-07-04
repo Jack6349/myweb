@@ -96,11 +96,26 @@ async function fetchEtfHoldings(code) {
   const hit = cache[code];
   if (hit && (Date.now() - hit.ts) < HOLDINGS_TTL) return hit.data;
 
-  const res = await fetch(GAS_URL + '?holdings=' + encodeURIComponent(code));
-  const data = await res.json();
-  if (data.stat !== 'OK') {
-    const err = new Error(data.error || (data.stat === 'NODATA' ? '查無成分股' : '查詢失敗'));
-    err.stat = data.stat;
+  // 先試 MoneyDJ（?holdings=）；台股 ETF 有股數
+  let data = null;
+  try {
+    const res = await fetch(GAS_URL + '?holdings=' + encodeURIComponent(code));
+    const j = await res.json();
+    if (j.stat === 'OK' && (j.holdings || []).length) data = Object.assign({ source: 'MoneyDJ' }, j);
+  } catch (e) { /* 轉 fallback */ }
+
+  // MoneyDJ 無資料（主動式/境外 ETF）→ fallback CMoney（?cmconstituent=，含代碼/名稱/權重，無股數）
+  if (!data) {
+    try {
+      const res2 = await fetch(GAS_URL + '?cmconstituent=' + encodeURIComponent(code));
+      const j2 = await res2.json();
+      if (j2.stat === 'OK' && (j2.holdings || []).length) data = Object.assign({ source: 'CMoney' }, j2);
+    } catch (e) { /* 兩來源皆無 */ }
+  }
+
+  if (!data) {
+    const err = new Error('查無成分股');
+    err.stat = 'NODATA';
     throw err;
   }
   cache[code] = { ts: Date.now(), data };
@@ -281,8 +296,8 @@ function holdingsTableHtml(data) {
       '<td style="padding:6px 6px;white-space:nowrap">' +
         '<span style="font-weight:600">' + h.code + '</span>' +
         '<span style="color:var(--text2);margin-left:6px">' + h.name + '</span></td>' +
-      '<td style="padding:6px 6px;text-align:right;color:var(--accent2);font-weight:600;white-space:nowrap">' + h.weight.toFixed(2) + '%</td>' +
-      '<td style="padding:6px 6px;text-align:right;color:var(--text2);white-space:nowrap">' + h.shares.toLocaleString('zh-TW') + '</td>' +
+      '<td style="padding:6px 6px;text-align:right;color:var(--accent2);font-weight:600;white-space:nowrap">' + (typeof h.weight === 'number' ? h.weight.toFixed(2) + '%' : '—') + '</td>' +
+      '<td style="padding:6px 6px;text-align:right;color:var(--text2);white-space:nowrap">' + (h.shares != null ? h.shares.toLocaleString('zh-TW') : '—') + '</td>' +
     '</tr>'
   ).join('');
   return '<div style="overflow-x:auto">' +
@@ -348,7 +363,8 @@ function renderHoldingsModal(data, navHtml) {
     '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">共 ' + (data.count || (data.holdings || []).length) +
       ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') + '</div>' +
     holdingsTableHtml(data) +
-    '<div class="api-note" style="margin-top:10px">資料來源：MoneyDJ 理財網。權重與持股數每日更新。</div>';
+    '<div class="api-note" style="margin-top:10px">資料來源：' + (data.source === 'CMoney'
+      ? 'CMoney（境外/主動式 ETF，僅權重無持股數）' : 'MoneyDJ 理財網') + '。每日更新。</div>';
 
   openModal('modal-holdings');
 }
