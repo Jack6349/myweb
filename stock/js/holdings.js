@@ -177,7 +177,7 @@ async function renderHeldEtfHoldings() {
       '<div class="vcard-head" style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;overflow:hidden">' +
         '<span class="vcard-code" style="flex-shrink:0">' + code + '</span>' +
         '<span class="vcard-name" id="hold-name-' + code + '" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">' + name + '</span>' +
-        '<span class="holdings-nav-slot" id="hold-nav-' + code + '"></span></div>' +
+        '<span class="holdings-nav-slot" id="hold-nav-' + code + '"><span class="holdings-nav-status">淨值載入中…</span></span></div>' +
       '<div class="holdings-item-summary" id="hold-meta-' + code + '">載入中…</div>' +
       '<div class="vcard-fold" id="hold-body-' + code + '"></div>' +
       '<button class="vcard-chev" id="hold-chev-' + code + '" onclick="toggleHeldItem(\'' + code + '\')">▼</button>' +
@@ -201,29 +201,49 @@ async function renderHeldEtfHoldings() {
   }
   _heldHoldingsLoading = false;
 
-  // 背景載入 ETF 清單 → 補上 NAV 與缺漏的名稱（清單抖動不影響已顯示的成分股）。
-  // all_etf 來源約半數回空，背景多輪重試直到取得完整清單（成功即快取整天）。
-  (async () => {
-    for (let round = 0; round < 8; round++) {
-      let uni = [];
-      try { uni = await loadEtfUniverse(); } catch (e) {}
-      // _etfUniverse 僅在「上市清單成功（含淨值）」時被設定；以此為 NAV 就緒判準
-      if (_etfUniverse) {
-        const nameByCode = {};
-        uni.forEach(e => { nameByCode[e.code.toUpperCase()] = e.name; });
-        for (const s of heldEtfs) {
-          const code = String(s.code).toUpperCase();
-          const nameEl = document.getElementById('hold-name-' + code);
-          if (nameEl && !nameEl.textContent && nameByCode[code]) nameEl.textContent = nameByCode[code];
-          const navSlot = document.getElementById('hold-nav-' + code);
-          if (navSlot) navSlot.innerHTML = await buildNavLineHtml(code);
-        }
-        return;
-      }
-      await new Promise(r => setTimeout(r, 1500));
-    }
-  })();
+  // 背景補上 NAV（淨值/市價/折溢價），含載入中／失敗重試提示
+  _lastHeldEtfs = heldEtfs;
+  loadHeldNav(heldEtfs);
   _syncHeldToggleLabel();
+}
+
+// 背景載入 ETF 清單 → 補 NAV。all_etf 來源約半數回空，多輪重試；成功補值、逾試顯示失敗可重試。
+let _lastHeldEtfs = null;
+async function loadHeldNav(heldEtfs) {
+  const setStatus = html => heldEtfs.forEach(s => {
+    const slot = document.getElementById('hold-nav-' + String(s.code).toUpperCase());
+    if (slot) slot.innerHTML = html;
+  });
+  setStatus('<span class="holdings-nav-status">淨值載入中…</span>');
+
+  for (let round = 0; round < 8; round++) {
+    let uni = [];
+    try { uni = await loadEtfUniverse(); } catch (e) {}
+    // _etfUniverse 僅在「上市清單成功（含淨值）」時被設定；以此為 NAV 就緒判準
+    if (_etfUniverse) {
+      const nameByCode = {};
+      uni.forEach(e => { nameByCode[e.code.toUpperCase()] = e.name; });
+      for (const s of heldEtfs) {
+        const code = String(s.code).toUpperCase();
+        const nameEl = document.getElementById('hold-name-' + code);
+        if (nameEl && !nameEl.textContent && nameByCode[code]) nameEl.textContent = nameByCode[code];
+        const navSlot = document.getElementById('hold-nav-' + code);
+        if (navSlot) {
+          const html = await buildNavLineHtml(code);
+          navSlot.innerHTML = html || '<span class="holdings-nav-status">無淨值資料</span>';
+        }
+      }
+      return;
+    }
+    if (round < 7) setStatus('<span class="holdings-nav-status">淨值載入中…(' + (round + 2) + ')</span>');
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  // 多輪仍失敗 → 提示可重試
+  setStatus('<span class="holdings-nav-status fail" onclick="retryHeldNav()">淨值載入失敗，點此重試</span>');
+}
+
+function retryHeldNav() {
+  if (_lastHeldEtfs) loadHeldNav(_lastHeldEtfs);
 }
 
 function toggleHeldItem(code) {
