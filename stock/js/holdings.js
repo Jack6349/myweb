@@ -307,7 +307,10 @@ function toggleAllHeld(btn) {
 function holdingsTableHtml(data, priceData) {
   const withPrice = !!priceData;
   const lastLabel = withPrice ? '現價' : '持股數';
-  const rows = (data.holdings || []).map((h, i) => {
+  // 依權重由高至低排列（權重缺漏者排最後）
+  const sorted = [...(data.holdings || [])].sort((a, b) =>
+    (typeof b.weight === 'number' ? b.weight : -1) - (typeof a.weight === 'number' ? a.weight : -1));
+  const rows = sorted.map((h, i) => {
     let lastCell;
     if (withPrice) {
       const sym = String(h.code).replace(/\s*US$/i, '').trim();
