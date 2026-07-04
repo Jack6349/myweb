@@ -230,6 +230,7 @@ async function renderHeldEtfHoldings() {
     }
   }
   _heldHoldingsLoading = false;
+  applyCnameState();
 
   // 背景補上 NAV（淨值/市價/折溢價），含載入中／失敗重試提示
   _lastHeldEtfs = heldEtfs;
@@ -318,11 +319,12 @@ function holdingsTableHtml(data, priceData) {
     } else {
       lastCell = (h.shares != null ? h.shares.toLocaleString('zh-TW') : '—');
     }
+    const nm = (h.name || '').replace(/"/g, '&quot;');
     return '<tr style="border-bottom:1px solid var(--border)">' +
       '<td style="padding:6px 6px;color:var(--text3);text-align:right;width:28px">' + (i + 1) + '</td>' +
       '<td style="padding:6px 6px;white-space:nowrap">' +
-        '<span style="font-weight:600">' + h.code + '</span>' +
-        '<span style="color:var(--text2);margin-left:6px">' + h.name + '</span></td>' +
+        '<span style="font-weight:600" title="' + nm + '">' + h.code + '</span>' +
+        '<span class="cname" style="color:var(--text2);margin-left:6px">' + h.name + '</span></td>' +
       '<td style="padding:6px 6px;text-align:right;color:var(--accent2);font-weight:600;white-space:nowrap">' + (typeof h.weight === 'number' ? h.weight.toFixed(2) + '%' : '—') + '</td>' +
       '<td style="padding:6px 6px;text-align:right;color:var(--text2);white-space:nowrap">' + lastCell + '</td>' +
     '</tr>';
@@ -335,6 +337,18 @@ function holdingsTableHtml(data, priceData) {
       '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">權重</th>' +
       '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">' + lastLabel + '</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+// 成分股名稱顯示/隱藏（全域 CSS class 切換，隱藏後代碼 tooltip 仍可看名稱）
+function applyCnameState() {
+  const hide = localStorage.getItem('holdings_hide_cname') === '1';
+  document.body.classList.toggle('hide-cnames', hide);
+  document.querySelectorAll('.cname-toggle').forEach(b => { b.textContent = hide ? '顯示名稱' : '隱藏名稱'; });
+}
+function toggleConstituentNames() {
+  const hide = localStorage.getItem('holdings_hide_cname') === '1';
+  localStorage.setItem('holdings_hide_cname', hide ? '0' : '1');
+  applyCnameState();
 }
 
 // 批次抓成分股現價（GAS ?usprices=，記憶體快取 15 分）；代碼去除 " US" 後綴
@@ -449,14 +463,18 @@ function renderHoldingsModal(data, navHtml, priceData, est) {
 
   bodyEl.innerHTML =
     estNavHeaderHtml(est) +
-    '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">共 ' + (data.count || (data.holdings || []).length) +
-      ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') + '</div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<span style="font-size:11px;color:var(--text3)">共 ' + (data.count || (data.holdings || []).length) +
+      ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') + '</span>' +
+      '<button class="cname-toggle" onclick="toggleConstituentNames()">隱藏名稱</button>' +
+    '</div>' +
     holdingsTableHtml(data, priceData) +
     '<div class="api-note" style="margin-top:10px">資料來源：' + (data.source === 'CMoney'
       ? 'CMoney（境外/主動式 ETF，僅權重無持股數）；估算淨值＝官方淨值×(1+Σ權重×漲跌×匯率)，僅供參考'
       : 'MoneyDJ 理財網') + '。每日更新。</div>';
 
   openModal('modal-holdings');
+  applyCnameState();
 }
 
 // 進入「ETF 成分股查詢」畫面時自動帶入持有 ETF 成分股（由 showScreen patch 觸發）
