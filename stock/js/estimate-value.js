@@ -876,19 +876,19 @@ function countCostFilled() {
 // ── ETF 淨值（折溢價用）：透過 GAS 既有 ?url= 代理抓 TWSE 全 ETF 淨值表，建代號→淨值對照 ──
 var _etfNavMap = null, _etfNavDay = null;
 function _navTodayStr() { var d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
-async function ensureNavMap(force) {
-  var today = _navTodayStr();
-  // 僅在「非空」時採用記憶體/localStorage 快取（避免沿用抖動回空的空表）
-  if (!force && _etfNavMap && _etfNavDay === today && Object.keys(_etfNavMap).length) return _etfNavMap;
-  if (!force) {
-    try {
-      var cached = JSON.parse(localStorage.getItem('etf_nav_map') || 'null');
-      if (cached && cached.day === today && cached.map && Object.keys(cached.map).length) {
-        _etfNavMap = cached.map; _etfNavDay = today; return _etfNavMap;
-      }
-    } catch (e) {}
-  }
-  // all_etf.txt 經 GAS 約半數回 200＋空內容；重試至多 5 次直到解析出資料，且不快取空表
+// 專用端點：GAS ?etfnav= 伺服器端重試＋解析，回 {stat:'OK', map:{CODE:{nav,price,premium,date}}}
+async function _fetchNavViaEndpoint() {
+  try {
+    var res = await fetch(GAS_URL + '?etfnav=1');
+    if (!res.ok) return null;
+    var j = await res.json();
+    if (j && j.stat === 'OK' && j.map && Object.keys(j.map).length) return j.map;
+  } catch (e) {}
+  return null; // 未部署或回失敗 → 交給回退
+}
+
+// 回退：直接經 ?url= 抓 all_etf.txt 解析（約半數回空，重試至多 5 次、不快取空表）
+async function _fetchNavViaUrl() {
   var src = 'https://mis.twse.com.tw/stock/data/all_etf.txt';
   var map = {};
   for (var attempt = 0; attempt < 5 && Object.keys(map).length === 0; attempt++) {
@@ -910,7 +910,25 @@ async function ensureNavMap(force) {
       });
     } catch (e) { /* 重試 */ }
   }
-  if (Object.keys(map).length === 0) throw new Error('NAV 取得失敗');
+  return map;
+}
+
+async function ensureNavMap(force) {
+  var today = _navTodayStr();
+  // 僅在「非空」時採用記憶體/localStorage 快取（避免沿用抖動回空的空表）
+  if (!force && _etfNavMap && _etfNavDay === today && Object.keys(_etfNavMap).length) return _etfNavMap;
+  if (!force) {
+    try {
+      var cached = JSON.parse(localStorage.getItem('etf_nav_map') || 'null');
+      if (cached && cached.day === today && cached.map && Object.keys(cached.map).length) {
+        _etfNavMap = cached.map; _etfNavDay = today; return _etfNavMap;
+      }
+    } catch (e) {}
+  }
+  // 優先走專用端點 ?etfnav=（GAS 伺服器端重試＋解析，穩定）；未部署或失敗再回退 ?url= 直抓解析
+  var map = await _fetchNavViaEndpoint();
+  if (!map || !Object.keys(map).length) map = await _fetchNavViaUrl();
+  if (!map || Object.keys(map).length === 0) throw new Error('NAV 取得失敗');
   _etfNavMap = map; _etfNavDay = today;
   try { localStorage.setItem('etf_nav_map', JSON.stringify({ day: today, map: map })); } catch (e) {}
   return map;
