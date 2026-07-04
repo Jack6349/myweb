@@ -206,8 +206,16 @@ async function renderHeldEtfHoldings() {
       const data = await fetchEtfHoldings(code);
       const meta = document.getElementById('hold-meta-' + code);
       const body = document.getElementById('hold-body-' + code);
-      if (meta) meta.textContent = '共 ' + data.count + ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '');
-      if (body) body.innerHTML = holdingsTableHtml(data);
+      // 境外/主動式（CMoney）：帶成分股現價＋估算淨值
+      let priceData = null, est = null;
+      if (data.source === 'CMoney') {
+        try { await ensureNavMap(); } catch (e) {}
+        priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
+        est = computeEstNav(code, data.holdings, priceData);
+      }
+      if (meta) meta.innerHTML = '共 ' + data.count + ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') +
+        (est ? '｜<span style="color:var(--accent2)">估算淨值 ' + est.estNav.toFixed(2) + '</span>' : '');
+      if (body) body.innerHTML = holdingsTableHtml(data, priceData);
     } catch (e) {
       const meta = document.getElementById('hold-meta-' + code);
       const chev = document.getElementById('hold-chev-' + code);
@@ -288,26 +296,90 @@ function toggleAllHeld(btn) {
   if (btn) btn.textContent = anyClosed ? '全部收合' : '全部展開';
 }
 
-// 成分股表格 HTML（持有折疊區與 modal 共用）
-function holdingsTableHtml(data) {
-  const rows = (data.holdings || []).map((h, i) =>
-    '<tr style="border-bottom:1px solid var(--border)">' +
+// 成分股表格 HTML（持有折疊區與 modal 共用）。priceData 有值時（境外/CMoney）末欄改「現價」
+function holdingsTableHtml(data, priceData) {
+  const withPrice = !!priceData;
+  const lastLabel = withPrice ? '現價' : '持股數';
+  const rows = (data.holdings || []).map((h, i) => {
+    let lastCell;
+    if (withPrice) {
+      const sym = String(h.code).replace(/\s*US$/i, '').trim();
+      const p = priceData.prices[sym];
+      if (p && p.price != null) {
+        const col = p.changePct > 0 ? '#ff5252' : (p.changePct < 0 ? '#26d962' : 'var(--text2)');
+        lastCell = '<span style="color:' + col + '">' + p.price.toFixed(2) + '</span>';
+      } else lastCell = '<span style="color:var(--text3)">—</span>';
+    } else {
+      lastCell = (h.shares != null ? h.shares.toLocaleString('zh-TW') : '—');
+    }
+    return '<tr style="border-bottom:1px solid var(--border)">' +
       '<td style="padding:6px 6px;color:var(--text3);text-align:right;width:28px">' + (i + 1) + '</td>' +
       '<td style="padding:6px 6px;white-space:nowrap">' +
         '<span style="font-weight:600">' + h.code + '</span>' +
         '<span style="color:var(--text2);margin-left:6px">' + h.name + '</span></td>' +
       '<td style="padding:6px 6px;text-align:right;color:var(--accent2);font-weight:600;white-space:nowrap">' + (typeof h.weight === 'number' ? h.weight.toFixed(2) + '%' : '—') + '</td>' +
-      '<td style="padding:6px 6px;text-align:right;color:var(--text2);white-space:nowrap">' + (h.shares != null ? h.shares.toLocaleString('zh-TW') : '—') + '</td>' +
-    '</tr>'
-  ).join('');
+      '<td style="padding:6px 6px;text-align:right;color:var(--text2);white-space:nowrap">' + lastCell + '</td>' +
+    '</tr>';
+  }).join('');
   return '<div style="overflow-x:auto">' +
     '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
     '<thead><tr style="border-bottom:2px solid var(--border)">' +
       '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">#</th>' +
       '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:left">成分股</th>' +
       '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">權重</th>' +
-      '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">持股數</th>' +
+      '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">' + lastLabel + '</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+// 批次抓成分股現價（GAS ?usprices=，記憶體快取 15 分）；代碼去除 " US" 後綴
+const USPRICE_TTL = 15 * 60 * 1000;
+const _uspriceCache = {};
+async function fetchConstituentPrices(codes) {
+  const syms = [...new Set((codes || []).map(c => String(c).replace(/\s*US$/i, '').trim()).filter(Boolean))];
+  if (!syms.length) return null;
+  const key = syms.slice().sort().join(',');
+  const hit = _uspriceCache[key];
+  if (hit && Date.now() - hit.ts < USPRICE_TTL) return hit;
+  try {
+    const r = await fetch(GAS_URL + '?usprices=' + encodeURIComponent(syms.join(',')));
+    const j = await r.json();
+    if (j.stat === 'OK') { const v = { ts: Date.now(), prices: j.prices || {}, fx: j.fx || null }; _uspriceCache[key] = v; return v; }
+  } catch (e) {}
+  return null;
+}
+
+// 估算淨值 = 最近官方淨值 ×(1 + Σ 權重×台幣漲跌)，台幣漲跌=(1+美元漲跌)(1+匯率漲跌)-1
+function computeEstNav(etfCode, holdings, priceData) {
+  const info = (typeof getEtfNav === 'function') ? getEtfNav(etfCode) : null;
+  if (!info || info.nav == null || !priceData) return null;
+  const fxR = (priceData.fx && priceData.fx.changePct != null) ? priceData.fx.changePct / 100 : 0;
+  let wret = 0, covered = 0;
+  (holdings || []).forEach(h => {
+    if (typeof h.weight !== 'number') return;
+    const sym = String(h.code).replace(/\s*US$/i, '').trim();
+    const p = priceData.prices[sym];
+    if (p && p.changePct != null) {
+      const usdR = p.changePct / 100;
+      const twdR = (1 + usdR) * (1 + fxR) - 1;
+      wret += (h.weight / 100) * twdR;
+      covered += h.weight;
+    }
+  });
+  if (covered < 50) return null; // 覆蓋率太低不估
+  return { estNav: info.nav * (1 + wret), officialNav: info.nav, coveredPct: Math.round(covered) };
+}
+
+// 估算淨值表頭 HTML
+function estNavHeaderHtml(est) {
+  if (!est) return '';
+  const diff = est.estNav - est.officialNav;
+  const col = diff > 0 ? '#ff5252' : (diff < 0 ? '#26d962' : 'var(--text2)');
+  return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px;padding:8px 10px;background:var(--bg4);border-radius:8px">' +
+    '<div><div style="font-size:10px;color:var(--text3)">估算淨值</div>' +
+      '<div style="font-size:18px;font-weight:700;color:' + col + '">' + est.estNav.toFixed(2) + '</div></div>' +
+    '<div style="text-align:right"><div style="font-size:10px;color:var(--text3)">官方淨值</div>' +
+      '<div style="font-size:14px;font-weight:600;color:var(--accent2)">' + est.officialNav.toFixed(2) + '</div></div>' +
+    '</div>';
 }
 
 // ── 查詢入口：直接帶代碼，或讀輸入框 ──
@@ -338,14 +410,21 @@ async function queryHoldings(codeOrInput) {
     data.name = etf.name;
     try { await ensureNavMap(); } catch (e) { /* 無淨值不阻斷成分股 */ }
     const navHtml = await buildNavLineHtml(etf.code);
-    renderHoldingsModal(data, navHtml);
+    // 境外/主動式（CMoney 來源）：抓成分股現價、算估算淨值
+    let priceData = null, est = null;
+    if (data.source === 'CMoney') {
+      if (statusEl) statusEl.textContent = '載入成分股現價…';
+      priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
+      est = computeEstNav(etf.code, data.holdings, priceData);
+    }
+    renderHoldingsModal(data, navHtml, priceData, est);
     if (statusEl) statusEl.textContent = '';
   } catch (e) {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">' + (e.message || '查詢失敗') + '</span>';
   }
 }
 
-function renderHoldingsModal(data, navHtml) {
+function renderHoldingsModal(data, navHtml, priceData, est) {
   const titleEl = document.getElementById('modal-holdings-title');
   const bodyEl = document.getElementById('modal-holdings-body');
   if (!titleEl || !bodyEl) return;
@@ -360,11 +439,13 @@ function renderHoldingsModal(data, navHtml) {
     (navHtml || '');
 
   bodyEl.innerHTML =
+    estNavHeaderHtml(est) +
     '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">共 ' + (data.count || (data.holdings || []).length) +
       ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') + '</div>' +
-    holdingsTableHtml(data) +
+    holdingsTableHtml(data, priceData) +
     '<div class="api-note" style="margin-top:10px">資料來源：' + (data.source === 'CMoney'
-      ? 'CMoney（境外/主動式 ETF，僅權重無持股數）' : 'MoneyDJ 理財網') + '。每日更新。</div>';
+      ? 'CMoney（境外/主動式 ETF，僅權重無持股數）；估算淨值＝官方淨值×(1+Σ權重×漲跌×匯率)，僅供參考'
+      : 'MoneyDJ 理財網') + '。每日更新。</div>';
 
   openModal('modal-holdings');
 }
