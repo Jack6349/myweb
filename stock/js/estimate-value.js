@@ -878,32 +878,39 @@ var _etfNavMap = null, _etfNavDay = null;
 function _navTodayStr() { var d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 async function ensureNavMap(force) {
   var today = _navTodayStr();
-  if (!force && _etfNavMap && _etfNavDay === today) return _etfNavMap;
+  // 僅在「非空」時採用記憶體/localStorage 快取（避免沿用抖動回空的空表）
+  if (!force && _etfNavMap && _etfNavDay === today && Object.keys(_etfNavMap).length) return _etfNavMap;
   if (!force) {
     try {
       var cached = JSON.parse(localStorage.getItem('etf_nav_map') || 'null');
-      if (cached && cached.day === today) { _etfNavMap = cached.map; _etfNavDay = today; return _etfNavMap; }
+      if (cached && cached.day === today && cached.map && Object.keys(cached.map).length) {
+        _etfNavMap = cached.map; _etfNavDay = today; return _etfNavMap;
+      }
     } catch (e) {}
   }
+  // all_etf.txt 經 GAS 約半數回 200＋空內容；重試至多 5 次直到解析出資料，且不快取空表
   var src = 'https://mis.twse.com.tw/stock/data/all_etf.txt';
-  var res;
-  for (var attempt = 0; attempt < 3; attempt++) {
-    res = await fetch(GAS_URL + '?url=' + encodeURIComponent(src));
-    if (res.ok) break;
-    if (attempt < 2) await new Promise(function (rs) { setTimeout(rs, 500 * (attempt + 1)); });
-  }
-  if (!res.ok) throw new Error('NAV HTTP ' + res.status);
-  var data = await res.json();
-  var insts = data.a1 || (Array.isArray(data) ? data : []);
   var map = {};
-  insts.forEach(function (inst) {
-    (inst.msgArray || []).forEach(function (x) {
-      if (!x.a) return;
-      // 欄位：e=成交價(市價)、f=淨值、g=折溢價%(=(e-f)/f)、c=規模、i=日期
-      var nav = parseFloat(x.f), prem = parseFloat(x.g);
-      if (!isNaN(nav) && nav > 0) map[String(x.a).toUpperCase()] = { nav: nav, premium: isNaN(prem) ? null : prem, date: x.i };
-    });
-  });
+  for (var attempt = 0; attempt < 5 && Object.keys(map).length === 0; attempt++) {
+    if (attempt > 0) await new Promise(function (rs) { setTimeout(rs, 400 + 300 * attempt); });
+    try {
+      var res = await fetch(GAS_URL + '?url=' + encodeURIComponent(src));
+      if (!res.ok) continue;
+      var data = await res.json();
+      var insts = data.a1 || (Array.isArray(data) ? data : []);
+      insts.forEach(function (inst) {
+        (inst.msgArray || []).forEach(function (x) {
+          if (!x.a) return;
+          // 欄位：e=成交價(市價)、f=淨值、g=折溢價%(=(e-f)/f)、c=規模、i=日期
+          var nav = parseFloat(x.f), prem = parseFloat(x.g), price = parseFloat(x.e);
+          if (!isNaN(nav) && nav > 0) map[String(x.a).toUpperCase()] = {
+            nav: nav, premium: isNaN(prem) ? null : prem, price: isNaN(price) ? null : price, date: x.i
+          };
+        });
+      });
+    } catch (e) { /* 重試 */ }
+  }
+  if (Object.keys(map).length === 0) throw new Error('NAV 取得失敗');
   _etfNavMap = map; _etfNavDay = today;
   try { localStorage.setItem('etf_nav_map', JSON.stringify({ day: today, map: map })); } catch (e) {}
   return map;

@@ -119,8 +119,9 @@ function getNavInfo(code) {
 // 淨值（橘黃）＋市價（依當日漲跌紅漲綠跌）＋折溢價（溢紅折綠），同行接在代碼/名稱右側。
 // 數值取自 all_etf（淨值/市價/折溢價同一快照）；市價漲跌方向另取 GAS ?price=（與當日損益同源）。
 async function buildNavLineHtml(code) {
-  const info = getNavInfo(code);
-  if (!info) return '';
+  // 共用「當日損益」的淨值來源 getEtfNav（需先 ensureNavMap）；市價無 e 時由淨值×(1+折溢價%)反推
+  const info = (typeof getEtfNav === 'function') ? getEtfNav(code) : null;
+  if (!info || info.nav == null) return '';
   let changePct = null;
   try {
     const p = await fetchStockPrice(code);
@@ -216,17 +217,14 @@ async function loadHeldNav(heldEtfs) {
   });
   setStatus('<span class="holdings-nav-status">淨值載入中…</span>');
 
-  for (let round = 0; round < 8; round++) {
-    let uni = [];
-    try { uni = await loadEtfUniverse(); } catch (e) {}
-    // _etfUniverse 僅在「上市清單成功（含淨值）」時被設定；以此為 NAV 就緒判準
-    if (_etfUniverse) {
-      const nameByCode = {};
-      uni.forEach(e => { nameByCode[e.code.toUpperCase()] = e.name; });
+  // 用與「當日損益」相同的 getEtfNav/ensureNavMap（首輪吃快取，通常已由當日損益載好）
+  for (let round = 0; round < 6; round++) {
+    let ok = false;
+    try { await ensureNavMap(round > 0); ok = true; } catch (e) { ok = false; }
+    const ready = ok && heldEtfs.some(s => getEtfNav(String(s.code).toUpperCase()));
+    if (ready) {
       for (const s of heldEtfs) {
         const code = String(s.code).toUpperCase();
-        const nameEl = document.getElementById('hold-name-' + code);
-        if (nameEl && !nameEl.textContent && nameByCode[code]) nameEl.textContent = nameByCode[code];
         const navSlot = document.getElementById('hold-nav-' + code);
         if (navSlot) {
           const html = await buildNavLineHtml(code);
@@ -235,8 +233,8 @@ async function loadHeldNav(heldEtfs) {
       }
       return;
     }
-    if (round < 7) setStatus('<span class="holdings-nav-status">淨值載入中…(' + (round + 2) + ')</span>');
-    await new Promise(r => setTimeout(r, 1500));
+    if (round < 5) setStatus('<span class="holdings-nav-status">淨值載入中…(' + (round + 2) + ')</span>');
+    await new Promise(r => setTimeout(r, 1200));
   }
   // 多輪仍失敗 → 提示可重試
   setStatus('<span class="holdings-nav-status fail" onclick="retryHeldNav()">淨值載入失敗，點此重試</span>');
@@ -323,6 +321,7 @@ async function queryHoldings(codeOrInput) {
     if (statusEl) statusEl.textContent = '載入 ' + etf.code + ' 成分股…';
     const data = await fetchEtfHoldings(etf.code);
     data.name = etf.name;
+    try { await ensureNavMap(); } catch (e) { /* 無淨值不阻斷成分股 */ }
     const navHtml = await buildNavLineHtml(etf.code);
     renderHoldingsModal(data, navHtml);
     if (statusEl) statusEl.textContent = '';
