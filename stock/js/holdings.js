@@ -193,8 +193,8 @@ async function renderHeldEtfHoldings() {
       '<div class="vcard-head" style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;overflow:hidden">' +
         '<span class="vcard-code" style="flex-shrink:0">' + code + '</span>' +
         '<span class="vcard-name" id="hold-name-' + code + '" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">' + name + '</span>' +
-        '<span class="holdings-nav-slot" id="hold-nav-' + code + '"><span class="holdings-nav-status">淨值載入中…</span></span></div>' +
-      '<div class="holdings-item-summary" id="hold-meta-' + code + '">載入中…</div>' +
+        '<span class="holdings-nav-slot" id="hold-nav-' + code + '"><span class="holdings-nav-status">' + spin('淨值載入中…') + '</span></span></div>' +
+      '<div class="holdings-item-summary" id="hold-meta-' + code + '">' + spin('載入中…') + '</div>' +
       '<div class="vcard-fold" id="hold-body-' + code + '"></div>' +
       '<button class="vcard-chev" id="hold-chev-' + code + '" onclick="toggleHeldItem(\'' + code + '\')">▼</button>' +
     '</div>';
@@ -209,6 +209,7 @@ async function renderHeldEtfHoldings() {
       // 境外/主動式（CMoney）：帶成分股現價＋估算淨值
       let priceData = null, est = null;
       if (data.source === 'CMoney') {
+        if (meta) meta.innerHTML = spin('估算中…');
         try { await ensureNavMap(); } catch (e) {}
         priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
         est = computeEstNav(code, data.holdings, priceData);
@@ -245,7 +246,7 @@ async function loadHeldNav(heldEtfs) {
     const slot = document.getElementById('hold-nav-' + String(s.code).toUpperCase());
     if (slot) slot.innerHTML = html;
   });
-  setStatus('<span class="holdings-nav-status">淨值載入中…</span>');
+  setStatus('<span class="holdings-nav-status">' + spin('淨值載入中…') + '</span>');
 
   // 用與「當日損益」相同的 getEtfNav/ensureNavMap（首輪吃快取，通常已由當日損益載好）
   for (let round = 0; round < 6; round++) {
@@ -263,7 +264,7 @@ async function loadHeldNav(heldEtfs) {
       }
       return;
     }
-    if (round < 5) setStatus('<span class="holdings-nav-status">淨值載入中…(' + (round + 2) + ')</span>');
+    if (round < 5) setStatus('<span class="holdings-nav-status">' + spin('淨值載入中…(' + (round + 2) + ')') + '</span>');
     await new Promise(r => setTimeout(r, 1200));
   }
   // 多輪仍失敗 → 提示可重試
@@ -342,6 +343,9 @@ function holdingsTableHtml(data, priceData) {
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
+// 動態圓圈 spinner + 文字
+function spin(text) { return '<span class="mini-spinner"></span>' + (text || ''); }
+
 // 成分股名稱顯示/隱藏（全域 CSS class 切換，隱藏後代碼 tooltip 仍可看名稱）
 function applyCnameState() {
   const hide = localStorage.getItem('holdings_hide_cname') === '1';
@@ -416,7 +420,7 @@ async function queryHoldings(codeOrInput) {
   input = String(input || '').trim();
   if (!input) { if (statusEl) statusEl.textContent = '請輸入代碼或名稱'; return; }
 
-  if (statusEl) statusEl.textContent = '查詢中…';
+  if (statusEl) statusEl.innerHTML = spin('查詢中…');
   try {
     const matches = await resolveHoldingsQuery(input);
     if (matches.length === 0) {
@@ -431,7 +435,7 @@ async function queryHoldings(codeOrInput) {
       return;
     }
     const etf = matches[0];
-    if (statusEl) statusEl.textContent = '載入 ' + etf.code + ' 成分股…';
+    if (statusEl) statusEl.innerHTML = spin('載入 ' + etf.code + ' 成分股…');
     const data = await fetchEtfHoldings(etf.code);
     data.name = etf.name;
     try { await ensureNavMap(); } catch (e) { /* 無淨值不阻斷成分股 */ }
@@ -439,7 +443,7 @@ async function queryHoldings(codeOrInput) {
     // 境外/主動式（CMoney 來源）：抓成分股現價、算估算淨值
     let priceData = null, est = null;
     if (data.source === 'CMoney') {
-      if (statusEl) statusEl.textContent = '載入成分股現價…';
+      if (statusEl) statusEl.innerHTML = spin('估算中…');
       priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
       est = computeEstNav(etf.code, data.holdings, priceData);
     }

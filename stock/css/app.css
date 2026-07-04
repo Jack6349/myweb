@@ -214,6 +214,7 @@
   .holdings-nav-status.fail { color:#e88; cursor:pointer; text-decoration:underline; }
   .cname-toggle { background:var(--bg4); border:1px solid var(--border); color:var(--text2); font-size:12px; padding:5px 10px; border-radius:8px; cursor:pointer; font-family:var(--font); white-space:nowrap; }
   body.hide-cnames .cname { display:none; }
+  .mini-spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--border2); border-top-color:var(--accent); border-radius:50%; animation:spin2 .7s linear infinite; vertical-align:-2px; margin-right:5px; }
 
   /* ── DIVIDEND ROW ── */
   .div-section-title { font-size:12px; font-weight:600; color:var(--text3); letter-spacing:.8px; text-transform:uppercase; margin:20px 0 10px; }
