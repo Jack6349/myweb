@@ -16,6 +16,28 @@ function getPriceCache() {
 }
 function setPriceCache(data) { localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(data)); }
 
+// 台股是否正在盤中（台灣時間 週一~五 09:00–13:35；不含國定假日，假日 API 會回前一交易日、屬無害重抓一次）
+function isTwMarketOpen() {
+  var tw = new Date(Date.now() + 8 * 3600000); // 以 UTC+8 檢視
+  var dow = tw.getUTCDay();
+  if (dow === 0 || dow === 6) return false;
+  var hm = tw.getUTCHours() * 60 + tw.getUTCMinutes();
+  return hm >= 9 * 60 && hm < 13 * 60 + 35;
+}
+// 最近一次「已收盤結算」時間（UTC ms）：最近一個已過的 台灣時間 週一~五 13:35(=05:35 UTC)
+function lastSettleTs() {
+  var now = Date.now();
+  for (var back = 0; back < 8; back++) {
+    var base = now - back * 86400000;
+    var d = new Date(base);
+    var settle = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 5, 35, 0); // 該 UTC 日的 13:35 台灣
+    var twDow = new Date(settle + 8 * 3600000).getUTCDay();
+    if (twDow === 0 || twDow === 6) continue;
+    if (settle <= now) return settle;
+  }
+  return 0;
+}
+
 // ══════════════ 年度可領估算 ══════════════
 // 邏輯：
 //   已領月份（Jan ~ 上月）→ 用 API 實際金額
@@ -575,8 +597,17 @@ async function fetchStockPrice(code) {
   const cache = getPriceCache();
   const now = Date.now();
   const today = todayStr();
-  // 同一天內且未超過 TTL 才用快取；跨日強制重抓
-  if (cache[code] && cache[code].day === today && (now - cache[code].ts) < PRICE_CACHE_TTL) return cache[code].data;
+  const c = cache[code];
+  if (c) {
+    if (!isTwMarketOpen()) {
+      // 非盤中（收盤後/盤前/週末/假日）：股價不再變動；只要快取是在最近一次收盤結算之後抓的，
+      // 代表已握有最新收盤價，直接沿用（跨日也適用），不重複呼叫 API
+      if (c.ts >= lastSettleTs()) return c.data;
+    } else {
+      // 盤中：價格會變動，沿用同日 + TTL 週期更新
+      if (c.day === today && (now - c.ts) < PRICE_CACHE_TTL) return c.data;
+    }
+  }
   const res = await fetch(GAS_URL + '?price=' + encodeURIComponent(code));
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const raw = await res.json();
