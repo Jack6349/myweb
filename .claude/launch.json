@@ -13,6 +13,13 @@
       "runtimeArgs": ["-m", "http.server", "8081"],
       "cwd": "travel-v2",
       "port": 8081
+    },
+    {
+      "name": "stock",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8123"],
+      "cwd": "stock",
+      "port": 8123
     }
   ]
 }
