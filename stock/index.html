@@ -11,8 +11,8 @@
 <title>股利總管</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=53">
-<script type="module" src="js/firebase-init.js?v=53"></script>
+<link rel="stylesheet" href="css/app.css?v=55">
+<script type="module" src="js/firebase-init.js?v=55"></script>
 </head>
 <body>
 
@@ -101,23 +101,30 @@
       </div>
     </div>
 
-    <!-- ETF 成分股查詢（入口卡片，點入獨立畫面） -->
-    <div class="section-title">ETF 成分股查詢</div>
-    <div class="func-card" onclick="showScreen('holdings')" style="flex-direction:row;align-items:center;gap:12px;text-align:left">
-      <div class="func-card-icon" style="background:rgba(240,204,122,.15);margin:0">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f0cc7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>
-      </div>
-      <div style="flex:1;min-width:0">
+    <!-- ETF 成分股查詢（入口卡片，點入獨立畫面）＋ 待開發功能佔位卡，統一與功能選單同尺寸 -->
+    <div class="func-grid" style="margin-top:12px">
+      <div class="func-card" onclick="showScreen('holdings')">
+        <div class="func-card-icon" style="background:rgba(240,204,122,.15);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f0cc7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>
+        </div>
         <div class="func-card-name">ETF 成分股查詢</div>
         <div class="func-card-desc">持有自動帶入・查任意 ETF</div>
+        <div class="func-card-amount" style="color:#f0cc7a;margin-top:8px">&nbsp;</div>
       </div>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+      <div class="func-card" style="opacity:.5;cursor:default;">
+        <div class="func-card-icon" style="background:rgba(255,255,255,.08);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        </div>
+        <div class="func-card-name">待開發功能</div>
+        <div class="func-card-desc">敬請期待</div>
+        <div class="func-card-amount" style="margin-top:8px">&nbsp;</div>
+      </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 0 0">
+    <div class="func-grid" style="margin-top:12px">
       <div class="func-card" onclick="showScreen('etf-screener')" style="background:linear-gradient(135deg,rgba(74,158,218,.18) 0%,#141e2e 100%);border-color:rgba(74,158,218,.55);border-width:1.5px;">
         <div class="func-card-icon" style="background:rgba(74,158,218,.2);">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6ec6f0" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6ec6f0" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </div>
         <div class="func-card-name">ETF 筛選器</div>
         <div class="func-card-desc">全台ETF評分筛選</div>
@@ -125,7 +132,7 @@
       </div>
       <div class="func-card" onclick="showScreen('etf-new')" style="background:linear-gradient(135deg,rgba(123,237,159,.18) 0%,#142010 100%);border-color:rgba(123,237,159,.55);border-width:1.5px;">
         <div class="func-card-icon" style="background:rgba(123,237,159,.2);">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7bed9f" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7bed9f" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
         </div>
         <div class="func-card-name">新興ETF觀察</div>
         <div class="func-card-desc">成立未滿1年</div>
@@ -524,19 +531,19 @@
 </div><!-- #app-shell -->
 
 <!-- 登入閘門（Phase 1） -->
-<script src="js/auth.js?v=53"></script>
+<script src="js/auth.js?v=55"></script>
 <!-- 模組載入順序須與原始檔一致，以維持相同執行順序 -->
-<script src="js/core.js?v=53"></script>
-<script src="js/portfolio.js?v=53"></script>
-<script src="js/api.js?v=53"></script>
-<script src="js/dividends.js?v=53"></script>
-<script src="js/estimate-value.js?v=53"></script>
+<script src="js/core.js?v=55"></script>
+<script src="js/portfolio.js?v=55"></script>
+<script src="js/api.js?v=55"></script>
+<script src="js/dividends.js?v=55"></script>
+<script src="js/estimate-value.js?v=55"></script>
 <!-- 持股雲端同步：Firestore -->
-<script src="js/repo.firebase.js?v=53"></script>
-<script src="js/etf.js?v=53"></script>
+<script src="js/repo.firebase.js?v=55"></script>
+<script src="js/etf.js?v=55"></script>
 <!-- ETF 成分股查詢（首頁卡片）：須在 estimate-value.js 之後以串接 showScreen patch -->
-<script src="js/holdings.js?v=53"></script>
+<script src="js/holdings.js?v=55"></script>
 <!-- 截圖匯入持股：Gemini 視覺（經 GAS 代理） -->
-<script src="js/import-ocr.js?v=53"></script>
+<script src="js/import-ocr.js?v=55"></script>
 </body>
 </html>
