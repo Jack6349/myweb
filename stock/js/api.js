@@ -39,7 +39,12 @@ async function fetchStockDivHistory(code) {
   }
   if (!res.ok) throw new Error('GAS HTTP ' + res.status);
   const json = await res.json();
-  if (json.stat !== 'OK') return [];
+  // 查無配息資料（如主動型 ETF）也要快取空結果，否則每次都重抓
+  if (json.stat !== 'OK') {
+    cache[cacheKey] = { ts: now, data: [] };
+    setDivCache(cache);
+    return [];
+  }
   const divs = json.dividends || [];
   const result = divs.map(d => {
     const exDate = new Date(d.date * 1000);
