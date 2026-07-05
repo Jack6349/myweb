@@ -187,10 +187,22 @@ async function renderNavChart(retryCount) {
     if (!ok) await new Promise(r => setTimeout(r, 1200));
   }
 
-  const rows = held.map(s => {
+  // 依折溢價分組排列：折價組在前（絕對值由大到小）、溢價組在後（絕對值由大到小），無折溢價者排最後
+  const items = held.map(s => {
     const code = String(s.code).toUpperCase();
     const info = getEtfNav(code);
-    if (!info || info.nav == null) return '';
+    if (!info || info.nav == null) return null;
+    return { code, info };
+  }).filter(Boolean);
+  items.sort((a, b) => {
+    const pa = a.info.premium, pb = b.info.premium;
+    const ga = pa == null ? 2 : (pa < 0 ? 0 : (pa > 0 ? 1 : 2));
+    const gb = pb == null ? 2 : (pb < 0 ? 0 : (pb > 0 ? 1 : 2));
+    if (ga !== gb) return ga - gb;
+    return Math.abs(pb || 0) - Math.abs(pa || 0);
+  });
+
+  const rows = items.map(({ code, info }) => {
     const nav = info.nav;
     const price = (info.price != null) ? info.price : (info.premium != null ? nav * (1 + info.premium / 100) : nav);
     const prem = info.premium;
