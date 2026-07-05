@@ -199,17 +199,15 @@ async function renderNavChart(retryCount) {
     let navW = 100, priceW = 100;
     if (prem > 0) navW = 100 - amp;        // 市價 > 淨值 → 市價較長
     else if (prem < 0) priceW = 100 - amp; // 市價 < 淨值 → 淨值較長
-    // 市價（bar+文字）：高於淨值→綠、低於→紅；折溢價文字：溢紅折綠
-    const upP = prem != null && prem > 0;
+    // 統一配色：溢價(市價>淨值)綠、折價(市價<淨值)紅。股票代碼、市價長條、折溢價%、價差文字皆同色。
     const priceCol = prem == null ? 'var(--text2)' : (prem > 0 ? '#5cb85c' : '#c9302c');
-    const premCol = prem == null ? 'var(--text3)' : (prem > 0 ? '#ff5252' : '#26d962');
     const premLabel = prem == null ? '' : (prem > 0 ? '溢' : (prem < 0 ? '折' : '')) + (prem > 0 ? '+' : '') + prem.toFixed(2) + '%';
-    // 市價-淨值價差：正值紅、負值深綠，靠左疊於淨值長條上；最前與正負號後各加一個空格；無價差則不顯示
+    // 市價-淨值價差：靠左疊於淨值長條上；最前與正負號後各加一個空格；無價差則不顯示
     const diff = Math.round((price - nav) * 100) / 100;
-    const diffCol = diff > 0 ? '#ff5252' : '#1e8e4a';
+    const diffCol = diff > 0 ? '#5cb85c' : (diff < 0 ? '#c9302c' : 'var(--text)');
     const diffLabel = diff === 0 ? '' : ' ' + (diff > 0 ? '+' : '-') + ' ' + Math.abs(diff).toFixed(2);
     return '<div class="navchart-row">' +
-      '<div class="navchart-code">' + code + '</div>' +
+      '<div class="navchart-code" style="color:' + priceCol + '">' + code + '</div>' +
       '<div class="navchart-bars">' +
         '<div class="navchart-diff" style="color:' + diffCol + '">' + diffLabel + '</div>' +
         '<div class="navchart-bar" style="width:' + navW + '%;background:var(--accent2)"></div>' +
@@ -222,7 +220,7 @@ async function renderNavChart(retryCount) {
         '</div>' +
         '<div class="navchart-pcol">' +
           '<div id="navchart-est-' + code + '">&nbsp;</div>' +
-          '<div>' + (premLabel ? '<span style="color:' + premCol + '">' + premLabel + '</span>' : '&nbsp;') + '</div>' +
+          '<div>' + (premLabel ? '<span style="color:' + priceCol + '">' + premLabel + '</span>' : '&nbsp;') + '</div>' +
         '</div>' +
       '</div>' +
     '</div>';
