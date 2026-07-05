@@ -206,9 +206,9 @@ async function renderHeldEtfHoldings() {
       const data = await fetchEtfHoldings(code);
       const meta = document.getElementById('hold-meta-' + code);
       const body = document.getElementById('hold-body-' + code);
-      // 境外/主動式（CMoney）：帶成分股現價＋估算淨值
+      // 境外/主動式（CMoney）且成分股為可報價股票：帶現價＋估算淨值（債券 ETF 成分股為債券，跳過）
       let priceData = null, est = null;
-      if (data.source === 'CMoney') {
+      if (data.source === 'CMoney' && holdingsPriceable(data.holdings)) {
         if (meta) meta.innerHTML = spin('估算中…');
         try { await ensureNavMap(); } catch (e) {}
         priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
@@ -306,21 +306,24 @@ function toggleAllHeld(btn) {
 
 // 成分股表格 HTML（持有折疊區與 modal 共用）。priceData 有值時（境外/CMoney）末欄改「現價」
 function holdingsTableHtml(data, priceData) {
-  const withPrice = !!priceData;
-  const lastLabel = withPrice ? '現價' : '持股數';
+  const holdings = data.holdings || [];
+  const hasShares = holdings.some(h => h.shares != null);
+  // 末欄模式：有現價→現價；否則有股數→持股數；都無（如債券 ETF）→不顯示末欄
+  const lastMode = priceData ? 'price' : (hasShares ? 'shares' : 'none');
+  const lastLabel = lastMode === 'price' ? '現價' : (lastMode === 'shares' ? '持股數' : '');
   // 依權重由高至低排列（權重缺漏者排最後）
-  const sorted = [...(data.holdings || [])].sort((a, b) =>
+  const sorted = [...holdings].sort((a, b) =>
     (typeof b.weight === 'number' ? b.weight : -1) - (typeof a.weight === 'number' ? a.weight : -1));
   const rows = sorted.map((h, i) => {
-    let lastCell;
-    if (withPrice) {
+    let lastCell = '';
+    if (lastMode === 'price') {
       const sym = String(h.code).replace(/\s*US$/i, '').trim();
       const p = priceData.prices[sym];
       if (p && p.price != null) {
         const col = p.changePct > 0 ? '#ff5252' : (p.changePct < 0 ? '#26d962' : 'var(--text2)');
         lastCell = '<span style="color:' + col + '">' + p.price.toFixed(2) + '</span>';
       } else lastCell = '<span style="color:var(--text3)">—</span>';
-    } else {
+    } else if (lastMode === 'shares') {
       lastCell = (h.shares != null ? h.shares.toLocaleString('zh-TW') : '—');
     }
     const nm = (h.name || '').replace(/"/g, '&quot;');
@@ -330,7 +333,7 @@ function holdingsTableHtml(data, priceData) {
         '<span style="font-weight:600" title="' + nm + '">' + h.code + '</span>' +
         '<span class="cname" style="color:var(--text2);margin-left:6px">' + h.name + '</span></td>' +
       '<td style="padding:6px 6px;text-align:right;color:var(--accent2);font-weight:600;white-space:nowrap">' + (typeof h.weight === 'number' ? h.weight.toFixed(2) + '%' : '—') + '</td>' +
-      '<td style="padding:6px 6px;text-align:right;color:var(--text2);white-space:nowrap">' + lastCell + '</td>' +
+      (lastMode === 'none' ? '' : '<td style="padding:6px 6px;text-align:right;color:var(--text2);white-space:nowrap">' + lastCell + '</td>') +
     '</tr>';
   }).join('');
   return '<div style="overflow-x:auto">' +
@@ -339,8 +342,16 @@ function holdingsTableHtml(data, priceData) {
       '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">#</th>' +
       '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:left">成分股</th>' +
       '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">權重</th>' +
-      '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">' + lastLabel + '</th>' +
+      (lastMode === 'none' ? '' : '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">' + lastLabel + '</th>') +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+// 成分股是否為可報價的股票（美股 "XXX US" 或台股數字代碼）；債券 ISIN 等回 false
+function holdingsPriceable(holdings) {
+  const codes = (holdings || []).map(h => String(h.code || ''));
+  if (!codes.length) return false;
+  const isStock = c => /\sUS$/i.test(c) || /^\d{4,6}[A-Z]?$/.test(c);
+  return codes.filter(isStock).length / codes.length >= 0.5;
 }
 
 // 動態圓圈 spinner + 文字
@@ -440,9 +451,9 @@ async function queryHoldings(codeOrInput) {
     data.name = etf.name;
     try { await ensureNavMap(); } catch (e) { /* 無淨值不阻斷成分股 */ }
     const navHtml = await buildNavLineHtml(etf.code);
-    // 境外/主動式（CMoney 來源）：抓成分股現價、算估算淨值
+    // 境外/主動式（CMoney 來源）且成分股可報價：抓現價、算估算淨值（債券 ETF 跳過）
     let priceData = null, est = null;
-    if (data.source === 'CMoney') {
+    if (data.source === 'CMoney' && holdingsPriceable(data.holdings)) {
       if (statusEl) statusEl.innerHTML = spin('估算中…');
       priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
       est = computeEstNav(etf.code, data.holdings, priceData);
@@ -477,7 +488,8 @@ function renderHoldingsModal(data, navHtml, priceData, est) {
     '</div>' +
     holdingsTableHtml(data, priceData) +
     '<div class="api-note" style="margin-top:10px">資料來源：' + (data.source === 'CMoney'
-      ? 'CMoney（境外/主動式 ETF，僅權重無持股數）；估算淨值＝官方淨值×(1+Σ權重×漲跌×匯率)，僅供參考'
+      ? (priceData ? 'CMoney（境外/主動式 ETF，僅權重無持股數）；估算淨值＝官方淨值×(1+Σ權重×漲跌×匯率)，僅供參考'
+        : 'CMoney（債券/非股票成分股，無現價與估算淨值）')
       : 'MoneyDJ 理財網') + '。每日更新。</div>';
 
   openModal('modal-holdings');
