@@ -280,6 +280,11 @@
   .vcard-price { font-size:25px; font-weight:700; letter-spacing:-.5px; line-height:1.1; }
   .vcard-yield { font-size:11px; font-weight:600; color:#f5d87a; white-space:nowrap; }
   .vcard-chg { font-size:12px; margin-top:1px; }
+  .vcard-mid { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .vcard-pricewrap { min-width:0; }
+  .vcard-pnl { text-align:right; flex-shrink:0; }
+  .vcard-pnl-amt { font-size:15px; font-weight:700; white-space:nowrap; letter-spacing:-.3px; }
+  .vcard-pnl-pct { font-size:13px; font-weight:600; white-space:nowrap; margin-top:2px; }
   .vcard-fold { display:none; margin-top:9px; padding-top:9px; border-top:1px solid var(--border); }
   .vcard-fold.open { display:block; }
   .vfold-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
@@ -290,7 +295,9 @@
   .vcard.limit-up { background:#c40000; border-color:#e64545; }
   .vcard.limit-down { background:#0f9d58; border-color:#17b268; }
   .vcard.limit-up .vcard-code, .vcard.limit-up .vcard-name, .vcard.limit-up .vcard-chev,
-  .vcard.limit-down .vcard-code, .vcard.limit-down .vcard-name, .vcard.limit-down .vcard-chev { color:#fff; }
+  .vcard.limit-up .vcard-pnl-amt, .vcard.limit-up .vcard-pnl-pct,
+  .vcard.limit-down .vcard-code, .vcard.limit-down .vcard-name, .vcard.limit-down .vcard-chev,
+  .vcard.limit-down .vcard-pnl-amt, .vcard.limit-down .vcard-pnl-pct { color:#fff !important; }
   .vcard.limit-up .vcard-fold, .vcard.limit-down .vcard-fold { background:rgba(0,0,0,.22); border-radius:8px; border-top-color:rgba(255,255,255,.25); padding:8px 10px; }
   .vcard.limit-up .vfold-label, .vcard.limit-down .vfold-label { color:rgba(255,255,255,.75); }
   .vtop-fold { display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
