@@ -211,10 +211,14 @@ async function renderNavChart(retryCount) {
         '<div class="navchart-bar" style="width:' + priceW + '%;background:' + priceCol + '"></div>' +
       '</div>' +
       '<div class="navchart-vals">' +
-        '<div style="color:var(--accent2)">淨值 ' + nav.toFixed(2) +
-          '<span id="navchart-est-' + code + '"></span></div>' +
-        '<div><span style="color:' + priceCol + '">市價 ' + price.toFixed(2) + '</span>' +
-          (premLabel ? '　<span style="color:' + premCol + '">' + premLabel + '</span>' : '') + '</div>' +
+        '<div class="navchart-vcol">' +
+          '<div style="color:var(--accent2)">淨值 ' + nav.toFixed(2) + '</div>' +
+          '<div><span style="color:' + priceCol + '">市價 ' + price.toFixed(2) + '</span></div>' +
+        '</div>' +
+        '<div class="navchart-pcol">' +
+          '<div id="navchart-est-' + code + '">&nbsp;</div>' +
+          '<div>' + (premLabel ? '<span style="color:' + premCol + '">' + premLabel + '</span>' : '&nbsp;') + '</div>' +
+        '</div>' +
       '</div>' +
     '</div>';
   }).filter(Boolean).join('');
@@ -227,6 +231,7 @@ async function renderNavChart(retryCount) {
     '<div class="navchart-legend"><span><i style="background:var(--accent2)"></i>淨值</span>' +
     '<span><i style="background:#5cb85c"></i>市價&gt;淨值(溢)</span><span><i style="background:#c9302c"></i>市價&lt;淨值(折)</span></div>' +
     rows;
+  alignNavChartCols();
 
   // 背景填入估算漲跌（僅可估算者顯示，如境外/主動式；其餘留空）
   for (const s of held) {
@@ -237,9 +242,24 @@ async function renderNavChart(retryCount) {
     if (pct == null) continue;
     const col = pct > 0 ? '#ff5252' : (pct < 0 ? '#26d962' : 'var(--text2)');
     const ar = pct > 0 ? '▲' : (pct < 0 ? '▼' : '—');
-    el.innerHTML = '<span style="color:' + col + ';font-size:12px;font-weight:700;margin-left:6px">估算 ' +
+    el.innerHTML = '<span style="color:' + col + ';font-size:12px;font-weight:700">估算 ' +
       ar + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%</span>';
+    alignNavChartCols();
   }
+}
+
+// 統一「淨值對比」各欄寬度：每欄依該欄最寬內容自動撐開（欄內文字保持靠左）
+function alignNavChartCols() {
+  const pane = document.getElementById('holdings-pane-chart');
+  if (!pane) return;
+  ['navchart-code', 'navchart-vcol', 'navchart-pcol'].forEach(cls => {
+    const els = pane.querySelectorAll('.' + cls);
+    if (!els.length) return;
+    els.forEach(el => { el.style.width = 'auto'; });
+    let max = 0;
+    els.forEach(el => { max = Math.max(max, el.getBoundingClientRect().width); });
+    els.forEach(el => { el.style.width = Math.ceil(max) + 'px'; });
+  });
 }
 
 // 取某 ETF 估算漲跌%（境外/主動式可報價者；否則 null）。沿用成分股/現價快取
