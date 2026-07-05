@@ -204,9 +204,14 @@ async function renderNavChart(retryCount) {
     const priceCol = prem == null ? 'var(--text2)' : (prem > 0 ? '#5cb85c' : '#c9302c');
     const premCol = prem == null ? 'var(--text3)' : (prem > 0 ? '#ff5252' : '#26d962');
     const premLabel = prem == null ? '' : (prem > 0 ? '溢' : (prem < 0 ? '折' : '')) + (prem > 0 ? '+' : '') + prem.toFixed(2) + '%';
+    // 市價-淨值價差：正值紅、負值綠，靠左疊於淨值長條上；最前與正負號後各加一個空格
+    const diff = price - nav;
+    const diffCol = diff > 0 ? '#ff5252' : (diff < 0 ? '#26d962' : 'var(--text)');
+    const diffLabel = ' ' + (diff >= 0 ? '+' : '-') + ' ' + Math.abs(diff).toFixed(2);
     return '<div class="navchart-row">' +
       '<div class="navchart-code">' + code + '</div>' +
       '<div class="navchart-bars">' +
+        '<div class="navchart-diff" style="color:' + diffCol + '">' + diffLabel + '</div>' +
         '<div class="navchart-bar" style="width:' + navW + '%;background:var(--accent2)"></div>' +
         '<div class="navchart-bar" style="width:' + priceW + '%;background:' + priceCol + '"></div>' +
       '</div>' +
