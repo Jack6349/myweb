@@ -160,12 +160,72 @@ async function buildNavLineHtml(code) {
 
 // ── 卡片頁籤切換 ──
 function switchHoldingsTab(tab) {
-  ['held', 'query'].forEach(t => {
+  ['held', 'chart', 'query'].forEach(t => {
     const btn = document.getElementById('holdings-tab-' + t);
     const pane = document.getElementById('holdings-pane-' + t);
     if (btn) btn.classList.toggle('active', t === tab);
     if (pane) pane.classList.toggle('active', t === tab);
   });
+  if (tab === 'chart') renderNavChart();
+}
+
+// ── 頁籤「淨值對比」：各持有 ETF 淨值 vs 市價 橫條圖 ──
+async function renderNavChart(retryCount) {
+  const pane = document.getElementById('holdings-pane-chart');
+  if (!pane) return;
+  if (!portfolio.length) { pane.innerHTML = '<span class="holdings-hint">尚無持股</span>'; return; }
+  const held = portfolio
+    .filter(s => /^0\d/.test(String(s.code)))
+    .sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }));
+  if (!held.length) { pane.innerHTML = '<span class="holdings-hint">持股中無 ETF</span>'; return; }
+
+  pane.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">' + spin('載入淨值…') + '</div>';
+  let ok = false;
+  for (let i = 0; i < 6 && !ok; i++) {
+    try { await ensureNavMap(i > 0); } catch (e) {}
+    ok = held.some(s => getEtfNav(String(s.code).toUpperCase()));
+    if (!ok) await new Promise(r => setTimeout(r, 1200));
+  }
+
+  const rows = held.map(s => {
+    const code = String(s.code).toUpperCase();
+    const info = getEtfNav(code);
+    if (!info || info.nav == null) return '';
+    const nav = info.nav;
+    const price = (info.price != null) ? info.price : (info.premium != null ? nav * (1 + info.premium / 100) : nav);
+    const prem = info.premium;
+    // 折溢價差距很小（多在 ±2% 內），等比例看不出來 → 放大差距（每 1% 縮 8%，最多縮 45%），較長者滿版
+    const amp = Math.min(Math.abs(prem || 0) * 8, 45);
+    let navW = 100, priceW = 100;
+    if (prem > 0) navW = 100 - amp;        // 市價 > 淨值 → 市價較長
+    else if (prem < 0) priceW = 100 - amp; // 市價 < 淨值 → 淨值較長
+    // 市價（bar+文字）：高於淨值→綠、低於→紅；折溢價文字：溢紅折綠
+    const upP = prem != null && prem > 0;
+    const priceCol = prem == null ? 'var(--text2)' : (prem > 0 ? '#5cb85c' : '#c9302c');
+    const premCol = prem == null ? 'var(--text3)' : (prem > 0 ? '#ff5252' : '#26d962');
+    const premLabel = prem == null ? '' : (prem > 0 ? '溢' : (prem < 0 ? '折' : '')) + (prem > 0 ? '+' : '') + prem.toFixed(2) + '%';
+    return '<div class="navchart-row">' +
+      '<div class="navchart-code">' + code + '</div>' +
+      '<div class="navchart-bars">' +
+        '<div class="navchart-bar" style="width:' + navW + '%;background:var(--accent2)"></div>' +
+        '<div class="navchart-bar" style="width:' + priceW + '%;background:' + priceCol + '"></div>' +
+      '</div>' +
+      '<div class="navchart-vals">' +
+        '<div style="color:var(--accent2)">淨值 ' + nav.toFixed(2) + '</div>' +
+        '<div><span style="color:' + priceCol + '">市價 ' + price.toFixed(2) + '</span>' +
+          (premLabel ? '　<span style="color:' + premCol + '">' + premLabel + '</span>' : '') + '</div>' +
+      '</div>' +
+    '</div>';
+  }).filter(Boolean).join('');
+
+  if (!rows) {
+    pane.innerHTML = '<div style="padding:20px;text-align:center"><span class="holdings-nav-status fail" onclick="renderNavChart()">淨值載入失敗，點此重試</span></div>';
+    return;
+  }
+  pane.innerHTML =
+    '<div class="navchart-legend"><span><i style="background:var(--accent2)"></i>淨值</span>' +
+    '<span><i style="background:#5cb85c"></i>市價&gt;淨值(溢)</span><span><i style="background:#c9302c"></i>市價&lt;淨值(折)</span></div>' +
+    rows;
 }
 
 // ── 頁籤「持有」：持有 ETF 自動帶入成分股（快取、隔日更新），比照當日損益折疊卡片 ──

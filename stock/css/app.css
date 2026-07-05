@@ -215,6 +215,14 @@
   .cname-toggle { background:var(--bg4); border:1px solid var(--border); color:var(--text2); font-size:12px; padding:5px 10px; border-radius:8px; cursor:pointer; font-family:var(--font); white-space:nowrap; }
   body.hide-cnames .cname { display:none; }
   .mini-spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--border2); border-top-color:var(--accent); border-radius:50%; animation:spin2 .7s linear infinite; vertical-align:-2px; margin-right:5px; }
+  /* 淨值對比橫條圖 */
+  .navchart-legend { display:flex; flex-wrap:wrap; gap:12px; font-size:11px; color:var(--text3); margin-bottom:10px; }
+  .navchart-legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .navchart-row { display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border); }
+  .navchart-code { width:64px; flex-shrink:0; font-size:15px; font-weight:700; color:var(--text); }
+  .navchart-bars { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+  .navchart-bar { height:16px; border-radius:3px; min-width:2px; transition:width .3s; }
+  .navchart-vals { flex-shrink:0; font-size:13px; font-weight:700; text-align:left; white-space:nowrap; line-height:1.5; }
 
   /* ── DIVIDEND ROW ── */
   .div-section-title { font-size:12px; font-weight:600; color:var(--text3); letter-spacing:.8px; text-transform:uppercase; margin:20px 0 10px; }
