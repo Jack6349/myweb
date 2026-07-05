@@ -211,7 +211,8 @@ async function renderNavChart(retryCount) {
         '<div class="navchart-bar" style="width:' + priceW + '%;background:' + priceCol + '"></div>' +
       '</div>' +
       '<div class="navchart-vals">' +
-        '<div style="color:var(--accent2)">淨值 ' + nav.toFixed(2) + '</div>' +
+        '<div style="color:var(--accent2)">淨值 ' + nav.toFixed(2) +
+          '<span id="navchart-est-' + code + '"></span></div>' +
         '<div><span style="color:' + priceCol + '">市價 ' + price.toFixed(2) + '</span>' +
           (premLabel ? '　<span style="color:' + premCol + '">' + premLabel + '</span>' : '') + '</div>' +
       '</div>' +
@@ -226,6 +227,31 @@ async function renderNavChart(retryCount) {
     '<div class="navchart-legend"><span><i style="background:var(--accent2)"></i>淨值</span>' +
     '<span><i style="background:#5cb85c"></i>市價&gt;淨值(溢)</span><span><i style="background:#c9302c"></i>市價&lt;淨值(折)</span></div>' +
     rows;
+
+  // 背景填入估算漲跌（僅可估算者顯示，如境外/主動式；其餘留空）
+  for (const s of held) {
+    const code = String(s.code).toUpperCase();
+    const el = document.getElementById('navchart-est-' + code);
+    if (!el || !getEtfNav(code)) continue;
+    const pct = await getEtfEstChange(code);
+    if (pct == null) continue;
+    const col = pct > 0 ? '#ff5252' : (pct < 0 ? '#26d962' : 'var(--text2)');
+    const ar = pct > 0 ? '▲' : (pct < 0 ? '▼' : '—');
+    el.innerHTML = '<span style="color:' + col + ';font-size:12px;font-weight:700;margin-left:6px">估算 ' +
+      ar + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%</span>';
+  }
+}
+
+// 取某 ETF 估算漲跌%（境外/主動式可報價者；否則 null）。沿用成分股/現價快取
+async function getEtfEstChange(code) {
+  try {
+    const data = await fetchEtfHoldings(code);
+    if (data.source !== 'CMoney' || !holdingsPriceable(data.holdings)) return null;
+    try { await ensureNavMap(); } catch (e) {}
+    const priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
+    const est = computeEstNav(code, data.holdings, priceData);
+    return est ? est.estChangePct : null;
+  } catch (e) { return null; }
 }
 
 // ── 頁籤「持有」：持有 ETF 自動帶入成分股（快取、隔日更新），比照當日損益折疊卡片 ──
