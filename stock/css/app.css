@@ -272,15 +272,16 @@
   .value-meta-val { font-size:14px; color:var(--text); font-weight:600; }
   /* 當日損益：2 欄折疊卡片 */
   .value-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-  .vcard { background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:11px 12px 9px; display:flex; flex-direction:column; }
+  .vcard { background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:11px 10px 9px; display:flex; flex-direction:column; overflow:hidden; }
   .vcard-head { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:6px; }
-  .vcard-code { font-size:15px; font-weight:700; color:var(--text); }
-  .vcard-name { font-size:11px; color:var(--text2); margin-left:5px; }
-  .vcard-priceline { display:flex; align-items:baseline; justify-content:space-between; gap:6px; }
-  .vcard-price { font-size:25px; font-weight:700; letter-spacing:-.5px; line-height:1.1; }
-  .vcard-yield { font-size:11px; font-weight:600; color:#f5d87a; white-space:nowrap; }
-  .vcard-chg { font-size:12px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .vcard-pnlrow { display:flex; align-items:baseline; justify-content:space-between; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:13px; font-weight:700; white-space:nowrap; }
+  .vcard-code { font-size:14px; font-weight:700; color:var(--text); }
+  .vcard-name { font-size:10px; color:var(--text2); margin-left:4px; }
+  .vcard-priceline { display:flex; align-items:baseline; justify-content:space-between; gap:4px; min-width:0; }
+  .vcard-price { font-size:20px; font-weight:700; letter-spacing:-.5px; line-height:1.1; flex-shrink:0; }
+  .vcard-yield { font-size:9px; font-weight:600; color:#f5d87a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .vcard-chg { font-size:10px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .vcard-pnlrow { display:flex; align-items:baseline; justify-content:space-between; gap:4px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:11px; font-weight:700; white-space:nowrap; overflow:hidden; }
+  .vcard-pnlrow span { overflow:hidden; text-overflow:ellipsis; min-width:0; }
   .vcard-fold { display:none; margin-top:9px; padding-top:9px; border-top:1px solid var(--border); }
   .vcard-fold.open { display:block; }
   .vfold-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
