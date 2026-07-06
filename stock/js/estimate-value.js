@@ -773,7 +773,7 @@ async function loadStockValue(forceRefresh) {
             '<div class="div-total-label" style="font-size:11px">漲跌幅％</div>' +
             '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:' +
               (weightedChangePct == null ? 'var(--text3)' : pnlCol(weightedChangePct)) + '">' +
-              (weightedChangePct == null ? '—' : (weightedChangePct > 0 ? '+' : '') + weightedChangePct.toFixed(2) + '%') + '</div>' +
+              (weightedChangePct == null ? '—' : (weightedChangePct > 0 ? '▲' : (weightedChangePct < 0 ? '▼' : '')) + Math.abs(weightedChangePct).toFixed(2) + '%') + '</div>' +
           '</div>' +
         '</div>' +
         '<div id="value-top-fold" class="vtop-fold">' +
@@ -810,8 +810,9 @@ async function loadStockValue(forceRefresh) {
       let chgTxt = '';
       if (hasData && r.change != null) {
         const arrow = r.change > 0 ? '▲' : (r.change < 0 ? '▼' : '—');
+        const pctArrow = r.changePct > 0 ? '▲' : (r.changePct < 0 ? '▼' : '');
         chgTxt = arrow + ' ' + (r.change > 0 ? '+' : '') + r.change.toFixed(2) +
-          '　' + (r.changePct > 0 ? '+' : '') + r.changePct.toFixed(2) + '%';
+          '　' + pctArrow + Math.abs(r.changePct).toFixed(2) + '%';
       }
 
       // 折/溢價（僅 ETF 有淨值）
