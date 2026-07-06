@@ -11,8 +11,8 @@
 <title>股利總管</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=68">
-<script type="module" src="js/firebase-init.js?v=68"></script>
+<link rel="stylesheet" href="css/app.css?v=69">
+<script type="module" src="js/firebase-init.js?v=69"></script>
 </head>
 <body>
 
@@ -155,6 +155,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" id="holdings-tab-held" onclick="switchHoldingsTab('held')">持有</button>
     <button class="tab-btn" id="holdings-tab-chart" onclick="switchHoldingsTab('chart')">淨值對比</button>
+    <button class="tab-btn" id="holdings-tab-chips" onclick="switchHoldingsTab('chips')">籌碼</button>
     <button class="tab-btn" id="holdings-tab-query" onclick="switchHoldingsTab('query')">查詢</button>
   </div>
   <div class="scroll-area">
@@ -169,6 +170,7 @@
       <div class="holdings-held-list" id="holdings-held-list"></div>
     </div>
     <div class="tab-pane" id="holdings-pane-chart" style="padding:12px 6px 24px"></div>
+    <div class="tab-pane" id="holdings-pane-chips" style="padding:12px 8px 24px"></div>
     <div class="tab-pane" id="holdings-pane-query" style="padding:12px 16px 24px">
       <div class="holdings-search">
         <input type="text" id="holdings-input" class="holdings-input" placeholder="輸入 ETF 代碼或名稱（如 00900、高股息）"
@@ -531,19 +533,21 @@
 </div><!-- #app-shell -->
 
 <!-- 登入閘門（Phase 1） -->
-<script src="js/auth.js?v=68"></script>
+<script src="js/auth.js?v=69"></script>
 <!-- 模組載入順序須與原始檔一致，以維持相同執行順序 -->
-<script src="js/core.js?v=68"></script>
-<script src="js/portfolio.js?v=68"></script>
-<script src="js/api.js?v=68"></script>
-<script src="js/dividends.js?v=68"></script>
-<script src="js/estimate-value.js?v=68"></script>
+<script src="js/core.js?v=69"></script>
+<script src="js/portfolio.js?v=69"></script>
+<script src="js/api.js?v=69"></script>
+<script src="js/dividends.js?v=69"></script>
+<script src="js/estimate-value.js?v=69"></script>
 <!-- 持股雲端同步：Firestore -->
-<script src="js/repo.firebase.js?v=68"></script>
-<script src="js/etf.js?v=68"></script>
+<script src="js/repo.firebase.js?v=69"></script>
+<script src="js/etf.js?v=69"></script>
 <!-- ETF 成分股查詢（首頁卡片）：須在 estimate-value.js 之後以串接 showScreen patch -->
-<script src="js/holdings.js?v=68"></script>
+<script src="js/holdings.js?v=69"></script>
+<!-- ETF 成分股籌碼分數：TWSE T86 穿透成分股 -->
+<script src="js/chips.js?v=69"></script>
 <!-- 截圖匯入持股：Gemini 視覺（經 GAS 代理） -->
-<script src="js/import-ocr.js?v=68"></script>
+<script src="js/import-ocr.js?v=69"></script>
 </body>
 </html>

@@ -160,13 +160,14 @@ async function buildNavLineHtml(code) {
 
 // ── 卡片頁籤切換 ──
 function switchHoldingsTab(tab) {
-  ['held', 'chart', 'query'].forEach(t => {
+  ['held', 'chart', 'chips', 'query'].forEach(t => {
     const btn = document.getElementById('holdings-tab-' + t);
     const pane = document.getElementById('holdings-pane-' + t);
     if (btn) btn.classList.toggle('active', t === tab);
     if (pane) pane.classList.toggle('active', t === tab);
   });
   if (tab === 'chart') renderNavChart();
+  if (tab === 'chips') renderChipsTab();
 }
 
 // ── 頁籤「淨值對比」：各持有 ETF 淨值 vs 市價 橫條圖 ──
