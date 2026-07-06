@@ -703,14 +703,18 @@ async function loadStockValue(forceRefresh) {
         if (priceData.date && priceData.date > latestDate) latestDate = priceData.date;
         // 最近除息日從快取取
         const latestExDate = getLatestExDate(stock.code);
-        // 預估年殖利率：年度可領估算（已領＋未領用最近一次）每股加總 ÷ 收盤價
+        // 預估年殖利率（實際）：年度可領估算（已領＋未領用最近一次）每股加總 ÷ 成本均價。
+        // 用成本均價而非現價，才是使用者實際的投報率；未填成本則回退現價估算。
+        const _cost = parseFloat(stock.cost);
+        const avgCostForYield = (!isNaN(_cost) && _cost > 0 && !isNaN(shares) && shares > 0) ? _cost / (shares * 1000) : null;
+        const yieldBase = avgCostForYield || price;
         let estYield = null, divWarn = false, divDiffPct = null;
-        if (stock.divFreqType !== 'none' && price > 0) {
+        if (stock.divFreqType !== 'none' && yieldBase > 0) {
           try {
             const hist = (stock.manualDiv && stock.manualDiv > 0) ? null : await fetchStockDivHistory(stock.code);
             const annual = computeStockAnnual(stock, hist, new Date());
             if (annual && annual.annualProjected > 0) {
-              estYield = annual.annualProjected / price * 100;
+              estYield = annual.annualProjected / yieldBase * 100;
               divWarn = annual.divWarn; divDiffPct = annual.lastTwoDiffPct;
             }
           } catch(e) { /* 配息查詢失敗不影響股價顯示 */ }
