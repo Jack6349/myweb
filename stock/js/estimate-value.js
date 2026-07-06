@@ -838,17 +838,17 @@ async function loadStockValue(forceRefresh) {
           '<div class="vcard-chg" style="color:' + priceCol + '">' + (chgTxt || '&nbsp;') + '</div>'
         : '<div class="vcard-price" style="color:var(--text3);font-size:16px">查詢失敗</div>';
 
-      // 卡片面板獲利（獲利金額＝含稅費現值−成本、獲利率）；負值綠字。折疊區資料不變。
+      // 卡片面板獲利：最下面一整行，獲利率(左)、獲利金額(右)；負值綠字。折疊區資料不變。
       const profitFace = (profit == null) ? '' :
-        '<div class="vcard-pnl">' +
-          '<div class="vcard-pnl-amt" style="color:' + pnlCol(profit) + '">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</div>' +
-          '<div class="vcard-pnl-pct" style="color:' + pnlCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</div>' +
+        '<div class="vcard-pnlrow">' +
+          '<span style="color:' + pnlCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>' +
+          '<span style="color:' + pnlCol(profit) + '">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</span>' +
         '</div>';
 
       cards += '<div class="vcard' + limitClass + '" data-row="' + rowIdx + '">' +
         '<div class="vcard-head"><span class="vcard-code">' + r.stock.code + '</span>' +
           '<span class="vcard-name">' + (r.stock.name || '') + '</span></div>' +
-        '<div class="vcard-mid"><div class="vcard-pricewrap">' + priceBlock + '</div>' + profitFace + '</div>' +
+        priceBlock + profitFace +
         '<div class="vcard-fold" data-row="' + rowIdx + '">' +
           vrow('折/溢價', premVal) + vrow('持有張數', sharesVal) + vrow('成本', costVal) + vrow('成本均價', avgCostVal) + vrow('現值', valueVal) +
           vrow('獲利金額', profitVal) + vrow('獲利率', prateVal) +
