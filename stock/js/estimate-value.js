@@ -838,11 +838,12 @@ async function loadStockValue(forceRefresh) {
           '<div class="vcard-chg" style="color:' + priceCol + '">' + (chgTxt || '&nbsp;') + '</div>'
         : '<div class="vcard-price" style="color:var(--text3);font-size:16px">查詢失敗</div>';
 
-      // 卡片面板獲利：最下面一整行，獲利率(左)、獲利金額(右)；固定桃紅色。折疊區資料不變。
+      // 卡片面板獲利：最下面一整行，獲利率(左)、獲利金額(右)；正#FA786E、負#A0E682。折疊區資料不變。
+      const pnlFaceCol = v => v < 0 ? '#A0E682' : '#FA786E';
       const profitFace = (profit == null) ? '' :
         '<div class="vcard-pnlrow">' +
-          '<span style="color:#ff1493">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>' +
-          '<span style="color:#ff1493">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</span>' +
+          '<span style="color:' + pnlFaceCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>' +
+          '<span style="color:' + pnlFaceCol(profit) + '">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</span>' +
         '</div>';
 
       cards += '<div class="vcard' + limitClass + '" data-row="' + rowIdx + '">' +
