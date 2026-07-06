@@ -737,6 +737,19 @@ async function loadStockValue(forceRefresh) {
     const pnlCol = (v) => v > 0 ? '#ff5252' : (v < 0 ? '#26d962' : 'var(--text3)');
     const fmtN = (n) => Math.round(n).toLocaleString('zh-TW');
 
+    // 加權平均漲跌幅：以各股現值為權重（Σ現值ᵢ×漲跌幅ᵢ ÷ Σ現值ᵢ），僅計入報價成功者
+    let weightedChangePct = null;
+    {
+      let wsum = 0, wtotal = 0;
+      rows.forEach(r => {
+        if (r.totalValue != null && r.changePct != null) {
+          wsum += r.totalValue * r.changePct;
+          wtotal += r.totalValue;
+        }
+      });
+      if (wtotal > 0) weightedChangePct = wsum / wtotal;
+    }
+
     if (stickyEl) {
       const afterTax = Math.round(grandTotal * 0.997735);
       const tcost = getTotalCost();
@@ -750,11 +763,17 @@ async function loadStockValue(forceRefresh) {
         '<div style="display:flex;align-items:flex-start;gap:10px">' +
           '<div style="flex:1;min-width:0">' +
             '<div class="div-total-label" style="font-size:11px">持股總現值</div>' +
-            '<div style="font-size:18px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$' + grandTotal.toLocaleString('zh-TW') + '</div>' +
+            '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$' + grandTotal.toLocaleString('zh-TW') + '</div>' +
           '</div>' +
           '<div style="flex:1;min-width:0">' +
             '<div class="div-total-label" style="color:#8ab4d4;font-size:11px">含稅費現值</div>' +
-            '<div style="font-size:18px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#8ab4d4">$' + afterTax.toLocaleString('zh-TW') + '</div>' +
+            '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#8ab4d4">$' + afterTax.toLocaleString('zh-TW') + '</div>' +
+          '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="div-total-label" style="font-size:11px">漲跌幅％</div>' +
+            '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:' +
+              (weightedChangePct == null ? 'var(--text3)' : pnlCol(weightedChangePct)) + '">' +
+              (weightedChangePct == null ? '—' : (weightedChangePct > 0 ? '+' : '') + weightedChangePct.toFixed(2) + '%') + '</div>' +
           '</div>' +
         '</div>' +
         '<div id="value-top-fold" class="vtop-fold">' +
