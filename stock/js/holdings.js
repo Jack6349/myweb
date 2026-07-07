@@ -255,12 +255,14 @@ async function renderNavChart(retryCount) {
     const code = String(s.code).toUpperCase();
     const el = document.getElementById('navchart-est-' + code);
     if (!el || !getEtfNav(code)) continue;
-    const pct = await getEtfEstChange(code);
-    if (pct == null) continue;
+    const r = await getEtfEstChange(code);
+    if (r == null) continue;
+    const pct = r.pct;
     const col = pct > 0 ? '#ff5252' : (pct < 0 ? '#26d962' : 'var(--text2)');
     const ar = pct > 0 ? '▲' : (pct < 0 ? '▼' : '—');
-    el.innerHTML = '<span style="color:' + col + ';font-size:12px;font-weight:700">估算 ' +
-      ar + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%</span>';
+    const lowTitle = r.lowConfidence ? ' title="成分股權重覆蓋率僅 ' + r.coveredPct + '%，估算可信度低"' : '';
+    el.innerHTML = '<span' + lowTitle + ' style="color:' + col + ';font-size:12px;font-weight:700;' + (r.lowConfidence ? 'opacity:.6' : '') + '">估算 ' +
+      ar + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%' + (r.lowConfidence ? ' ⚠️' : '') + '</span>';
     alignNavChartCols();
   }
 }
@@ -279,15 +281,17 @@ function alignNavChartCols() {
   });
 }
 
-// 取某 ETF 估算漲跌%（境外/主動式可報價者；否則 null）。沿用成分股/現價快取
+// 取某 ETF 估算漲跌%（境外/主動式可報價者；否則 null）。沿用成分股/現價快取。回傳 {pct, lowConfidence} 或 null
 async function getEtfEstChange(code) {
   try {
     const data = await fetchEtfHoldings(code);
-    if (data.source !== 'CMoney' || !holdingsPriceable(data.holdings)) return null;
+    if (!holdingsPriceable(data.holdings)) return null;
     try { await ensureNavMap(); } catch (e) {}
-    const priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
+    const priceData = data.source === 'CMoney'
+      ? await fetchConstituentPrices((data.holdings || []).map(h => h.code))
+      : await fetchConstituentPricesTW((data.holdings || []).map(h => h.code));
     const est = computeEstNav(code, data.holdings, priceData);
-    return est ? est.estChangePct : null;
+    return est ? { pct: est.estChangePct, lowConfidence: est.lowConfidence, coveredPct: est.coveredPct } : null;
   } catch (e) { return null; }
 }
 
@@ -322,7 +326,10 @@ async function renderOneHeldCard(code, force) {
     const pc = est.estChangePct;
     const col = pc > 0 ? '#ff5252' : (pc < 0 ? '#26d962' : 'var(--text2)');
     const ar = pc > 0 ? '▲' : (pc < 0 ? '▼' : '—');
-    estTag = '｜<span style="color:' + col + ';font-weight:700">估算 ' + ar + (pc > 0 ? '+' : '') + pc.toFixed(2) + '%</span>';
+    const lowTag = est.lowConfidence
+      ? ' <span title="成分股權重覆蓋率僅 ' + est.coveredPct + '%，估算可信度低" style="color:var(--text3)">⚠️低覆蓋' + est.coveredPct + '%</span>' : '';
+    estTag = '｜<span style="color:' + col + ';font-weight:700;' + (est.lowConfidence ? 'opacity:.65' : '') + '">估算 ' +
+      ar + (pc > 0 ? '+' : '') + pc.toFixed(2) + '%</span>' + lowTag;
   }
   if (meta) meta.innerHTML = '共 ' + data.count + ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') + estTag;
   if (body) body.innerHTML = holdingsTableHtml(data, priceData);
@@ -583,8 +590,11 @@ function computeEstNav(etfCode, holdings, priceData) {
       covered += h.weight;
     }
   });
-  if (covered < 50) return null; // 覆蓋率太低不估
-  return { estNav: info.nav * (1 + wret), officialNav: info.nav, estChangePct: wret * 100, coveredPct: Math.round(covered) };
+  if (covered < 15) return null; // 覆蓋率極低（<15%）才完全不估；15~50% 之間仍顯示但標「低可信度」
+  return {
+    estNav: info.nav * (1 + wret), officialNav: info.nav, estChangePct: wret * 100,
+    coveredPct: Math.round(covered), lowConfidence: covered < 50
+  };
 }
 
 // 估算表頭 HTML：估算漲跌幅為主（開盤前預估趨勢），估算/官方淨值為輔
@@ -593,10 +603,13 @@ function estNavHeaderHtml(est) {
   const pct = est.estChangePct;
   const col = pct > 0 ? '#ff5252' : (pct < 0 ? '#26d962' : 'var(--text2)');
   const arrow = pct > 0 ? '▲' : (pct < 0 ? '▼' : '—');
-  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;padding:10px 12px;background:var(--bg4);border-radius:8px">' +
+  const lowNote = est.lowConfidence
+    ? '<div style="font-size:10px;color:var(--text3);margin-top:2px" title="成分股權重覆蓋率僅 ' + est.coveredPct + '%，估算可信度低">⚠️ 覆蓋率僅 ' + est.coveredPct + '%，估算僅供參考</div>' : '';
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;padding:10px 12px;background:var(--bg4);border-radius:8px;' +
+    (est.lowConfidence ? 'opacity:.7' : '') + '">' +
     '<div><div style="font-size:10px;color:var(--text3)">估算漲跌（開盤前預估）</div>' +
       '<div style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:' + col + '">' + arrow + ' ' +
-      (pct > 0 ? '+' : '') + pct.toFixed(2) + '%</div></div>' +
+      (pct > 0 ? '+' : '') + pct.toFixed(2) + '%</div>' + lowNote + '</div>' +
     '<div style="text-align:right">' +
       '<div style="font-size:11px;color:' + col + '">估算淨值 ' + est.estNav.toFixed(2) + '</div>' +
       '<div style="font-size:11px;color:var(--text3)">官方淨值 ' + est.officialNav.toFixed(2) + '</div></div>' +
@@ -631,11 +644,13 @@ async function queryHoldings(codeOrInput) {
     data.name = etf.name;
     try { await ensureNavMap(); } catch (e) { /* 無淨值不阻斷成分股 */ }
     const navHtml = await buildNavLineHtml(etf.code);
-    // 境外/主動式（CMoney 來源）且成分股可報價：抓現價、算估算淨值（債券 ETF 跳過）
+    // 成分股可報價（境外/主動式 CMoney、或台股 MoneyDJ）：抓現價、算估算淨值（債券 ETF 跳過）
     let priceData = null, est = null;
-    if (data.source === 'CMoney' && holdingsPriceable(data.holdings)) {
+    if (holdingsPriceable(data.holdings)) {
       if (statusEl) statusEl.innerHTML = spin('估算中…');
-      priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
+      priceData = data.source === 'CMoney'
+        ? await fetchConstituentPrices((data.holdings || []).map(h => h.code))
+        : await fetchConstituentPricesTW((data.holdings || []).map(h => h.code));
       est = computeEstNav(etf.code, data.holdings, priceData);
     }
     renderHoldingsModal(data, navHtml, priceData, est);
