@@ -119,7 +119,7 @@ function _streakLabel(n, who) {
   if (n === 0) return who + '觀望';
   return who + (n > 0 ? '連買' : '連賣') + Math.abs(n) + '日';
 }
-function _streakColor(n) { return n > 0 ? '#ff5252' : (n < 0 ? '#26d962' : 'var(--text3)'); }
+function _streakColor(n) { return n > 0 ? '#ff5252' : (n < 0 ? '#26d962' : 'var(--text2)'); }
 
 // ── 頁籤「籌碼」：各持有 ETF 的成分股籌碼分數 ──
 let _chipsLoading = false;
@@ -149,7 +149,7 @@ async function renderChipsTab() {
     return '<div class="vcard" style="margin-bottom:8px" id="chip-card-' + code + '">' +
       '<div class="vcard-head"><span class="vcard-code">' + code + '</span>' +
         '<span class="vcard-name">' + (s.name || '') + '</span></div>' +
-      '<div id="chip-body-' + code + '" style="font-size:12px;color:var(--text3)">' + spin('計算中…') + '</div>' +
+      '<div id="chip-body-' + code + '" style="font-size:12px;color:var(--text2)">' + spin('計算中…') + '</div>' +
     '</div>';
   }).join('') +
   '<div class="api-note">籌碼分數＝Σ成分股權重×（外資連買賣天數＋投信連買賣天數，各上限±5）÷覆蓋權重，範圍±10。' +
@@ -163,7 +163,7 @@ async function renderChipsTab() {
       const data = await fetchEtfHoldings(code);
       const res = computeChipScore(data.holdings, t86days);
       if (!res) {
-        body.innerHTML = '<span style="color:var(--text3)">不適用（美股/債券成分或無法人資料）</span>';
+        body.innerHTML = '<span style="color:var(--text2)">不適用（美股/債券成分或無法人資料）</span>';
         continue;
       }
       const sc = res.score;
@@ -172,7 +172,7 @@ async function renderChipsTab() {
       const contribHtml = res.contributors.map(c =>
         '<div style="display:flex;justify-content:space-between;gap:6px;padding:3px 0;border-top:1px solid var(--border);font-size:11px">' +
           '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">' + c.code +
-            ' <span style="color:var(--text3)">' + c.name + '（' + c.weight.toFixed(1) + '%）</span></span>' +
+            ' <span style="color:var(--text2)">' + c.name + '（' + c.weight.toFixed(1) + '%）</span></span>' +
           '<span style="white-space:nowrap;flex-shrink:0">' +
             '<span style="color:' + _streakColor(c.f) + '">' + _streakLabel(c.f, '外資') + '</span>　' +
             '<span style="color:' + _streakColor(c.t) + '">' + _streakLabel(c.t, '投信') + '</span></span>' +
@@ -182,7 +182,7 @@ async function renderChipsTab() {
         '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:2px 0 6px">' +
           '<span style="font-size:20px;font-weight:800;color:' + col + '">' + (sc > 0 ? '+' : '') + sc.toFixed(1) +
             '<span style="font-size:11px;font-weight:600;margin-left:5px">' + tag + '</span></span>' +
-          '<span style="font-size:10px;color:var(--text3)">覆蓋 ' + res.coveredPct + '%｜近 ' + res.days + ' 日</span>' +
+          '<span style="font-size:10px;color:var(--text2)">覆蓋 ' + res.coveredPct + '%｜近 ' + res.days + ' 日</span>' +
         '</div>' + contribHtml;
     } catch (e) {
       body.innerHTML = '<span style="color:var(--danger)">成分股載入失敗</span>';
