@@ -340,6 +340,8 @@ async function renderHeldEtfHoldings() {
       } else if (data.source === 'MoneyDJ' && holdingsPriceable(data.holdings)) {
         if (meta) meta.innerHTML = spin('載入成分股現價中…');
         priceData = await fetchConstituentPricesTW((data.holdings || []).map(h => h.code));
+        try { await ensureNavMap(); } catch (e) {}
+        est = computeEstNav(code, data.holdings, priceData);
       }
       let estTag = '';
       if (est) {
