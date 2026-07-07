@@ -19,11 +19,11 @@ async function fetchWithCORS(url) {
 // ── FETCH 股利歷史（Yahoo Finance via GAS）──
 // GAS 回傳格式：{ stat:'OK', code:'00900', dividends:[{date:unix, amount:0.5},...] }
 // date = Unix timestamp（秒），為除息日
-async function fetchStockDivHistory(code) {
+async function fetchStockDivHistory(code, force) {
   const cacheKey = 'yf_' + code;
   const cache = getDivCache();
   const now = Date.now();
-  if (cache[cacheKey] && (now - cache[cacheKey].ts) < DIV_CACHE_TTL) {
+  if (!force && cache[cacheKey] && (now - cache[cacheKey].ts) < DIV_CACHE_TTL) {
     // 從 localStorage 讀回時 Date 物件變成字串，需重新轉換
     return cache[cacheKey].data.map(r => ({
       ...r, exDate: r.exDate ? new Date(r.exDate) : null

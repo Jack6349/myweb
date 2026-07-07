@@ -541,9 +541,90 @@ function recordCountForStock(stock, hist) {
   return stepMap[step] || 4;
 }
 
+// 保存目前「配息紀錄」各持股資料，供單檔刷新使用
+let _recordsStockResults = [];
+
+// 產生單一持股的配息紀錄卡片 HTML（含右上角單檔刷新鈕）
+function buildRecordCardHtml(r) {
+  const stock = r.stock;
+  const hist = (r.history || []).filter(h => h.exDate).sort((a, b) => a.exDate - b.exDate);
+  const code = stock.code;
+  if (!hist.length) {
+    return '<div class="div-row" id="rec-card-' + code + '" style="position:relative">' +
+      refreshBtnHtml(code) +
+      '<div class="div-row-name" style="padding-right:20px">' + code + ' <span class="div-row-code" style="font-weight:400">' + (stock.name || code) + '</span></div>' +
+      '<div style="font-size:12px;color:var(--text2);margin-top:6px">無配息紀錄</div></div>';
+  }
+  const count = recordCountForStock(stock, hist);
+  const recent = hist.slice(-count).reverse(); // 最近一期在前，往後排
+  const half = Math.ceil(recent.length / 2);
+  const left = recent.slice(0, half);
+  const right = recent.slice(half);
+  const cost = parseFloat(stock.cost);
+  const shares = parseFloat(stock.shares);
+  const avgCost = (!isNaN(cost) && cost > 0 && !isNaN(shares) && shares > 0) ? cost / (shares * 1000) : null;
+  const curYear = new Date().getFullYear();
+  const annualCashDiv = hist.filter(h => h.exDate.getFullYear() === curYear)
+    .reduce((s, h) => s + h.cashDiv, 0);
+  const annualPct = avgCost ? (annualCashDiv / avgCost * 100) : null;
+
+  const entryHtml = h => {
+    const yld = avgCost ? (h.cashDiv / avgCost * 100) : null;
+    return '<div style="display:flex;justify-content:space-between;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">' +
+      '<span style="color:var(--text3)">' + h.exDateStr + '</span>' +
+      '<span style="color:var(--text2)">$' + h.cashDiv.toFixed(3) + '</span>' +
+      '<span style="color:var(--accent2)">' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</span>' +
+      '</div>';
+  };
+
+  return '<div class="div-row" id="rec-card-' + code + '" style="position:relative">' +
+    refreshBtnHtml(code) +
+    '<div class="div-row-top" style="display:flex;justify-content:space-between;align-items:baseline;padding-right:20px">' +
+      '<div><div class="div-row-name">' + code + ' <span class="div-row-code" style="font-weight:400">' + (stock.name || code) + '</span></div></div>' +
+      '<div style="font-size:13px;font-weight:700;color:var(--accent2);white-space:nowrap">' + (annualPct != null ? curYear + ' 年累積 ' + annualPct.toFixed(2) + '%' : '—') + '</div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:8px">' +
+      '<div>' + left.map(entryHtml).join('') + '</div>' +
+      '<div>' + right.map(entryHtml).join('') + '</div>' +
+    '</div></div>';
+}
+
+function refreshBtnHtml(code) {
+  return '<button class="holdings-refresh-btn" id="rec-refresh-' + code + '" onclick="refreshOneRecordStock(\'' + code + '\')" ' +
+    'title="重新整理" aria-label="重新整理' + code + '">' +
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
+  '</button>';
+}
+
+// 單檔刷新：強制重抓該檔配息歷史（清快取），只更新該卡片，不影響其他持股
+async function refreshOneRecordStock(code) {
+  const btn = document.getElementById('rec-refresh-' + code);
+  if (btn) btn.classList.add('spinning');
+  try {
+    const idx = _recordsStockResults.findIndex(r => String(r.stock.code) === String(code));
+    if (idx < 0) return;
+    const stock = _recordsStockResults[idx].stock;
+    const history = (stock.manualDiv && stock.manualDiv > 0) ? [] : await fetchStockDivHistory(code, true);
+    _recordsStockResults[idx] = Object.assign({}, _recordsStockResults[idx], { history });
+    const cardEl = document.getElementById('rec-card-' + code);
+    if (cardEl) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = buildRecordCardHtml(_recordsStockResults[idx]);
+      cardEl.replaceWith(tmp.firstElementChild);
+    }
+  } catch (e) {
+    const meta = document.getElementById('rec-card-' + code);
+    if (meta) meta.insertAdjacentHTML('beforeend', '<div style="color:var(--danger);font-size:11px;margin-top:4px">刷新失敗</div>');
+  } finally {
+    const btnAfter = document.getElementById('rec-refresh-' + code);
+    if (btnAfter) btnAfter.classList.remove('spinning');
+  }
+}
+
 async function renderRecordsTab(stockResults) {
   const pane = document.getElementById('est-pane-records');
   if (!pane) return;
+  _recordsStockResults = stockResults;
 
   const withHistory = stockResults.filter(r => r.history && r.history.some(h => h.exDate));
   if (withHistory.length === 0) {
@@ -553,42 +634,9 @@ async function renderRecordsTab(stockResults) {
   }
 
   let html = '<div class="div-section-title" style="margin-top:12px">配息紀錄</div>';
-  for (const r of withHistory) {
-    const stock = r.stock;
-    const hist = r.history.filter(h => h.exDate).sort((a, b) => a.exDate - b.exDate);
-    const count = recordCountForStock(stock, hist);
-    const recent = hist.slice(-count).reverse(); // 最近一期在前，往後排
-    const half = Math.ceil(recent.length / 2);
-    const left = recent.slice(0, half);
-    const right = recent.slice(half);
-    const cost = parseFloat(stock.cost);
-    const shares = parseFloat(stock.shares);
-    const avgCost = (!isNaN(cost) && cost > 0 && !isNaN(shares) && shares > 0) ? cost / (shares * 1000) : null;
-    const curYear = new Date().getFullYear();
-    const annualCashDiv = hist.filter(h => h.exDate.getFullYear() === curYear)
-      .reduce((s, h) => s + h.cashDiv, 0);
-    const annualPct = avgCost ? (annualCashDiv / avgCost * 100) : null;
-
-    const entryHtml = h => {
-      const yld = avgCost ? (h.cashDiv / avgCost * 100) : null;
-      return '<div style="display:flex;justify-content:space-between;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">' +
-        '<span style="color:var(--text3)">' + h.exDateStr + '</span>' +
-        '<span style="color:var(--text2)">$' + h.cashDiv.toFixed(3) + '</span>' +
-        '<span style="color:var(--accent2)">' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</span>' +
-        '</div>';
-    };
-
-    html += '<div class="div-row">' +
-      '<div class="div-row-top" style="display:flex;justify-content:space-between;align-items:baseline">' +
-        '<div><div class="div-row-name">' + stock.code + ' <span class="div-row-code" style="font-weight:400">' + (stock.name || stock.code) + '</span></div></div>' +
-        '<div style="font-size:13px;font-weight:700;color:var(--accent2);white-space:nowrap">' + (annualPct != null ? curYear + ' 年累積 ' + annualPct.toFixed(2) + '%' : '—') + '</div>' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:8px">' +
-        '<div>' + left.map(entryHtml).join('') + '</div>' +
-        '<div>' + right.map(entryHtml).join('') + '</div>' +
-      '</div></div>';
-  }
-  html += '<div class="api-note">殖利率＝該筆配息金額 ÷ 該股平均成本（未填成本者顯示 —），僅供單次配息參考，非年化值。</div>';
+  for (const r of withHistory) html += buildRecordCardHtml(r);
+  html += '<div class="api-note">殖利率＝該筆配息金額 ÷ 該股平均成本（未填成本者顯示 —），僅供單次配息參考，非年化值。' +
+    '資料來源 Yahoo Finance，更新可能落後官方公告數日。</div>';
   pane.innerHTML = html;
 }
 
