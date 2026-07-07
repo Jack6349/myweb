@@ -70,6 +70,87 @@ async function getRecentT86(n) {
   return out;
 }
 
+// ══ 融資餘額（TWSE MI_MARGN，散戶情緒溫度計）══
+const MGN_CACHE_PREFIX = 'mgn_v1_';
+
+// 抓某日融資餘額 → { code: 融資今日餘額(張) }；假日/未發布回 null，快取規則同 T86
+async function fetchMarginDay(ymd) {
+  const key = MGN_CACHE_PREFIX + ymd;
+  try {
+    const c = localStorage.getItem(key);
+    if (c === 'HOLIDAY') return null;
+    if (c) return JSON.parse(c);
+  } catch (e) {}
+
+  let j = null;
+  try {
+    const r = await fetch('https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=' + ymd + '&selectType=ALL&response=json');
+    j = await r.json();
+  } catch (e) { return null; }
+
+  const tb = j && j.stat === 'OK' && Array.isArray(j.tables)
+    ? j.tables.find(t => t.fields && t.fields[0] === '代號' && Array.isArray(t.data) && t.data.length > 100)
+    : null;
+  if (!tb) {
+    if (ymd < _t86TodayYmd()) { try { localStorage.setItem(key, 'HOLIDAY'); } catch (e) {} }
+    return null;
+  }
+  // 欄位：6=融資今日餘額（張）
+  const map = {};
+  tb.data.forEach(row => { map[String(row[0]).trim()] = _t86Num(row[6]); });
+  try { localStorage.setItem(key, JSON.stringify(map)); } catch (e) { _pruneMgnCache(); }
+  return map;
+}
+
+function _pruneMgnCache() {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf(MGN_CACHE_PREFIX) === 0) keys.push(k);
+  }
+  keys.sort().slice(0, Math.max(keys.length - T86_DAYS - 2, 0)).forEach(k => localStorage.removeItem(k));
+}
+
+// 取近 n 個交易日融資餘額，最近在前
+async function getRecentMargin(n) {
+  const out = [];
+  const now = new Date(Date.now() + 8 * 3600000);
+  for (let back = 0; back < T86_LOOKBACK_CALENDAR && out.length < n; back++) {
+    const d = new Date(now.getTime() - back * 86400000);
+    const dow = d.getUTCDay();
+    if (dow === 0 || dow === 6) continue;
+    const ymd = d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+    const map = await fetchMarginDay(ymd);
+    if (map) out.push({ ymd, map });
+  }
+  return out;
+}
+
+// 融資熱度行：餘額＋N日增減%；融資5日增幅≥10%且同時溢價>0.3% → ⚠️過熱
+function marginLineHtml(code, mgnDays) {
+  if (!mgnDays.length) return '';
+  const series = mgnDays.map(d => d.map[code]).map(v => (v == null ? null : v));
+  const cur = series[0];
+  if (cur == null) return ''; // 上櫃或無融資資料
+  let oldest = null;
+  for (let i = series.length - 1; i >= 1; i--) { if (series[i] != null) { oldest = series[i]; break; } }
+  let chgHtml = '';
+  let overheat = false, chg = null;
+  if (oldest != null && oldest >= 50) { // 基期太小不算%（雜訊）
+    chg = (cur - oldest) / oldest * 100;
+    const col = chg > 0 ? '#ff5252' : (chg < 0 ? '#26d962' : 'var(--text2)');
+    const ar = chg > 0 ? '▲' : (chg < 0 ? '▼' : '');
+    chgHtml = '｜' + series.length + '日 <span style="color:' + col + '">' + ar + Math.abs(chg).toFixed(1) + '%</span>';
+    const nav = (typeof getEtfNav === 'function') ? getEtfNav(code) : null;
+    overheat = chg >= 10 && nav && nav.premium != null && nav.premium > 0.3;
+  }
+  return '<div style="display:flex;justify-content:space-between;gap:6px;padding:3px 0;border-top:1px solid var(--border);font-size:11px">' +
+    '<span style="color:var(--text2)">融資餘額(散戶)</span>' +
+    '<span style="white-space:nowrap">' + cur.toLocaleString('zh-TW') + ' 張' + chgHtml +
+    (overheat ? '　<span style="color:#f5d87a" title="融資5日增逾10%且溢價，散戶追價買貴風險">⚠️過熱</span>' : '') +
+    '</span></div>';
+}
+
 // 連買/賣天數：vals 為最近在前的買賣超序列。回傳帶方向的天數（+3=連買3日、-2=連賣2日、0=最近一日無動作）
 function _streak(vals) {
   if (!vals.length || vals[0] === 0) return 0;
@@ -142,6 +223,10 @@ async function renderChipsTab() {
     _chipsLoading = false;
     return;
   }
+  // 融資餘額（散戶熱度）＋淨值（過熱判定需折溢價）；失敗不阻斷籌碼分數
+  let mgnDays = [];
+  try { mgnDays = await getRecentMargin(T86_DAYS); } catch (e) {}
+  try { await ensureNavMap(); } catch (e) {}
 
   // 逐檔骨架
   pane.innerHTML = held.map(s => {
@@ -153,17 +238,19 @@ async function renderChipsTab() {
     '</div>';
   }).join('') +
   '<div class="api-note">籌碼分數＝Σ成分股權重×（外資連買賣天數＋投信連買賣天數，各上限±5）÷覆蓋權重，範圍±10。' +
-  '正值（紅）＝法人偏多、負值（綠）＝偏空。資料：TWSE T86 近 ' + T86_DAYS + ' 個交易日；僅涵蓋上市成分股，美股/債券型不適用。</div>';
+  '正值（紅）＝法人偏多、負值（綠）＝偏空。資料：TWSE T86 近 ' + T86_DAYS + ' 個交易日；僅涵蓋上市成分股，美股/債券型不適用。<br>' +
+  '融資餘額＝散戶槓桿熱度：5日增幅≥10%且同時溢價 → ⚠️過熱（追價買貴風險，宜暫緩加碼）；融資下降＝籌碼沉澱。上櫃 ETF 無融資資料。</div>';
 
   for (const s of held) {
     const code = String(s.code).toUpperCase();
     const body = document.getElementById('chip-body-' + code);
     if (!body) continue;
+    const mline = marginLineHtml(code, mgnDays);
     try {
       const data = await fetchEtfHoldings(code);
       const res = computeChipScore(data.holdings, t86days);
       if (!res) {
-        body.innerHTML = '<span style="color:var(--text2)">不適用（美股/債券成分或無法人資料）</span>';
+        body.innerHTML = '<div style="color:var(--text2);padding:2px 0 4px">成分股籌碼不適用（美股/債券成分）</div>' + mline;
         continue;
       }
       const sc = res.score;
@@ -183,9 +270,9 @@ async function renderChipsTab() {
           '<span style="font-size:20px;font-weight:800;color:' + col + '">' + (sc > 0 ? '+' : '') + sc.toFixed(1) +
             '<span style="font-size:11px;font-weight:600;margin-left:5px">' + tag + '</span></span>' +
           '<span style="font-size:10px;color:var(--text2)">覆蓋 ' + res.coveredPct + '%｜近 ' + res.days + ' 日</span>' +
-        '</div>' + contribHtml;
+        '</div>' + contribHtml + mline;
     } catch (e) {
-      body.innerHTML = '<span style="color:var(--danger)">成分股載入失敗</span>';
+      body.innerHTML = '<span style="color:var(--danger)">成分股載入失敗</span>' + mline;
     }
   }
   _chipsLoading = false;
