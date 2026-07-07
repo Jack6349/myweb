@@ -277,6 +277,9 @@
   .vcard-refresh-btn { flex-shrink:0; background:none; border:none; padding:2px; margin:-2px -2px 0 0; cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:.75; }
   .vcard-refresh-btn:active { opacity:1; }
   .vcard-refresh-btn.spinning svg { animation:spin .7s linear infinite; }
+  .holdings-refresh-btn { position:absolute; top:8px; right:8px; z-index:2; width:18px; height:18px; border-radius:50%; background:var(--bg4); border:1px solid var(--border); color:var(--text2); padding:0; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .holdings-refresh-btn:active { background:var(--bg); }
+  .holdings-refresh-btn.spinning svg { animation:spin .7s linear infinite; }
   .vcard-code { font-size:14px; font-weight:700; color:var(--text); }
   .vcard-name { font-size:10px; color:var(--text2); margin-left:4px; }
   .vcard-priceline { display:flex; align-items:flex-start; justify-content:space-between; gap:4px; min-width:0; }

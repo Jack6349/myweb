@@ -291,6 +291,59 @@ async function getEtfEstChange(code) {
   } catch (e) { return null; }
 }
 
+// 載入/重算單一持有 ETF 卡片的成分股與現價估算，寫入該卡片的 meta/body（供初次載入與單卡刷新共用）
+async function renderOneHeldCard(code, force) {
+  const meta = document.getElementById('hold-meta-' + code);
+  const body = document.getElementById('hold-body-' + code);
+  if (force) {
+    try {
+      const hc = JSON.parse(localStorage.getItem(HOLDINGS_CACHE_KEY) || '{}');
+      delete hc[code];
+      localStorage.setItem(HOLDINGS_CACHE_KEY, JSON.stringify(hc));
+    } catch (e) {}
+  }
+  const data = await fetchEtfHoldings(code);
+  // 境外/主動式（CMoney）且成分股為可報價股票：帶現價＋估算淨值（債券 ETF 成分股為債券，跳過）
+  // 台股（MoneyDJ）成分股：直接帶現價＋漲跌幅
+  let priceData = null, est = null;
+  if (data.source === 'CMoney' && holdingsPriceable(data.holdings)) {
+    if (meta) meta.innerHTML = spin('估算中…');
+    try { await ensureNavMap(force); } catch (e) {}
+    priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code), force);
+    est = computeEstNav(code, data.holdings, priceData);
+  } else if (data.source === 'MoneyDJ' && holdingsPriceable(data.holdings)) {
+    if (meta) meta.innerHTML = spin('載入成分股現價中…');
+    priceData = await fetchConstituentPricesTW((data.holdings || []).map(h => h.code), force);
+    try { await ensureNavMap(force); } catch (e) {}
+    est = computeEstNav(code, data.holdings, priceData);
+  }
+  let estTag = '';
+  if (est) {
+    const pc = est.estChangePct;
+    const col = pc > 0 ? '#ff5252' : (pc < 0 ? '#26d962' : 'var(--text2)');
+    const ar = pc > 0 ? '▲' : (pc < 0 ? '▼' : '—');
+    estTag = '｜<span style="color:' + col + ';font-weight:700">估算 ' + ar + (pc > 0 ? '+' : '') + pc.toFixed(2) + '%</span>';
+  }
+  if (meta) meta.innerHTML = '共 ' + data.count + ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') + estTag;
+  if (body) body.innerHTML = holdingsTableHtml(data, priceData);
+}
+
+// 單卡刷新：強制重抓該檔成分股/現價/估算，不影響其他持有 ETF 卡片
+async function refreshOneHeldEtf(code) {
+  const btn = document.getElementById('hold-refresh-' + code);
+  if (btn) btn.classList.add('spinning');
+  try {
+    await renderOneHeldCard(code, true);
+    const navSlot = document.getElementById('hold-nav-' + code);
+    if (navSlot) navSlot.innerHTML = await buildNavLineHtml(code);
+  } catch (e) {
+    const meta = document.getElementById('hold-meta-' + code);
+    if (meta) meta.innerHTML = '<span style="color:var(--danger)">' + (e.stat === 'NODATA' ? '無成分股' : '載入失敗') + '</span>';
+  } finally {
+    if (btn) btn.classList.remove('spinning');
+  }
+}
+
 // ── 頁籤「持有」：持有 ETF 自動帶入成分股（快取、隔日更新），比照當日損益折疊卡片 ──
 let _heldHoldingsLoading = false;
 async function renderHeldEtfHoldings() {
@@ -312,12 +365,16 @@ async function renderHeldEtfHoldings() {
   wrap.innerHTML = heldEtfs.map(s => {
     const code = String(s.code).toUpperCase();
     const name = s.name || '';
-    return '<div class="vcard" style="margin-bottom:8px">' +
-      '<div class="vcard-head" style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;overflow:hidden">' +
+    return '<div class="vcard" style="margin-bottom:8px;position:relative" id="hold-card-' + code + '">' +
+      '<button class="holdings-refresh-btn" id="hold-refresh-' + code + '" onclick="refreshOneHeldEtf(\'' + code + '\')" ' +
+        'title="重新整理" aria-label="重新整理' + code + '">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
+      '</button>' +
+      '<div class="vcard-head" style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;overflow:hidden;padding-right:20px">' +
         '<span class="vcard-code" style="flex-shrink:0">' + code + '</span>' +
         '<span class="vcard-name" id="hold-name-' + code + '" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">' + name + '</span>' +
         '<span class="holdings-nav-slot" id="hold-nav-' + code + '"><span class="holdings-nav-status">' + spin('淨值載入中…') + '</span></span></div>' +
-      '<div class="holdings-item-summary" id="hold-meta-' + code + '">' + spin('載入中…') + '</div>' +
+      '<div class="holdings-item-summary" id="hold-meta-' + code + '" style="padding-right:20px">' + spin('載入中…') + '</div>' +
       '<div class="vcard-fold" id="hold-body-' + code + '"></div>' +
       '<button class="vcard-chev" id="hold-chev-' + code + '" onclick="toggleHeldItem(\'' + code + '\')">▼</button>' +
     '</div>';
@@ -326,32 +383,7 @@ async function renderHeldEtfHoldings() {
   for (const s of heldEtfs) {
     const code = String(s.code).toUpperCase();
     try {
-      const data = await fetchEtfHoldings(code);
-      const meta = document.getElementById('hold-meta-' + code);
-      const body = document.getElementById('hold-body-' + code);
-      // 境外/主動式（CMoney）且成分股為可報價股票：帶現價＋估算淨值（債券 ETF 成分股為債券，跳過）
-      // 台股（MoneyDJ）成分股：直接帶現價＋漲跌幅
-      let priceData = null, est = null;
-      if (data.source === 'CMoney' && holdingsPriceable(data.holdings)) {
-        if (meta) meta.innerHTML = spin('估算中…');
-        try { await ensureNavMap(); } catch (e) {}
-        priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
-        est = computeEstNav(code, data.holdings, priceData);
-      } else if (data.source === 'MoneyDJ' && holdingsPriceable(data.holdings)) {
-        if (meta) meta.innerHTML = spin('載入成分股現價中…');
-        priceData = await fetchConstituentPricesTW((data.holdings || []).map(h => h.code));
-        try { await ensureNavMap(); } catch (e) {}
-        est = computeEstNav(code, data.holdings, priceData);
-      }
-      let estTag = '';
-      if (est) {
-        const pc = est.estChangePct;
-        const col = pc > 0 ? '#ff5252' : (pc < 0 ? '#26d962' : 'var(--text2)');
-        const ar = pc > 0 ? '▲' : (pc < 0 ? '▼' : '—');
-        estTag = '｜<span style="color:' + col + ';font-weight:700">估算 ' + ar + (pc > 0 ? '+' : '') + pc.toFixed(2) + '%</span>';
-      }
-      if (meta) meta.innerHTML = '共 ' + data.count + ' 檔成分股' + (data.date ? '｜資料日 ' + data.date : '') + estTag;
-      if (body) body.innerHTML = holdingsTableHtml(data, priceData);
+      await renderOneHeldCard(code, false);
     } catch (e) {
       const meta = document.getElementById('hold-meta-' + code);
       const chev = document.getElementById('hold-chev-' + code);
@@ -478,7 +510,7 @@ function holdingsTableHtml(data, priceData) {
 }
 
 // 批次抓台股成分股現價（沿用 fetchStockPrice 既有快取/非盤中不重抓機制），分批呼叫避免尖峰
-async function fetchConstituentPricesTW(codes) {
+async function fetchConstituentPricesTW(codes, force) {
   const uniq = [...new Set((codes || []).map(c => String(c).trim()).filter(Boolean))];
   const prices = {};
   const batchSize = 5;
@@ -486,7 +518,7 @@ async function fetchConstituentPricesTW(codes) {
     const batch = uniq.slice(i, i + batchSize);
     await Promise.all(batch.map(async code => {
       try {
-        const p = await fetchStockPrice(code);
+        const p = await fetchStockPrice(code, force);
         if (p && p.price != null) prices[code] = { price: p.price, changePct: p.changePct };
       } catch (e) { /* 單檔失敗不影響其他 */ }
     }));
@@ -520,12 +552,12 @@ function toggleConstituentNames() {
 // 批次抓成分股現價（GAS ?usprices=，記憶體快取 15 分）；代碼去除 " US" 後綴
 const USPRICE_TTL = 15 * 60 * 1000;
 const _uspriceCache = {};
-async function fetchConstituentPrices(codes) {
+async function fetchConstituentPrices(codes, force) {
   const syms = [...new Set((codes || []).map(c => String(c).replace(/\s*US$/i, '').trim()).filter(Boolean))];
   if (!syms.length) return null;
   const key = syms.slice().sort().join(',');
   const hit = _uspriceCache[key];
-  if (hit && Date.now() - hit.ts < USPRICE_TTL) return hit;
+  if (!force && hit && Date.now() - hit.ts < USPRICE_TTL) return hit;
   try {
     const r = await fetch(GAS_URL + '?usprices=' + encodeURIComponent(syms.join(',')));
     const j = await r.json();

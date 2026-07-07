@@ -593,12 +593,12 @@ async function renderRecordsTab(stockResults) {
 }
 
 // ══════════════ 當日股票損益 ══════════════
-async function fetchStockPrice(code) {
+async function fetchStockPrice(code, force) {
   const cache = getPriceCache();
   const now = Date.now();
   const today = todayStr();
   const c = cache[code];
-  if (c) {
+  if (c && !force) {
     if (!isTwMarketOpen()) {
       // 非盤中（收盤後/盤前/週末/假日）：股價不再變動；只要快取是在最近一次收盤結算之後抓的，
       // 代表已握有最新收盤價，直接沿用（跨日也適用），不重複呼叫 API
