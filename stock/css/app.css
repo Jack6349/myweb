@@ -274,6 +274,9 @@
   .value-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
   .vcard { background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:11px 10px 9px; display:flex; flex-direction:column; overflow:hidden; }
   .vcard-head { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:6px; }
+  .vcard-refresh-btn { flex-shrink:0; background:none; border:none; padding:2px; margin:-2px -2px 0 0; cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:.75; }
+  .vcard-refresh-btn:active { opacity:1; }
+  .vcard-refresh-btn.spinning svg { animation:spin .7s linear infinite; }
   .vcard-code { font-size:14px; font-weight:700; color:var(--text); }
   .vcard-name { font-size:10px; color:var(--text2); margin-left:4px; }
   .vcard-priceline { display:flex; align-items:flex-start; justify-content:space-between; gap:4px; min-width:0; }

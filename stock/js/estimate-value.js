@@ -665,6 +665,228 @@ function getLatestExDate(code) {
   return sorted.length > 0 ? sorted[0].exDateStr : null;
 }
 
+// 共用色彩/格式輔助（當日損益卡片與合計卡共用，單檔刷新亦會用到）
+function pnlCol(v) { return v > 0 ? '#ff5252' : (v < 0 ? '#26d962' : 'var(--text3)'); }
+function fmtN(n) { return Math.round(n).toLocaleString('zh-TW'); }
+
+// 保存目前「當日損益」各持股資料，供單檔刷新後重算合計卡使用
+let _valueRows = [];
+
+// 抓單一持股的當日損益資料列（供整批載入與單檔刷新共用）
+async function fetchStockRowData(stock) {
+  try {
+    const priceData = await fetchStockPrice(stock.code);
+    const shares = parseFloat(stock.shares);
+    const price = priceData.price;
+    const totalValue = Math.round(price * shares * 1000);
+    const latestExDate = getLatestExDate(stock.code);
+    const _cost = parseFloat(stock.cost);
+    const avgCostForYield = (!isNaN(_cost) && _cost > 0 && !isNaN(shares) && shares > 0) ? _cost / (shares * 1000) : null;
+    const yieldBase = avgCostForYield || price;
+    let estYield = null, divWarn = false, divDiffPct = null;
+    if (stock.divFreqType !== 'none' && yieldBase > 0) {
+      try {
+        const hist = (stock.manualDiv && stock.manualDiv > 0) ? null : await fetchStockDivHistory(stock.code);
+        const annual = computeStockAnnual(stock, hist, new Date());
+        if (annual && annual.annualProjected > 0) {
+          estYield = annual.annualProjected / yieldBase * 100;
+          divWarn = annual.divWarn; divDiffPct = annual.lastTwoDiffPct;
+        }
+      } catch (e) { /* 配息查詢失敗不影響股價顯示 */ }
+    }
+    return { stock, price, totalValue, date: priceData.date, latestExDate, change: priceData.change, changePct: priceData.changePct, estYield, divWarn, divDiffPct };
+  } catch (e) {
+    return { stock, price: null, totalValue: null, date: null, latestExDate: null, error: e.message, estYield: null };
+  }
+}
+
+// 產生單一持股卡片 HTML（含右上角單檔刷新鈕）；rowIdx 決定展開/收合分組
+function buildValueCardHtml(r, rowIdx) {
+  const hasData = r.price != null;
+  const isLimitUp = hasData && r.changePct != null && r.changePct >= 9.9;
+  const isLimitDown = hasData && r.changePct != null && r.changePct <= -9.9;
+  const isLimit = isLimitUp || isLimitDown;
+  const limitClass = isLimitUp ? ' limit-up' : (isLimitDown ? ' limit-down' : '');
+  const priceCol = isLimit ? '#fff'
+    : (hasData && r.change > 0) ? '#ff5252' : ((hasData && r.change < 0) ? '#26d962' : 'var(--text)');
+
+  let chgTxt = '';
+  if (hasData && r.change != null) {
+    const arrow = r.change > 0 ? '▲' : (r.change < 0 ? '▼' : '—');
+    const pctArrow = r.changePct > 0 ? '▲' : (r.changePct < 0 ? '▼' : '');
+    chgTxt = arrow + ' ' + (r.change > 0 ? '+' : '') + r.change.toFixed(2) +
+      '　' + pctArrow + Math.abs(r.changePct).toFixed(2) + '%';
+  }
+
+  const nav = getEtfNav(r.stock.code);
+  let premVal = '<span class="vfold-val" style="color:var(--text3)">—</span>';
+  if (nav && hasData) {
+    const prem = Math.round((r.price - nav.nav) / nav.nav * 10000) / 100;
+    const plabel = prem > 0 ? '溢價 ' : (prem < 0 ? '折價 ' : '');
+    premVal = '<span class="vfold-val" style="color:' + pnlCol(prem) + '">' + plabel + (prem > 0 ? '+' : '') + prem.toFixed(2) + '%</span>';
+  }
+
+  const cost = parseFloat(r.stock.cost);
+  const hasCost = !isNaN(cost) && cost > 0;
+  let profit = null, prate = null;
+  if (hasCost && hasData) { profit = Math.round(r.totalValue * 0.997735) - cost; prate = profit / cost * 100; }
+
+  const shares = parseFloat(r.stock.shares);
+  const avgCost = (hasCost && !isNaN(shares) && shares > 0) ? cost / (shares * 1000) : null;
+
+  const sharesStr = (!isNaN(shares) && shares > 0)
+    ? shares.toFixed(3).replace(/\.?0+$/, '') : null;
+
+  const dash = '<span class="vfold-val" style="color:var(--text3)">—</span>';
+  const vrow = (label, valHtml) => '<div class="vfold-row"><span class="vfold-label">' + label + '</span>' + valHtml + '</div>';
+  const sharesVal = sharesStr == null ? dash
+    : '<span class="vfold-val" style="color:var(--text)">' + sharesStr + ' 張</span>';
+  const costVal = hasCost ? '<span class="vfold-val" style="color:var(--accent2)">$' + fmtN(cost) + '</span>' : dash;
+  const avgCostVal = avgCost == null ? dash
+    : '<span class="vfold-val" style="color:var(--accent2)">$' + avgCost.toFixed(2) + '</span>';
+  const valueVal = hasData ? '<span class="vfold-val" style="color:#8ab4d4">$' + fmtN(r.totalValue) + '</span>' : dash;
+  const profitVal = profit == null ? dash
+    : '<span class="vfold-val" style="color:' + pnlCol(profit) + '">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</span>';
+  const prateVal = prate == null ? dash
+    : '<span class="vfold-val" style="color:' + pnlCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>';
+
+  const yieldHtml = (r.estYield != null)
+    ? '<span class="vcard-yield"' + (r.divWarn ? ' title="最近兩次配息差距 ' + Math.round(r.divDiffPct) + '%，年估可能失真"' : '') + '>' +
+      (r.divWarn ? '⚠️ ' : '') + '年估 ' + r.estYield.toFixed(2) + '%</span>' : '';
+  const priceBlock = hasData
+    ? '<div class="vcard-priceline"><span class="vcard-price" style="color:' + priceCol + '">' + r.price.toFixed(2) + '</span>' + yieldHtml + '</div>' +
+      '<div class="vcard-chg" style="color:' + priceCol + '">' + (chgTxt || '&nbsp;') + '</div>'
+    : '<div class="vcard-price" style="color:var(--text3);font-size:16px">查詢失敗</div>';
+
+  const pnlFaceCol = v => v < 0 ? '#A0E682' : '#FA786E';
+  const profitFace = (profit == null) ? '' :
+    '<div class="vcard-pnlrow">' +
+      '<span style="color:' + pnlFaceCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>' +
+      '<span style="color:' + pnlFaceCol(profit) + '">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</span>' +
+    '</div>';
+
+  const code = r.stock.code;
+  const refreshCol = isLimit ? '#fff' : 'var(--text2)';
+  const refreshBtnHtml =
+    '<button class="vcard-refresh-btn" onclick="event.stopPropagation();refreshSingleStockValue(\'' + code + '\',this)" ' +
+      'title="重新整理此檔" aria-label="重新整理' + code + '" style="color:' + refreshCol + '">' +
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
+    '</button>';
+
+  return '<div class="vcard' + limitClass + '" data-row="' + rowIdx + '" data-code="' + code + '">' +
+    '<div class="vcard-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;white-space:normal">' +
+      '<div style="min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"><span class="vcard-code">' + code + '</span>' +
+        '<span class="vcard-name">' + (r.stock.name || '') + '</span></div>' +
+      refreshBtnHtml +
+    '</div>' +
+    priceBlock + profitFace +
+    '<div class="vcard-fold" data-row="' + rowIdx + '">' +
+      vrow('折/溢價', premVal) + vrow('持有張數', sharesVal) + vrow('成本', costVal) + vrow('成本均價', avgCostVal) + vrow('現值', valueVal) +
+      vrow('獲利金額', profitVal) + vrow('獲利率', prateVal) +
+    '</div>' +
+    '<button class="vcard-chev" data-row="' + rowIdx + '" onclick="toggleValueRow(' + rowIdx + ')" aria-label="展開明細">▼</button>' +
+  '</div>';
+}
+
+// 重新計算並更新合計卡（持股總現值/含稅費現值/漲跌幅％），供整批載入與單檔刷新共用
+function updateValueStickyCard(rows) {
+  const stickyEl = document.getElementById('value-total-sticky');
+  if (!stickyEl) return;
+  const grandTotal = rows.reduce((s, r) => s + (r.totalValue || 0), 0);
+  var _cv = document.getElementById('card-value'); if (_cv) _cv.innerHTML = '$ ' + Math.round(grandTotal * 0.997735).toLocaleString('zh-TW') + '<span style="font-size:11px;font-weight:400;margin-left:2px">元</span>';
+
+  var _costFilled = countCostFilled(), _costN = (typeof portfolio !== 'undefined' ? portfolio.length : 0);
+  var costHint = _costFilled === 0
+    ? '沿用舊總成本，可在各持股編輯填入'
+    : (_costFilled < _costN ? '各持股成本加總（已填 ' + _costFilled + '/' + _costN + ' 檔）' : '各持股成本加總');
+
+  let weightedChangePct = null;
+  {
+    let wsum = 0, wtotal = 0;
+    rows.forEach(r => {
+      if (r.totalValue != null && r.changePct != null) {
+        wsum += r.totalValue * r.changePct;
+        wtotal += r.totalValue;
+      }
+    });
+    if (wtotal > 0) weightedChangePct = wsum / wtotal;
+  }
+
+  const latestDate = rows.reduce((s, r) => (r.date && r.date > s) ? r.date : s, '');
+  const afterTax = Math.round(grandTotal * 0.997735);
+  const tcost = getTotalCost();
+  const tprofit = tcost ? afterTax - tcost : null;
+  const tprate = tcost ? tprofit / tcost * 100 : null;
+  stickyEl.style.display = 'block';
+  stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0;padding:12px 14px">' +
+    '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">' +
+      '<button id="value-toggle-all" onclick="toggleAllValueRows(this)" style="background:rgba(240,204,122,.12);border:1px solid rgba(240,204,122,.35);color:var(--accent2);font-size:12px;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:var(--font)">全部展開</button>' +
+    '</div>' +
+    '<div style="display:flex;align-items:flex-start;gap:10px">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="div-total-label" style="font-size:11px">持股總現值</div>' +
+        '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$' + grandTotal.toLocaleString('zh-TW') + '</div>' +
+      '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="div-total-label" style="color:#8ab4d4;font-size:11px">含稅費現值</div>' +
+        '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#8ab4d4">$' + afterTax.toLocaleString('zh-TW') + '</div>' +
+      '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="div-total-label" style="font-size:11px">漲跌幅％</div>' +
+        '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:' +
+          (weightedChangePct == null ? 'var(--text3)' : pnlCol(weightedChangePct)) + '">' +
+          (weightedChangePct == null ? '—' : (weightedChangePct > 0 ? '▲' : (weightedChangePct < 0 ? '▼' : '')) + Math.abs(weightedChangePct).toFixed(2) + '%') + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div id="value-top-fold" class="vtop-fold">' +
+      '<div class="vtop-row"><span class="vtop-label">總付出成本</span>' +
+        '<span class="vtop-val" style="color:#f5d87a">' + (tcost ? '$' + tcost.toLocaleString('zh-TW') : '—') + '</span></div>' +
+      '<div style="font-size:10px;color:var(--text3);text-align:right;margin:-3px 0 6px">' + costHint + '</div>' +
+      '<div class="vtop-row"><span class="vtop-label">損益試算</span>' +
+        '<span class="vtop-val" style="color:' + (tprofit == null ? 'var(--text3)' : pnlCol(tprofit)) + '">' +
+        (tprofit == null ? '—' : (tprofit >= 0 ? '+' : '') + tprofit.toLocaleString('zh-TW') + ' 元') + '</span></div>' +
+      '<div class="vtop-row"><span class="vtop-label">獲利率</span>' +
+        '<span class="vtop-val" style="color:' + (tprate == null ? 'var(--text3)' : pnlCol(tprate)) + '">' +
+        (tprate == null ? '—' : (tprate > 0 ? '+' : '') + tprate.toFixed(2) + '%') + '</span></div>' +
+    '</div>' +
+    '<div class="div-total-count">共 ' + rows.length + ' 支持股｜' +
+    (latestDate ? '收盤日 ' + latestDate : '') + '</div>' +
+    '</div>';
+  const dateLabel = document.getElementById('value-date-label');
+  if (dateLabel) dateLabel.textContent = latestDate ? '收盤日：' + latestDate : '';
+}
+
+// 單檔刷新：只重抓該檔股價（清其快取），重算該卡片與合計卡，不動其他持股
+async function refreshSingleStockValue(code, btnEl) {
+  const idx = _valueRows.findIndex(r => String(r.stock.code) === String(code));
+  if (idx < 0) return;
+  if (btnEl) btnEl.classList.add('spinning');
+  try {
+    const cache = getPriceCache();
+    delete cache[code];
+    setPriceCache(cache);
+    const stock = _valueRows[idx].stock;
+    const newRow = await fetchStockRowData(stock);
+    _valueRows[idx] = newRow;
+
+    const cardEl = document.querySelector('#value-result .vcard[data-code="' + code + '"]');
+    const rowIdx = cardEl ? parseInt(cardEl.getAttribute('data-row'), 10) : Math.floor(idx / 2);
+    const wasOpen = cardEl && cardEl.querySelector('.vcard-fold') && cardEl.querySelector('.vcard-fold').classList.contains('open');
+    if (cardEl) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = buildValueCardHtml(newRow, rowIdx);
+      const newCardEl = tmp.firstElementChild;
+      if (wasOpen) {
+        newCardEl.querySelector('.vcard-fold').classList.add('open');
+        newCardEl.querySelector('.vcard-chev').textContent = '▲';
+      }
+      cardEl.replaceWith(newCardEl);
+    }
+    updateValueStickyCard(_valueRows);
+  } catch (e) { /* 單檔刷新失敗不影響其他持股 */ }
+  finally { if (btnEl) btnEl.classList.remove('spinning'); }
+}
+
 async function loadStockValue(forceRefresh) {
   if (portfolio.length === 0) {
     document.getElementById('value-result').innerHTML =
@@ -691,197 +913,22 @@ async function loadStockValue(forceRefresh) {
 
   try {
     const rows = [];
-    let latestDate = '';
     for (let i = 0; i < portfolio.length; i++) {
       const stock = portfolio[i];
       if (loadingText) loadingText.textContent = '查詢中 (' + (i+1) + '/' + portfolio.length + ')：' + (stock.name || stock.code);
-      try {
-        const priceData = await fetchStockPrice(stock.code);
-        const shares = parseFloat(stock.shares);
-        const price = priceData.price;
-        const totalValue = Math.round(price * shares * 1000);
-        if (priceData.date && priceData.date > latestDate) latestDate = priceData.date;
-        // 最近除息日從快取取
-        const latestExDate = getLatestExDate(stock.code);
-        // 預估年殖利率（實際）：年度可領估算（已領＋未領用最近一次）每股加總 ÷ 成本均價。
-        // 用成本均價而非現價，才是使用者實際的投報率；未填成本則回退現價估算。
-        const _cost = parseFloat(stock.cost);
-        const avgCostForYield = (!isNaN(_cost) && _cost > 0 && !isNaN(shares) && shares > 0) ? _cost / (shares * 1000) : null;
-        const yieldBase = avgCostForYield || price;
-        let estYield = null, divWarn = false, divDiffPct = null;
-        if (stock.divFreqType !== 'none' && yieldBase > 0) {
-          try {
-            const hist = (stock.manualDiv && stock.manualDiv > 0) ? null : await fetchStockDivHistory(stock.code);
-            const annual = computeStockAnnual(stock, hist, new Date());
-            if (annual && annual.annualProjected > 0) {
-              estYield = annual.annualProjected / yieldBase * 100;
-              divWarn = annual.divWarn; divDiffPct = annual.lastTwoDiffPct;
-            }
-          } catch(e) { /* 配息查詢失敗不影響股價顯示 */ }
-        }
-        rows.push({ stock, price, totalValue, date: priceData.date, latestExDate, change: priceData.change, changePct: priceData.changePct, estYield, divWarn, divDiffPct });
-      } catch(e) {
-        rows.push({ stock, price: null, totalValue: null, date: null, latestExDate: null, error: e.message, estYield: null });
-      }
+      rows.push(await fetchStockRowData(stock));
     }
 
     rows.sort((a,b) => String(a.stock.code).localeCompare(String(b.stock.code), undefined, {numeric:true}));
-    const grandTotal = rows.reduce((s,r) => s + (r.totalValue||0), 0);
-    var _cv=document.getElementById('card-value'); if(_cv) _cv.innerHTML='$ '+Math.round(grandTotal*0.997735).toLocaleString('zh-TW')+'<span style="font-size:11px;font-weight:400;margin-left:2px">元</span>';
+    _valueRows = rows;
 
-    // 逐檔成本填寫進度提示（P1）
-    var _costFilled = countCostFilled(), _costN = (typeof portfolio !== 'undefined' ? portfolio.length : 0);
-    var costHint = _costFilled === 0
-      ? '沿用舊總成本，可在各持股編輯填入'
-      : (_costFilled < _costN ? '各持股成本加總（已填 ' + _costFilled + '/' + _costN + ' 檔）' : '各持股成本加總');
-
+    // 逐檔成本填寫進度提示（P1）在 updateValueStickyCard 內處理
     try { await ensureNavMap(); } catch (e) { /* 淨值非必要（每日快取），失敗就不顯示折溢價 */ }
 
     loading.style.display = 'none';
-    const pnlCol = (v) => v > 0 ? '#ff5252' : (v < 0 ? '#26d962' : 'var(--text3)');
-    const fmtN = (n) => Math.round(n).toLocaleString('zh-TW');
+    updateValueStickyCard(rows);
 
-    // 加權平均漲跌幅：以各股現值為權重（Σ現值ᵢ×漲跌幅ᵢ ÷ Σ現值ᵢ），僅計入報價成功者
-    let weightedChangePct = null;
-    {
-      let wsum = 0, wtotal = 0;
-      rows.forEach(r => {
-        if (r.totalValue != null && r.changePct != null) {
-          wsum += r.totalValue * r.changePct;
-          wtotal += r.totalValue;
-        }
-      });
-      if (wtotal > 0) weightedChangePct = wsum / wtotal;
-    }
-
-    if (stickyEl) {
-      const afterTax = Math.round(grandTotal * 0.997735);
-      const tcost = getTotalCost();
-      const tprofit = tcost ? afterTax - tcost : null;
-      const tprate = tcost ? tprofit / tcost * 100 : null;
-      stickyEl.style.display = 'block';
-      stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0;padding:12px 14px">' +
-        '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">' +
-          '<button id="value-toggle-all" onclick="toggleAllValueRows(this)" style="background:rgba(240,204,122,.12);border:1px solid rgba(240,204,122,.35);color:var(--accent2);font-size:12px;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:var(--font)">全部展開</button>' +
-        '</div>' +
-        '<div style="display:flex;align-items:flex-start;gap:10px">' +
-          '<div style="flex:1;min-width:0">' +
-            '<div class="div-total-label" style="font-size:11px">持股總現值</div>' +
-            '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:var(--accent2)">$' + grandTotal.toLocaleString('zh-TW') + '</div>' +
-          '</div>' +
-          '<div style="flex:1;min-width:0">' +
-            '<div class="div-total-label" style="color:#8ab4d4;font-size:11px">含稅費現值</div>' +
-            '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#8ab4d4">$' + afterTax.toLocaleString('zh-TW') + '</div>' +
-          '</div>' +
-          '<div style="flex:1;min-width:0">' +
-            '<div class="div-total-label" style="font-size:11px">漲跌幅％</div>' +
-            '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:' +
-              (weightedChangePct == null ? 'var(--text3)' : pnlCol(weightedChangePct)) + '">' +
-              (weightedChangePct == null ? '—' : (weightedChangePct > 0 ? '▲' : (weightedChangePct < 0 ? '▼' : '')) + Math.abs(weightedChangePct).toFixed(2) + '%') + '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div id="value-top-fold" class="vtop-fold">' +
-          '<div class="vtop-row"><span class="vtop-label">總付出成本</span>' +
-            '<span class="vtop-val" style="color:#f5d87a">' + (tcost ? '$' + tcost.toLocaleString('zh-TW') : '—') + '</span></div>' +
-          '<div style="font-size:10px;color:var(--text3);text-align:right;margin:-3px 0 6px">' + costHint + '</div>' +
-          '<div class="vtop-row"><span class="vtop-label">損益試算</span>' +
-            '<span class="vtop-val" style="color:' + (tprofit == null ? 'var(--text3)' : pnlCol(tprofit)) + '">' +
-            (tprofit == null ? '—' : (tprofit >= 0 ? '+' : '') + tprofit.toLocaleString('zh-TW') + ' 元') + '</span></div>' +
-          '<div class="vtop-row"><span class="vtop-label">獲利率</span>' +
-            '<span class="vtop-val" style="color:' + (tprate == null ? 'var(--text3)' : pnlCol(tprate)) + '">' +
-            (tprate == null ? '—' : (tprate > 0 ? '+' : '') + tprate.toFixed(2) + '%') + '</span></div>' +
-        '</div>' +
-        '<div class="div-total-count">共 ' + rows.length + ' 支持股｜' +
-        (latestDate ? '收盤日 ' + latestDate : '') + '</div>' +
-        '</div>';
-    }
-    document.getElementById('value-date-label').textContent = latestDate ? '收盤日：' + latestDate : '';
-    const vrow = (label, valHtml) => '<div class="vfold-row"><span class="vfold-label">' + label + '</span>' + valHtml + '</div>';
-
-    let cards = '';
-    rows.forEach((r, idx) => {
-      const rowIdx = Math.floor(idx / 2);
-      const hasData = r.price != null;
-      // 漲停/跌停（台股上下限 ±10%）：整張卡片套色，漲停紅底、跌停綠底、白字
-      const isLimitUp = hasData && r.changePct != null && r.changePct >= 9.9;
-      const isLimitDown = hasData && r.changePct != null && r.changePct <= -9.9;
-      const isLimit = isLimitUp || isLimitDown;
-      const limitClass = isLimitUp ? ' limit-up' : (isLimitDown ? ' limit-down' : '');
-      const priceCol = isLimit ? '#fff'
-        : (hasData && r.change > 0) ? '#ff5252' : ((hasData && r.change < 0) ? '#26d962' : 'var(--text)');
-
-      // 漲跌（與現價同色，常駐顯示）
-      let chgTxt = '';
-      if (hasData && r.change != null) {
-        const arrow = r.change > 0 ? '▲' : (r.change < 0 ? '▼' : '—');
-        const pctArrow = r.changePct > 0 ? '▲' : (r.changePct < 0 ? '▼' : '');
-        chgTxt = arrow + ' ' + (r.change > 0 ? '+' : '') + r.change.toFixed(2) +
-          '　' + pctArrow + Math.abs(r.changePct).toFixed(2) + '%';
-      }
-
-      // 折/溢價（僅 ETF 有淨值）
-      const nav = getEtfNav(r.stock.code);
-      let premVal = '<span class="vfold-val" style="color:var(--text3)">—</span>';
-      if (nav && hasData) {
-        const prem = Math.round((r.price - nav.nav) / nav.nav * 10000) / 100;
-        const plabel = prem > 0 ? '溢價 ' : (prem < 0 ? '折價 ' : '');
-        premVal = '<span class="vfold-val" style="color:' + pnlCol(prem) + '">' + plabel + (prem > 0 ? '+' : '') + prem.toFixed(2) + '%</span>';
-      }
-
-      // 成本 / 獲利
-      const cost = parseFloat(r.stock.cost);
-      const hasCost = !isNaN(cost) && cost > 0;
-      let profit = null, prate = null;
-      if (hasCost && hasData) { profit = Math.round(r.totalValue * 0.997735) - cost; prate = profit / cost * 100; }
-
-      // 成本均價 = 成本 / 持有股數（股數＝張數×1000）
-      const shares = parseFloat(r.stock.shares);
-      const avgCost = (hasCost && !isNaN(shares) && shares > 0) ? cost / (shares * 1000) : null;
-
-      // 持有張數（零股以小數表示，整張不顯示多餘的 0）
-      const sharesStr = (!isNaN(shares) && shares > 0)
-        ? shares.toFixed(3).replace(/\.?0+$/, '') : null;
-
-      const dash = '<span class="vfold-val" style="color:var(--text3)">—</span>';
-      const sharesVal = sharesStr == null ? dash
-        : '<span class="vfold-val" style="color:var(--text)">' + sharesStr + ' 張</span>';
-      const costVal = hasCost ? '<span class="vfold-val" style="color:var(--accent2)">$' + fmtN(cost) + '</span>' : dash;
-      const avgCostVal = avgCost == null ? dash
-        : '<span class="vfold-val" style="color:var(--accent2)">$' + avgCost.toFixed(2) + '</span>';
-      const valueVal = hasData ? '<span class="vfold-val" style="color:#8ab4d4">$' + fmtN(r.totalValue) + '</span>' : dash;
-      const profitVal = profit == null ? dash
-        : '<span class="vfold-val" style="color:' + pnlCol(profit) + '">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</span>';
-      const prateVal = prate == null ? dash
-        : '<span class="vfold-val" style="color:' + pnlCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>';
-
-      const yieldHtml = (r.estYield != null)
-        ? '<span class="vcard-yield"' + (r.divWarn ? ' title="最近兩次配息差距 ' + Math.round(r.divDiffPct) + '%，年估可能失真"' : '') + '>' +
-          (r.divWarn ? '⚠️ ' : '') + '年估 ' + r.estYield.toFixed(2) + '%</span>' : '';
-      const priceBlock = hasData
-        ? '<div class="vcard-priceline"><span class="vcard-price" style="color:' + priceCol + '">' + r.price.toFixed(2) + '</span>' + yieldHtml + '</div>' +
-          '<div class="vcard-chg" style="color:' + priceCol + '">' + (chgTxt || '&nbsp;') + '</div>'
-        : '<div class="vcard-price" style="color:var(--text3);font-size:16px">查詢失敗</div>';
-
-      // 卡片面板獲利：最下面一整行，獲利率(左)、獲利金額(右)；正#FA786E、負#A0E682。折疊區資料不變。
-      const pnlFaceCol = v => v < 0 ? '#A0E682' : '#FA786E';
-      const profitFace = (profit == null) ? '' :
-        '<div class="vcard-pnlrow">' +
-          '<span style="color:' + pnlFaceCol(prate) + '">' + (prate > 0 ? '+' : '') + prate.toFixed(2) + '%</span>' +
-          '<span style="color:' + pnlFaceCol(profit) + '">' + (profit < 0 ? '-$' : '+$') + fmtN(Math.abs(profit)) + '</span>' +
-        '</div>';
-
-      cards += '<div class="vcard' + limitClass + '" data-row="' + rowIdx + '">' +
-        '<div class="vcard-head"><span class="vcard-code">' + r.stock.code + '</span>' +
-          '<span class="vcard-name">' + (r.stock.name || '') + '</span></div>' +
-        priceBlock + profitFace +
-        '<div class="vcard-fold" data-row="' + rowIdx + '">' +
-          vrow('折/溢價', premVal) + vrow('持有張數', sharesVal) + vrow('成本', costVal) + vrow('成本均價', avgCostVal) + vrow('現值', valueVal) +
-          vrow('獲利金額', profitVal) + vrow('獲利率', prateVal) +
-        '</div>' +
-        '<button class="vcard-chev" data-row="' + rowIdx + '" onclick="toggleValueRow(' + rowIdx + ')" aria-label="展開明細">▼</button>' +
-      '</div>';
-    });
-
+    const cards = rows.map((r, idx) => buildValueCardHtml(r, Math.floor(idx / 2))).join('');
     resultEl.innerHTML = rows.length
       ? '<div class="value-grid">' + cards + '</div>'
       : '<div class="div-empty">無資料</div>';

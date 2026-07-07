@@ -330,12 +330,16 @@ async function renderHeldEtfHoldings() {
       const meta = document.getElementById('hold-meta-' + code);
       const body = document.getElementById('hold-body-' + code);
       // 境外/主動式（CMoney）且成分股為可報價股票：帶現價＋估算淨值（債券 ETF 成分股為債券，跳過）
+      // 台股（MoneyDJ）成分股：直接帶現價＋漲跌幅
       let priceData = null, est = null;
       if (data.source === 'CMoney' && holdingsPriceable(data.holdings)) {
         if (meta) meta.innerHTML = spin('估算中…');
         try { await ensureNavMap(); } catch (e) {}
         priceData = await fetchConstituentPrices((data.holdings || []).map(h => h.code));
         est = computeEstNav(code, data.holdings, priceData);
+      } else if (data.source === 'MoneyDJ' && holdingsPriceable(data.holdings)) {
+        if (meta) meta.innerHTML = spin('載入成分股現價中…');
+        priceData = await fetchConstituentPricesTW((data.holdings || []).map(h => h.code));
       }
       let estTag = '';
       if (est) {
@@ -444,7 +448,9 @@ function holdingsTableHtml(data, priceData) {
       const p = priceData.prices[sym];
       if (p && p.price != null) {
         const col = p.changePct > 0 ? '#ff5252' : (p.changePct < 0 ? '#26d962' : 'var(--text2)');
-        lastCell = '<span style="color:' + col + '">' + p.price.toFixed(2) + '</span>';
+        const chgTxt = (p.changePct != null) ? (p.changePct > 0 ? '+' : '') + p.changePct.toFixed(2) + '%' : '';
+        lastCell = '<div style="color:' + col + '">' + p.price.toFixed(2) + '</div>' +
+          (chgTxt ? '<div style="font-size:10px;color:' + col + '">' + chgTxt + '</div>' : '');
       } else lastCell = '<span style="color:var(--text3)">—</span>';
     } else if (lastMode === 'shares') {
       lastCell = (h.shares != null ? h.shares.toLocaleString('zh-TW') : '—');
@@ -467,6 +473,23 @@ function holdingsTableHtml(data, priceData) {
       '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">權重</th>' +
       (lastMode === 'none' ? '' : '<th style="padding:6px 6px;color:var(--text3);font-weight:600;text-align:right">' + lastLabel + '</th>') +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+// 批次抓台股成分股現價（沿用 fetchStockPrice 既有快取/非盤中不重抓機制），分批呼叫避免尖峰
+async function fetchConstituentPricesTW(codes) {
+  const uniq = [...new Set((codes || []).map(c => String(c).trim()).filter(Boolean))];
+  const prices = {};
+  const batchSize = 5;
+  for (let i = 0; i < uniq.length; i += batchSize) {
+    const batch = uniq.slice(i, i + batchSize);
+    await Promise.all(batch.map(async code => {
+      try {
+        const p = await fetchStockPrice(code);
+        if (p && p.price != null) prices[code] = { price: p.price, changePct: p.changePct };
+      } catch (e) { /* 單檔失敗不影響其他 */ }
+    }));
+  }
+  return { prices, fx: null };
 }
 
 // 成分股是否為可報價的股票（美股 "XXX US" 或台股數字代碼）；債券 ISIN 等回 false
