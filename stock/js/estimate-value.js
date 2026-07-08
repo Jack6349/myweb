@@ -867,7 +867,7 @@ function updateValueStickyCard(rows) {
   const tprate = tcost ? tprofit / tcost * 100 : null;
   stickyEl.style.display = 'block';
   stickyEl.innerHTML = '<div class="div-total-card" style="margin-bottom:0;padding:12px 14px">' +
-    '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">' +
+    '<div style="display:flex;justify-content:flex-end;margin-bottom:8px">' +
       '<button id="value-toggle-all" onclick="toggleAllValueRows(this)" style="background:rgba(240,204,122,.12);border:1px solid rgba(240,204,122,.35);color:var(--accent2);font-size:12px;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:var(--font)">全部展開</button>' +
     '</div>' +
     '<div style="display:flex;align-items:flex-start;gap:10px">' +
@@ -886,13 +886,19 @@ function updateValueStickyCard(rows) {
           (weightedChangePct == null ? '—' : (weightedChangePct > 0 ? '▲' : (weightedChangePct < 0 ? '▼' : '')) + Math.abs(weightedChangePct).toFixed(2) + '%') + '</div>' +
       '</div>' +
     '</div>' +
+    '<div style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="div-total-label" style="font-size:11px">總付出成本</div>' +
+        '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:#f5d87a">' + (tcost ? '$' + tcost.toLocaleString('zh-TW') : '—') + '</div>' +
+      '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="div-total-label" style="font-size:11px">總損益（金額）</div>' +
+        '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:' + (tprofit == null ? 'var(--text3)' : pnlCol(tprofit)) + '">' +
+        (tprofit == null ? '—' : (tprofit >= 0 ? '+' : '') + tprofit.toLocaleString('zh-TW') + ' 元') + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="font-size:10px;color:var(--text3);text-align:right;margin-top:3px">' + costHint + '</div>' +
     '<div id="value-top-fold" class="vtop-fold">' +
-      '<div class="vtop-row"><span class="vtop-label">總付出成本</span>' +
-        '<span class="vtop-val" style="color:#f5d87a">' + (tcost ? '$' + tcost.toLocaleString('zh-TW') : '—') + '</span></div>' +
-      '<div style="font-size:10px;color:var(--text3);text-align:right;margin:-3px 0 6px">' + costHint + '</div>' +
-      '<div class="vtop-row"><span class="vtop-label">損益試算</span>' +
-        '<span class="vtop-val" style="color:' + (tprofit == null ? 'var(--text3)' : pnlCol(tprofit)) + '">' +
-        (tprofit == null ? '—' : (tprofit >= 0 ? '+' : '') + tprofit.toLocaleString('zh-TW') + ' 元') + '</span></div>' +
       '<div class="vtop-row"><span class="vtop-label">獲利率</span>' +
         '<span class="vtop-val" style="color:' + (tprate == null ? 'var(--text3)' : pnlCol(tprate)) + '">' +
         (tprate == null ? '—' : (tprate > 0 ? '+' : '') + tprate.toFixed(2) + '%') + '</span></div>' +
