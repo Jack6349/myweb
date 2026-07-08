@@ -378,7 +378,7 @@
 .import-placeholder .import-sub{ font-size:12px; color:var(--text3); margin-top:8px; }
 .import-preview{ max-width:100%; max-height:60vh; display:block; }
 #import-actions{ display:flex; gap:10px; margin-top:14px; }
-#import-actions .btn-primary, #import-actions .btn-secondary{ margin-top:0; }
+#import-actions .btn-primary, #import-actions .btn-secondary{ margin-top:0; width:auto; flex:1; min-width:0; }
 .btn-secondary{ flex:1; background:var(--bg3); color:var(--text); border:1px solid var(--border2); border-radius:var(--radius-sm); padding:13px; font-size:15px; font-weight:600; cursor:pointer; font-family:var(--font); transition:background .15s; }
 .btn-secondary:active{ background:var(--bg4); }
 .import-status{ font-size:13px; margin-top:14px; line-height:1.7; white-space:pre-line; }

@@ -184,8 +184,10 @@
         if (Number(ex.shares) !== Number(r.shares)) status += '（' + Number(ex.shares).toLocaleString('zh-TW') + '→' + r.shares.toLocaleString('zh-TW') + ' 張）';
       } else { status = '不變'; color = 'var(--text3)'; }
       var nm = r.name || (ex && ex.name) || '';
+      // 預設只勾選有變動的項目（新增／更新）；「不變」預設不勾選，避免覆蓋沒有異動的既有資料
+      var checkedAttr = status.indexOf('不變') === 0 ? '' : 'checked';
       return '<tr>' +
-        '<td style="padding:6px 4px;border-top:1px solid var(--border);text-align:center;vertical-align:top"><input type="checkbox" id="imp-chk-' + i + '" checked style="width:16px;height:16px"></td>' +
+        '<td style="padding:6px 4px;border-top:1px solid var(--border);text-align:center;vertical-align:top"><input type="checkbox" id="imp-chk-' + i + '" ' + checkedAttr + ' style="width:16px;height:16px"></td>' +
         '<td style="padding:6px 4px;border-top:1px solid var(--border)"><div style="font-weight:600">' + r.code + '</div>' +
           '<input id="imp-name-' + i + '" type="text" value="' + esc(nm) + '" placeholder="名稱" style="' + nameInp + '">' +
           '<div style="font-size:10px;color:' + color + ';font-weight:600">' + status + '</div></td>' +
