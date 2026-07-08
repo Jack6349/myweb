@@ -11,8 +11,8 @@
 <title>股利總管</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=78">
-<script type="module" src="js/firebase-init.js?v=78"></script>
+<link rel="stylesheet" href="css/app.css?v=79">
+<script type="module" src="js/firebase-init.js?v=79"></script>
 </head>
 <body>
 
@@ -111,13 +111,13 @@
         <div class="func-card-desc">持有自動帶入・查任意 ETF</div>
         <div class="func-card-amount" style="color:#f0cc7a;margin-top:8px">&nbsp;</div>
       </div>
-      <div class="func-card" style="opacity:.5;cursor:default;">
-        <div class="func-card-icon" style="background:rgba(255,255,255,.08);">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div class="func-card" onclick="showScreen('realtime-price')">
+        <div class="func-card-icon" style="background:rgba(110,198,240,.15);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6ec6f0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 12 6 6 10 10 17 3 23 9"/><polyline points="17 3 23 3 23 9"/></svg>
         </div>
-        <div class="func-card-name">待開發功能</div>
-        <div class="func-card-desc">敬請期待</div>
-        <div class="func-card-amount" style="margin-top:8px">&nbsp;</div>
+        <div class="func-card-name">即時股價</div>
+        <div class="func-card-desc">僅現價/漲跌，快速刷新</div>
+        <div class="func-card-amount" style="color:#6ec6f0;margin-top:8px">&nbsp;</div>
       </div>
     </div>
 
@@ -376,6 +376,29 @@
   </div>
 </div>
 
+<!-- ══════════════ 即時股價（輕量：僅現價/漲跌，不含配息/淨值/成本等附屬查詢） ══════════════ -->
+<div class="screen" id="screen-realtime-price">
+  <div class="page-header">
+    <div class="header-row">
+      <div>
+        <div class="page-title">即時股價</div>
+        <div class="page-sub" id="rtp-date-label"></div>
+      </div>
+      <button class="refresh-btn" onclick="loadRealtimePrices(true)" id="rtp-refresh-btn" title="重新整理">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="rtp-total-sticky" style="display:none; padding:10px 16px 0; background:var(--bg); flex-shrink:0;"></div>
+  <div class="scroll-area">
+    <div class="loading-state" id="rtp-loading" style="display:none">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">查詢股價中…</div>
+    </div>
+    <div id="rtp-result" style="padding:12px 0 24px"></div>
+  </div>
+</div>
+
 <!-- ══════════════ BOTTOM NAV ══════════════ -->
 <nav class="bottom-nav">
   <div class="nav-item active" onclick="showScreen('home')" id="nav-home">
@@ -535,23 +558,25 @@
 </div><!-- #app-shell -->
 
 <!-- 登入閘門（Phase 1） -->
-<script src="js/auth.js?v=78"></script>
+<script src="js/auth.js?v=79"></script>
 <!-- 模組載入順序須與原始檔一致，以維持相同執行順序 -->
-<script src="js/core.js?v=78"></script>
-<script src="js/portfolio.js?v=78"></script>
-<script src="js/api.js?v=78"></script>
-<script src="js/dividends.js?v=78"></script>
-<script src="js/estimate-value.js?v=78"></script>
+<script src="js/core.js?v=79"></script>
+<script src="js/portfolio.js?v=79"></script>
+<script src="js/api.js?v=79"></script>
+<script src="js/dividends.js?v=79"></script>
+<script src="js/estimate-value.js?v=79"></script>
 <!-- 持股雲端同步：Firestore -->
-<script src="js/repo.firebase.js?v=78"></script>
-<script src="js/etf.js?v=78"></script>
+<script src="js/repo.firebase.js?v=79"></script>
+<script src="js/etf.js?v=79"></script>
 <!-- ETF 成分股查詢（首頁卡片）：須在 estimate-value.js 之後以串接 showScreen patch -->
-<script src="js/holdings.js?v=78"></script>
+<script src="js/holdings.js?v=79"></script>
+<!-- 即時股價：輕量版僅現價/漲跌，不查配息/淨值等附屬資料 -->
+<script src="js/realtime-price.js?v=79"></script>
 <!-- ETF 成分股籌碼分數：TWSE T86 穿透成分股 -->
-<script src="js/chips.js?v=78"></script>
+<script src="js/chips.js?v=79"></script>
 <!-- ETF 資金流週報：TDCC 集保股權分散（經 GAS ?tdcc=） -->
-<script src="js/tdccflow.js?v=78"></script>
+<script src="js/tdccflow.js?v=79"></script>
 <!-- 截圖匯入持股：Gemini 視覺（經 GAS 代理） -->
-<script src="js/import-ocr.js?v=78"></script>
+<script src="js/import-ocr.js?v=79"></script>
 </body>
 </html>
