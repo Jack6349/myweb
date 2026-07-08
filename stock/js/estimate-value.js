@@ -896,8 +896,8 @@ function updateValueStickyCard(rows) {
         '<div style="font-size:16px;font-weight:700;letter-spacing:-.5px;white-space:nowrap;color:' + (tprofit == null ? 'var(--text3)' : pnlCol(tprofit)) + '">' +
         (tprofit == null ? '—' : (tprofit >= 0 ? '+' : '') + tprofit.toLocaleString('zh-TW') + ' 元') + '</div>' +
       '</div>' +
+      '<div style="flex:1;min-width:0"></div>' +
     '</div>' +
-    '<div style="font-size:10px;color:var(--text3);text-align:right;margin-top:3px">' + costHint + '</div>' +
     '<div id="value-top-fold" class="vtop-fold">' +
       '<div class="vtop-row"><span class="vtop-label">獲利率</span>' +
         '<span class="vtop-val" style="color:' + (tprate == null ? 'var(--text3)' : pnlCol(tprate)) + '">' +
