@@ -24,6 +24,11 @@ function isTwMarketOpen() {
   var hm = tw.getUTCHours() * 60 + tw.getUTCMinutes();
   return hm >= 9 * 60 && hm < 13 * 60 + 35;
 }
+// 今天的開盤時間（UTC ms）：台灣時間 09:00（=01:00 UTC）
+function todayOpenTs() {
+  var tw = new Date(Date.now() + 8 * 3600000);
+  return Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate(), 1, 0, 0);
+}
 // 最近一次「已收盤結算」時間（UTC ms）：最近一個已過的 台灣時間 週一~五 13:35(=05:35 UTC)
 function lastSettleTs() {
   var now = Date.now();
@@ -652,8 +657,9 @@ async function fetchStockPrice(code, force) {
       // 代表已握有最新收盤價，直接沿用（跨日也適用），不重複呼叫 API
       if (c.ts >= lastSettleTs()) return c.data;
     } else {
-      // 盤中：價格會變動，沿用同日 + TTL 週期更新
-      if (c.day === today && (now - c.ts) < PRICE_CACHE_TTL) return c.data;
+      // 盤中：價格會變動，沿用同日 + TTL 週期更新；但若快取是開盤前抓的（例如盤前先開過頁面），
+      // 即使還沒滿 TTL 也視為過期，強制重抓一次，避免開盤後仍沿用盤前的舊漲跌幅
+      if (c.day === today && c.ts >= todayOpenTs() && (now - c.ts) < PRICE_CACHE_TTL) return c.data;
     }
   }
   const res = await fetch(GAS_URL + '?price=' + encodeURIComponent(code));
