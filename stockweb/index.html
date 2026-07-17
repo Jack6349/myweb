@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>股利總管 Web</title>
+<link rel="stylesheet" href="css/app.css?v=61">
+</head>
+<body>
+
+<!-- 登入閘門（僅限本人） -->
+<div id="login-gate" class="login-gate">
+  <div class="login-box">
+    <div class="login-title">股利總管 Web</div>
+    <div class="login-sub">私人看盤工具，僅限本人使用</div>
+    <button id="login-btn" class="btn-login">使用 Google 登入</button>
+    <button id="login-signout" class="btn-login" style="display:none">登出</button>
+    <div id="login-msg" class="login-msg"></div>
+  </div>
+</div>
+
+<div class="topbar">
+  <div class="topbar-title"><a href="javascript:void(0)" class="topbar-home" onclick="closeStream()">股利總管 <span class="topbar-web">Web</span></a><span id="crumb" class="crumb"></span><span id="topbar-txf" class="topbar-txf"></span><span id="topbar-totals" class="topbar-totals"></span></div>
+  <div class="topbar-right">
+    <span id="stream-info" class="stream-info"></span>
+    <span id="conn-status" class="conn-status">連線檢查中…</span>
+    <button id="btn-back" class="btn-back" onclick="closeStream()" style="display:none">← 返回</button>
+    <span id="div-sync-status" style="display:none"></span>
+  </div>
+</div>
+
+<!-- 功能導覽列（各功能頁最上方，直接切換，不用回首頁） -->
+<nav id="nav-bar" class="nav-bar" style="display:none">
+  <button data-view="stream" onclick="openStream()">即時行情</button>
+  <button data-view="live" onclick="openLive()">即時持股</button>
+  <button data-view="inv" onclick="openInventory()">持股庫存</button>
+  <button data-view="divest" onclick="openDividendEst()">股利估算</button>
+  <button data-view="txinfo" onclick="openTxinfo()">交易資訊</button>
+  <button data-view="trend" onclick="openTrend()">趨勢評估</button>
+  <button data-view="signals" onclick="openSignals()">籌碼淨值</button>
+  <button data-view="alerts" onclick="openAlerts()">停損停利</button>
+  <button data-view="news" onclick="openNews()">新聞情勢</button>
+  <button data-view="risk" onclick="openRiskReport()">加減碼報告</button>
+  <button data-view="params" onclick="openParams()">參數設定</button>
+</nav>
+
+<div class="main-area">
+
+  <!-- 首頁卡片區（之後陸續搬入其他功能） -->
+  <div id="home-cards" class="func-grid">
+    <div class="func-card" onclick="openStream()">
+      <div class="func-icon">📈</div>
+      <div class="func-name">即時行情</div>
+      <div class="func-desc">永豐金 Shioaji 逐筆推送，盤中即時看盤</div>
+    </div>
+    <div class="func-card" onclick="openLive()">
+      <div class="func-icon">⚡</div>
+      <div class="func-name">即時持股</div>
+      <div class="func-desc">左右雙欄精簡看盤，現價/損益盤中逐筆更新，可切換排序</div>
+    </div>
+    <div class="func-card" onclick="openInventory()">
+      <div class="func-icon">📊</div>
+      <div class="func-name">持股庫存</div>
+      <div class="func-desc">券商即時庫存、成本均價、未實現損益，逐檔可查建倉明細</div>
+    </div>
+    <div class="func-card" onclick="openDividendEst()">
+      <div class="func-icon">💰</div>
+      <div class="func-name">股利估算</div>
+      <div class="func-desc">當年 1–12 月已領＋預估配息，逐月與逐檔明細（TWSE e添富）</div>
+    </div>
+    <div class="func-card" onclick="openTxinfo()">
+      <div class="func-icon">🧾</div>
+      <div class="func-name">交易資訊</div>
+      <div class="func-desc">台幣交割、今日委託/成交回報彙整、已實現損益查詢，一頁看完交易相關訊息</div>
+    </div>
+    <div class="func-card" onclick="openTrend()">
+      <div class="func-icon">📉</div>
+      <div class="func-name">趨勢評估</div>
+      <div class="func-desc">各持股趨勢強弱、股價高低、期間報酬、相對強弱，ETF 可查成分股趨勢</div>
+    </div>
+    <div class="func-card" onclick="openSignals()">
+      <div class="func-icon">🧭</div>
+      <div class="func-name">籌碼淨值</div>
+      <div class="func-desc">L2 官方淨值折溢價（錯殺/過熱）＋ L3 法人籌碼、融資熱度、集保大戶週變化</div>
+    </div>
+    <div class="func-card" onclick="openAlerts()">
+      <div class="func-icon">🎯</div>
+      <div class="func-name">停損停利</div>
+      <div class="func-desc">設定各檔停利/停損價與獲利率、買進價，觸發時於即時持股/庫存整列反紅(賣)綠(買)底</div>
+    </div>
+    <div class="func-card" onclick="openNews()">
+      <div class="func-icon">📰</div>
+      <div class="func-name">新聞情勢</div>
+      <div class="func-desc">彙整財經 RSS 新聞，一鍵產生 AI 情勢分析 Prompt</div>
+    </div>
+    <div class="func-card" onclick="openRiskReport()">
+      <div class="func-icon">🧮</div>
+      <div class="func-name">加減碼報告</div>
+      <div class="func-desc">系統性風險量化評分（VIX/美債/美元/費半/台指夜盤）＋動作對照，取代質化 veto</div>
+    </div>
+    <div class="func-card" onclick="openParams()">
+      <div class="func-icon">⚙️</div>
+      <div class="func-name">參數設定</div>
+      <div class="func-desc">手動維護資料集中地：成份股匯入（僅列需匯入的 ETF），後續手動參數陸續放這</div>
+    </div>
+  </div>
+
+  <!-- 即時行情畫面 -->
+  <div id="stream-view" style="display:none">
+    <div id="stream-error" class="stream-error" style="display:none"></div>
+    <div id="stream-summary" class="stream-summary" style="display:none"></div>
+    <div id="stream-grid" class="stream-grid"></div>
+  </div>
+
+  <!-- 持股庫存畫面 -->
+  <div id="inv-view" style="display:none">
+    <div id="inv-error" class="stream-error" style="display:none"></div>
+    <div id="inv-summary" class="stream-summary" style="display:none"></div>
+    <div class="inv-table-wrap">
+      <table class="inv-table">
+        <thead><tr>
+          <th></th>
+          <th class="live-dot-cell"></th>
+          <th>代號<span class="sh"><b data-sort="codeAsc" onclick="changeInvSort('codeAsc')">▲</b><b data-sort="codeDesc" onclick="changeInvSort('codeDesc')">▼</b></span></th>
+          <th>名稱</th><th class="num">餘額</th><th class="num">成本均價</th><th class="num">現價</th>
+          <th class="num">漲跌幅<span class="sh"><b data-sort="chgAsc" onclick="changeInvSort('chgAsc')">▲</b><b data-sort="chgDesc" onclick="changeInvSort('chgDesc')">▼</b></span></th>
+          <th class="num">成份股漲跌%</th><th class="num">付出成本</th><th class="num">現值</th>
+          <th class="num">未實現損益<span class="sh"><b data-sort="pnlAsc" onclick="changeInvSort('pnlAsc')">▲</b><b data-sort="pnlDesc" onclick="changeInvSort('pnlDesc')">▼</b></span></th>
+          <th class="num">獲利率<span class="sh"><b data-sort="prateAsc" onclick="changeInvSort('prateAsc')">▲</b><b data-sort="prateDesc" onclick="changeInvSort('prateDesc')">▼</b></span></th>
+        </tr></thead>
+        <tbody id="inv-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 即時持股畫面（左右雙欄精簡看盤） -->
+  <div id="live-view" style="display:none">
+    <div id="live-error" class="stream-error" style="display:none"></div>
+    <div id="live-summary" class="stream-summary" style="display:none"></div>
+    <div id="live-digest" class="live-digest" style="display:block"></div>
+    <div id="live-cols" class="live-cols"></div>
+  </div>
+
+  <!-- 股利估算畫面（月份總覽＋個股明細，e添富配息） -->
+  <div id="divest-view" style="display:none">
+    <div class="divest-topbar">
+      <button class="btn-query" onclick="startDividendEst(true)">↻ 重新整理</button>
+      <span id="divest-info" style="font-size:13px;color:var(--text2)"></span>
+      <span id="divest-sumline" class="divest-sumline"></span>
+    </div>
+    <div id="divest-error" class="stream-error" style="display:none"></div>
+    <div id="divest-wrap"></div>
+  </div>
+
+  <!-- 加減碼報告：系統性風險評分 -->
+  <div id="risk-view" style="display:none">
+    <div class="tr-toolbar">
+      <button class="btn-query" onclick="startRiskReport(true)">↻ 重新整理</button>
+      <span id="risk-info" style="font-size:13px;color:var(--text2)"></span>
+    </div>
+    <div id="risk-wrap"></div>
+  </div>
+
+  <!-- 交易資訊畫面（子頁籤：交易帳務＝原三框 / 出借行情＝TWSE 借券資料） -->
+  <div id="txinfo-view" style="display:none">
+    <div id="tx-error" class="stream-error" style="display:none"></div>
+    <div class="tx-subtabs">
+      <button id="tx-subtab-account" class="tx-subtab active" onclick="txShowTab('account')">交易帳務</button>
+      <button id="tx-subtab-sbl" class="tx-subtab" onclick="txShowTab('sbl')">出借行情</button>
+    </div>
+    <div id="tx-tab-account">
+    <div class="tx-grid">
+      <div class="tx-box">
+        <div class="tx-box-head"><span class="tx-box-title">台幣交割</span>
+          <button class="btn-query tx-refresh" onclick="refreshTxinfo()">↻ 刷新</button></div>
+        <div id="tx-settle-body"></div>
+      </div>
+      <div class="tx-box">
+        <div class="tx-box-head"><span class="tx-box-title">今日委託與成交</span>
+          <span id="tx-order-sum" class="tx-order-sum"></span></div>
+        <div id="tx-order-body"></div>
+      </div>
+    </div>
+    <div class="tx-box">
+      <div class="tx-box-head"><span class="tx-box-title">交易紀錄（已實現損益）</span></div>
+      <div class="tr-toolbar">
+        <label>起始<input type="date" id="tr-begin"></label>
+        <label>結束<input type="date" id="tr-end"></label>
+        <button class="btn-query" onclick="loadTrades()">查詢</button>
+      </div>
+      <div id="tr-result"></div>
+    </div>
+    </div>
+
+    <!-- 出借行情（TWSE 借券成交費率＋借券賣出餘額，盤後資料） -->
+    <div id="tx-tab-sbl" style="display:none">
+      <div class="tx-box">
+        <div class="tx-box-head"><span class="tx-box-title">出借行情（持股 × TWSE 借券資料）</span>
+          <span id="sbl-date" class="sbl-date"></span></div>
+        <div class="sbl-toolbar">提醒門檻：加權費率 ≥
+          <input id="sbl-fee-min" class="sbl-inp" type="number" step="0.1" min="0" onchange="sblThrChanged()"> % 且 當日成交 ≥
+          <input id="sbl-vol-min" class="sbl-inp" type="number" step="1" min="0" onchange="sblThrChanged()"> 張
+          <button class="btn-query tx-refresh" onclick="startSbl(true)">↻ 更新</button></div>
+        <div id="sbl-banner" class="sbl-banner" style="display:none"></div>
+        <div id="sbl-body"></div>
+        <div class="tx-note">來源：TWSE 借券成交明細（含競價/議借，量加權費率）＋融券借券賣出餘額（上市），每日盤後更新。費率為借貸市場整體行情，實拿需扣券商分成，僅供手動掛出借參考；上櫃標的餘額暫不提供。<br>「借出數量」自動偵測（出借中股數＝建倉明細−庫存彙總）；「借出費率％」手動輸入（券商無費率 API），存於本機瀏覽器；年收(元)＝借出股數×現價×費率%概算，實際依每日收盤價計息並扣券商分成。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 參數設定畫面（手動維護資料集中地：成份股匯入等，後續新增皆放此頁） -->
+  <div id="params-view" style="display:none">
+    <div class="tx-box">
+      <div class="tx-box-head"><span class="tx-box-title">成份股匯入</span>
+        <button class="btn-query tx-refresh" onclick="startParams(true)">↻ 重新整理</button></div>
+      <div id="params-const-body"></div>
+      <div class="tx-note">僅列出自動來源（MoneyDJ/CMoney）抓不到、需手動維護清單的 ETF（境外/主動式）。匯入格式規劃中；目前更新方式：從 CMoney「持股明細」頁複製後由開發端更新 HOLDINGS_OVERRIDES。「今日尚未嘗試自動抓取」的 ETF 不列出，進過持股庫存後狀態才會更新。</div>
+    </div>
+  </div>
+
+  <!-- 趨勢評估畫面 -->
+  <div id="trend-view" style="display:none">
+    <div class="tr-toolbar">
+      <button class="btn-query" onclick="startTrend()">↻ 重新計算</button>
+      <span id="trend-info" style="font-size:13px;color:var(--text2)"></span>
+    </div>
+    <div id="trend-error" class="stream-error" style="display:none"></div>
+    <div id="trend-wrap"></div>
+  </div>
+
+  <!-- 籌碼淨值畫面 -->
+  <div id="signals-view" style="display:none">
+    <div class="tr-toolbar">
+      <button class="btn-query" onclick="startSignals()">↻ 重新計算</button>
+      <span id="sig-info" style="font-size:13px;color:var(--text2)"></span>
+    </div>
+    <div id="sig-error" class="stream-error" style="display:none"></div>
+    <div id="sig-wrap"></div>
+  </div>
+
+  <!-- 停損停利畫面 -->
+  <div id="alerts-view" style="display:none">
+    <div class="tr-toolbar">
+      <button class="btn-query" onclick="startAlerts()">↻ 重新載入</button>
+      <span id="al-info" style="font-size:13px;color:var(--text2)"></span>
+    </div>
+    <div id="al-error" class="stream-error" style="display:none"></div>
+    <div id="al-wrap"></div>
+  </div>
+
+  <!-- 新聞情勢畫面 -->
+  <div id="news-view" style="display:none">
+    <div class="tr-toolbar">
+      <button class="btn-query" onclick="loadNews()">↻ 重新抓取</button>
+      <button class="btn-query" onclick="showNewsPrompt()">🤖 產生 AI 分析 Prompt</button>
+      <span id="news-info" style="font-size:13px;color:var(--text2)"></span>
+    </div>
+    <div id="macro-bar" class="macro-bar"></div>
+    <div id="news-list" class="news-list"></div>
+  </div>
+
+</div>
+
+<!-- 交易明細彈窗 -->
+<div id="detail-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeDetailModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span id="detail-title" class="modal-title"></span>
+      <button class="modal-close" onclick="closeDetailModal()">×</button>
+    </div>
+    <div id="detail-body" class="modal-body"></div>
+  </div>
+</div>
+
+<script type="module" src="js/firebase-init.js?v=10"></script>
+<script src="js/auth.js?v=10"></script>
+<script src="js/broker.js?v=17"></script>
+<script src="js/stream.js?v=48"></script>
+<script src="js/inventory.js?v=43"></script>
+<script src="js/constituents.js?v=8"></script>
+<script src="js/live.js?v=41"></script>
+<script src="js/trades.js?v=11"></script>
+<script src="js/txinfo.js?v=3"></script>
+<script src="js/sbl.js?v=5"></script>
+<script src="js/params.js?v=2"></script>
+<script src="js/dividend-est.js?v=8"></script>
+<script src="js/risk-score.js?v=2"></script>
+<script src="js/news.js?v=28"></script>
+<script src="js/trend.js?v=30"></script>
+<script src="js/signals.js?v=27"></script>
+<script src="js/alerts.js?v=36"></script>
+<script src="js/digest.js?v=40"></script>
+</body>
+</html>

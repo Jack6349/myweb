@@ -4,20 +4,32 @@
     {
       "name": "myweb-static",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8090"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8090"
+      ],
       "port": 8090
     },
     {
       "name": "travel-v2",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8081"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8081"
+      ],
       "cwd": "travel-v2",
       "port": 8081
     },
     {
       "name": "stock",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8123"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8123"
+      ],
       "cwd": "stock",
       "port": 8123
     }

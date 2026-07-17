@@ -1,0 +1,307 @@
+// 股利總管 Web — 股利估算（TWSE e添富配息資料；當年 1–12 月已領＋預估）
+// 單頁：上「月份總覽」（每月：橫條＋月總額＋該月各檔代號/金額）＋橫線＋下「個股明細」（可折疊）
+// 資料源：e添富 dividendList（伺服器渲染 HTML）→ GAS ?urltext= 原文代理 → 前端解析
+// 持股/股數：沿用 ensureFeed 的 _sharesMap（含出借補償與 Firestore 後備）
+
+var _divEstRows = null;    // e添富 解析後全 ETF 配息列（每日快取）
+var _divEstResult = null;  // 計算結果，供折疊重繪
+var _divEstOpen = {};      // code -> 是否展開
+
+function _divTwDate() {
+  var tw = new Date(Date.now() + 8 * 3600000);
+  return { y: tw.getUTCFullYear(), iso: tw.toISOString().slice(0, 10) };
+}
+
+// e添富 HTML → [{code,name,exDate(ISO),payDate,amount(number|null)}]
+function parseEtfDividendHtml(html) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  var rocToISO = function (s) {
+    var m = (s || '').match(/(\d+)年(\d+)月(\d+)日/);
+    return m ? (+m[1] + 1911) + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : null;
+  };
+  var best = null, bestN = 0;
+  doc.querySelectorAll('table').forEach(function (t) {
+    var n = t.querySelectorAll('tbody tr').length; if (n > bestN) { bestN = n; best = t; }
+  });
+  if (!best) return [];
+  var out = [];
+  best.querySelectorAll('tbody tr').forEach(function (tr) {
+    var td = tr.querySelectorAll('td'); if (td.length < 7) return;
+    var t = function (i) { return (td[i].textContent || '').trim(); };
+    var a = parseFloat(t(5));
+    var ex = rocToISO(t(2));
+    if (!ex) return;
+    out.push({ code: t(0), name: t(1), exDate: ex, payDate: rocToISO(t(4)), amount: isNaN(a) ? null : a });
+  });
+  return out;
+}
+
+async function fetchEtfDividendList(force) {
+  var day = _divTwDate().iso;
+  var lsKey = 'etf_div_list_v1';
+  if (!force) {
+    if (_divEstRows && _divEstRows.day === day) return _divEstRows.rows;
+    try { var c = JSON.parse(localStorage.getItem(lsKey) || 'null'); if (c && c.day === day) { _divEstRows = c; return c.rows; } } catch (e) {}
+  }
+  var yr = _divTwDate().y;
+  var url = 'https://www.twse.com.tw/zh/ETFortune/dividendList?stkNo=&startDate=' + (yr - 1) + '&endDate=' + yr;
+  var r = await fetch(NEWS_GAS_URL + '?urltext=' + encodeURIComponent(url));
+  if (!r.ok) throw new Error('e添富 HTTP ' + r.status);
+  var text = await r.text();
+  // GAS 端錯誤（如 urlfetch 配額爆掉）會回 JSON {"error":...} → 丟出可讀訊息，不要當 HTML 解析
+  if (text.charAt(0) === '{') {
+    var je = null;
+    try { je = JSON.parse(text); } catch (pe) {}
+    if (je && je.error) throw new Error(je.error);
+  }
+  var rows = parseEtfDividendHtml(text);
+  if (!rows.length) throw new Error('e添富回應無資料（來源異常，稍後再試）'); // 空結果不可快取成當日資料
+  _divEstRows = { day: day, rows: rows };
+  try { localStorage.setItem(lsKey, JSON.stringify(_divEstRows)); } catch (e) {}
+  return rows;
+}
+
+// Yahoo 配息後備（GAS ?code=）：e添富（上市）沒有的持股（上櫃/債券 ETF）用此補；每日快取
+async function fetchYahooDiv(code, force) {
+  var day = _divTwDate().iso, lsKey = 'divest_yf_v1', cache = { day: day, map: {} };
+  try { var c = JSON.parse(localStorage.getItem(lsKey) || 'null'); if (c && c.day === day) cache = c; } catch (e) {}
+  if (!force && cache.map[code]) return cache.map[code];
+  var recs = [];
+  try {
+    var r = await fetch(NEWS_GAS_URL + '?code=' + encodeURIComponent(code));
+    var j = await r.json();
+    if (j.stat === 'OK') {
+      (j.dividends || []).forEach(function (d) {
+        if (!(d.amount > 0)) return;
+        var ex = new Date(d.date * 1000 + 8 * 3600000).toISOString().slice(0, 10);
+        var pay = d.payDate ? new Date(d.payDate * 1000 + 8 * 3600000).toISOString().slice(0, 10) : null;
+        recs.push({ code: code, name: (_contracts[code] && _contracts[code].name) || '', exDate: ex, payDate: pay, amount: d.amount });
+      });
+    }
+  } catch (e) {}
+  cache.map[code] = recs;
+  try { localStorage.setItem(lsKey, JSON.stringify(cache)); } catch (e) {}
+  return recs;
+}
+
+// 依除息日間隔中位數推頻率（月數）：月配1/季配3/半年6/年配12
+function _divInferStep(recs) {
+  if (recs.length < 2) return 12;
+  var gaps = [];
+  for (var i = 1; i < recs.length; i++) {
+    var a = recs[i - 1].exDate, b = recs[i].exDate;
+    var g = (+b.slice(0, 4) * 12 + +b.slice(5, 7)) - (+a.slice(0, 4) * 12 + +a.slice(5, 7));
+    if (g > 0) gaps.push(g);
+  }
+  if (!gaps.length) return 12;
+  gaps.sort(function (x, y) { return x - y; });
+  var n = gaps.length;
+  var med = n % 2 ? gaps[(n - 1) / 2] : (gaps[n / 2 - 1] + gaps[n / 2]) / 2;
+  // 放寬分界：季配 gap≈3(2–4)、半年配≈6(5–9)、避免把半年配誤判成年配
+  return med <= 1.4 ? 1 : (med <= 4.5 ? 3 : (med <= 9 ? 6 : 12));
+}
+
+function _addMonths(iso, n) {
+  var y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1, d = iso.slice(8, 10);
+  var t = y * 12 + m + n;
+  return Math.floor(t / 12) + '-' + ('0' + (t % 12 + 1)).slice(-2) + '-' + d;
+}
+
+// 單檔當年 1–12 月，依「發放月」分組（跨年：去年12月除息→今年1月發放算今年）
+// 已過發放日=已領(actual)、未來=預估(est)。發放日：有則用，無則「除息月＋1」推導。
+function computeEtfYear(recs, shares, todayIso, year) {
+  recs = recs.filter(function (r) { return r.exDate; }).sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
+  if (!recs.length) return null;
+  var lastAmt = 0;
+  for (var i = recs.length - 1; i >= 0; i--) { if (recs[i].amount != null) { lastAmt = recs[i].amount; break; } }
+  var payOf = function (r) { return r.payDate || _addMonths(r.exDate, 1); };
+
+  var byMonth = {};  // 發放月(1-12) → 資料
+  recs.forEach(function (r) {
+    var pay = payOf(r); if (!pay) return;
+    if (+pay.slice(0, 4) !== year) return;   // 只算發放年為今年者
+    var pm = +pay.slice(5, 7);
+    byMonth[pm] = {
+      exDate: r.exDate, payDate: pay, derivedPay: !r.payDate,
+      perShare: r.amount != null ? r.amount : lastAmt,
+      status: pay <= todayIso ? 'actual' : 'est'
+    };
+  });
+  // 預估（僅補未填、晚於最後已領月的發放月）
+  var lastActualM = 0;
+  Object.keys(byMonth).forEach(function (mk) { if (byMonth[mk].status === 'actual' && +mk > lastActualM) lastActualM = +mk; });
+  var hasPrior = recs.some(function (r) { var p = payOf(r); return p && +p.slice(0, 4) === year - 1; });
+  if (hasPrior) {
+    // 有去年同期：以「去年發放月 ＋12」投影（自然吻合不規則配息的實際月份）
+    recs.forEach(function (r) {
+      var pay = payOf(r); if (!pay || +pay.slice(0, 4) !== year - 1) return;
+      var projPay = _addMonths(pay, 12), pm = +projPay.slice(5, 7);
+      if (byMonth[pm] || pm <= lastActualM) return;
+      byMonth[pm] = { exDate: r.exDate ? _addMonths(r.exDate, 12) : null, payDate: projPay, derivedPay: !r.payDate, perShare: lastAmt, status: 'est' };
+    });
+  } else {
+    // 新配息檔（無去年資料）：依頻率自最近一次發放往後推
+    var step = _divInferStep(recs);
+    var lastPay = payOf(recs[recs.length - 1]);
+    var ym = (+lastPay.slice(0, 4)) * 12 + (+lastPay.slice(5, 7) - 1);
+    for (var k = 0; k < 24; k++) {
+      ym += step;
+      var yy = Math.floor(ym / 12), mm = (ym % 12) + 1;
+      if (yy > year) break;
+      if (yy === year && !byMonth[mm] && mm > lastActualM) {
+        byMonth[mm] = { exDate: null, payDate: yy + '-' + ('0' + mm).slice(-2) + '-15', derivedPay: true, perShare: lastAmt, status: 'est' };
+      }
+    }
+  }
+
+  var months = [];
+  Object.keys(byMonth).forEach(function (mk) {
+    var e = byMonth[mk];
+    months.push({ month: +mk, exDate: e.exDate, payDate: e.payDate, derivedPay: e.derivedPay, perShare: e.perShare, total: e.perShare * shares, status: e.status });
+  });
+  months.sort(function (a, b) { return a.month - b.month; });
+  var actualTotal = 0, estTotal = 0;
+  months.forEach(function (mo) { if (mo.status === 'actual') actualTotal += mo.total; else estTotal += mo.total; });
+  return { months: months, actualTotal: actualTotal, estTotal: estTotal };
+}
+
+async function startDividendEst(force) {
+  var errEl = document.getElementById('divest-error');
+  var wrap = document.getElementById('divest-wrap');
+  var info = document.getElementById('divest-info');
+  errEl.style.display = 'none';
+  wrap.innerHTML = '<div class="modal-loading">讀取持股與配息資料…</div>';
+
+  // 持股/股數（沿用行情引擎的 _sharesMap；失敗容忍）
+  try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) {}
+  var shareMap = (typeof _sharesMap !== 'undefined' && _sharesMap) ? _sharesMap : {};
+  var codes = Object.keys(shareMap).filter(isEtfCode);
+  if (!codes.length) { wrap.innerHTML = '<div class="modal-loading">無持有 ETF</div>'; return; }
+
+  var rows;
+  try { rows = await fetchEtfDividendList(force); }
+  catch (e) { errEl.style.display = 'block'; errEl.textContent = 'e添富配息資料讀取失敗：' + e.message; wrap.innerHTML = ''; return; }
+
+  // 依代號分組（e添富＝上市）
+  var byCode = {};
+  rows.forEach(function (r) { (byCode[r.code] = byCode[r.code] || []).push(r); });
+
+  // e添富 沒有的持股（上櫃/債券 ETF）用 Yahoo 後備補
+  var recMap = {}, missing = [];
+  codes.forEach(function (code) {
+    if (byCode[code] && byCode[code].length) recMap[code] = byCode[code];
+    else missing.push(code);
+  });
+  await Promise.all(missing.map(async function (code) {
+    try { var yr = await fetchYahooDiv(code, force); if (yr && yr.length) recMap[code] = yr; } catch (e) {}
+  }));
+
+  var tw = _divTwDate();
+  var stocks = [];
+  codes.forEach(function (code) {
+    var recs = recMap[code];
+    if (!recs || !recs.length) return; // 不配息／未開始配息 → 不列
+    var res = computeEtfYear(recs, shareMap[code], tw.iso, tw.y);
+    if (!res || (!res.months.length)) return;
+    var name = (recs[0].name) || (_contracts[code] && _contracts[code].name) || '';
+    stocks.push({ code: code, name: name, res: res, src: (byCode[code] && byCode[code].length) ? 'e添富' : 'Yahoo' });
+  });
+  if (!stocks.length) { wrap.innerHTML = '<div class="modal-loading">持有 ETF 皆無配息紀錄</div>'; return; }
+  stocks.sort(function (a, b) { return String(a.code).localeCompare(String(b.code), undefined, { numeric: true }); });
+
+  _divEstResult = { stocks: stocks, year: tw.y };
+  info.textContent = tw.y + ' 年・' + stocks.length + ' 檔配息 ETF';
+  renderDividendEst();
+}
+
+function renderDividendEst() {
+  var wrap = document.getElementById('divest-wrap');
+  if (!_divEstResult) return;
+  var stocks = _divEstResult.stocks, year = _divEstResult.year;
+
+  // 各月彙總
+  var mActual = new Array(13).fill(0), mEst = new Array(13).fill(0);
+  var mItems = {}; for (var i = 1; i <= 12; i++) mItems[i] = [];
+  var grandActual = 0, grandEst = 0;
+  stocks.forEach(function (s) {
+    grandActual += s.res.actualTotal; grandEst += s.res.estTotal;
+    s.res.months.forEach(function (mo) {
+      if (mo.status === 'actual') mActual[mo.month] += mo.total; else mEst[mo.month] += mo.total;
+      mItems[mo.month].push({ code: s.code, total: mo.total, status: mo.status });
+    });
+  });
+  var grand = grandActual + grandEst;
+  var maxTotal = 1;
+  for (var m = 1; m <= 12; m++) maxTotal = Math.max(maxTotal, mActual[m] + mEst[m]);
+
+  var money = function (v) { return '$' + Math.round(v).toLocaleString('zh-TW'); };
+
+  // ── 合計（頂部帶狀，nav-bar 式一行） ──
+  var sp = function (lb, v, c) {
+    return '<span class="divest-sp"><span class="divest-sp-lb">' + lb + '</span>' +
+      '<span class="divest-sp-v" style="color:' + c + '">' + v + '</span></span>';
+  };
+  var sumEl = document.getElementById('divest-sumline');
+  if (sumEl) sumEl.innerHTML = sp('年估總額', money(grand), 'var(--accent)') +
+    sp('已入帳', money(grandActual), 'var(--down)') + sp('月均', money(grand / 12), 'var(--accent2)');
+
+  // ── 月份總覽（依發放月）──
+  var html = '<div class="divest-sec-title">月份總覽（依發放月）</div><div class="divest-months">';
+  for (var mo = 1; mo <= 12; mo++) {
+    var act = mActual[mo], est = mEst[mo], tot = act + est;
+    var wPct = tot > 0 ? Math.max(4, Math.round(tot / maxTotal * 100)) : 0;
+    var actW = tot > 0 ? Math.round(act / tot * 100) : 0;
+    var totColor = tot === 0 ? 'var(--text3)' : (est === 0 ? 'var(--down)' : (act === 0 ? 'var(--accent2)' : 'var(--text)'));
+    var items = mItems[mo].sort(function (a, b) { return b.total - a.total; }).map(function (it) {
+      return '<span class="divest-chip"><span class="divest-chip-code">' + it.code + '</span> ' +
+        '<span style="color:' + (it.status === 'actual' ? 'var(--down)' : 'var(--accent2)') + '">' + money(it.total) + '</span></span>';
+    }).join('<span class="divest-sep">・</span>');
+    html += '<div class="divest-mrow">' +
+      '<span class="divest-mlabel">' + mo + '月</span>' +
+      '<span class="divest-track">' + (tot > 0 ? '<span class="divest-bar" style="width:' + wPct + '%">' +
+        '<span style="width:' + actW + '%;background:var(--down)"></span><span style="width:' + (100 - actW) + '%;background:var(--accent2)"></span></span>' : '') + '</span>' +
+      '<span class="divest-mtot" style="color:' + totColor + '">' + (tot > 0 ? money(tot) : '—') + '</span>' +
+      '<span class="divest-mitems">' + items + '</span>' +
+    '</div>';
+  }
+  html += '</div>';
+
+  // ── 個股明細（可折疊）──
+  html += '<div class="divest-divider"></div><div class="divest-sec-title">個股明細</div><div class="divest-stocks">';
+  stocks.forEach(function (s) {
+    var open = !!_divEstOpen[s.code];
+    var md = function (iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; };
+    var det = '<div class="divest-drow divest-dhead">' +
+        '<span class="divest-dm">發放月</span><span class="divest-dex">除息</span>' +
+        '<span class="divest-dpay">發放</span><span class="divest-dps">每股</span>' +
+        '<span class="divest-dtot">金額</span><span style="width:34px"></span></div>' +
+      s.res.months.map(function (mo) {
+      var stCls = mo.status === 'actual' ? 'var(--down)' : 'var(--accent2)';
+      var stTxt = mo.status === 'actual' ? '已領' : '預估';
+      return '<div class="divest-drow">' +
+        '<span class="divest-dm">' + mo.month + '月</span>' +
+        '<span class="divest-dex">' + md(mo.exDate) + '</span>' +
+        '<span class="divest-dpay">' + (mo.derivedPay ? '~' : '') + md(mo.payDate) + '</span>' +
+        '<span class="divest-dps">' + mo.perShare.toFixed(4) + '</span>' +
+        '<span class="divest-dtot">' + money(mo.total) + '</span>' +
+        '<span style="color:' + stCls + ';width:34px;text-align:right">' + stTxt + '</span>' +
+      '</div>';
+    }).join('');
+    html += '<div class="divest-stock">' +
+      '<div class="divest-shead" onclick="toggleDivStock(\'' + s.code + '\')">' +
+        '<div><span class="divest-scode">' + s.code + '</span> <span class="divest-sname">' + s.name + '</span></div>' +
+        '<div class="divest-smeta">已領 <span style="color:var(--down)">' + money(s.res.actualTotal) + '</span>　估算 <span style="color:var(--accent2)">' + money(s.res.estTotal) + '</span>　' +
+          '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span></div>' +
+      '</div>' +
+      (open ? '<div class="divest-detail">' + det + '</div>' : '') +
+    '</div>';
+  });
+  html += '</div>';
+  html += '<div class="divest-note">依「發放月」歸戶當月收入；發放日已過為「已領」、未來為「預估」。發放日缺漏時以「除息月＋1」推導（明細標「~」）。除息日供加減碼參考。資料來源：上市 ETF＝TWSE e添富（含已公告發放日）；上櫃/債券 ETF＝Yahoo 歷史推估。</div>';
+  wrap.innerHTML = html;
+}
+
+function toggleDivStock(code) {
+  _divEstOpen[code] = !_divEstOpen[code];
+  renderDividendEst();
+}
