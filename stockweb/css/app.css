@@ -289,6 +289,9 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .sbl-dim { color: var(--text3); }
 .sbl-table b { font-weight: 700; }
 .sbl-table th.sbl-my { color: var(--accent2); }
+.sbl-table th.sbl-calc { color: #8fd0ff; }
+.sbl-table td.sbl-calc { background: rgba(143,208,255,.05); }
+.sbl-sep { color: var(--text3); margin: 0 4px; }
 .sbl-lent-inp { width: 72px; padding: 3px 6px; font-size: 13px; }
 .sbl-lent-inp::placeholder { color: var(--text3); }
 .sbl-total td { font-weight: 700; border-bottom: none; padding-top: 10px; color: var(--accent2); }

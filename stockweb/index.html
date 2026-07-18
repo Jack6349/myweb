@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=61">
+<link rel="stylesheet" href="css/app.css?v=62">
 </head>
 <body>
 
@@ -200,10 +200,12 @@
         <div class="sbl-toolbar">提醒門檻：加權費率 ≥
           <input id="sbl-fee-min" class="sbl-inp" type="number" step="0.1" min="0" onchange="sblThrChanged()"> % 且 期間成交 ≥
           <input id="sbl-vol-min" class="sbl-inp" type="number" step="1" min="0" onchange="sblThrChanged()"> 張
+          <span class="sbl-sep">｜</span>召回試算：空窗
+          <input id="sbl-idle-days" class="sbl-inp" type="number" step="1" min="0" onchange="sblThrChanged()"> 工作天
           <button class="btn-query tx-refresh" onclick="startSbl(true)">↻ 更新</button></div>
         <div id="sbl-banner" class="sbl-banner" style="display:none"></div>
         <div id="sbl-body"></div>
-        <div class="tx-note">來源：TWSE 借券成交明細（近 20 交易日區間，<b>僅計競價成交</b>，量加權）＋融券借券賣出餘額（上市，盤後）。排除「議借」——那是法人間私下議定（ETF 造市/對沖等），費率可低至 0.05% 且量體極大，混入會嚴重扭曲加權值、對散戶出借無參考價值；該檔若另有議借成交，滑鼠移到費率欄可看對照。費率是「有人借才會產生」的流量資料，多數個股整天無成交，故取區間行情並標示最近成交日；餘額則是累積未還的存量，兩者常不同步屬正常。費率為市場整體行情、不分券商，實拿需扣券商分成，僅供手動掛出借參考；上櫃標的餘額暫不提供。<br>「借出數量」自動偵測（出借中股數＝建倉明細−庫存彙總）；「借出費率％」手動輸入（券商無費率 API），存於本機瀏覽器；年收(元)＝借出股數×現價×費率%概算，實際依每日收盤價計息並扣券商分成。</div>
+        <div class="tx-note">來源：TWSE 借券成交明細（近 20 交易日區間，<b>僅計競價成交</b>，量加權）＋融券借券賣出餘額（上市，盤後）。排除「議借」——那是法人間私下議定（ETF 造市/對沖等），費率可低至 0.05% 且量體極大，混入會嚴重扭曲加權值、對散戶出借無參考價值；該檔若另有議借成交，滑鼠移到費率欄可看對照。費率是「有人借才會產生」的流量資料，多數個股整天無成交，故取區間行情並標示最近成交日；餘額則是累積未還的存量，兩者常不同步屬正常。費率為市場整體行情、不分券商，實拿需扣券商分成，僅供手動掛出借參考；上櫃標的餘額暫不提供。<br>「借出數量」自動偵測（出借中股數＝建倉明細−庫存彙總）；「借出費率％」手動輸入（券商無費率 API），存於本機瀏覽器；年收(元)＝借出股數×現價×費率%概算，實際依每日收盤價計息並扣券商分成。<br>估年收＝以市場競價費率計，已出借者用出借股數（與年收同基準可直接比）、未出借者用總庫存；年增＝估年收−年收。回本(天)＝空窗天數×(現有費率÷費率差)，即召回後以市場費率重新出借、多久補回空窗期損失（與市值無關）。<b>試算僅供參考，不構成投資建議</b>：實際還需考量該檔流動性（你的張數佔市場成交量比重過高可能長期借不出去）、召回期間是否計息、券商分成與召回規則。</div>
       </div>
     </div>
   </div>
@@ -281,7 +283,7 @@
 <script src="js/live.js?v=41"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=3"></script>
-<script src="js/sbl.js?v=8"></script>
+<script src="js/sbl.js?v=9"></script>
 <script src="js/params.js?v=2"></script>
 <script src="js/dividend-est.js?v=8"></script>
 <script src="js/risk-score.js?v=2"></script>

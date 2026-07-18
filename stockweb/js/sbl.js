@@ -18,13 +18,16 @@ function txShowTab(tab) {
 
 function _sblThr() {
   var f = parseFloat(localStorage.getItem('sbl_fee_min')), v = parseInt(localStorage.getItem('sbl_vol_min'), 10);
-  return { fee: isNaN(f) ? 0.5 : f, vol: isNaN(v) ? 10 : v };
+  var i = parseFloat(localStorage.getItem('sbl_idle_days'));
+  return { fee: isNaN(f) ? 0.5 : f, vol: isNaN(v) ? 10 : v, idle: (isNaN(i) || i < 0) ? 6 : i };
 }
 function sblThrChanged() {
   var f = parseFloat(document.getElementById('sbl-fee-min').value), v = parseInt(document.getElementById('sbl-vol-min').value, 10);
+  var i = parseFloat(document.getElementById('sbl-idle-days').value);
   if (!isNaN(f)) localStorage.setItem('sbl_fee_min', f);
   if (!isNaN(v)) localStorage.setItem('sbl_vol_min', v);
-  if (_sblCache) _sblRender(); // 只重算提醒，不重抓
+  if (!isNaN(i) && i >= 0) localStorage.setItem('sbl_idle_days', i);
+  if (_sblCache) _sblRender(); // 只重算提醒/試算，不重抓
 }
 
 // ── 實際已借出 ──
@@ -93,6 +96,7 @@ async function startSbl(force) {
   var thr = _sblThr();
   document.getElementById('sbl-fee-min').value = thr.fee;
   document.getElementById('sbl-vol-min').value = thr.vol;
+  document.getElementById('sbl-idle-days').value = thr.idle;
   try {
     // 近 30 日曆天（≈20 交易日）借券成交，一次區間查詢撈完
     var day = new Date(), from = new Date(day.getTime() - 30 * 86400000);
@@ -174,13 +178,24 @@ function _sblRender() {
     var name = (b && b.name) || (ct ? ct.name : '');
     var price = p.last_price || (ct && ct.reference) || 0; // 全數出借時彙總缺現價 → 退平盤價
     var w = f && f.vol ? f.wsum / f.vol : null;
-    var mv = price * p.totalShares; // 市值（股，含借出）
-    var est = (w != null && mv) ? mv * w / 100 : null; // 估年收（未扣券商分成）
     var hit = w != null && f.vol >= thr.vol && w >= thr.fee;
     var rate = (lentMap[code] && lentMap[code].r) || 0;
+    // 估年收基準：已出借者用「出借股數」（才能與左邊實際年收同基準相比）；未出借者用總庫存（全額出借的潛力）
+    var estShares = p.lentShares > 0 ? p.lentShares : p.totalShares;
+    var est = (w != null && price) ? estShares * price * w / 100 : null;
     // 實際年收＝借出股數×現價×費率%（以現價概算；實際依每日收盤價計息）
     var lentInc = (p.lentShares > 0 && rate > 0 && price) ? p.lentShares * price * rate / 100 : null;
-    return { code: code, name: name, lots: p.totalShares / 1000, lentLots: p.lentShares / 1000, rate: rate, f: f, w: w, b: b, est: est, hit: hit, lentInc: lentInc, lastMd: f ? f.lastMd : '' };
+    // 召回試算：換到市場費率的年增額與回本天數
+    //   回本天數 ＝ 空窗天數 × (現有費率 ÷ 費率差)   ← 與市值/張數無關，純比例
+    var gain = null, bDays = null;
+    if (lentInc != null && est != null) {
+      gain = est - lentInc;
+      var gap = w - rate;
+      if (gap > 0) bDays = thr.idle * rate / gap;
+    }
+    return { code: code, name: name, lots: p.totalShares / 1000, lentLots: p.lentShares / 1000, rate: rate,
+      f: f, w: w, b: b, est: est, estOnLent: p.lentShares > 0, hit: hit, lentInc: lentInc, gain: gain, bDays: bDays,
+      lastMd: f ? f.lastMd : '' };
   });
   rows.sort(function (a, b) {
     if (a.hit !== b.hit) return a.hit ? -1 : 1;
@@ -205,7 +220,8 @@ function _sblRender() {
     '<th class="num sbl-my">借出數量</th><th class="num sbl-my">借出費率％</th><th class="num sbl-my">年收(元)</th>' +
     '<th class="num">借券賣出餘額(張)</th>' +
     '<th class="num">競價費率% 加權/最高</th><th class="num">最近成交</th><th class="num">期間成交(張)</th>' +
-    '<th class="num">估年收(元)</th><th style="text-align:center">提醒</th></tr></thead><tbody>';
+    '<th class="num">估年收(元)</th><th class="num sbl-calc">年增(元)</th><th class="num sbl-calc">回本(天)</th>' +
+    '<th style="text-align:center">提醒</th></tr></thead><tbody>';
   rows.forEach(function (r) {
     var balHtml = '—';
     if (r.b) {
@@ -233,18 +249,28 @@ function _sblRender() {
         : '<span class="sbl-dim">期間無競價' + (negLots ? '＊' : '') + '</span>') + '</td>' +
       '<td class="num">' + (r.lastMd ? r.lastMd : '<span class="sbl-dim">—</span>') + '</td>' +
       '<td class="num">' + (r.f ? r.f.vol.toLocaleString('zh-TW') : '0') + '</td>' +
-      '<td class="num">' + (r.est != null ? Math.round(r.est).toLocaleString('zh-TW') : '—') + '</td>' +
+      '<td class="num"' + (r.est != null ? ' title="基準：' + (r.estOnLent ? '出借股數（與左側年收同基準）' : '總庫存（全額出借的潛力）') + '"' : '') + '>' +
+        (r.est != null ? Math.round(r.est).toLocaleString('zh-TW') : '—') + '</td>' +
+      '<td class="num sbl-calc">' + (r.gain == null ? '<span class="sbl-dim">—</span>'
+        : (r.gain > 0 ? '<b class="up">+' + Math.round(r.gain).toLocaleString('zh-TW') + '</b>'
+          : '<span class="down">' + Math.round(r.gain).toLocaleString('zh-TW') + '</span>')) + '</td>' +
+      '<td class="num sbl-calc">' + (r.gain == null ? '<span class="sbl-dim">—</span>'
+        : (r.bDays == null ? '<span class="down">優於市場</span>' : '<b>' + r.bDays.toFixed(1) + '</b>')) + '</td>' +
       '<td style="text-align:center">' + (r.hit ? '<span class="sbl-pill">值得出借</span>' : '<span class="sbl-dim">—</span>') + '</td></tr>';
   });
   html += '</tbody>';
   // 已借出合計（有偵測到借出才顯示）
-  var lentQ = 0, lentInc = 0, lentN = 0;
-  rows.forEach(function (r) { if (r.lentLots > 0) { lentN++; lentQ += r.lentLots; lentInc += r.lentInc || 0; } });
+  var lentQ = 0, lentInc = 0, lentN = 0, gainSum = 0;
+  rows.forEach(function (r) {
+    if (r.lentLots > 0) { lentN++; lentQ += r.lentLots; lentInc += r.lentInc || 0; gainSum += r.gain || 0; }
+  });
   if (lentN) {
     html += '<tfoot><tr class="sbl-total"><td>已借出合計（' + lentN + ' 檔）</td><td></td>' +
       '<td class="num sbl-my">' + _sblLots(lentQ) + '</td><td></td>' +
       '<td class="num sbl-my">' + Math.round(lentInc).toLocaleString('zh-TW') + '</td>' +
-      '<td colspan="6"></td></tr></tfoot>';
+      '<td colspan="5"></td>' +
+      '<td class="num sbl-calc">' + (gainSum ? (gainSum > 0 ? '+' : '') + Math.round(gainSum).toLocaleString('zh-TW') : '') + '</td>' +
+      '<td colspan="2"></td></tr></tfoot>';
   }
   html += '</table></div>';
   document.getElementById('sbl-body').innerHTML = html;
