@@ -223,17 +223,40 @@ function _usMarketLive() {
     return m >= 570 && m <= 970; // 9:30–16:10
   } catch (e) { return true; } // 時區 API 異常時寧可照舊輪詢
 }
-// 批次抓報價：每 100 檔一包（每包＝GAS 端 1 次 UrlFetch）；回 {SYM:{price,chg}}
+// 批次抓報價：每 20 檔一包（Yahoo spark 單次上限 20 檔，超過整包 400；每包＝GAS 端 1 次 UrlFetch）
+// 包內只要有一檔 Yahoo 查無的代號整包 404 → 失敗的包二分拆包定位壞代號，只跳過壞代號其餘照抓；
+// 壞代號記在 _usBadSyms（本場次不再重試）。配額類錯誤（單日次數過多）則直接中止，避免拆包爆量重試。
+var _usBadSyms = {};
+// Yahoo 可查的股票代號才送：純字母（可帶 .X/-X 後綴，如 BRK.B）。
+// 排除債券 CUSIP/ISIN（含數字，如 US031921AC31、XS2826815446）——債券 ETF 的持債 Yahoo 沒有，
+// 事先濾掉才不會靠二分拆包一個個試（那會產生大量 GAS 呼叫、可能燒爆配額）。
+function _isUsTicker(sym) { return /^[A-Z]{1,6}([.\-][A-Z]{1,3})?$/.test(sym); }
 async function _usQuoteBatch(list) {
   var out = {};
-  for (var i = 0; i < list.length; i += 100) {
-    var part = list.slice(i, i + 100);
+  var todo = list.filter(function (s) { return _isUsTicker(s) && !_usBadSyms[s]; });
+  for (var i = 0; i < todo.length; i += 20) {
+    await _usQuoteChunk(todo.slice(i, i + 20), out);
+  }
+  return out;
+}
+async function _usQuoteChunk(part, out) {
+  if (!part.length) return;
+  try {
     var r = await fetch(NEWS_GAS_URL + '?usquote=' + encodeURIComponent(part.join(',')));
     var j = await r.json();
     if (j && j.error) throw new Error(j.error);
     if (j) Object.assign(out, j);
+  } catch (e) {
+    if (/單日|quota/i.test(e.message || '')) throw e; // 配額爆掉：整批中止，別再打了
+    if (part.length === 1) {
+      _usBadSyms[part[0]] = true;
+      console.warn('[const usquote] 跳過 Yahoo 查無代號：' + part[0]);
+      return;
+    }
+    var mid = Math.ceil(part.length / 2);
+    await _usQuoteChunk(part.slice(0, mid), out);
+    await _usQuoteChunk(part.slice(mid), out);
   }
-  return out;
 }
 async function pollUsConst(force) {
   var syms = {};
