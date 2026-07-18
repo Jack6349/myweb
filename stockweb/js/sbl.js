@@ -65,13 +65,23 @@ function _sblLots(lots) {
 }
 function _sblYmd(d) { return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'); }
 
-// 借券成交明細（單日）：回傳 rows 或 null（該日無資料）
-async function _sblFetchFee(ymd) {
-  var url = 'https://www.twse.com.tw/rwd/zh/lending/t13sa710?startDate=' + ymd + '&endDate=' + ymd + '&tradeType=&stockNo=&response=json';
+// 借券成交明細（日期區間，一次撈完）：回傳 rows 或 null
+// 費率是「當日流量」，多數個股整天無人借（實測 7/17 全市場僅 370/1218 檔有成交）→
+// 改抓近 30 日曆天（≈20 交易日）給出參考行情與最近成交日，判斷該不該掛出借才有依據
+async function _sblFetchFeeRange(startYmd, endYmd) {
+  var url = 'https://www.twse.com.tw/rwd/zh/lending/t13sa710?startDate=' + startYmd + '&endDate=' + endYmd +
+    '&tradeType=&stockNo=&response=json';
   var r = await fetch(url); if (!r.ok) return null;
   var j = await r.json();
   if (j.stat !== 'OK' || !j.data || !j.data.length) return null;
   return j.data;
+}
+// 民國日期 "115年07月17日" → {ymd:'20260717', md:'07/17'}
+function _sblRocDate(s) {
+  var m = String(s || '').match(/(\d+)年(\d+)月(\d+)日/);
+  if (!m) return null;
+  var y = parseInt(m[1], 10) + 1911, mo = m[2].padStart(2, '0'), d = m[3].padStart(2, '0');
+  return { ymd: '' + y + mo + d, md: mo + '/' + d };
 }
 
 async function startSbl(force) {
@@ -84,23 +94,30 @@ async function startSbl(force) {
   document.getElementById('sbl-fee-min').value = thr.fee;
   document.getElementById('sbl-vol-min').value = thr.vol;
   try {
-    // 找最近有資料的交易日（今日盤後才有；往前最多找 7 天）
-    var feeRows = null, day = new Date(), ymd = '';
-    for (var i = 0; i < 7 && !feeRows; i++) {
-      ymd = _sblYmd(day);
-      try { feeRows = await _sblFetchFee(ymd); } catch (e) { feeRows = null; }
-      if (!feeRows) day.setDate(day.getDate() - 1);
-    }
-    if (!feeRows) { body.innerHTML = '<div class="modal-loading">近 7 日查無借券成交資料（TWSE 可能維護中）</div>'; return; }
+    // 近 30 日曆天（≈20 交易日）借券成交，一次區間查詢撈完
+    var day = new Date(), from = new Date(day.getTime() - 30 * 86400000);
+    var endYmd = _sblYmd(day), startYmd = _sblYmd(from), feeRows = null;
+    try { feeRows = await _sblFetchFeeRange(startYmd, endYmd); } catch (e) { feeRows = null; }
+    if (!feeRows) { body.innerHTML = '<div class="modal-loading">近 30 日查無借券成交資料（TWSE 可能維護中）</div>'; return; }
 
-    // 逐檔聚合：加權費率（量加權）、最高費率、成交張數（含競價/議借/定價）
-    var fee = {};
+    // 逐檔聚合：只計「競價」——議借是法人間私下議定（常見 ETF 造市/對沖），費率可低到 0.05%
+    // 且量體巨大（實測 20 日全市場議借 1,069 萬張 vs 競價 22.6 萬張），混入會嚴重扭曲加權值，
+    // 對散戶出借方無參考價值（例：00988A 全部加權 0.39% → 競價加權 1.74%）。議借另記供對照。
+    var fee = {}, feeDays = {};
     feeRows.forEach(function (r) {
       var code = String(r[1] || '').trim().split(/\s+/)[0]; if (!code) return;
-      var vol = _sblNum(r[3]), rate = _sblNum(r[4]);
-      var f = fee[code] || (fee[code] = { vol: 0, wsum: 0, max: 0 });
+      var vol = _sblNum(r[3]), rate = _sblNum(r[4]), dt = _sblRocDate(r[0]), type = String(r[2] || '').trim();
+      var f = fee[code] || (fee[code] = { vol: 0, wsum: 0, max: 0, last: null, lastMd: '', negVol: 0, negWsum: 0 });
+      if (type === '議借') { f.negVol += vol; f.negWsum += vol * rate; return; }
+      if (dt) feeDays[dt.ymd] = true;
       f.vol += vol; f.wsum += vol * rate; if (rate > f.max) f.max = rate;
+      if (dt && (!f.last || dt.ymd > f.last)) { f.last = dt.ymd; f.lastMd = dt.md; }
     });
+    var _md = function (ymd) { return ymd.slice(4, 6) + '/' + ymd.slice(6, 8); };
+    var dayList = Object.keys(feeDays).sort();
+    var rangeLabel = dayList.length
+      ? '近 ' + dayList.length + ' 交易日（' + _md(dayList[0]) + '~' + _md(dayList[dayList.length - 1]) + '）'
+      : '近 30 日';
 
     // 借券賣出餘額（上市；單位:股）：idx 8=前日餘額、12=當日餘額
     // 費率明細盤中即時揭露、餘額盤後才有 → 當日撈不到就往前找（最多 7 天），日期不同時另行標註
@@ -121,8 +138,7 @@ async function startSbl(force) {
       bDay.setDate(bDay.getDate() - 1);
     }
     var dateEl = document.getElementById('sbl-date');
-    dateEl.textContent = '費率 ' + ymd.slice(4, 6) + '/' + ymd.slice(6, 8) + '（盤中揭露）' +
-      (balYmd ? '・餘額 ' + balYmd.slice(4, 6) + '/' + balYmd.slice(6, 8) + '（盤後）' : '・餘額暫無資料');
+    dateEl.textContent = '費率 ' + rangeLabel + '・餘額 ' + (balYmd ? _md(balYmd) + '（盤後）' : '暫無資料');
 
     // 券商庫存（server 未連線時仍顯示市場資料提示）
     var positions = [];
@@ -143,7 +159,7 @@ async function startSbl(force) {
       }
     }
 
-    _sblCache = { ymd: ymd, fee: fee, bal: bal, positions: positions };
+    _sblCache = { range: rangeLabel, balYmd: balYmd, fee: fee, bal: bal, positions: positions };
     _sblRender();
   } catch (e) {
     body.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>';
@@ -164,7 +180,7 @@ function _sblRender() {
     var rate = (lentMap[code] && lentMap[code].r) || 0;
     // 實際年收＝借出股數×現價×費率%（以現價概算；實際依每日收盤價計息）
     var lentInc = (p.lentShares > 0 && rate > 0 && price) ? p.lentShares * price * rate / 100 : null;
-    return { code: code, name: name, lots: p.totalShares / 1000, lentLots: p.lentShares / 1000, rate: rate, f: f, w: w, b: b, est: est, hit: hit, lentInc: lentInc };
+    return { code: code, name: name, lots: p.totalShares / 1000, lentLots: p.lentShares / 1000, rate: rate, f: f, w: w, b: b, est: est, hit: hit, lentInc: lentInc, lastMd: f ? f.lastMd : '' };
   });
   rows.sort(function (a, b) {
     if (a.hit !== b.hit) return a.hit ? -1 : 1;
@@ -178,8 +194,8 @@ function _sblRender() {
   if (hits.length) {
     bn.style.display = '';
     bn.innerHTML = '🔔 值得出借 ' + hits.length + ' 檔：' + hits.map(function (r) {
-      return r.code + (r.name ? ' ' + r.name : '') + '（加權 ' + r.w.toFixed(2) + '%）';
-    }).join('、') + '　— 達門檻且借券成交熱絡，可考慮手動掛出借';
+      return r.code + (r.name ? ' ' + r.name : '') + '（加權 ' + r.w.toFixed(2) + '%' + (r.lastMd ? '，最近 ' + r.lastMd : '') + '）';
+    }).join('、') + '　— 期間費率達門檻且成交熱絡，可考慮手動掛出借';
   } else {
     bn.style.display = 'none'; bn.innerHTML = '';
   }
@@ -188,7 +204,8 @@ function _sblRender() {
     '<th>代號 / 名稱</th><th class="num">庫存(張)</th>' +
     '<th class="num sbl-my">借出數量</th><th class="num sbl-my">借出費率％</th><th class="num sbl-my">年收(元)</th>' +
     '<th class="num">借券賣出餘額(張)</th>' +
-    '<th class="num">費率% 加權/最高</th><th class="num">成交(張)</th><th class="num">估年收(元)</th><th style="text-align:center">提醒</th></tr></thead><tbody>';
+    '<th class="num">競價費率% 加權/最高</th><th class="num">最近成交</th><th class="num">期間成交(張)</th>' +
+    '<th class="num">估年收(元)</th><th style="text-align:center">提醒</th></tr></thead><tbody>';
   rows.forEach(function (r) {
     var balHtml = '—';
     if (r.b) {
@@ -197,6 +214,10 @@ function _sblRender() {
         : (d < 0 ? ' <span class="down">▼' + Math.round(-d).toLocaleString('zh-TW') + '</span>' : '');
       balHtml = Math.round(r.b.today).toLocaleString('zh-TW') + arrow;
     }
+    // 議借對照（滑鼠提示）：說明該檔另有法人議借成交，但未計入競價費率
+    var negLots = r.f ? r.f.negVol : 0;
+    var negTip = negLots ? ' title="另有法人議借 ' + Math.round(negLots).toLocaleString('zh-TW') + ' 張（加權 ' +
+      (r.f.negWsum / negLots).toFixed(2) + '%），非散戶行情，未計入"' : '';
     html += '<tr' + (r.hit ? ' class="sbl-hit"' : '') + '>' +
       '<td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + (r.name || '') + '</span></td>' +
       '<td class="num">' + _sblLots(r.lots) + '</td>' +
@@ -208,7 +229,9 @@ function _sblRender() {
       '<td class="num sbl-my">' + (r.lentInc != null ? Math.round(r.lentInc).toLocaleString('zh-TW')
         : (r.lentLots > 0 ? '<span class="sbl-dim">填費率</span>' : '<span class="sbl-dim">—</span>')) + '</td>' +
       '<td class="num">' + balHtml + '</td>' +
-      '<td class="num">' + (r.w != null ? '<b>' + r.w.toFixed(2) + '</b> / ' + r.f.max.toFixed(2) : '<span class="sbl-dim">無成交</span>') + '</td>' +
+      '<td class="num"' + negTip + '>' + (r.w != null ? '<b>' + r.w.toFixed(2) + '</b> / ' + r.f.max.toFixed(2)
+        : '<span class="sbl-dim">期間無競價' + (negLots ? '＊' : '') + '</span>') + '</td>' +
+      '<td class="num">' + (r.lastMd ? r.lastMd : '<span class="sbl-dim">—</span>') + '</td>' +
       '<td class="num">' + (r.f ? r.f.vol.toLocaleString('zh-TW') : '0') + '</td>' +
       '<td class="num">' + (r.est != null ? Math.round(r.est).toLocaleString('zh-TW') : '—') + '</td>' +
       '<td style="text-align:center">' + (r.hit ? '<span class="sbl-pill">值得出借</span>' : '<span class="sbl-dim">—</span>') + '</td></tr>';
@@ -221,7 +244,7 @@ function _sblRender() {
     html += '<tfoot><tr class="sbl-total"><td>已借出合計（' + lentN + ' 檔）</td><td></td>' +
       '<td class="num sbl-my">' + _sblLots(lentQ) + '</td><td></td>' +
       '<td class="num sbl-my">' + Math.round(lentInc).toLocaleString('zh-TW') + '</td>' +
-      '<td colspan="5"></td></tr></tfoot>';
+      '<td colspan="6"></td></tr></tfoot>';
   }
   html += '</table></div>';
   document.getElementById('sbl-body').innerHTML = html;

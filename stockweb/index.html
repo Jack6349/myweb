@@ -198,12 +198,12 @@
         <div class="tx-box-head"><span class="tx-box-title">出借行情（持股 × TWSE 借券資料）</span>
           <span id="sbl-date" class="sbl-date"></span></div>
         <div class="sbl-toolbar">提醒門檻：加權費率 ≥
-          <input id="sbl-fee-min" class="sbl-inp" type="number" step="0.1" min="0" onchange="sblThrChanged()"> % 且 當日成交 ≥
+          <input id="sbl-fee-min" class="sbl-inp" type="number" step="0.1" min="0" onchange="sblThrChanged()"> % 且 期間成交 ≥
           <input id="sbl-vol-min" class="sbl-inp" type="number" step="1" min="0" onchange="sblThrChanged()"> 張
           <button class="btn-query tx-refresh" onclick="startSbl(true)">↻ 更新</button></div>
         <div id="sbl-banner" class="sbl-banner" style="display:none"></div>
         <div id="sbl-body"></div>
-        <div class="tx-note">來源：TWSE 借券成交明細（含競價/議借，量加權費率）＋融券借券賣出餘額（上市），每日盤後更新。費率為借貸市場整體行情，實拿需扣券商分成，僅供手動掛出借參考；上櫃標的餘額暫不提供。<br>「借出數量」自動偵測（出借中股數＝建倉明細−庫存彙總）；「借出費率％」手動輸入（券商無費率 API），存於本機瀏覽器；年收(元)＝借出股數×現價×費率%概算，實際依每日收盤價計息並扣券商分成。</div>
+        <div class="tx-note">來源：TWSE 借券成交明細（近 20 交易日區間，<b>僅計競價成交</b>，量加權）＋融券借券賣出餘額（上市，盤後）。排除「議借」——那是法人間私下議定（ETF 造市/對沖等），費率可低至 0.05% 且量體極大，混入會嚴重扭曲加權值、對散戶出借無參考價值；該檔若另有議借成交，滑鼠移到費率欄可看對照。費率是「有人借才會產生」的流量資料，多數個股整天無成交，故取區間行情並標示最近成交日；餘額則是累積未還的存量，兩者常不同步屬正常。費率為市場整體行情、不分券商，實拿需扣券商分成，僅供手動掛出借參考；上櫃標的餘額暫不提供。<br>「借出數量」自動偵測（出借中股數＝建倉明細−庫存彙總）；「借出費率％」手動輸入（券商無費率 API），存於本機瀏覽器；年收(元)＝借出股數×現價×費率%概算，實際依每日收盤價計息並扣券商分成。</div>
       </div>
     </div>
   </div>
@@ -281,7 +281,7 @@
 <script src="js/live.js?v=41"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=3"></script>
-<script src="js/sbl.js?v=5"></script>
+<script src="js/sbl.js?v=8"></script>
 <script src="js/params.js?v=2"></script>
 <script src="js/dividend-est.js?v=8"></script>
 <script src="js/risk-score.js?v=2"></script>
