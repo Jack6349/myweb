@@ -176,6 +176,13 @@ async function openTradeDetail(code, detailId) {
   }
 }
 function closeDetailModal() {
-  document.getElementById('detail-modal').style.display = 'none';
+  var modal = document.getElementById('detail-modal');
+  modal.style.display = 'none';
+  var box = modal.querySelector('.modal-box');
+  if (box) box.classList.remove('chart-wide'); // 還原一般彈窗尺寸
   if (typeof closeConstPop === 'function') closeConstPop(); // 成份股彈窗收尾（還原輪詢頻率）
+  // 線圖彈窗收尾：停止延遲渲染、關閉盤中自動更新、退訂五檔（歸還訂閱額度）
+  if (typeof _chartCode !== 'undefined') _chartCode = null;
+  if (typeof _chartStopBidAsk === 'function') _chartStopBidAsk();
+  if (typeof _chartStopLiveTimer === 'function') _chartStopLiveTimer();
 }

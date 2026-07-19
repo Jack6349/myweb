@@ -292,6 +292,84 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .sbl-table th.sbl-calc { color: #8fd0ff; }
 .sbl-table td.sbl-calc { background: rgba(143,208,255,.05); }
 .sbl-sep { color: var(--text3); margin: 0 4px; }
+
+/* ── 個股線圖彈窗 ── */
+.scard { cursor: pointer; }
+.chart-tabs { margin-bottom: 10px; }
+.chart-info { font-size: 13px; color: var(--text2); margin-bottom: 6px; min-height: 20px; font-variant-numeric: tabular-nums; }
+.chart-info b { color: var(--text); font-weight: 700; }
+.chart-svg { width: 100%; height: auto; display: block; }
+.ck-grid { stroke: #3d5470; stroke-width: 1; }
+.ck-sep { stroke: #56708f; stroke-width: 1; stroke-dasharray: 4 3; }
+.ck-ref { stroke: #8fa3ba; stroke-width: 1; stroke-dasharray: 5 4; }
+.ck-cross { stroke: var(--accent2); stroke-width: 1; stroke-dasharray: 4 3; pointer-events: none; }
+.ck-axis { fill: #c2d2e2; font-size: 11px; font-family: var(--font); }
+.ck-line { fill: none; stroke-width: 1.4; }
+.ck-line.up { stroke: var(--up); }
+.ck-line.dn { stroke: var(--down); }
+.ck-vol.up { fill: var(--up); opacity: .55; }
+.ck-vol.dn { fill: var(--down); opacity: .55; }
+/* 日 K 棒與均線 */
+.ck-wick.up, .ck-body.up { stroke: var(--up); fill: var(--up); }
+.ck-wick.dn, .ck-body.dn { stroke: var(--down); fill: var(--down); }
+.ck-wick { stroke-width: 1; }
+.ck-ma { fill: none; stroke-width: 1.3; }
+.ck-ma.ma5 { stroke: #f0cc7a; }
+.ck-ma.ma20 { stroke: #7fb0ff; }
+.ck-ma.ma60 { stroke: #d08fe8; }
+.ck-legend { font-size: 12px; margin-left: 10px; font-weight: 700; }
+.ck-legend.ma5 { color: #f0cc7a; }
+.ck-legend.ma20 { color: #7fb0ff; }
+.ck-legend.ma60 { color: #d08fe8; }
+/* 線圖彈窗：加大版面，讓圖＋報價面板一次看完不用捲動 */
+.modal-box.chart-wide { max-width: 1120px; max-height: 94vh; }
+.modal-box.chart-wide .modal-body { padding: 12px 18px; overflow-y: auto; }
+.modal-box.chart-wide .chart-svg { max-height: 46vh; }
+.modal-box.chart-wide .iq-grid { grid-template-columns: repeat(5, 1fr); }
+.modal-box.chart-wide .detail-note { margin-top: 8px; }
+@media (max-width: 1180px) { .modal-box.chart-wide .iq-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-height: 760px) { .modal-box.chart-wide .chart-svg { max-height: 40vh; } }
+
+/* 即時行情（當日走勢） */
+.ck-iline { fill: none; stroke-width: 1.6; }
+.ck-iline.up { stroke: var(--up); }
+.ck-iline.dn { stroke: var(--down); }
+.ck-fill.up { fill: rgba(255,82,82,.16); stroke: none; }
+.ck-fill.dn { fill: rgba(38,217,98,.16); stroke: none; }
+.ck-vwap { fill: none; stroke: #e2e8f0; stroke-width: 1.2; }
+.ck-ivol { fill: #6aa9e8; opacity: .75; }
+.ck-ax-up { fill: #ff8080; }
+.ck-ax-dn { fill: #5fe08f; }
+.ck-ax-ref { fill: #f0cc7a; }
+.ck-legend.vwap { color: #e2e8f0; }
+.iq-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 12px; }
+.iq-cell { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--bg2); padding: 7px 12px; }
+.iq-k { font-size: 12px; color: var(--text2); }
+.iq-v { font-size: 14px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.iq-v.y { color: var(--accent2); }
+@media (max-width: 700px) { .iq-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* 買賣五檔 */
+.bid-head { display: flex; gap: 18px; align-items: center; font-size: 13px; color: var(--text2); margin-bottom: 10px; font-variant-numeric: tabular-nums; }
+.bid-head b { font-size: 16px; color: var(--text); }
+.bid-time { margin-left: auto; color: var(--text3); font-size: 12px; }
+.bid-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; table-layout: fixed; }
+.bid-table th { font-size: 11px; color: var(--text3); font-weight: 400; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.bid-table td { padding: 5px 8px; border-bottom: 1px solid rgba(38,54,74,.5); }
+.bid-table .num { text-align: right; }
+.bid-lv { color: var(--text3); font-size: 11px; width: 40px; }
+.bid-px { font-weight: 700; width: 88px; }
+.bid-bar-cell { width: 34%; position: relative; }
+.bid-bar { display: block; height: 13px; border-radius: 2px; }
+.bid-bar.bid { background: rgba(255,82,82,.45); float: right; }
+.bid-bar.ask { background: rgba(38,217,98,.45); }
+.bid-diff { font-size: 11px; margin: 0 4px; }
+.bid-empty { color: transparent; }
+.bid-ratio { margin-top: 12px; }
+.bid-ratio-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; }
+.bid-ratio-bar i.bid { background: var(--up); }
+.bid-ratio-bar i.ask { background: var(--down); }
+.bid-ratio-txt { display: block; font-size: 12px; color: var(--text2); margin-top: 6px; font-variant-numeric: tabular-nums; }
 .sbl-lent-inp { width: 72px; padding: 3px 6px; font-size: 13px; }
 .sbl-lent-inp::placeholder { color: var(--text3); }
 .sbl-total td { font-weight: 700; border-bottom: none; padding-top: 10px; color: var(--accent2); }

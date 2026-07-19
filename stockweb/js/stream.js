@@ -462,7 +462,8 @@ async function startStream() {
   // 建卡（若尚未建）並渲染
   Object.keys(_contracts).forEach(function (code) {
     if (!document.getElementById('scard-' + code)) {
-      grid.insertAdjacentHTML('beforeend', '<div class="scard" id="scard-' + code + '"></div>');
+      grid.insertAdjacentHTML('beforeend',
+        '<div class="scard" id="scard-' + code + '" title="點看線圖" onclick="openChartPop(\'' + code + '\')"></div>');
     }
     renderCard(code);
   });
