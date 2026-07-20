@@ -281,6 +281,7 @@ async function refreshPositions() {
 
 // ── 格式工具 ──
 function fmtPct(v) { return (v > 0 ? '▲' : (v < 0 ? '▼' : '')) + Math.abs(v).toFixed(2) + '%'; }
+function fmtChg(v) { return (v > 0 ? '▲' : (v < 0 ? '▼' : '')) + Math.abs(v).toFixed(2); } // 漲跌金額（▲漲/▼跌，色由外層 up/down 決定）
 function colorClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'flat'); }
 function fmtMoney(v) { return '$' + Math.round(v).toLocaleString('zh-TW'); }
 

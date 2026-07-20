@@ -1,10 +1,8 @@
-// 股利總管 Web — 趨勢評估（自 Yahoo 日 K 計算趨勢強弱/股價高低/報酬，相對 0050 強弱，ETF 成分股隨選展開）
+// 股利總管 Web — 趨勢評估（自 Yahoo 日 K 計算趨勢強弱/股價高低/報酬，ETF 成分股隨選展開）
 // 註：券商 App 的「診斷分數」為其加值產品、不在 Shioaji API；此處指標為自算技術面，非券商診斷。
 
 var TREND_GAS = NEWS_GAS_URL;   // 沿用同一 GAS 代理（?url= Yahoo）
-var TREND_BENCH = '0050';       // 相對強弱基準
 var _trendRows = [];            // [{code,name,trend,isEtf}]
-var _trendBench = null;         // 基準 trend
 
 function yahooSym(code) {
   code = String(code).trim();
@@ -87,7 +85,7 @@ async function startTrend() {
   } catch (e) { errEl.style.display = 'block'; errEl.textContent = '讀不到持股：' + e.message; wrap.innerHTML = ''; return; }
   if (!holdings.length) { wrap.innerHTML = '<div class="modal-loading">無持股資料</div>'; return; }
 
-  // 各持股平行計算（不再抓 0050 基準：vs0050 欄已移除，僅 ETF 成分股展開時另行取用）
+  // 各持股平行計算
   var rows = await Promise.all(holdings.map(async function (h) {
     return { code: h.code, name: h.name, isEtf: isEtfCode(h.code), trend: await trendForHolding(h.code) };
   }));
@@ -210,7 +208,6 @@ async function ensureTrend() {
   // 靜默計算（不動畫面），供 Prompt 使用
   try {
     var positions = (_positions && _positions.length) ? _positions : await fetchBrokerPositions();
-    _trendBench = await trendForHolding(TREND_BENCH);
     _trendRows = await Promise.all((positions || []).map(async function (p) {
       var code = String(p.code);
       return { code: code, name: (_contracts[code] && _contracts[code].name) || '', isEtf: isEtfCode(code), trend: await trendForHolding(code) };
@@ -220,13 +217,11 @@ async function ensureTrend() {
 
 function trendSummaryForPrompt() {
   if (!_trendRows.length) return '';
-  var benchR3 = _trendBench ? _trendBench.r3 : null;
   return _trendRows.map(function (r) {
     var t = r.trend;
     if (!t) return '- ' + r.code + ' ' + (r.name || '') + '：查無日K';
-    var rs = (benchR3 != null && t.r3 != null) ? '，相對0050(3月) ' + (t.r3 - benchR3 >= 0 ? '+' : '') + (t.r3 - benchR3).toFixed(1) + '%' : '';
     return '- ' + r.code + ' ' + (r.name || '') + '：強弱 ' + t.score10.toFixed(1) + '/10(' + t.label + ')（' + t.arr +
       '，52週位置' + (t.posPct == null ? 'N/A' : Math.round(t.posPct) + '%') +
-      '，近1月' + _pct(t.r1) + ' 近3月' + _pct(t.r3) + ' 近1年' + _pct(t.r12) + rs + '）';
+      '，近1月' + _pct(t.r1) + ' 近3月' + _pct(t.r3) + ' 近1年' + _pct(t.r12) + '）';
   }).join('\n');
 }

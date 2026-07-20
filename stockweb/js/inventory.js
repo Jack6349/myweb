@@ -44,6 +44,7 @@ function invValRow(p) {
   var profit = netVal != null ? netVal - cost : null;
   var prate = (profit != null && cost) ? profit / cost * 100 : null;
   var chg = (price != null && c && c.reference) ? (price - c.reference) / c.reference * 100 : null;
+  var chgAmt = (price != null && c && c.reference) ? price - c.reference : null; // 今日漲跌金額（現價−昨收）
   var pcls = profit == null ? 'flat' : colorClass(profit);
   var ccls = chg == null ? 'flat' : colorClass(chg);
   var cm = (typeof constEst === 'function') ? constEst(code) : null; // 成份股估算（覆蓋率達標才有）
@@ -60,6 +61,7 @@ function invValRow(p) {
     '<td class="num">' + shares.toLocaleString('zh-TW') + '</td>' +
     '<td class="num">' + p.price.toFixed(2) + '</td>' +
     '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
+    '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
     '<td class="num ' + estCls + '" ' + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
       (cm && cm.est != null ? fmtPct(cm.est) : '—') + '</td>' +

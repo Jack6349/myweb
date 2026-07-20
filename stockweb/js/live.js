@@ -40,8 +40,9 @@ function liveCalc(p) {
   var profit = netVal != null ? netVal - cost : null;
   var prate = (profit != null && cost) ? profit / cost * 100 : null;
   var chg = (price != null && c && c.reference) ? (price - c.reference) / c.reference * 100 : null;
+  var chgAmt = (price != null && c && c.reference) ? price - c.reference : null; // 今日漲跌金額
   var alert = (typeof evalAlert === 'function') ? evalAlert(code, price, prate) : null;
-  return { code: code, cost: cost, price: price, val: netVal, profit: profit, prate: prate, chg: chg, avg: p.price, alert: alert };
+  return { code: code, cost: cost, price: price, val: netVal, profit: profit, prate: prate, chg: chg, chgAmt: chgAmt, avg: p.price, alert: alert };
 }
 
 function liveRowHtml(p) {
@@ -56,6 +57,7 @@ function liveRowHtml(p) {
     '<td class="num">' + (p.quantity != null ? Math.round(p.quantity).toLocaleString('zh-TW') : '—') + '</td>' +
     '<td class="num">' + v.avg.toFixed(2) + '</td>' +
     '<td class="num ' + ccls + '">' + (v.price != null ? v.price.toFixed(2) : '—') + '</td>' +
+    '<td class="num ' + ccls + '">' + (v.chgAmt == null ? '—' : fmtChg(v.chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (v.chg == null ? '—' : fmtPct(v.chg)) + '</td>' +
     '<td class="num">' + (v.val != null ? Math.round(v.val).toLocaleString('zh-TW') : '—') + '</td>' +
     '<td class="num ' + pcls + '">' + (v.profit == null ? '—' : (v.profit >= 0 ? '+' : '') + Math.round(v.profit).toLocaleString('zh-TW')) + '</td>' +
@@ -90,6 +92,7 @@ function liveHead() {
   return '<thead><tr><th class="live-dot-cell"></th>' +
     _liveSortTh('代號', 'code') +
     '<th class="num">餘額</th><th class="num">成本均價</th><th class="num">現價</th>' +
+    '<th class="num">漲跌</th>' +
     _liveSortTh('漲跌幅', 'chg', true) +
     '<th class="num">現值</th>' +
     _liveSortTh('未實現損益', 'pnl', true) +
