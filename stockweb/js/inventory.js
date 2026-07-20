@@ -16,15 +16,20 @@ function invMetrics(p) {
   return { val: netVal, profit: profit, prate: prate, chg: chg };
 }
 
-function changeInvSort(v) {
-  _invSort = v;
+// 整欄表頭可點：第一次點降冪（▼ 高→低），再點升冪（▲），再點又降冪…（兩態切換，恆有排序）
+function invSortCol(key) {
+  _invSort = (_invSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
   renderInvTable();
   _updateInvSortArrows();
 }
-// 排序欄位的三角亮起、其餘變暗
+// 依 _invSort 更新各排序欄位的箭頭方向與高亮
 function _updateInvSortArrows() {
-  document.querySelectorAll('#inv-view .sh b').forEach(function (b) {
-    b.classList.toggle('active', b.getAttribute('data-sort') === _invSort);
+  document.querySelectorAll('#inv-view th.sort-th').forEach(function (th) {
+    var key = th.getAttribute('data-key');
+    var on = _invSort === key + 'Asc' || _invSort === key + 'Desc';
+    th.classList.toggle('sorted', on);
+    var ind = th.querySelector('.sort-ind');
+    if (ind) ind.textContent = _invSort === key + 'Asc' ? '▲' : (_invSort === key + 'Desc' ? '▼' : '↕');
   });
 }
 

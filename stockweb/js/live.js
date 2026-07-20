@@ -79,19 +79,21 @@ function liveSorted() {
   return arr;
 }
 
-// 欄名旁上下三角排序（作用中亮、其餘暗）；每次重繪依 _liveSort 標示 active
-function _liveArrows(asc, desc) {
-  return '<span class="sh"><b' + (_liveSort === asc ? ' class="active"' : '') + ' onclick="changeLiveSort(\'' + asc + '\')">▲</b>' +
-    '<b' + (_liveSort === desc ? ' class="active"' : '') + ' onclick="changeLiveSort(\'' + desc + '\')">▼</b></span>';
+// 整欄表頭可點排序（與持股庫存一致）：單一箭頭指示狀態，點擊區＝整格
+function _liveSortTh(label, key, numCls) {
+  var on = _liveSort === key + 'Asc' || _liveSort === key + 'Desc';
+  var arrow = _liveSort === key + 'Asc' ? '▲' : (_liveSort === key + 'Desc' ? '▼' : '↕');
+  return '<th class="' + (numCls ? 'num ' : '') + 'sort-th' + (on ? ' sorted' : '') + '" onclick="liveSortCol(\'' + key + '\')" title="點擊排序">' +
+    label + '<span class="sort-ind">' + arrow + '</span></th>';
 }
 function liveHead() {
   return '<thead><tr><th class="live-dot-cell"></th>' +
-    '<th>代號' + _liveArrows('codeAsc', 'codeDesc') + '</th>' +
+    _liveSortTh('代號', 'code') +
     '<th class="num">餘額</th><th class="num">成本均價</th><th class="num">現價</th>' +
-    '<th class="num">漲跌幅' + _liveArrows('chgAsc', 'chgDesc') + '</th>' +
+    _liveSortTh('漲跌幅', 'chg', true) +
     '<th class="num">現值</th>' +
-    '<th class="num">未實現損益' + _liveArrows('pnlAsc', 'pnlDesc') + '</th>' +
-    '<th class="num">獲利率' + _liveArrows('prateAsc', 'prateDesc') + '</th></tr></thead>';
+    _liveSortTh('未實現損益', 'pnl', true) +
+    _liveSortTh('獲利率', 'prate', true) + '</tr></thead>';
 }
 
 function renderLiveTables() {
@@ -114,8 +116,8 @@ function renderLiveRow(code) {
   renderLiveTables();
 }
 
-function changeLiveSort(v) {
-  _liveSort = v;
+function liveSortCol(key) {
+  _liveSort = (_liveSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
   renderLiveTables();
 }
 

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=68">
+<link rel="stylesheet" href="css/app.css?v=70">
 </head>
 <body>
 
@@ -121,12 +121,12 @@
         <thead><tr>
           <th></th>
           <th class="live-dot-cell"></th>
-          <th>代號<span class="sh"><b data-sort="codeAsc" onclick="changeInvSort('codeAsc')">▲</b><b data-sort="codeDesc" onclick="changeInvSort('codeDesc')">▼</b></span></th>
+          <th class="sort-th" data-key="code" onclick="invSortCol('code')" title="點擊排序">代號<span class="sort-ind">↕</span></th>
           <th>名稱</th><th class="num">餘額</th><th class="num">成本均價</th><th class="num">現價</th>
-          <th class="num">漲跌幅<span class="sh"><b data-sort="chgAsc" onclick="changeInvSort('chgAsc')">▲</b><b data-sort="chgDesc" onclick="changeInvSort('chgDesc')">▼</b></span></th>
+          <th class="num sort-th" data-key="chg" onclick="invSortCol('chg')" title="點擊排序">漲跌幅<span class="sort-ind">↕</span></th>
           <th class="num">成份股漲跌%</th><th class="num">付出成本</th><th class="num">現值</th>
-          <th class="num">未實現損益<span class="sh"><b data-sort="pnlAsc" onclick="changeInvSort('pnlAsc')">▲</b><b data-sort="pnlDesc" onclick="changeInvSort('pnlDesc')">▼</b></span></th>
-          <th class="num">獲利率<span class="sh"><b data-sort="prateAsc" onclick="changeInvSort('prateAsc')">▲</b><b data-sort="prateDesc" onclick="changeInvSort('prateDesc')">▼</b></span></th>
+          <th class="num sort-th" data-key="pnl" onclick="invSortCol('pnl')" title="點擊排序">未實現損益<span class="sort-ind">↕</span></th>
+          <th class="num sort-th" data-key="prate" onclick="invSortCol('prate')" title="點擊排序">獲利率<span class="sort-ind">↕</span></th>
         </tr></thead>
         <tbody id="inv-tbody"></tbody>
       </table>
@@ -278,9 +278,9 @@
 <script src="js/auth.js?v=10"></script>
 <script src="js/broker.js?v=17"></script>
 <script src="js/stream.js?v=49"></script>
-<script src="js/inventory.js?v=46"></script>
+<script src="js/inventory.js?v=47"></script>
 <script src="js/constituents.js?v=11"></script>
-<script src="js/live.js?v=41"></script>
+<script src="js/live.js?v=42"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=3"></script>
 <script src="js/sbl.js?v=9"></script>
