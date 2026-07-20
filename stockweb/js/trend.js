@@ -87,17 +87,14 @@ async function startTrend() {
   } catch (e) { errEl.style.display = 'block'; errEl.textContent = '讀不到持股：' + e.message; wrap.innerHTML = ''; return; }
   if (!holdings.length) { wrap.innerHTML = '<div class="modal-loading">無持股資料</div>'; return; }
 
-  // 基準 + 各持股平行計算
-  var benchP = trendForHolding(TREND_BENCH);
+  // 各持股平行計算（不再抓 0050 基準：vs0050 欄已移除，僅 ETF 成分股展開時另行取用）
   var rows = await Promise.all(holdings.map(async function (h) {
     return { code: h.code, name: h.name, isEtf: isEtfCode(h.code), trend: await trendForHolding(h.code) };
   }));
-  _trendBench = await benchP;
   _trendRows = rows;
 
   var okCount = rows.filter(function (r) { return r.trend; }).length;
-  info.textContent = '共 ' + rows.length + ' 檔（' + okCount + ' 檔取得日 K）｜相對強弱基準：0050' +
-    (_trendBench ? '（近3月 ' + _pct(_trendBench.r3) + '）' : '');
+  info.textContent = '共 ' + rows.length + ' 檔（' + okCount + ' 檔取得日 K）';
   renderTrendTable();
 }
 
@@ -110,19 +107,17 @@ function renderTrendTable() {
     var ra = a.trend && a.trend.r3 != null ? a.trend.r3 : -999, rb = b.trend && b.trend.r3 != null ? b.trend.r3 : -999;
     return rb - ra;
   });
-  var benchR3 = _trendBench ? _trendBench.r3 : null;
   var html = '<div class="inv-table-wrap"><table class="inv-table trend-table"><thead><tr>' +
     '<th>代號</th><th>名稱</th><th class="num">強弱</th><th>排列</th><th class="num">52週位置</th>' +
     '<th class="num">近1月</th><th class="num">近3月</th><th class="num">近6月</th><th class="num">近1年</th>' +
-    '<th class="num">vs0050(3月)</th><th></th></tr></thead><tbody>';
+    '<th></th></tr></thead><tbody>';
   rows.forEach(function (r) {
     var t = r.trend;
     if (!t) {
       html += '<tr><td class="inv-code">' + r.code + '</td><td class="inv-name">' + (r.name || '') + '</td>' +
-        '<td class="num flat" colspan="9">查無日K</td></tr>';
+        '<td class="num flat" colspan="8">查無日K</td></tr>';
       return;
     }
-    var rs = (benchR3 != null && t.r3 != null) ? t.r3 - benchR3 : null;
     var arrCls = t.arr === '多頭排列' ? 'up' : (t.arr === '空頭排列' ? 'down' : 'flat');
     html += '<tr>' +
       '<td class="inv-code">' + r.code + '</td>' +
@@ -134,7 +129,6 @@ function renderTrendTable() {
       '<td class="num ' + _pctCls(t.r3) + '">' + _pct(t.r3) + '</td>' +
       '<td class="num ' + _pctCls(t.r6) + '">' + _pct(t.r6) + '</td>' +
       '<td class="num ' + _pctCls(t.r12) + '">' + _pct(t.r12) + '</td>' +
-      '<td class="num ' + _pctCls(rs) + '">' + (rs == null ? '—' : (rs >= 0 ? '+' : '') + rs.toFixed(1) + '%') + '</td>' +
       '<td>' + (r.isEtf ? '<button class="btn-detail" onclick="showConstituentTrend(\'' + r.code + '\',\'' + (r.name || '') + '\')">成分股</button>' : '') + '</td>' +
     '</tr>';
   });

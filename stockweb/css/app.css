@@ -218,7 +218,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .trend-table .inv-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── 新聞情勢 ── */
-.macro-bar { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.macro-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
+@media (max-width: 1100px) { .macro-bar { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 680px) { .macro-bar { grid-template-columns: repeat(2, 1fr); } }
 .macro-bar:empty { display: none; }
 .macro-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; display: flex; align-items: baseline; gap: 8px; }
 .macro-name { font-size: 12px; color: var(--text2); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -304,9 +306,9 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ck-ref { stroke: #8fa3ba; stroke-width: 1; stroke-dasharray: 5 4; }
 .ck-cross { stroke: var(--accent2); stroke-width: 1; stroke-dasharray: 4 3; pointer-events: none; }
 .ck-axis { fill: #c2d2e2; font-size: 11px; font-family: var(--font); }
-.ck-line { fill: none; stroke-width: 1.4; }
-.ck-line.up { stroke: var(--up); }
-.ck-line.dn { stroke: var(--down); }
+/* 五日線：暗橘線＋由上而下漸層填滿 */
+.ck5-line { fill: none; stroke: #e8731e; stroke-width: 1.4; }
+.ck5-fill { fill: url(#ck5grad); stroke: none; }
 .ck-vol.up { fill: var(--up); opacity: .55; }
 .ck-vol.dn { fill: var(--down); opacity: .55; }
 /* 日 K 棒與均線 */
@@ -336,6 +338,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ck-iline.dn { stroke: var(--down); }
 .ck-fill.up { fill: rgba(255,82,82,.16); stroke: none; }
 .ck-fill.dn { fill: rgba(38,217,98,.16); stroke: none; }
+.ck-fill { stroke: none; }
 .ck-vwap { fill: none; stroke: #e2e8f0; stroke-width: 1.2; }
 .ck-ivol { fill: #6aa9e8; opacity: .75; }
 .ck-ax-up { fill: #ff8080; }
@@ -352,24 +355,42 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 /* 買賣五檔 */
 .bid-head { display: flex; gap: 18px; align-items: center; font-size: 13px; color: var(--text2); margin-bottom: 10px; font-variant-numeric: tabular-nums; }
 .bid-head b { font-size: 16px; color: var(--text); }
+.bid-head b.up { color: var(--up); }
+.bid-head b.down { color: var(--down); }
+.bid-head b.flat { color: var(--accent2); }
 .bid-time { margin-left: auto; color: var(--text3); font-size: 12px; }
-.bid-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; table-layout: fixed; }
-.bid-table th { font-size: 11px; color: var(--text3); font-weight: 400; padding: 4px 8px; border-bottom: 1px solid var(--border); }
-.bid-table td { padding: 5px 8px; border-bottom: 1px solid rgba(58,79,104,.6); }
-.bid-table .num { text-align: right; }
-.bid-lv { color: var(--text3); font-size: 11px; width: 40px; }
-.bid-px { font-weight: 700; width: 88px; }
-.bid-bar-cell { width: 34%; position: relative; }
-.bid-bar { display: block; height: 13px; border-radius: 2px; }
-.bid-bar.bid { background: rgba(255,82,82,.45); float: right; }
-.bid-bar.ask { background: rgba(38,217,98,.45); }
-.bid-diff { font-size: 11px; margin: 0 4px; }
-.bid-empty { color: transparent; }
-.bid-ratio { margin-top: 12px; }
-.bid-ratio-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; }
+/* 內外盤比 Bar（頂部，加高，兩側放張數/百分比） */
+.bid-ratio { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+.bid-ratio-bar { flex: 1; display: flex; height: 19px; border-radius: 4px; overflow: hidden; }
 .bid-ratio-bar i.bid { background: var(--up); }
 .bid-ratio-bar i.ask { background: var(--down); }
-.bid-ratio-txt { display: block; font-size: 12px; color: var(--text2); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.bid-ratio-side { font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bid-ratio-side.left { text-align: right; min-width: 120px; }
+.bid-ratio-side.right { text-align: left; min-width: 120px; }
+.bid-ratio-side b.y { color: var(--accent2); font-size: 15px; }
+.bid-ratio-lbl { font-size: 12px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
+.bid-ratio { margin-bottom: 14px; }
+/* 五檔表：左右兩欄深度對照 */
+.bid-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; table-layout: fixed; }
+.bid-table th { font-size: 11px; color: var(--text3); font-weight: 400; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.bid-table .bid-side-h { font-size: 12px; font-weight: 700; text-align: center; }
+.bid-table .bid-side-h.buy { color: var(--up); }
+.bid-table .bid-side-h.sell { color: var(--down); }
+.bid-table td { padding: 6px 8px; border-bottom: 1px solid rgba(58,79,104,.6); }
+.bid-table .num { text-align: right; }
+.bid-px { font-weight: 700; width: 74px; }
+.bid-px.buy { color: var(--up); }
+.bid-px.sell { color: var(--down); }
+.bid-vol { color: var(--accent2); width: 82px; }
+.bid-bar-cell { width: 20%; position: relative; }
+.bid-bar { display: block; height: 13px; border-radius: 2px; }
+.bid-bar.bid { background: rgba(255,82,82,.5); float: right; }
+.bid-bar.ask { background: rgba(38,217,98,.5); }
+/* 中央分隔：買賣兩欄之間 */
+.bid-table td.bid-px.sell, .bid-table .bid-side-h.sell, .bid-table thead tr:nth-child(2) th:nth-child(4) { border-left: 2px solid var(--border); }
+.bid-diff { font-size: 11px; margin: 0 4px; color: var(--text3); }
+.bid-diff.up { color: var(--up); }
+.bid-diff.down { color: var(--down); }
 .sbl-lent-inp { width: 72px; padding: 3px 6px; font-size: 13px; }
 .sbl-lent-inp::placeholder { color: var(--text3); }
 .sbl-total td { font-weight: 700; border-bottom: none; padding-top: 10px; color: var(--accent2); }

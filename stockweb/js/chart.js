@@ -191,7 +191,10 @@ function _chartIntraSvg(cc, code) {
   var hi = ref + dev, lo = ref - dev;
   var vmax = 1; b.v.forEach(function (v) { if (v > vmax) vmax = v; });
 
-  var x = function (k) { return PAD_L + (n === 1 ? PW / 2 : k * PW / (n - 1)); };
+  // X 軸固定為整個交易時段 09:00–13:30（不隨當前時間縮放）；資料只填到現在，右側留白
+  var SESS_S = 540, SESS_E = 810; // 分鐘
+  var _tmin = function (t) { return parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3, 5), 10); };
+  var x = function (k) { return PAD_L + (_tmin(b.t[k]) - SESS_S) / (SESS_E - SESS_S) * PW; };
   var y = function (p) { return PAD_T + (hi - p) * PH / (hi - lo); };
   var vy = function (v) { return PAD_T + PH + GAP + VH - v * VH / vmax; };
 
@@ -203,29 +206,42 @@ function _chartIntraSvg(cc, code) {
     s += '<line class="' + (g === 2 ? 'ck-ref' : 'ck-grid') + '" x1="' + PAD_L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + yy.toFixed(1) + '"/>' +
       '<text class="ck-axis ' + kls + '" x="' + (PAD_L - 6) + '" y="' + (yy + 3.5).toFixed(1) + '" text-anchor="end">' + pv.toFixed(2) + '</text>';
   }
-  // X 軸整點格線（09~13）
-  var prevH = '';
-  b.t.forEach(function (t, k) {
-    var hh = t.slice(0, 2);
-    if (hh !== prevH) {
-      if (k > 0) s += '<line class="ck-grid" x1="' + x(k).toFixed(1) + '" y1="' + PAD_T + '" x2="' + x(k).toFixed(1) + '" y2="' + (PAD_T + PH) + '"/>';
-      s += '<text class="ck-axis" x="' + x(k).toFixed(1) + '" y="' + (H - 2) + '" text-anchor="middle">' + hh + '</text>';
-      prevH = hh;
-    }
-  });
-  // 量條
-  var bw = Math.max(0.6, PW / n * 0.7);
+  // X 軸固定整點格線 09~13（位置依時段比例，與資料多寡無關）
+  for (var hh = 9; hh <= 13; hh++) {
+    var xg = PAD_L + (hh * 60 - SESS_S) / (SESS_E - SESS_S) * PW;
+    if (hh > 9) s += '<line class="ck-grid" x1="' + xg.toFixed(1) + '" y1="' + PAD_T + '" x2="' + xg.toFixed(1) + '" y2="' + (PAD_T + PH) + '"/>';
+    s += '<text class="ck-axis" x="' + xg.toFixed(1) + '" y="' + (H - 2) + '" text-anchor="middle">' + String(hh).padStart(2, '0') + '</text>';
+  }
+  // 量條（寬度依每分鐘間距，不隨資料筆數變化）
+  var bw = Math.max(0.6, PW / (SESS_E - SESS_S) * 0.7);
   for (var k2 = 0; k2 < n; k2++) {
     if (!b.v[k2]) continue;
     s += '<rect class="ck-ivol" x="' + (x(k2) - bw / 2).toFixed(1) + '" y="' + vy(b.v[k2]).toFixed(1) +
       '" width="' + bw.toFixed(1) + '" height="' + Math.max(0.6, b.v[k2] * VH / vmax).toFixed(1) + '"/>';
   }
-  // 價格線＋填色（收盤價相對昨收決定紅/綠）
-  var up = b.c[n - 1] >= ref, cls = up ? 'up' : 'dn';
-  var pts = [], k3;
-  for (k3 = 0; k3 < n; k3++) pts.push(x(k3).toFixed(1) + ',' + y(b.c[k3]).toFixed(1));
-  s += '<polygon class="ck-fill ' + cls + '" points="' + x(0).toFixed(1) + ',' + y(ref).toFixed(1) + ' ' + pts.join(' ') + ' ' + x(n - 1).toFixed(1) + ',' + y(ref).toFixed(1) + '"/>';
-  s += '<polyline class="ck-iline ' + cls + '" points="' + pts.join(' ') + '"/>';
+  // 價格線＋填色以昨收為界分段上色：高於昨收＝紅、低於＝綠，跨越昨收處精確切分（同券商 App）
+  var yRef = y(ref), k3;
+  var redFill = '', dnFill = '', redLn = '', dnLn = '';
+  var seg = function (xa, ya, xb, yb, red) {
+    var ln = 'M' + xa.toFixed(1) + ' ' + ya.toFixed(1) + 'L' + xb.toFixed(1) + ' ' + yb.toFixed(1);
+    var fl = 'M' + xa.toFixed(1) + ' ' + ya.toFixed(1) + 'L' + xb.toFixed(1) + ' ' + yb.toFixed(1) +
+      'L' + xb.toFixed(1) + ' ' + yRef.toFixed(1) + 'L' + xa.toFixed(1) + ' ' + yRef.toFixed(1) + 'Z';
+    if (red) { redLn += ln; redFill += fl; } else { dnLn += ln; dnFill += fl; }
+  };
+  for (k3 = 0; k3 < n - 1; k3++) {
+    var ca = b.c[k3], cb = b.c[k3 + 1], xa = x(k3), xb = x(k3 + 1);
+    if ((ca >= ref) === (cb >= ref)) {
+      seg(xa, y(ca), xb, y(cb), ca >= ref);
+    } else {
+      var xc = xa + (xb - xa) * (ref - ca) / (cb - ca);   // 與昨收線交點
+      seg(xa, y(ca), xc, yRef, ca >= ref);
+      seg(xc, yRef, xb, y(cb), cb >= ref);
+    }
+  }
+  if (dnFill) s += '<path class="ck-fill dn" d="' + dnFill + '"/>';
+  if (redFill) s += '<path class="ck-fill up" d="' + redFill + '"/>';
+  if (dnLn) s += '<path class="ck-iline dn" d="' + dnLn + '"/>';
+  if (redLn) s += '<path class="ck-iline up" d="' + redLn + '"/>';
   // 均價線
   var vp = [];
   for (k3 = 0; k3 < n; k3++) if (vwap[k3] != null) vp.push(x(k3).toFixed(1) + ',' + y(vwap[k3]).toFixed(1));
@@ -272,14 +288,18 @@ function _chartBindIntraHover(b) {
   var hit = document.getElementById('cki-hit'), cross = document.getElementById('cki-cross'), tip = document.getElementById('cki-tip');
   if (!svg || !hit || !cross || !tip) return;
   var n = b.c.length, PAD_L = 58, PW = 860 - 58 - 12;
+  var SESS_S = 540, SESS_E = 810;
+  var _tmin = function (t) { return parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3, 5), 10); };
   var base = tip.innerHTML;
   var ct = _contracts[_chartCode] || {}, ref = ct.reference || b.c[0];
   hit.addEventListener('mousemove', function (ev) {
     var vx = _chartVX(svg, ev.clientX);
     if (vx == null) return;
-    var k = Math.round((vx - PAD_L) / PW * (n - 1));
-    if (k < 0) k = 0; if (k > n - 1) k = n - 1;
-    var xx = PAD_L + (n === 1 ? PW / 2 : k * PW / (n - 1));
+    // 反推游標對應的時間，找最接近的那根分 K（X 軸為固定時段，非等距索引）
+    var tgt = SESS_S + (vx - PAD_L) / PW * (SESS_E - SESS_S);
+    var k = 0, best = Infinity;
+    for (var i = 0; i < n; i++) { var dd = Math.abs(_tmin(b.t[i]) - tgt); if (dd < best) { best = dd; k = i; } }
+    var xx = PAD_L + (_tmin(b.t[k]) - SESS_S) / (SESS_E - SESS_S) * PW;
     cross.setAttribute('x1', xx); cross.setAttribute('x2', xx); cross.style.display = '';
     var p = b.c[k], d = p - ref, dp = ref ? d / ref * 100 : 0;
     var cls = d > 0 ? 'up' : (d < 0 ? 'down' : '');
@@ -331,13 +351,15 @@ function _chartStopBidAsk() {
   }
 }
 
-// 五檔表：委買由高到低、委賣由低到高；量條寬度依該檔量佔比；未開盤或尚無推送時顯示快照最佳一檔
+// 五檔表：左右兩欄深度對照（買盤左、賣盤右，各 5 檔，買1/賣1 在最上）
+// 版面 左→右：〔量條→買量→買價 ‖ 賣價→賣量→量條〕；量條在最外側、價格在中央面對面
+// 顏色：買價紅、賣價綠、買賣量黃；成交價漲紅/平黃/跌綠
 function _bidAskHtml(b, code) {
-  var r = _rows[code] || {}, ct = _contracts[code] || {};
+  var r = _rows[code] || {}, ct = _contracts[code] || {}, ref = ct.reference;
+  var dealCls = (r.close != null && ref != null) ? (r.close > ref ? 'up' : (r.close < ref ? 'down' : 'flat')) : '';
   var head = '<div class="bid-head">' +
-    '<span>成交 <b class="' + (r.close != null && ct.reference ? colorClass(r.close - ct.reference) : '') + '">' +
-      (r.close != null ? r.close.toFixed(2) : '—') + '</b></span>' +
-    '<span>昨收 ' + (ct.reference != null ? ct.reference.toFixed(2) : '—') + '</span>' +
+    '<span>成交 <b class="' + dealCls + '">' + (r.close != null ? r.close.toFixed(2) : '—') + '</b></span>' +
+    '<span>昨收 ' + (ref != null ? ref.toFixed(2) : '—') + '</span>' +
     '<span>總量 ' + (r.total_volume != null ? r.total_volume.toLocaleString('zh-TW') : '—') + '</span>' +
     '<span class="bid-time">' + (b ? (b.time || '').slice(0, 8) : (r.time || '')) + '</span></div>';
 
@@ -351,37 +373,41 @@ function _bidAskHtml(b, code) {
   var dbv = b.diff_bid_vol || [], dav = b.diff_ask_vol || [];
   var maxV = 1;
   bv.concat(av).forEach(function (v) { if (v > maxV) maxV = v; });
-  var ref = ct.reference;
-  var pcls = function (p) { return (ref && p) ? colorClass(parseFloat(p) - ref) : ''; };
   var diff = function (d) { return d ? '<span class="bid-diff ' + (d > 0 ? 'up' : 'down') + '">' + (d > 0 ? '+' : '') + d + '</span>' : ''; };
+  var barW = function (v) { return (v / maxV * 100).toFixed(1); };
 
-  var rows = '';
-  for (var i = 4; i >= 0; i--) {   // 委賣：價高在上
-    if (ap[i] == null) continue;
-    rows += '<tr class="bid-row"><td class="bid-lv">賣' + (i + 1) + '</td>' +
-      '<td class="num bid-empty"></td><td class="bid-bar-cell"></td>' +
-      '<td class="num bid-px ' + pcls(ap[i]) + '">' + parseFloat(ap[i]).toFixed(2) + '</td>' +
-      '<td class="bid-bar-cell"><span class="bid-bar ask" style="width:' + (av[i] / maxV * 100).toFixed(1) + '%"></span></td>' +
-      '<td class="num">' + (av[i] || 0).toLocaleString('zh-TW') + diff(dav[i]) + '</td></tr>';
-  }
-  for (var j = 0; j < 5; j++) {    // 委買：價高在上
-    if (bp[j] == null) continue;
-    rows += '<tr class="bid-row"><td class="bid-lv">買' + (j + 1) + '</td>' +
-      '<td class="num">' + diff(dbv[j]) + (bv[j] || 0).toLocaleString('zh-TW') + '</td>' +
-      '<td class="bid-bar-cell bid-bar-r"><span class="bid-bar bid" style="width:' + (bv[j] / maxV * 100).toFixed(1) + '%"></span></td>' +
-      '<td class="num bid-px ' + pcls(bp[j]) + '">' + parseFloat(bp[j]).toFixed(2) + '</td>' +
-      '<td class="bid-bar-cell"></td><td class="num bid-empty"></td></tr>';
-  }
+  // 內外盤比 Bar（移到最上方、加高，兩側放張數與百分比）
   var sumB = 0, sumA = 0;
   bv.forEach(function (v) { sumB += v; }); av.forEach(function (v) { sumA += v; });
-  var tot = sumB + sumA || 1;
-  return head +
-    '<table class="bid-table"><thead><tr><th></th><th class="num">買量</th><th></th><th class="num">價格</th><th></th><th class="num">賣量</th></tr></thead>' +
+  var tot = sumB + sumA || 1, pB = sumB / tot * 100, pA = sumA / tot * 100;
+  var ratio = '<div class="bid-ratio">' +
+    '<span class="bid-ratio-lbl">委買</span>' +
+    '<span class="bid-ratio-side left"><b class="y">' + sumB.toLocaleString('zh-TW') + '</b>（' + pB.toFixed(1) + '%）</span>' +
+    '<span class="bid-ratio-bar"><i class="bid" style="width:' + pB.toFixed(1) + '%"></i><i class="ask" style="width:' + pA.toFixed(1) + '%"></i></span>' +
+    '<span class="bid-ratio-side right">（' + pA.toFixed(1) + '%）<b class="y">' + sumA.toLocaleString('zh-TW') + '</b></span>' +
+    '<span class="bid-ratio-lbl">委賣</span>' +
+    '</div>';
+
+  // 五列：買 i／賣 i 同列（i=0 為最佳買賣，置頂）
+  var rows = '';
+  for (var i = 0; i < 5; i++) {
+    var hasB = bp[i] != null, hasA = ap[i] != null;
+    rows += '<tr class="bid-row">' +
+      // 買盤（左）：量條 → 買量 → 買價
+      '<td class="bid-bar-cell bid-bar-r">' + (hasB ? '<span class="bid-bar bid" style="width:' + barW(bv[i]) + '%"></span>' : '') + '</td>' +
+      '<td class="num bid-vol">' + (hasB ? diff(dbv[i]) + (bv[i] || 0).toLocaleString('zh-TW') : '') + '</td>' +
+      '<td class="num bid-px buy">' + (hasB ? parseFloat(bp[i]).toFixed(2) : '') + '</td>' +
+      // 賣盤（右）：賣價 → 賣量 → 量條
+      '<td class="num bid-px sell">' + (hasA ? parseFloat(ap[i]).toFixed(2) : '') + '</td>' +
+      '<td class="num bid-vol">' + (hasA ? diff(dav[i]) + (av[i] || 0).toLocaleString('zh-TW') : '') + '</td>' +
+      '<td class="bid-bar-cell">' + (hasA ? '<span class="bid-bar ask" style="width:' + barW(av[i]) + '%"></span>' : '') + '</td>' +
+      '</tr>';
+  }
+  return head + ratio +
+    '<table class="bid-table"><thead><tr>' +
+      '<th colspan="3" class="bid-side-h buy">買盤</th><th colspan="3" class="bid-side-h sell">賣盤</th></tr>' +
+      '<tr><th></th><th class="num">買量</th><th class="num">買價</th><th class="num">賣價</th><th class="num">賣量</th><th></th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>' +
-    '<div class="bid-ratio"><span class="bid-ratio-bar"><i class="bid" style="width:' + (sumB / tot * 100).toFixed(1) + '%"></i>' +
-      '<i class="ask" style="width:' + (sumA / tot * 100).toFixed(1) + '%"></i></span>' +
-      '<span class="bid-ratio-txt">委買 <b class="up">' + sumB.toLocaleString('zh-TW') + '</b>（' + (sumB / tot * 100).toFixed(1) + '%）' +
-      '　委賣 <b class="down">' + sumA.toLocaleString('zh-TW') + '</b>（' + (sumA / tot * 100).toFixed(1) + '%）</span></div>' +
     _bidSnapNote();
 }
 function _bidSnapNote() {
@@ -680,7 +706,10 @@ function _chart5dSvg(d, code) {
   var dayStart = [], prevDay = '';
   d.dts.forEach(function (t, i) { var dd = t.slice(0, 10); if (dd !== prevDay) { dayStart.push({ i: i, day: dd }); prevDay = dd; } });
 
-  var s = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
+  var s = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">' +
+    '<defs><linearGradient id="ck5grad" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#e8731e" stop-opacity="0.55"/>' +
+      '<stop offset="1" stop-color="#e8731e" stop-opacity="0.03"/></linearGradient></defs>';
 
   // 價格區水平格線＋Y 軸標籤（5 等分）
   for (var g = 0; g <= 4; g++) {
@@ -710,11 +739,12 @@ function _chart5dSvg(d, code) {
       '" width="' + barW.toFixed(1) + '" height="' + vh.toFixed(1) + '"/>';
   }
 
-  // 價格折線（收盤價；漲綠跌紅依全期首尾）
+  // 價格折線＋暗橘漸層填滿（自線往下填至價格區底，上濃下淡）
   var pts = [];
   for (var j2 = 0; j2 < n; j2++) pts.push(x(j2).toFixed(1) + ',' + y(d.close[j2]).toFixed(1));
-  var rise = d.close[n - 1] >= d.close[0];
-  s += '<polyline class="ck-line ' + (rise ? 'up' : 'dn') + '" points="' + pts.join(' ') + '"/>';
+  var baseY = (PAD_T + PH).toFixed(1);
+  s += '<polygon class="ck5-fill" points="' + x(0).toFixed(1) + ',' + baseY + ' ' + pts.join(' ') + ' ' + x(n - 1).toFixed(1) + ',' + baseY + '"/>';
+  s += '<polyline class="ck5-line" points="' + pts.join(' ') + '"/>';
 
   // 量區頂線
   s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + (PAD_T + PH + GAP) + '" x2="' + (W - PAD_R) + '" y2="' + (PAD_T + PH + GAP) + '"/>' +
