@@ -227,7 +227,7 @@ function renderDividendEst() {
     grandActual += s.res.actualTotal; grandEst += s.res.estTotal;
     s.res.months.forEach(function (mo) {
       if (mo.status === 'actual') mActual[mo.month] += mo.total; else mEst[mo.month] += mo.total;
-      mItems[mo.month].push({ code: s.code, total: mo.total, status: mo.status });
+      mItems[mo.month].push({ code: s.code, total: mo.total, status: mo.status, payDate: mo.payDate });
     });
   });
   var grand = grandActual + grandEst;
@@ -235,6 +235,7 @@ function renderDividendEst() {
   for (var m = 1; m <= 12; m++) maxTotal = Math.max(maxTotal, mActual[m] + mEst[m]);
 
   var money = function (v) { return '$' + Math.round(v).toLocaleString('zh-TW'); };
+  var md = function (iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; };
 
   // ── 合計（頂部帶狀，nav-bar 式一行） ──
   var sp = function (lb, v, c) {
@@ -253,9 +254,11 @@ function renderDividendEst() {
     var actW = tot > 0 ? Math.round(act / tot * 100) : 0;
     var totColor = tot === 0 ? 'var(--text3)' : (est === 0 ? 'var(--down)' : (act === 0 ? 'var(--accent2)' : 'var(--text)'));
     var items = mItems[mo].sort(function (a, b) { return b.total - a.total; }).map(function (it) {
-      return '<span class="divest-chip"><span class="divest-chip-code">' + it.code + '</span> ' +
-        '<span style="color:' + (it.status === 'actual' ? 'var(--down)' : 'var(--accent2)') + '">' + money(it.total) + '</span></span>';
-    }).join('<span class="divest-sep">・</span>');
+      return '<div class="divest-item ' + (it.status === 'actual' ? 'dv-act' : 'dv-est') + '">' +
+        '<span class="di-code">' + it.code + '</span>' +
+        '<span class="di-date">' + md(it.payDate) + '</span>' +
+        '<span class="di-amt">' + money(it.total) + '</span></div>';
+    }).join('');
     html += '<div class="divest-mrow">' +
       '<span class="divest-mlabel">' + mo + '月</span>' +
       '<span class="divest-track">' + (tot > 0 ? '<span class="divest-bar" style="width:' + wPct + '%">' +
@@ -270,21 +273,19 @@ function renderDividendEst() {
   html += '<div class="divest-divider"></div><div class="divest-sec-title">個股明細</div><div class="divest-stocks">';
   stocks.forEach(function (s) {
     var open = !!_divEstOpen[s.code];
-    var md = function (iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; };
     var det = '<div class="divest-drow divest-dhead">' +
         '<span class="divest-dm">發放月</span><span class="divest-dex">除息</span>' +
         '<span class="divest-dpay">發放</span><span class="divest-dps">每股</span>' +
-        '<span class="divest-dtot">金額</span><span style="width:34px"></span></div>' +
+        '<span class="divest-dtot">金額</span><span class="divest-dst">狀態</span></div>' +
       s.res.months.map(function (mo) {
-      var stCls = mo.status === 'actual' ? 'var(--down)' : 'var(--accent2)';
       var stTxt = mo.status === 'actual' ? '已領' : '預估';
-      return '<div class="divest-drow">' +
+      return '<div class="divest-drow ' + (mo.status === 'actual' ? 'dv-act' : 'dv-est') + '">' +
         '<span class="divest-dm">' + mo.month + '月</span>' +
         '<span class="divest-dex">' + md(mo.exDate) + '</span>' +
-        '<span class="divest-dpay">' + (mo.derivedPay ? '~' : '') + md(mo.payDate) + '</span>' +
+        '<span class="divest-dpay">' + md(mo.payDate) + '</span>' +
         '<span class="divest-dps">' + mo.perShare.toFixed(4) + '</span>' +
         '<span class="divest-dtot">' + money(mo.total) + '</span>' +
-        '<span style="color:' + stCls + ';width:34px;text-align:right">' + stTxt + '</span>' +
+        '<span class="divest-dst">' + stTxt + '</span>' +
       '</div>';
     }).join('');
     html += '<div class="divest-stock">' +
@@ -297,7 +298,7 @@ function renderDividendEst() {
     '</div>';
   });
   html += '</div>';
-  html += '<div class="divest-note">依「發放月」歸戶當月收入；發放日已過為「已領」、未來為「預估」。發放日缺漏時以「除息月＋1」推導（明細標「~」）。除息日供加減碼參考。資料來源：上市 ETF＝TWSE e添富（含已公告發放日）；上櫃/債券 ETF＝Yahoo 歷史推估。</div>';
+  html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。</div>';
   wrap.innerHTML = html;
 }
 

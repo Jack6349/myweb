@@ -10,18 +10,23 @@ var _positions = [];   // 券商庫存原始列（含 id/quantity/price/pnl）
 var _sharesMap = {};   // code → 股數
 var _totalCost = 0;    // 總付出成本（元）
 var _feedReady = null; // ensureFeed 的 Promise（避免重複初始化）
+var STREAM_OTHER_N = 10; // 即時行情下段「其他主要成分股」檔數（依曝險）
 
 // 券商端成本=0的入帳（如銀行認購後匯入，非本券商成交）：code → { 入帳日: 實際付出成本(元) }
 // 只在建倉明細確實存在「同日、price=0」的筆時才套用；該筆賣出或券商補登成本後自動失效
 var COST_OVERRIDES = { '00407A': { '2026-06-23': 100000 } }; // 往來銀行認購10張，0手續費
 
 // ── 檢視切換 ──
-var VIEW_TITLES = { stream: '即時行情', inv: '持股庫存', divest: '股利估算', txinfo: '交易資訊', live: '即時持股', news: '新聞情勢', trend: '趨勢評估', signals: '籌碼淨值', alerts: '停損停利', risk: '加減碼報告', params: '參數設定' };
+var VIEW_TITLES = { stream: '即時行情', inv: '持股庫存', divest: '股利估算', txinfo: '交易資訊', live: '即時持股', news: '新聞情勢', trend: '趨勢評估', signals: '籌碼淨值', alerts: '停損停利', risk: '加減碼報告', params: '參數設定', topconst: '成分股曝險' };
 var _curView = 'home';
 function showView(name) {
+  // 離開成分股曝險卡片 → 退訂該卡片新訂閱的 tick
+  if (_curView === 'topconst' && name !== 'topconst' && typeof stopTopConst === 'function') stopTopConst();
+  // 離開即時行情 → 退訂下段成分股的 tick
+  if (_curView === 'stream' && name !== 'stream' && typeof stopStreamOthers === 'function') stopStreamOthers();
   _curView = name;
   document.getElementById('home-cards').style.display = name === 'home' ? 'grid' : 'none';
-  ['stream', 'inv', 'divest', 'txinfo', 'live', 'news', 'trend', 'signals', 'alerts', 'risk', 'params'].forEach(function (v) {
+  ['stream', 'inv', 'divest', 'txinfo', 'live', 'news', 'trend', 'signals', 'alerts', 'risk', 'params', 'topconst'].forEach(function (v) {
     document.getElementById(v + '-view').style.display = v === name ? 'block' : 'none';
   });
   document.getElementById('crumb').textContent = VIEW_TITLES[name] || '';
@@ -51,6 +56,7 @@ function openTrend() { showView('trend'); if (typeof startTrend === 'function') 
 function openSignals() { showView('signals'); if (typeof startSignals === 'function') startSignals(); }
 function openAlerts() { showView('alerts'); if (typeof startAlerts === 'function') startAlerts(); }
 function openParams() { showView('params'); if (typeof startParams === 'function') startParams(); }
+function openTopConst() { showView('topconst'); if (typeof startTopConst === 'function') startTopConst(); }
 function closeStream() { goHome(); } // 相容頂欄返回鈕/標題連結
 
 // ── 服務健康檢查 ──
@@ -428,6 +434,7 @@ function openSSE() {
       renderSummaries();
       if (typeof renderInvRow === 'function') renderInvRow(code);
       if (typeof renderLiveRow === 'function') renderLiveRow(code);
+      if (typeof renderTopConstRow === 'function') renderTopConstRow(code);
       if (prev != null && close !== prev) flashCard(code, close > prev ? 1 : -1);
     } catch (e) {}
   });
@@ -460,16 +467,60 @@ async function startStream() {
     errEl.textContent = e.message;
     return;
   }
-  // 建卡（若尚未建）並渲染
-  Object.keys(_contracts).forEach(function (code) {
-    if (!document.getElementById('scard-' + code)) {
-      grid.insertAdjacentHTML('beforeend',
-        '<div class="scard" id="scard-' + code + '" title="點看線圖" onclick="openChartPop(\'' + code + '\')"></div>');
+  // 其他主要成分股：持股 ETF 台股成分股中曝險前 N（排除已持有），另行訂閱、離開退訂
+  var others = [];
+  try {
+    if (typeof initConstituents === 'function') await initConstituents();
+    if (typeof computeTopConst === 'function') {
+      var own = {}; (_positions || []).forEach(function (p) { own[String(p.code)] = true; });
+      others = computeTopConst(STREAM_OTHER_N).filter(function (r) { return !own[r.code]; }).map(function (r) { return r.code; });
     }
-    renderCard(code);
-  });
+  } catch (e) { console.warn('[stream others]', e); }
+  // 補合約/快照/訂閱
+  for (var i = 0; i < others.length; i++) {
+    var oc = others[i];
+    if (!_contracts[oc]) { try { _contracts[oc] = await fetchContract(oc); } catch (e) {} }
+    if (!_rows[oc]) _rows[oc] = { close: null, total_volume: null, time: '' };
+  }
+  try {
+    var snaps = await fetchSnapshots(others.map(function (c) { return _contracts[c]; }).filter(Boolean));
+    snaps.forEach(function (s) { _rows[s.code] = { close: s.close, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) }; });
+  } catch (e) {}
+  _streamOtherSubbed = [];
+  for (var k = 0; k < others.length; k++) {
+    var c2 = _contracts[others[k]];
+    if (c2) { try { await subscribeTick(c2); _streamOtherSubbed.push(others[k]); } catch (e) {} }
+  }
+
+  // 兩段結構：上＝現有持股、下＝其他主要成分股，各依代碼排序
+  var byCode = function (a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true }); };
+  var holdCodes = (_positions || []).map(function (p) { return String(p.code); }).sort(byCode);
+  others.sort(byCode);
+  var card = function (code) { return '<div class="scard" id="scard-' + code + '" title="點看線圖" onclick="openChartPop(\'' + code + '\')"></div>'; };
+  var html = '<div class="scard-sec-title">現有持股（' + holdCodes.length + '）</div>' +
+    '<div class="scard-grid">' + holdCodes.map(card).join('') + '</div>';
+  if (others.length) {
+    html += '<div class="scard-divider"></div>' +
+      '<div class="scard-sec-title">其他主要成分股（' + others.length + '，依曝險）</div>' +
+      '<div class="scard-grid">' + others.map(card).join('') + '</div>';
+  }
+  grid.innerHTML = html;
+  holdCodes.concat(others).forEach(function (code) { renderCard(code); });
   renderSummaries();
-  info.textContent = '已連線｜' + Object.keys(_contracts).length + ' 檔訂閱中';
+  info.textContent = '已連線｜持股 ' + holdCodes.length + ' 檔' + (others.length ? '＋成分 ' + others.length + ' 檔' : '');
+}
+
+// 離開即時行情：退訂本畫面新訂閱的成分股（歸還 200 檔訂閱額度）
+var _streamOtherSubbed = [];
+function stopStreamOthers() {
+  (_streamOtherSubbed || []).forEach(function (code) {
+    var c = _contracts[code]; if (!c) return;
+    fetch(API + '/api/v1/stream/unsubscribe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ security_type: 'STK', exchange: c.exchange, code: code, quote_type: 'Tick' })
+    }).catch(function () {});
+  });
+  _streamOtherSubbed = [];
 }
 
 // 開機：檢查服務狀態；由使用者點卡片進入功能

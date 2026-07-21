@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=76">
+<link rel="stylesheet" href="css/app.css?v=85">
 </head>
 <body>
 
@@ -41,6 +41,7 @@
   <button data-view="alerts" onclick="openAlerts()">停損停利</button>
   <button data-view="news" onclick="openNews()">新聞情勢</button>
   <button data-view="risk" onclick="openRiskReport()">加減碼報告</button>
+  <button data-view="topconst" onclick="openTopConst()">成分股曝險</button>
   <button data-view="params" onclick="openParams()">參數設定</button>
 </nav>
 
@@ -98,6 +99,11 @@
       <div class="func-name">加減碼報告</div>
       <div class="func-desc">系統性風險量化評分（VIX/美債/美元/費半/台指夜盤）＋動作對照，取代質化 veto</div>
     </div>
+    <div class="func-card" onclick="openTopConst()">
+      <div class="func-icon">🧩</div>
+      <div class="func-name">成分股曝險</div>
+      <div class="func-desc">持股 ETF 台股成分股中曝險最高前 10 檔，現價/漲跌盤中即時，含持有 ETF 權重</div>
+    </div>
     <div class="func-card" onclick="openParams()">
       <div class="func-icon">⚙️</div>
       <div class="func-name">參數設定</div>
@@ -128,6 +134,8 @@
           <th class="num">成份股漲跌%</th><th class="num">付出成本</th><th class="num">現值</th>
           <th class="num sort-th" data-key="pnl" onclick="invSortCol('pnl')" title="點擊排序">未實現損益<span class="sort-ind">↕</span></th>
           <th class="num sort-th" data-key="prate" onclick="invSortCol('prate')" title="點擊排序">獲利率<span class="sort-ind">↕</span></th>
+          <th class="num" title="該檔現值佔總現值%">現值比</th>
+          <th class="num" title="該檔未實現損益佔總現值%（貢獻值）">現值率</th>
         </tr></thead>
         <tbody id="inv-tbody"></tbody>
       </table>
@@ -151,6 +159,15 @@
     </div>
     <div id="divest-error" class="stream-error" style="display:none"></div>
     <div id="divest-wrap"></div>
+  </div>
+
+  <!-- 成分股曝險：持股 ETF 台股成分股曝險前 10（盤中即時） -->
+  <div id="topconst-view" style="display:none">
+    <div class="tr-toolbar">
+      <button class="btn-query" onclick="startTopConst()">↻ 重新整理</button>
+      <span id="topconst-info" style="font-size:13px;color:var(--text2)"></span>
+    </div>
+    <div id="topconst-wrap"></div>
   </div>
 
   <!-- 加減碼報告：系統性風險評分 -->
@@ -278,16 +295,17 @@
 <script type="module" src="js/firebase-init.js?v=10"></script>
 <script src="js/auth.js?v=10"></script>
 <script src="js/broker.js?v=17"></script>
-<script src="js/stream.js?v=50"></script>
-<script src="js/inventory.js?v=48"></script>
+<script src="js/stream.js?v=52"></script>
+<script src="js/inventory.js?v=52"></script>
 <script src="js/constituents.js?v=11"></script>
-<script src="js/live.js?v=43"></script>
+<script src="js/live.js?v=44"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=3"></script>
 <script src="js/sbl.js?v=9"></script>
 <script src="js/params.js?v=2"></script>
-<script src="js/chart.js?v=12"></script>
-<script src="js/dividend-est.js?v=8"></script>
+<script src="js/topconst.js?v=5"></script>
+<script src="js/chart.js?v=13"></script>
+<script src="js/dividend-est.js?v=9"></script>
 <script src="js/risk-score.js?v=2"></script>
 <script src="js/news.js?v=28"></script>
 <script src="js/trend.js?v=32"></script>

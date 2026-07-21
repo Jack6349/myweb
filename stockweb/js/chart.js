@@ -415,29 +415,49 @@ function _bidSnapNote() {
 }
 
 // ── 盤中自動更新：只重抓「今日」分 K 併入既有資料（今日約 266 根、~17KB），不重抓整段 ──
-var _chartLiveTimer = null;
+var _chartLiveTimer = null, _chartTick = 0;
 function _chartEnsureLiveTimer() {
   if (_chartLiveTimer) return;
   _chartLiveTimer = setInterval(function () {
     if (!_chartCode) return _chartStopLiveTimer();               // 彈窗已關
     if (typeof _twMarketLive === 'function' && !_twMarketLive()) return; // 非盤中不動作
-    if (_chartTab === 'intra') return _chartLoadIntraLive();
-    if (_chartTab === 'd5' || _chartTab === 'day') _chartRefreshToday();
-  }, 60000);
+    _chartTick++;
+    // 即時行情：每 12 秒更新價格線/報價面板（僅當日分 K，輕量）；內外盤較重，每 5 次(60s)才更新
+    if (_chartTab === 'intra') return _chartLoadIntraLive(_chartTick % 5 === 0);
+    // 五日線/日線：資料每分鐘才增一根，每 5 次(60s)更新即可
+    if ((_chartTab === 'd5' || _chartTab === 'day') && _chartTick % 5 === 0) _chartRefreshToday();
+  }, 12000);
 }
 function _chartStopLiveTimer() {
   if (_chartLiveTimer) { clearInterval(_chartLiveTimer); _chartLiveTimer = null; }
 }
-// 盤中重抓當日走勢（僅當日分 K＋內外盤，約 17KB＋210KB）
-async function _chartLoadIntraLive() {
+// 盤中輕量更新：只抓「今日」分 K（約 17KB）重繪價格線與報價面板；內外盤(ticks,~210KB)較重，refreshIO 時才抓
+async function _chartLoadIntraLive(refreshIO) {
   var code = _chartCode, key = code + ':intra';
   try {
-    var b = await _chartFetchIntra(code);
+    var today = _chartYmd(new Date());
+    var r = await fetch(API + '/api/v1/data/kbars', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contract: { security_type: 'STK', exchange: (_contracts[code] || {}).exchange || 'TSE', code: code },
+        start: today, end: today
+      })
+    });
+    if (!r.ok) return;
+    var j = await r.json();
+    if (!j || !j.datetime || !j.datetime.length) return;    // 開盤前今日尚無分 K → 維持原圖
     if (_chartCode !== code || _chartTab !== 'intra') return;
     var cc = _chartCache[key];
     if (!cc) return;
+    var b = { day: today, t: [], c: [], v: [], amt: [] };
+    for (var i = 0; i < j.datetime.length; i++) {
+      b.t.push(j.datetime[i].slice(11, 16)); b.c.push(j.Close[i]); b.v.push(j.Volume[i]); b.amt.push(j.Amount[i]);
+      if (b.o == null) { b.o = j.Open[i]; b.h = j.High[i]; b.l = j.Low[i]; }
+      if (j.High[i] > b.h) b.h = j.High[i];
+      if (j.Low[i] < b.l) b.l = j.Low[i];
+    }
     cc.bars = b;
-    cc.io = await _chartFetchIO(code, b.day) || cc.io;
+    if (refreshIO || !cc.io) cc.io = await _chartFetchIO(code, today) || cc.io;
     if (_chartCode !== code || _chartTab !== 'intra') return;
     document.getElementById('chart-area').innerHTML = _chartIntraSvg(cc, code);
     _chartBindIntraHover(cc.bars);

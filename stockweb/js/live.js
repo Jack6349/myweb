@@ -53,7 +53,7 @@ function liveRowHtml(p) {
   var dotColor = _liveColorMap[v.code] || '#888';
   return '<td class="live-dot-cell"><button class="live-dot' + (on ? ' on' : '') + '" style="--dot:' + dotColor +
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + v.code + '\',this)"></button></td>' +
-    '<td class="inv-code">' + v.code + '</td>' +
+    '<td class="inv-code"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + v.code + '\')">' + v.code + '</span></td>' +
     '<td class="num">' + (p.quantity != null ? Math.round(p.quantity).toLocaleString('zh-TW') : '—') + '</td>' +
     '<td class="num">' + v.avg.toFixed(2) + '</td>' +
     '<td class="num ' + ccls + '">' + (v.price != null ? v.price.toFixed(2) : '—') + '</td>' +

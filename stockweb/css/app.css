@@ -88,9 +88,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .tr-summary .sum-val { font-size: 17px; font-weight: 700; margin-top: 2px; }
 
 /* 每行固定 5 檔；15 檔內一頁完整顯示，超過才捲動 */
-.stream-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 12px; }
-@media (max-width: 1100px) { .stream-grid { grid-template-columns: repeat(4, 1fr); } }
-@media (max-width: 880px) { .stream-grid { grid-template-columns: repeat(3, 1fr); } }
+.stream-grid { display: block; }
+.scard-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 12px; }
+@media (max-width: 1100px) { .scard-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 880px) { .scard-grid { grid-template-columns: repeat(3, 1fr); } }
+.scard-sec-title { font-size: 13px; font-weight: 700; color: var(--accent2); margin: 4px 0 8px; }
+.scard-divider { border-top: 1px solid var(--border-strong, #435a78); margin: 18px 0 0; }
 .scard { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 9px 14px; position: relative; }
 .scard.flash-up { animation: flashUp .45s; }
 .scard.flash-down { animation: flashDown .45s; }
@@ -116,6 +119,24 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .inv-table tr:hover td { background: var(--bg2); }
 .inv-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .inv-code { color: var(--accent2); font-weight: 700; }
+.code-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.code-link:hover { color: var(--accent); text-decoration-style: solid; }
+/* 成分股曝險：持有明細（無外框、固定寬度：代碼 6 位＋比例 NN.NN% 亮橘） */
+.tc-holders { white-space: normal; }
+.tc-holder { display: inline-grid; grid-template-columns: 44px 46px; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; vertical-align: top; }
+.tc-holder .tc-c { color: var(--accent2); }
+.tc-holder .tc-w { color: #ff9e2c; text-align: right; }
+.tc-sep { color: var(--text3); margin: 0 5px; }
+/* 固定佈局：前 6 欄定寬，持有明細取剩餘寬並換行，避免最後一欄撐出橫向捲軸 */
+.tc-table { table-layout: fixed; }
+.tc-table th:nth-child(1), .tc-table td:nth-child(1) { width: 66px; }
+.tc-table th:nth-child(2), .tc-table td:nth-child(2) { width: 96px; }
+.tc-table th:nth-child(3), .tc-table td:nth-child(3) { width: 78px; }
+.tc-table th:nth-child(4), .tc-table td:nth-child(4) { width: 78px; }
+.tc-table th:nth-child(5), .tc-table td:nth-child(5) { width: 74px; }
+.tc-table th:nth-child(6), .tc-table td:nth-child(6) { width: 78px; }
+.tc-table .tc-holders { white-space: normal; line-height: 2; }
+.tc-table .inv-name { overflow: hidden; text-overflow: ellipsis; }
 .inv-name { color: var(--text2); }
 .inv-detail { padding-right: 0 !important; }
 .btn-detail { background: rgba(240,204,122,.1); border: 1px solid rgba(240,204,122,.3); color: var(--accent2); font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer; font-family: var(--font); white-space: nowrap; }
@@ -408,15 +429,23 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-sp-v { font-size: 16px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
 .divest-sec-title { font-size: 12px; color: var(--text3); margin: 6px 2px; }
 .divest-months { font-size: 12px; }
-.divest-mrow { display: flex; align-items: center; gap: 10px; padding: 5px 2px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; }
+.divest-mrow { display: flex; align-items: flex-start; gap: 10px; padding: 6px 2px; border-bottom: 1px solid var(--border); }
 .divest-mrow:last-child { border-bottom: none; }
-.divest-mlabel { width: 34px; color: var(--text2); flex-shrink: 0; }
-.divest-track { width: 120px; flex-shrink: 0; }
+.divest-mlabel { width: 34px; color: var(--text2); flex-shrink: 0; padding-top: 1px; }
+.divest-track { width: 120px; flex-shrink: 0; padding-top: 5px; }
 .divest-bar { display: flex; height: 9px; border-radius: 3px; overflow: hidden; }
-.divest-mtot { width: 84px; flex-shrink: 0; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-.divest-mitems { overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--border-strong, #435a78); padding-left: 10px; color: var(--text2); }
-.divest-chip { margin-right: 4px; }
-.divest-chip-code { color: var(--text); }
+.divest-mtot { width: 84px; flex-shrink: 0; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; padding-top: 1px; }
+.divest-mitems { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 0; border-left: 1px solid var(--border-strong, #435a78); padding-left: 10px; }
+/* 每檔一個固定寬度區塊、同一行並排：編號 發放日期 發放金額（等寬對齊，跨月同欄對齊）；檔與檔間加分隔線 */
+.divest-item { flex: 0 0 auto; display: grid; grid-template-columns: 56px 46px 84px; gap: 8px; font-size: 12px; font-variant-numeric: tabular-nums; padding: 0 16px; border-left: 1px solid var(--border); }
+.divest-item:first-child { padding-left: 0; border-left: none; }
+.di-code { white-space: nowrap; }
+.di-date { text-align: center; }
+.di-amt { text-align: right; }
+.divest-item.dv-act { color: #1a9e49; }
+.divest-item.dv-est { color: #c9a85a; }
+.divest-item.dv-act .di-amt { color: var(--down); font-weight: 700; }
+.divest-item.dv-est .di-amt { color: var(--accent2); font-weight: 700; }
 .divest-divider { border-top: 2px solid #435a78; margin: 14px 0 4px; }
 .divest-stocks { }
 .divest-stock { border-bottom: 1.5px solid #3f5673; }
@@ -427,14 +456,20 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-smeta { font-size: 12px; color: var(--text3); white-space: nowrap; }
 .divest-chev { color: var(--text3); margin-left: 4px; }
 .divest-detail { padding: 2px 0 10px 8px; border-left: 2px solid #435a78; margin: 0 0 8px 4px; font-size: 12px; }
-.divest-drow { display: flex; gap: 10px; padding: 2px 0; color: var(--text2); }
+.divest-drow { display: flex; gap: 10px; padding: 2px 0; color: var(--text2); font-variant-numeric: tabular-nums; }
 .divest-dm { width: 34px; }
 .divest-dex { width: 48px; }
+.divest-dpay { width: 48px; }
 .divest-dps { width: 56px; text-align: right; }
 .divest-dtot { width: 84px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.divest-dst { width: 34px; text-align: right; }
 .divest-note { font-size: 11px; color: var(--text3); margin-top: 12px; line-height: 1.5; }
-.divest-sep { color: var(--text3); margin: 0 3px; }
-.divest-dpay { width: 48px; }
+/* 已發放=綠、預估=黃：除發放月外整列上色（靠繼承），金額加亮（亮色＋粗體） */
+.divest-drow.dv-act { color: #1a9e49; }
+.divest-drow.dv-est { color: #c9a85a; }
+.divest-drow.dv-act .divest-dm, .divest-drow.dv-est .divest-dm { color: var(--text2); }
+.divest-drow.dv-act .divest-dtot { color: var(--down); font-weight: 700; }
+.divest-drow.dv-est .divest-dtot { color: var(--accent2); font-weight: 700; }
 .divest-dhead { color: var(--text3) !important; font-size: 11px; }
 
 /* ── 表頭排序：整欄可點，單一箭頭指示狀態（點擊區＝整格，避免誤點小三角）── */

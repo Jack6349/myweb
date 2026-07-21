@@ -33,6 +33,17 @@ function _updateInvSortArrows() {
   });
 }
 
+// 全部持股的今日總現值（＝各檔現價×股數之和，與「現值」欄同基準）；供現值比/現值率分母用
+function _invTotalVal() {
+  var tot = 0;
+  (_positions || []).forEach(function (p) {
+    var r = _rows[String(p.code)];
+    var price = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
+    if (price != null) tot += price * p.quantity;
+  });
+  return tot;
+}
+
 function invValRow(p) {
   var code = String(p.code);
   var c = _contracts[code], r = _rows[code];
@@ -47,6 +58,10 @@ function invValRow(p) {
   var chgAmt = (price != null && c && c.reference) ? price - c.reference : null; // 今日漲跌金額（現價−昨收）
   var pcls = profit == null ? 'flat' : colorClass(profit);
   var ccls = chg == null ? 'flat' : colorClass(chg);
+  // 現值比＝該檔現值佔總現值%；現值率＝該檔未實現損益佔總現值%（貢獻值，有正負）
+  var totVal = _invTotalVal();
+  var vRatio = (val != null && totVal) ? val / totVal * 100 : null;
+  var pRatio = (profit != null && totVal) ? profit / totVal * 100 : null;
   var cm = (typeof constEst === 'function') ? constEst(code) : null; // 成份股估算（覆蓋率達標才有）
   var estCls = (cm && cm.est != null) ? colorClass(cm.est) : 'flat';
   // 注意股圓點：與即時持股共用識別色（_liveColorMap）與標記狀態（live_watch_v1），兩頁互通
@@ -56,7 +71,7 @@ function invValRow(p) {
       (cm ? '<button class="btn-detail" style="margin-left:4px" onclick="openConstituents(\'' + code + '\')">成份股</button>' : '') + '</td>' +
     '<td class="live-dot-cell"><button class="live-dot' + (dotOn ? ' on' : '') + '" style="--dot:' + dotColor +
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + code + '\',this)"></button></td>' +
-    '<td class="inv-code">' + code + '</td>' +
+    '<td class="inv-code"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     '<td class="inv-name">' + ((c && c.name) || '') + '</td>' +
     '<td class="num">' + shares.toLocaleString('zh-TW') + '</td>' +
     '<td class="num">' + p.price.toFixed(2) + '</td>' +
@@ -68,7 +83,9 @@ function invValRow(p) {
     '<td class="num">' + Math.round(cost).toLocaleString('zh-TW') + '</td>' +
     '<td class="num">' + (val != null ? Math.round(val).toLocaleString('zh-TW') : '—') + '</td>' +
     '<td class="num ' + pcls + '">' + (profit == null ? '—' : (profit >= 0 ? '+' : '') + Math.round(profit).toLocaleString('zh-TW')) + '</td>' +
-    '<td class="num ' + pcls + '">' + (prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%') + '</td>';
+    '<td class="num ' + pcls + '">' + (prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%') + '</td>' +
+    '<td class="num">' + (vRatio == null ? '—' : vRatio.toFixed(2) + '%') + '</td>' +
+    '<td class="num ' + pcls + '">' + (pRatio == null ? '—' : (pRatio > 0 ? '+' : '') + pRatio.toFixed(2) + '%') + '</td>';
 }
 
 // 停損停利觸發評估（sell/buy/null）
@@ -107,16 +124,21 @@ function renderInvTable() {
   }).join('');
 }
 
-// 單列即時更新（SSE 觸發）
+// 即時更新（SSE 觸發）：整表重繪，讓現值比/現值率等「跨列指標」隨任一檔跳動同步一致
+// （現值比/現值率的分母是總現值，任一檔變動都影響全部列，故不能只重繪單列）
+// 以 setTimeout 節流（~120ms）合併連續 tick：至多每 120ms 重繪一次、且讀取當下最新報價；
+// 用 setTimeout 而非 requestAnimationFrame，因 rAF 在分頁切到背景時不觸發、會凍結表格。
+var _invRenderPending = false;
 function renderInvRow(code) {
-  var tr = document.getElementById('inv-tr-' + String(code));
-  if (!tr) return;
-  var p = _positions.filter(function (x) { return String(x.code) === String(code); })[0];
-  if (p) {
-    tr.innerHTML = invValRow(p);
-    var al = invAlert(p);
-    tr.className = al ? 'alert-' + al : '';
-  }
+  var tb = document.getElementById('inv-tbody');
+  if (!tb || !tb.children.length) return; // 未在持股庫存頁 → 不動作
+  if (_invRenderPending) return;
+  _invRenderPending = true;
+  setTimeout(function () {
+    _invRenderPending = false;
+    var t = document.getElementById('inv-tbody');
+    if (t && t.children.length) renderInvTable();
+  }, 120);
 }
 
 async function startInventory() {
