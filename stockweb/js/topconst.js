@@ -4,7 +4,7 @@
 
 var _topConstRows = [];   // 前 10：{code,name,expo,pct,holders:[{etf,weight}]}
 var _topSubbed = [];      // 本卡片新訂閱的代號（離開退訂）
-var TOPCONST_N = 10;
+var TOPCONST_N = 15;
 
 // 計算前 n 大台股成分（依曝險 B）；供「成分股曝險」卡片與「即時行情」共用
 // 曝險 = Σ(各 ETF 現值 × 該檔權重%)；pct = 曝險 ÷ 總持股現值 ×100

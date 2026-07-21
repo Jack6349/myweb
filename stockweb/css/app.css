@@ -94,7 +94,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 @media (max-width: 880px) { .scard-grid { grid-template-columns: repeat(3, 1fr); } }
 .scard-sec-title { font-size: 13px; font-weight: 700; color: var(--accent2); margin: 4px 0 8px; }
 .scard-divider { border-top: 1px solid var(--border-strong, #435a78); margin: 18px 0 0; }
-.scard { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 9px 14px; position: relative; }
+.scard { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 9px 14px; position: relative; width: 95%; justify-self: center; }
 .scard.flash-up { animation: flashUp .45s; }
 .scard.flash-down { animation: flashDown .45s; }
 @keyframes flashUp { 0% { background: rgba(255,82,82,.22); } 100% { background: var(--bg3); } }

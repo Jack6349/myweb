@@ -10,7 +10,7 @@ var _positions = [];   // 券商庫存原始列（含 id/quantity/price/pnl）
 var _sharesMap = {};   // code → 股數
 var _totalCost = 0;    // 總付出成本（元）
 var _feedReady = null; // ensureFeed 的 Promise（避免重複初始化）
-var STREAM_OTHER_N = 10; // 即時行情下段「其他主要成分股」檔數（依曝險）
+var STREAM_OTHER_N = 15; // 即時行情下段「其他主要成分股」檔數（依曝險）
 
 // 券商端成本=0的入帳（如銀行認購後匯入，非本券商成交）：code → { 入帳日: 實際付出成本(元) }
 // 只在建倉明細確實存在「同日、price=0」的筆時才套用；該筆賣出或券商補登成本後自動失效
