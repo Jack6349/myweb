@@ -288,6 +288,14 @@ async function refreshPositions() {
 // ── 格式工具 ──
 function fmtPct(v) { return (v > 0 ? '▲' : (v < 0 ? '▼' : '')) + Math.abs(v).toFixed(2) + '%'; }
 function fmtChg(v) { return (v > 0 ? '▲' : (v < 0 ? '▼' : '')) + Math.abs(v).toFixed(2); } // 漲跌金額（▲漲/▼跌，色由外層 up/down 決定）
+// 漲跌停判定：現價等於漲停價→'up'（漲停）、等於跌停價→'down'（跌停）、否則 ''
+function limitState(code, price) {
+  var c = _contracts[String(code)];
+  if (!c || price == null) return '';
+  if (c.limit_up != null && Math.abs(price - c.limit_up) < 0.005) return 'up';
+  if (c.limit_down != null && Math.abs(price - c.limit_down) < 0.005) return 'down';
+  return '';
+}
 function colorClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'flat'); }
 function fmtMoney(v) { return '$' + Math.round(v).toLocaleString('zh-TW'); }
 
@@ -395,6 +403,9 @@ function renderCard(code) {
   var chg = (r.close != null && c.reference) ? r.close - c.reference : null;
   var pct = (chg != null && c.reference) ? chg / c.reference * 100 : null;
   var cls = chg == null ? 'flat' : colorClass(chg);
+  var lim = limitState(code, r.close);            // 漲跌停：卡片下半部變紅/綠
+  el.classList.toggle('lim-up', lim === 'up');
+  el.classList.toggle('lim-down', lim === 'down');
   el.innerHTML =
     '<div class="scard-head"><span class="scard-code">' + code + '</span>' +
       '<span class="scard-name">' + (c.name || '') + '</span></div>' +

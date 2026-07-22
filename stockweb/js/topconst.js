@@ -107,7 +107,8 @@ function topConstRowHtml(r) {
     return '<span class="tc-holder"><span class="code-link tc-c" onclick="openChartPop(\'' + h.etf + '\')">' + h.etf + '</span>' +
       '<span class="tc-w">' + h.weight.toFixed(2) + '%</span></span>';
   }).join('<span class="tc-sep">｜</span>');
-  return '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
+  var lim = (typeof limitState === 'function') ? limitState(r.code, price) : '';
+  return '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
     '<td class="inv-name">' + ((c && c.name) || r.name || '') + '</td>' +
     '<td class="num" title="曝險 $' + Math.round(r.expo).toLocaleString('zh-TW') + '"><b>' + r.pct.toFixed(2) + '%</b></td>' +
     '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +

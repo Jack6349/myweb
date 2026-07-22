@@ -71,7 +71,7 @@ function invValRow(p) {
       (cm ? '<button class="btn-detail" style="margin-left:4px" onclick="openConstituents(\'' + code + '\')">成份股</button>' : '') + '</td>' +
     '<td class="live-dot-cell"><button class="live-dot' + (dotOn ? ' on' : '') + '" style="--dot:' + dotColor +
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + code + '\',this)"></button></td>' +
-    '<td class="inv-code"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
+    '<td class="inv-code' + (typeof limitState === 'function' && limitState(code, price) ? ' lim-' + limitState(code, price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     '<td class="inv-name">' + ((c && c.name) || '') + '</td>' +
     '<td class="num">' + shares.toLocaleString('zh-TW') + '</td>' +
     '<td class="num">' + p.price.toFixed(2) + '</td>' +
