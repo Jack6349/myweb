@@ -288,9 +288,16 @@ function renderDividendEst() {
         '<span class="divest-dst">' + stTxt + '</span>' +
       '</div>';
     }).join('');
+    // 現價（進頁快照）＋預估年殖利率＝年配息(每股，已領＋預估) ÷ 現價 ×100（以現價計，供換股/調節判斷）
+    var _r = (typeof _rows !== 'undefined') && _rows[s.code];
+    var price = (_r && _r.close != null) ? _r.close : ((typeof _contracts !== 'undefined' && _contracts[s.code] && _contracts[s.code].reference) || null);
+    var annPerShare = s.res.months.reduce(function (a, mo) { return a + (mo.perShare || 0); }, 0);
+    var yld = (price && annPerShare) ? annPerShare / price * 100 : null;
     html += '<div class="divest-stock">' +
       '<div class="divest-shead" onclick="toggleDivStock(\'' + s.code + '\')">' +
-        '<div><span class="divest-scode">' + s.code + '</span> <span class="divest-sname">' + s.name + '</span></div>' +
+        '<div><span class="divest-scode">' + s.code + '</span> <span class="divest-sname">' + s.name + '</span>' +
+          '<span class="divest-yield">現價 <b>' + (price != null ? price.toFixed(2) : '—') + '</b>　' +
+          '預估年殖利率 <b>' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</b></span></div>' +
         '<div class="divest-smeta">已領 <span style="color:var(--down)">' + money(s.res.actualTotal) + '</span>　估算 <span style="color:var(--accent2)">' + money(s.res.estTotal) + '</span>　' +
           '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span></div>' +
       '</div>' +
@@ -305,4 +312,20 @@ function renderDividendEst() {
 function toggleDivStock(code) {
   _divEstOpen[code] = !_divEstOpen[code];
   renderDividendEst();
+}
+
+// 只刷新現價快照（重抓持股 ETF 快照後重繪，不重抓配息資料、不動 GAS）
+async function refreshDivPrices() {
+  var btn = document.getElementById('divest-refpx');
+  if (btn) btn.textContent = '刷新中…';
+  try {
+    var cons = Object.keys((typeof _sharesMap !== 'undefined' && _sharesMap) || {}).filter(isEtfCode)
+      .map(function (c) { return _contracts[c]; }).filter(Boolean);
+    if (cons.length) {
+      var snaps = await fetchSnapshots(cons);
+      snaps.forEach(function (s) { _rows[s.code] = { close: s.close, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) }; });
+    }
+  } catch (e) { console.warn('[divest refresh px]', e); }
+  if (btn) btn.textContent = '↻ 刷新現價';
+  if (typeof _divEstResult !== 'undefined' && _divEstResult) renderDividendEst();
 }

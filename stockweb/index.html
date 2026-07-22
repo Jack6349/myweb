@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=87">
+<link rel="stylesheet" href="css/app.css?v=88">
 </head>
 <body>
 
@@ -154,6 +154,7 @@
   <div id="divest-view" style="display:none">
     <div class="divest-topbar">
       <button class="btn-query" onclick="startDividendEst(true)">↻ 重新整理</button>
+      <button id="divest-refpx" class="btn-query" onclick="refreshDivPrices()">↻ 刷新現價</button>
       <span id="divest-info" style="font-size:13px;color:var(--text2)"></span>
       <span id="divest-sumline" class="divest-sumline"></span>
     </div>
@@ -305,7 +306,7 @@
 <script src="js/params.js?v=2"></script>
 <script src="js/topconst.js?v=7"></script>
 <script src="js/chart.js?v=13"></script>
-<script src="js/dividend-est.js?v=9"></script>
+<script src="js/dividend-est.js?v=10"></script>
 <script src="js/risk-score.js?v=2"></script>
 <script src="js/news.js?v=28"></script>
 <script src="js/trend.js?v=32"></script>
