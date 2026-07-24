@@ -288,10 +288,20 @@ function renderDividendEst() {
         '<span class="divest-dst">' + stTxt + '</span>' +
       '</div>';
     }).join('');
-    // 現價（進頁快照）＋預估年殖利率＝年配息(每股，已領＋預估) ÷ 現價 ×100（以現價計，供換股/調節判斷）
+    // 現價（進頁快照）＋預估年殖利率＝單次配息(每股) × 配息頻率 ÷ 現價 ×100（當前年化殖利率，供換股/調節判斷）
+    // 例：00988B 月配、下次預估 0.157、現價 20 → 0.157×12/20 = 9.42%
     var _r = (typeof _rows !== 'undefined') && _rows[s.code];
     var price = (_r && _r.close != null) ? _r.close : ((typeof _contracts !== 'undefined' && _contracts[s.code] && _contracts[s.code].reference) || null);
-    var annPerShare = s.res.months.reduce(function (a, mo) { return a + (mo.perShare || 0); }, 0);
+    var _mos = s.res.months || [];
+    // 代表性單次配息（每股）：優先用「下一次預估」，否則用最近一次已領
+    var _rep = _mos.filter(function (m) { return m.status === 'est'; })[0] ||
+      _mos.filter(function (m) { return m.status === 'actual'; }).slice(-1)[0];
+    var repPS = _rep ? _rep.perShare : 0;
+    // 配息頻率：由相鄰兩次配息的月份間隔推估（月配→12、季配→4、半年→2、年配→1）
+    var freq;
+    if (_mos.length >= 2) { var gap = _mos[_mos.length - 1].month - _mos[_mos.length - 2].month; freq = gap > 0 ? Math.max(1, Math.round(12 / gap)) : _mos.length; }
+    else freq = _mos.length || 1;
+    var annPerShare = repPS * freq;
     var yld = (price && annPerShare) ? annPerShare / price * 100 : null;
     html += '<div class="divest-stock">' +
       '<div class="divest-shead" onclick="toggleDivStock(\'' + s.code + '\')">' +
