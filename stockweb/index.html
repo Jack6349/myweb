@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=88">
+<link rel="stylesheet" href="css/app.css?v=89">
 </head>
 <body>
 
@@ -150,16 +150,32 @@
     <div id="live-cols" class="live-cols"></div>
   </div>
 
-  <!-- 股利估算畫面（月份總覽＋個股明細，e添富配息） -->
+  <!-- 股利估算畫面（子頁籤：股利估算＝月份總覽＋個股明細 / 換股試算＝賣出換入後的月股利增減） -->
   <div id="divest-view" style="display:none">
-    <div class="divest-topbar">
-      <button class="btn-query" onclick="startDividendEst(true)">↻ 重新整理</button>
-      <button id="divest-refpx" class="btn-query" onclick="refreshDivPrices()">↻ 刷新現價</button>
-      <span id="divest-info" style="font-size:13px;color:var(--text2)"></span>
-      <span id="divest-sumline" class="divest-sumline"></span>
+    <div class="tx-subtabs">
+      <button id="divest-subtab-est" class="tx-subtab active" onclick="divShowTab('est')">股利估算</button>
+      <button id="divest-subtab-swap" class="tx-subtab" onclick="divShowTab('swap')">換股試算</button>
     </div>
-    <div id="divest-error" class="stream-error" style="display:none"></div>
-    <div id="divest-wrap"></div>
+    <div id="divest-tab-est">
+      <div class="divest-topbar">
+        <button class="btn-query" onclick="startDividendEst(true)">↻ 重新整理</button>
+        <button id="divest-refpx" class="btn-query" onclick="refreshDivPrices()">↻ 刷新現價</button>
+        <span id="divest-info" style="font-size:13px;color:var(--text2)"></span>
+        <span id="divest-sumline" class="divest-sumline"></span>
+      </div>
+      <div id="divest-error" class="stream-error" style="display:none"></div>
+      <div id="divest-wrap"></div>
+    </div>
+
+    <!-- 換股試算：賣出部分/全部張數 → 買現有持股或指定代碼，試算未來 12 個月股利增減 -->
+    <div id="divest-tab-swap" style="display:none">
+      <div class="swap-toolbar">
+        <button class="btn-query" onclick="swapRefreshPrices()">↻ 刷新現價</button>
+        <button class="btn-query" onclick="swapReset()">✕ 清空試算</button>
+        <span id="swap-info" style="font-size:13px;color:var(--text2)"></span>
+      </div>
+      <div id="swap-wrap"></div>
+    </div>
   </div>
 
   <!-- 成分股曝險：持股 ETF 台股成分股曝險前 10（盤中即時） -->
@@ -306,7 +322,8 @@
 <script src="js/params.js?v=2"></script>
 <script src="js/topconst.js?v=7"></script>
 <script src="js/chart.js?v=13"></script>
-<script src="js/dividend-est.js?v=11"></script>
+<script src="js/dividend-est.js?v=12"></script>
+<script src="js/swap.js?v=1"></script>
 <script src="js/risk-score.js?v=2"></script>
 <script src="js/news.js?v=28"></script>
 <script src="js/trend.js?v=32"></script>

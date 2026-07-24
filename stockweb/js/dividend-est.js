@@ -6,6 +6,8 @@
 var _divEstRows = null;    // e添富 解析後全 ETF 配息列（每日快取）
 var _divEstResult = null;  // 計算結果，供折疊重繪
 var _divEstOpen = {};      // code -> 是否展開
+var _divByCode = {};       // code -> e添富配息列（本次載入）
+var _divRecMap = {};       // code -> 已取得的配息紀錄（e添富 或 Yahoo 後備）；換股試算共用
 
 function _divTwDate() {
   var tw = new Date(Date.now() + 8 * 3600000);
@@ -185,6 +187,7 @@ async function startDividendEst(force) {
   // 依代號分組（e添富＝上市）
   var byCode = {};
   rows.forEach(function (r) { (byCode[r.code] = byCode[r.code] || []).push(r); });
+  _divByCode = byCode;
 
   // e添富 沒有的持股（上櫃/債券 ETF）用 Yahoo 後備補
   var recMap = {}, missing = [];
@@ -195,6 +198,7 @@ async function startDividendEst(force) {
   await Promise.all(missing.map(async function (code) {
     try { var yr = await fetchYahooDiv(code, force); if (yr && yr.length) recMap[code] = yr; } catch (e) {}
   }));
+  _divRecMap = recMap;   // 供換股試算共用
 
   var tw = _divTwDate();
   var stocks = [];
@@ -322,6 +326,25 @@ function renderDividendEst() {
 function toggleDivStock(code) {
   _divEstOpen[code] = !_divEstOpen[code];
   renderDividendEst();
+}
+
+// 取單檔配息紀錄（e添富 優先、Yahoo 後備），結果併入 _divRecMap 快取；供換股試算查「指定代碼」
+async function _divGetRecs(code, force) {
+  code = String(code);
+  if (!force && _divRecMap[code] && _divRecMap[code].length) return _divRecMap[code];
+  if (!Object.keys(_divByCode).length) {
+    try {
+      var rows = await fetchEtfDividendList(force);
+      var bc = {};
+      rows.forEach(function (r) { (bc[r.code] = bc[r.code] || []).push(r); });
+      _divByCode = bc;
+    } catch (e) {}
+  }
+  if (_divByCode[code] && _divByCode[code].length) { _divRecMap[code] = _divByCode[code]; return _divRecMap[code]; }
+  var yr = [];
+  try { yr = await fetchYahooDiv(code, force); } catch (e) {}
+  _divRecMap[code] = yr || [];
+  return _divRecMap[code];
 }
 
 // 只刷新現價快照（重抓持股 ETF 快照後重繪，不重抓配息資料、不動 GAS）
