@@ -415,8 +415,10 @@ function _swapBuyHtml() {
     h += '<div class="swap-picks">';
     codes.forEach(function (code) {
       var on = _swapState.buyExist.indexOf(code) >= 0;
-      h += '<label class="swap-chip' + (on ? ' on' : '') + '"><input type="checkbox"' + (on ? ' checked' : '') +
-        ' onchange="swapToggleBuy(\'' + code + '\',this)"> ' + code + ' <span class="swap-dim">' + _swapName(code) + '</span></label>';
+      var nm = _swapName(code);
+      h += '<label class="swap-chip' + (on ? ' on' : '') + '" title="' + code + ' ' + nm + '"><input type="checkbox"' + (on ? ' checked' : '') +
+        ' onchange="swapToggleBuy(\'' + code + '\',this)"><span class="swap-chip-c">' + code + '</span>' +
+        '<span class="swap-dim swap-chip-n">' + nm + '</span></label>';
     });
     h += '</div>';
   } else {
@@ -426,7 +428,9 @@ function _swapBuyHtml() {
       (_swapNote ? '<span class="swap-warn">' + _swapNote + '</span>' : '') + '</div>';
     h += '<div class="swap-picks">';
     _swapState.buyCodes.forEach(function (code) {
-      h += '<span class="swap-chip on">' + code + ' <span class="swap-dim">' + _swapName(code) + '</span>' +
+      var nm = _swapName(code);
+      h += '<span class="swap-chip on" title="' + code + ' ' + nm + '"><span class="swap-chip-c">' + code + '</span>' +
+        '<span class="swap-dim swap-chip-n">' + nm + '</span>' +
         '<button class="swap-x" title="移除" onclick="swapDelCode(\'' + code + '\')">×</button></span>';
     });
     h += '</div>';

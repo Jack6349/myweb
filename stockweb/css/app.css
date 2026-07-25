@@ -525,8 +525,10 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-opts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text2); margin-bottom: 10px; }
 .swap-radio { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .swap-radio input { accent-color: var(--accent2); cursor: pointer; }
-.swap-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.swap-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--bg3); border: 1px solid var(--border); border-radius: 99px; padding: 4px 12px; font-size: 12px; color: var(--text2); cursor: pointer; }
+.swap-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; margin-bottom: 10px; }
+.swap-chip { display: flex; align-items: center; gap: 5px; min-width: 0; background: var(--bg3); border: 1px solid var(--border); border-radius: 99px; padding: 4px 12px; font-size: 12px; color: var(--text2); cursor: pointer; }
+.swap-chip-c { flex-shrink: 0; width: 52px; font-variant-numeric: tabular-nums; }
+.swap-chip-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .swap-chip.on { background: rgba(240,204,122,.14); border-color: rgba(240,204,122,.4); color: var(--accent2); }
 .swap-chip input { accent-color: var(--accent2); cursor: pointer; }
 .swap-x { background: transparent; border: none; color: var(--text3); font-size: 14px; cursor: pointer; padding: 0 0 0 2px; line-height: 1; }
