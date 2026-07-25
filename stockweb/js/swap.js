@@ -383,8 +383,8 @@ function _swapSellHtml() {
       '<td class="num' + (free < held ? ' swap-warn' : '') + '">' + _swapLots(free) + '</td>' +
       '<td class="num">' + (val != null ? fmtMoney(val) : '—') + '</td>' +
       '<td class="num" id="swap-base-' + code + '">—</td>' +
-      '<td class="num"><input class="sbl-inp swap-inp" type="number" min="0" step="0.001" value="' + (v != null ? v : '') + '"' +
-        ' oninput="swapSellInput(\'' + code + '\',this)"></td>' +
+      '<td class="num"><input class="sbl-inp swap-inp" type="number" min="0" step="1" value="' + (v != null ? v : '') + '"' +
+        ' title="上下鍵每次 ±1 張；零股請手動輸入小數（0.5＝500 股）" oninput="swapSellInput(\'' + code + '\',this)"></td>' +
       '<td><button class="swap-mini" onclick="swapSellAll(\'' + code + '\')">全部</button></td>' +
       '<td class="num" id="swap-sell-' + code + '">—</td>' +
     '</tr>';
