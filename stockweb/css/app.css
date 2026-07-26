@@ -534,6 +534,8 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-x { background: transparent; border: none; color: var(--text3); font-size: 14px; cursor: pointer; padding: 0 0 0 2px; line-height: 1; }
 .swap-x:hover { color: var(--up); }
 .swap-sum { display: flex; flex-wrap: wrap; gap: 10px 26px; padding: 4px 2px 12px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+.swap-sumbar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 22px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+.swap-sumbar:empty { display: none; }
 .swap-months { font-size: 12px; }
 .swap-mrow { display: flex; align-items: center; gap: 10px; padding: 5px 2px; border-bottom: 1px solid var(--border); }
 .swap-mrow:last-child { border-bottom: none; }
