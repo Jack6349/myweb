@@ -119,8 +119,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 /* 自身垂直+水平捲動容器；標題列 sticky top:0 相對本容器，不與頂欄打架 */
 .inv-table-wrap { overflow: auto; max-height: calc(100vh - 150px); }
 .inv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.inv-table th { text-align: left; color: var(--text2); font-weight: 600; font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; z-index: 5; background: var(--bg); }
-.inv-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.inv-table th { text-align: left; color: var(--text2); font-weight: 600; font-size: 12px; padding: 8px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; z-index: 5; background: var(--bg); }
+.inv-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+/* 成份股漲跌：刻意調暗，避免與「漲跌幅」的紅綠混淆 */
+.inv-cchg { opacity: .5; }
 .inv-table tr:hover td { background: var(--bg2); }
 .inv-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .inv-code { color: var(--accent2); font-weight: 700; }
