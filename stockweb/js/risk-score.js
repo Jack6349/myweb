@@ -232,16 +232,18 @@ function _rsBondBlockHtml(bond, sp) {
     var name = (_contracts[r.code] && _contracts[r.code].name) || '';
     h += '<div class="rs-bond-item"><div class="rs-bond-code">' + r.code +
       (name ? ' <span class="rs-bond-name">' + name + '</span>' : '') + '</div><ol class="rs-bond-list">';
-    // 1. 美股信用債跌幅
-    h += '<li>' + (usKnown ? dot(usHit) : '⚪') + ' 美國非投等債跌幅 ' + (usHit ? '≥' : '<') + ' ' + X + '%（' +
-      (usKnown ? usVals : '資料暫缺') + '）</li>';
-    // 2. 折價
-    var premTxt = r.prem == null ? '資料暫缺' :
-      ((r.prem > 0 ? '+' : '') + r.prem.toFixed(2) + '%' + (r.prem > 0 ? '，為溢價、非折價' : (r.prem === 0 ? '，持平' : '，為折價')));
-    h += '<li>' + (r.prem == null ? '⚪' : dot(r.discHit)) + ' 折價 ' + (r.discHit ? '≥' : '<') + ' ' + Y + '%（' + premTxt + '）</li>';
-    // 3. 成交量
-    var volTxt = r.ratio == null ? '資料暫缺' : Math.round(r.ratio) + '%';
-    h += '<li>' + (r.ratio == null ? '⚪' : dot(r.volHit)) + ' 成交量 ' + (r.volHit ? '<' : '≥') + ' 90日中位數 ' + Z + '%（' + volTxt + '）</li>';
+    // 1. 美股非投等債跌幅：實際值 比較符 門檻（純數字比較，不加補充敘述）
+    h += '<li>' + (usKnown ? dot(usHit) : '⚪') + ' ' +
+      (usKnown ? usVals + ' ' + (usHit ? '≥' : '<') + ' 跌幅 ' + X + '%' : '美國非投等債跌幅 資料暫缺') + '</li>';
+    // 2. 折溢價：溢價時條件不成立、只列數值；折價時才做門檻比較
+    var premLi;
+    if (r.prem == null) premLi = '⚪ 折價 資料暫缺';
+    else if (r.prem > 0) premLi = '🟢 溢價 ' + r.prem.toFixed(2) + '%';
+    else premLi = dot(r.discHit) + ' 折價 ' + Math.abs(r.prem).toFixed(2) + '% ' + (r.discHit ? '≥' : '<') + ' ' + Y + '%';
+    h += '<li>' + premLi + '</li>';
+    // 3. 成交量：當日量佔 90 日中位數比例 比較 門檻
+    h += '<li>' + (r.ratio == null ? '⚪ 成交量 資料暫缺' :
+      dot(r.volHit) + ' 成交量 ' + Math.round(r.ratio) + '% ' + (r.volHit ? '<' : '≥') + ' 90日中位數 ' + Z + '%') + '</li>';
     h += '</ol></div>';
   });
 
