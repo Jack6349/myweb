@@ -144,10 +144,10 @@ async function startRiskReport(force) {
 
   // 動作對照
   var verdict, vColor;
-  if (flag) { verdict = '危機訊號：直接 veto，暫停加碼'; vColor = 'var(--up)'; }
-  else if (total >= 7) { verdict = '高風險：veto，暫停加碼，等分數回落'; vColor = 'var(--up)'; }
-  else if (total >= 4) { verdict = '中度風險：加碼額度減半，或延後一日確認止穩'; vColor = 'var(--accent2)'; }
-  else { verdict = '正常波動：照第一/二層規則正常加碼'; vColor = 'var(--down)'; }
+  if (flag) { verdict = '🔴 股債齊跌，暫停加碼'; vColor = 'var(--up)'; }
+  else if (total >= 7) { verdict = '🔴 暫停加碼，等分數回落'; vColor = 'var(--up)'; }
+  else if (total >= 4) { verdict = '🟡 加碼額度減半，或延後一日確認止穩'; vColor = 'var(--accent2)'; }
+  else { verdict = '🟢 正常，可執行加碼計畫'; vColor = 'var(--down)'; }
 
   var tw = new Date(Date.now() + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 16);
   info.textContent = '更新：' + tw + '（台北）';
@@ -159,10 +159,14 @@ async function startRiskReport(force) {
     '<div class="rs-verdict-txt"><div class="rs-vlabel">建議動作</div><div style="color:' + vColor + ';font-weight:700">' + verdict + '</div>' +
     (avail < 6 ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">（' + avail + '/6 項有資料，' + (6 - avail) + ' 項暫缺）</div>' : '') +
     '</div></div>';
-  // 旗標
+  // 旗標（正向表列：顯示實際值與門檻比較，不用「需…≥」的反向敘述）
+  var eqTxt = equityWorst != null ? sp(equityWorst, 2) : '—';
+  var tnxTxt = tnx && tnx.chg != null ? sp(tnx.chg, 2) : '—';
   html += '<div class="rs-flag ' + (flag ? 'on' : '') + '">' +
-    (flag ? '⚠️ 股債同向重挫旗標【觸發】：股市重挫且美債殖利率同步飆升，傳統股債對沖失效 → 直接 veto' :
-      '股債同向重挫旗標：未觸發（需 費半/Nasdaq 跌幅≥' + RS_FLAG.equityDrop + '% 且 美10年債殖利率漲幅≥' + RS_FLAG.yieldUp + '%）') +
+    (flag ? '🔴 股債同向重挫：費半/Nasdaq ' + eqTxt + '（跌幅 ≥ ' + RS_FLAG.equityDrop + '%）且 美10年債殖利率 ' + tnxTxt +
+        '（漲幅 ≥ ' + RS_FLAG.yieldUp + '%）→ 股債齊跌、傳統對沖失效，暫停加碼' :
+      '🟢 股債同向重挫：未發生（費半/Nasdaq ' + eqTxt + '，跌幅 < ' + RS_FLAG.equityDrop + '%；美10年債殖利率 ' + tnxTxt +
+        '，漲幅 < ' + RS_FLAG.yieldUp + '%）') +
     '</div>';
   // 指標明細（股票型系統性風險；每列附說明小字）
   html += '<div class="rs-sec-title">股票型系統性風險 · 指標明細</div><table class="rs-table"><thead><tr><th>指標</th><th class="num">數值</th><th class="num">得分</th></tr></thead><tbody>';
@@ -173,7 +177,7 @@ async function startRiskReport(force) {
   html += '</tbody></table>';
   // 對照與免責（股票區塊）
   html += '<div class="rs-note">' +
-    '<b>動作對照</b>：0–3 正常加碼｜4–6 減半或延後｜7+ veto｜旗標觸發直接 veto。<br>' +
+    '<b>動作對照</b>：0–3 正常加碼｜4–6 減半或延後｜7 分以上暫停加碼｜股債同向重挫發生時直接暫停加碼。<br>' +
     '<b>得分色</b>：<span style="color:var(--down)">0 低</span>／<span style="color:var(--accent2)">1 中</span>／<span style="color:var(--up)">2 高</span>。<br>' +
     '資料源：Yahoo（VIX/美10年債/美元指數/費半/Nasdaq）＋ Shioaji 台指期夜盤(TXFR1)。' +
     '門檻為初始值、待 6 個月歷史回測校準。<b>本面板為依你設定規則自動算分的參考，非投資建議。</b>' +
@@ -185,56 +189,72 @@ async function startRiskReport(force) {
   wrap.innerHTML = html;
 }
 
-// 債券型信用風險區塊：第一層＝美股端 HYG/JNK 觸發、OAS 旁證；第二層＝各檔折溢價/量本地確認
+// 債券型信用風險區塊：每檔逐條紅綠燈直述（美股信用債跌幅／折價／成交量），綜合判定用操作語言
 function _rsBondBlockHtml(bond, sp) {
   var Y = RS_BOND_TH.discount, Z = RS_BOND_TH.volShrink, X = RS_BOND_TH.drop;
   var hygDrop = bond.hyg && bond.hyg.chg != null ? Math.max(0, -bond.hyg.chg) : null;
   var jnkDrop = bond.jnk && bond.jnk.chg != null ? Math.max(0, -bond.jnk.chg) : null;
-  // 第一層：HYG 或 JNK 單日跌幅 ≥ X%
-  var usTrig = (hygDrop != null && hygDrop >= X) || (jnkDrop != null && jnkDrop >= X);
+  var usHit = (hygDrop != null && hygDrop >= X) || (jnkDrop != null && jnkDrop >= X);
   var usKnown = hygDrop != null || jnkDrop != null;
+  var usVals = 'HYG ' + (bond.hyg ? sp(bond.hyg.chg, 2) : '—') + '／JNK ' + (bond.jnk ? sp(bond.jnk.chg, 2) : '—');
+  var oas = bond.oas;
+
+  // 逐檔判定：美股跌幅達標 且（折價達標 或 量縮達標）→ 暫停；美股達標但本地未確認 → 注意
+  var results = RS_BOND_CODES.map(function (code, i) {
+    var nav = bond.nav[i], vol = bond.vol[i];
+    var prem = nav && nav.premium != null ? nav.premium : null;   // 正=溢價、負=折價
+    var ratio = vol && vol.ratio != null ? vol.ratio : null;
+    var discHit = prem != null && prem <= -Y;
+    var volHit = ratio != null && ratio < Z;
+    var localKnown = prem != null || ratio != null;
+    var level;                                                     // 0 綠 / 1 黃 / 2 紅 / -1 資料缺
+    if (!usKnown || !localKnown) level = -1;
+    else if (usHit && (discHit || volHit)) level = 2;
+    else if (usHit) level = 1;
+    else level = 0;
+    return { code: code, prem: prem, ratio: ratio, discHit: discHit, volHit: volHit, level: level };
+  });
+  var worst = Math.max.apply(null, results.map(function (r) { return r.level; }));
+  var dot = function (hit) { return hit ? '🔴' : '🟢'; };
 
   var h = '<div class="rs-sec-title">債券型信用風險 · 非投等債（' + RS_BOND_CODES.join('／') + '）</div>';
 
-  // 第一層：美股端領先訊號
-  h += '<div class="rs-bond-us ' + (usTrig ? 'on' : '') + '">' +
-    '<b>第一層｜美股端領先訊號</b>：HYG ' + (bond.hyg ? sp(bond.hyg.chg, 2) : '—') + '／JNK ' + (bond.jnk ? sp(bond.jnk.chg, 2) : '—') +
-    ' → ' + (!usKnown ? '資料暫缺' : (usTrig ? '⚠️ 信用市場壓力升溫（觸發，跌幅 ≥ ' + X + '%）' : '正常（未達 ' + X + '%）')) + '</div>';
+  // 綜合判定（操作語言）
+  var vTxt, vColor;
+  if (worst === 2) { vTxt = '🔴 暫停換股／加碼'; vColor = 'var(--up)'; }
+  else if (worst === 1) { vTxt = '🟡 注意，美股信用債走弱，暫緩新進場'; vColor = 'var(--accent2)'; }
+  else if (worst === 0) { vTxt = '🟢 正常，可執行換股／加碼計畫'; vColor = 'var(--down)'; }
+  else { vTxt = '⚪ 資料暫缺，無法判定'; vColor = 'var(--text3)'; }
+  h += '<div class="rs-bond-verdict" style="border-color:' + vColor + ';color:' + vColor + '">綜合判定：' + vTxt + '</div>';
 
-  // OAS 旁證（延遲，不當即時觸發）
-  var oas = bond.oas;
-  h += '<div class="rs-bond-oas">OAS 信用利差 ' + (oas ? oas.value.toFixed(2) + '%（' + (oas.chg >= 0 ? '+' : '−') + Math.abs(oas.chg).toFixed(2) + ' pp，' + (oas.chg > 0 ? '走闊' : (oas.chg < 0 ? '收斂' : '持平')) + '）' : '—') +
-    (oas ? '｜資料時效：截至 ' + oas.date + '（約延遲 1 交易日）' : '') +
-    (oas && usTrig && oas.chg > 0 ? '　<b class="up">信用利差同步走闊，確認訊號成立</b>' : '') + '</div>';
-
-  // 第二層：各檔本地確認（折溢價 or 量縮）
-  h += '<table class="rs-table rs-bond-table"><thead><tr><th>標的</th><th class="num">折溢價</th><th class="num">當日量/90日中位</th><th>判定</th></tr></thead><tbody>';
-  RS_BOND_CODES.forEach(function (code, i) {
-    var nav = bond.nav[i], vol = bond.vol[i];
-    var prem = nav && nav.premium != null ? nav.premium : null;
-    var ratio = vol && vol.ratio != null ? vol.ratio : null;
-    var discHit = prem != null && prem <= -Y;                 // 折價達 Y pp
-    var volHit = ratio != null && ratio < Z;                  // 量縮到中位數 Z% 以下
-    var localKnown = prem != null || ratio != null;
-    var status, scls;
-    if (!usTrig) { status = usKnown ? '正常（美股端未觸發）' : '資料暫缺'; scls = 'flat'; }
-    else if (!localKnown) { status = '資料暫缺（折溢價/量）'; scls = 'flat'; }
-    else if (discHit || volHit) { status = '⚠️ override：凍結加碼／換股'; scls = 'up'; }
-    else { status = '觀察（美股升溫、本地未確認）'; scls = 'accent'; }
-    var premCls = prem == null ? 'flat' : (prem < 0 ? 'down' : (prem > 0 ? 'up' : 'flat'));
-    var scolor = scls === 'up' ? 'var(--up)' : (scls === 'accent' ? 'var(--accent2)' : 'var(--text3)');
-    h += '<tr class="' + (scls === 'up' ? 'rs-bond-hit' : '') + '"><td>' + code +
-      '<div class="rs-idesc">' + ((_contracts[code] && _contracts[code].name) || '') + '</div></td>' +
-      '<td class="num ' + premCls + '">' + (prem == null ? '—' : (prem > 0 ? '+' : '') + prem.toFixed(2) + '%') + '</td>' +
-      '<td class="num">' + (ratio == null ? '—' : Math.round(ratio) + '%') + '</td>' +
-      '<td style="color:' + scolor + ';font-weight:700">' + status + '</td></tr>';
+  // 各檔三條件逐條列示
+  results.forEach(function (r) {
+    var name = (_contracts[r.code] && _contracts[r.code].name) || '';
+    h += '<div class="rs-bond-item"><div class="rs-bond-code">' + r.code +
+      (name ? ' <span class="rs-bond-name">' + name + '</span>' : '') + '</div><ol class="rs-bond-list">';
+    // 1. 美股信用債跌幅
+    h += '<li>' + (usKnown ? dot(usHit) : '⚪') + ' 美國非投等債跌幅 ' + (usHit ? '≥' : '<') + ' ' + X + '%（' +
+      (usKnown ? usVals : '資料暫缺') + '）</li>';
+    // 2. 折價
+    var premTxt = r.prem == null ? '資料暫缺' :
+      ((r.prem > 0 ? '+' : '') + r.prem.toFixed(2) + '%' + (r.prem > 0 ? '，為溢價、非折價' : (r.prem === 0 ? '，持平' : '，為折價')));
+    h += '<li>' + (r.prem == null ? '⚪' : dot(r.discHit)) + ' 折價 ' + (r.discHit ? '≥' : '<') + ' ' + Y + '%（' + premTxt + '）</li>';
+    // 3. 成交量
+    var volTxt = r.ratio == null ? '資料暫缺' : Math.round(r.ratio) + '%';
+    h += '<li>' + (r.ratio == null ? '⚪' : dot(r.volHit)) + ' 成交量 ' + (r.volHit ? '<' : '≥') + ' 90日中位數 ' + Z + '%（' + volTxt + '）</li>';
+    h += '</ol></div>';
   });
-  h += '</tbody></table>';
+
+  // 參考資訊：OAS（延遲一日，作為佐證而非即時判定）
+  h += '<div class="rs-bond-oas">參考｜美國非投等債信用利差（OAS）' +
+    (oas ? oas.value.toFixed(2) + '%，較前一日' + (oas.chg > 0 ? '走闊 +' : (oas.chg < 0 ? '收斂 −' : '持平 ')) + Math.abs(oas.chg).toFixed(2) + ' 個百分點｜資料截至 ' + oas.date + '（延遲約 1 個交易日）' : '資料暫缺') +
+    (oas && usHit && oas.chg > 0 ? '　<b class="up">利差同步走闊，走弱訊號成立</b>' : '') + '</div>';
 
   h += '<div class="rs-note">' +
-    '<b>兩層 override 邏輯</b>：第一層 HYG 或 JNK 單日跌幅 ≥ ' + X + '%（美股隔夜領先）→ 第二層該檔折價 ≥ ' + Y + ' pp <b>或</b> 當日量 < 近90日中位數 ' + Z + '% → 才標 override。此警示<b>僅作用於本區塊非投等債</b>，不影響上方股票型評分與 veto。<br>' +
-    '<b>指標說明</b>：HYG/JNK＝美國非投等債價格，信用風險反應最快的隔夜領先訊號（含利率＋利差＋流動性）；OAS＝剔除利率因子後的純信用利差、最乾淨但延遲約1日，當確認；折溢價＝台股端流動性是否惡化（折價擴大＝衝擊已傳導）；成交量為當日累計、盤中偏低屬正常。<br>' +
-    '資料源：Yahoo（HYG/JNK）＋ FRED（OAS, BAMLH0A0HYM2）＋ TWSE 官方淨值（折溢價）＋ Shioaji 日K（量）。門檻 X=' + X + '% 為近一年 HYG/JNK 跌幅 p10、Y/Z 為初始值，待回測校準。<b>非投資建議。</b>' +
+    '<b>怎麼判定</b>：先看美國非投等債（HYG/JNK）單日跌幅是否達 ' + X + '%；若已達，再看該檔在台灣市場是否同步惡化——折價達 ' + Y + '% <b>或</b> 當日成交量不到 90 日中位數的 ' + Z + '%，兩者任一成立就顯示暫停。' +
+    '美股走弱但台灣端還沒惡化時顯示注意，代表衝擊尚未傳導過來。此判定<b>只適用於這兩檔非投等債</b>，不影響上方股票型的評分與加碼建議。<br>' +
+    '<b>指標說明</b>：HYG/JNK＝美國非投等債 ETF 價格，信用風險反應最快，美股收盤早於台股開盤，等於隔夜領先訊號；OAS＝非投等債比公債多要求的利差，已剔除利率因素、最能反映純信用風險，但公布延遲約一日，只當佐證；折價＝市價低於淨值，擴大代表台灣端流動性轉差；成交量為當日累計，盤中查看時偏低屬正常。<br>' +
+    '資料源：Yahoo（HYG/JNK）＋ FRED（OAS, BAMLH0A0HYM2）＋ TWSE 官方淨值（折溢價）＋ Shioaji 日K（成交量）。判定標準 ' + X + '% 取自近一年 HYG/JNK 單日跌幅的後 10% 分位，' + Y + '%／' + Z + '% 為初始值，待回測校準。<b>非投資建議。</b>' +
     '</div>';
   return h;
 }
