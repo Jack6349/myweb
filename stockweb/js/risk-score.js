@@ -21,6 +21,12 @@ var RS_BOND_TH = { drop: 0.35, discount: 0.5, volShrink: 50 };
 var RS_BOND_CODES = ['00981B', '00988B'];
 
 function _rsScore(v, th) { return v == null ? null : (v < th[0] ? 0 : (v <= th[1] ? 1 : 2)); }
+// 指標說明：直接陳述量的是什麼＋各分數的數字區間（門檻取自 RS_TH，改門檻說明同步）
+function _rsDesc(what, th, unit, words) {
+  return what + '　< ' + th[0] + unit + ' ' + words[0] +
+    '｜' + th[0] + '–' + th[1] + unit + ' ' + words[1] +
+    '｜> ' + th[1] + unit + ' ' + words[2];
+}
 function _rsColor(s) { return s == null ? 'var(--text3)' : (s === 0 ? 'var(--down)' : (s === 1 ? 'var(--accent2)' : 'var(--up)')); }
 
 var _rsCache = {}; // sym → {ts,data}；成功結果快取 3 分鐘，減少 GAS urlfetch 消耗
@@ -120,12 +126,12 @@ async function startRiskReport(force) {
   var vixUp = vix && vix.chg != null ? Math.max(0, vix.chg) : null;
 
   var rows = [
-    { k: 'VIX 絕對值', desc: '市場恐慌程度；>25 代表避險情緒濃', val: vix ? vix.value.toFixed(2) : '—', score: vix ? _rsScore(vix.value, RS_TH.vix) : null },
-    { k: 'VIX 單日變化', desc: '恐慌情緒單日升溫幅度（只計上升）', val: vix ? sp(vix.chg, 1) : '—', score: _rsScore(vixUp, RS_TH.vixChg) },
-    { k: '美10年債殖利率變化', desc: '利率環境；升息期易上行，與股市同跌時傳統對沖失效', val: tnx ? sp(tnx.chg, 2) : '—', score: tnx && tnx.chg != null ? _rsScore(Math.abs(tnx.chg), RS_TH.yield) : null },
-    { k: '美元指數變化', desc: '資金避險流向；急升常伴隨風險資產走弱', val: dxy ? sp(dxy.chg, 2) : '—', score: dxy && dxy.chg != null ? _rsScore(Math.abs(dxy.chg), RS_TH.dxy) : null },
-    { k: '費半/Nasdaq 變化（取較弱）', desc: '科技股動能；台股連動最深的美股訊號', val: equityWorst != null ? sp(equityWorst, 2) : '—', score: _rsScore(equityDrop, RS_TH.equity) },
-    { k: '台指期夜盤變化', desc: '台股隔夜預期；反映國際盤對台股開盤的壓力', val: nightChg != null ? sp(nightChg, 2) : '—', score: _rsScore(nightDrop, RS_TH.night) }
+    { k: 'VIX 絕對值', desc: _rsDesc('市場避險情緒', RS_TH.vix, '', ['平穩', '升溫', '濃厚']), val: vix ? vix.value.toFixed(2) : '—', score: vix ? _rsScore(vix.value, RS_TH.vix) : null },
+    { k: 'VIX 單日變化', desc: _rsDesc('恐慌情緒單日升幅', RS_TH.vixChg, '%', ['平穩', '升溫', '急升']), val: vix ? sp(vix.chg, 1) : '—', score: _rsScore(vixUp, RS_TH.vixChg) },
+    { k: '美10年債殖利率變化', desc: _rsDesc('利率環境單日變動', RS_TH.yield, '%', ['平穩', '波動', '劇烈']), val: tnx ? sp(tnx.chg, 2) : '—', score: tnx && tnx.chg != null ? _rsScore(Math.abs(tnx.chg), RS_TH.yield) : null },
+    { k: '美元指數變化', desc: _rsDesc('資金避險流向單日變動', RS_TH.dxy, '%', ['平穩', '波動', '劇烈']), val: dxy ? sp(dxy.chg, 2) : '—', score: dxy && dxy.chg != null ? _rsScore(Math.abs(dxy.chg), RS_TH.dxy) : null },
+    { k: '費半/Nasdaq 變化（取較弱）', desc: _rsDesc('科技股單日跌幅', RS_TH.equity, '%', ['平穩', '下挫', '重挫']), val: equityWorst != null ? sp(equityWorst, 2) : '—', score: _rsScore(equityDrop, RS_TH.equity) },
+    { k: '台指期夜盤變化', desc: _rsDesc('台股隔夜跌幅', RS_TH.night, '%', ['平穩', '下挫', '重挫']), val: nightChg != null ? sp(nightChg, 2) : '—', score: _rsScore(nightDrop, RS_TH.night) }
   ];
 
   var total = 0, avail = 0;
@@ -163,10 +169,10 @@ async function startRiskReport(force) {
   var eqTxt = equityWorst != null ? sp(equityWorst, 2) : '—';
   var tnxTxt = tnx && tnx.chg != null ? sp(tnx.chg, 2) : '—';
   html += '<div class="rs-flag ' + (flag ? 'on' : '') + '">' +
-    (flag ? '🔴 股債同向重挫：費半/Nasdaq ' + eqTxt + '（跌幅 ≥ ' + RS_FLAG.equityDrop + '%）且 美10年債殖利率 ' + tnxTxt +
-        '（漲幅 ≥ ' + RS_FLAG.yieldUp + '%）→ 股債齊跌、傳統對沖失效，暫停加碼' :
-      '🟢 股債同向重挫：未發生（費半/Nasdaq ' + eqTxt + '，跌幅 < ' + RS_FLAG.equityDrop + '%；美10年債殖利率 ' + tnxTxt +
-        '，漲幅 < ' + RS_FLAG.yieldUp + '%）') +
+    (flag ? '🔴 股債同向重挫：費半/Nasdaq ' + eqTxt + ' ≥ 跌幅 ' + RS_FLAG.equityDrop + '%　且　美10年債殖利率 ' + tnxTxt +
+        ' ≥ 漲幅 ' + RS_FLAG.yieldUp + '%　→　暫停加碼' :
+      '🟢 股債同向重挫：費半/Nasdaq ' + eqTxt + ' < 跌幅 ' + RS_FLAG.equityDrop + '%　且　美10年債殖利率 ' + tnxTxt +
+        ' < 漲幅 ' + RS_FLAG.yieldUp + '%') +
     '</div>';
   // 指標明細（股票型系統性風險；每列附說明小字）
   html += '<div class="rs-sec-title">股票型系統性風險 · 指標明細</div><table class="rs-table"><thead><tr><th>指標</th><th class="num">數值</th><th class="num">得分</th></tr></thead><tbody>';
@@ -248,9 +254,11 @@ function _rsBondBlockHtml(bond, sp) {
   });
 
   // 參考資訊：OAS（延遲一日，作為佐證而非即時判定）
+  var oasSign = oas ? (oas.chg > 0 ? '+' : (oas.chg < 0 ? '−' : '')) + Math.abs(oas.chg).toFixed(2) : '';
   h += '<div class="rs-bond-oas">參考｜美國非投等債信用利差（OAS）' +
-    (oas ? oas.value.toFixed(2) + '%，較前一日' + (oas.chg > 0 ? '走闊 +' : (oas.chg < 0 ? '收斂 −' : '持平 ')) + Math.abs(oas.chg).toFixed(2) + ' 個百分點｜資料截至 ' + oas.date + '（延遲約 1 個交易日）' : '資料暫缺') +
-    (oas && usHit && oas.chg > 0 ? '　<b class="up">利差同步走闊，走弱訊號成立</b>' : '') + '</div>';
+    (oas ? '　今日 ' + oas.value.toFixed(2) + '%　前一日 ' + (oas.value - oas.chg).toFixed(2) + '%　變化 ' + oasSign +
+      '　資料截至 ' + oas.date + '（延遲約 1 個交易日）' : '　資料暫缺') +
+    (oas && usHit && oas.chg > 0 ? '　<b class="up">利差變化 ' + oasSign + ' > 0，走弱訊號成立</b>' : '') + '</div>';
 
   h += '<div class="rs-note">' +
     '<b>怎麼判定</b>：先看美國非投等債（HYG/JNK）單日跌幅是否達 ' + X + '%；若已達，再看該檔在台灣市場是否同步惡化——折價達 ' + Y + '% <b>或</b> 當日成交量不到 90 日中位數的 ' + Z + '%，兩者任一成立就顯示暫停。' +
