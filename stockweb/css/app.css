@@ -191,6 +191,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 /* 彈窗捲動時，明細表欄位標題固定置頂 */
 /* 明細表自帶捲動容器（無內距）→ sticky 標題齊平頂端，上方不會露出資料列 */
 .detail-scroll { overflow: auto; max-height: 62vh; }
+/* 含表格的彈窗：讓表格吸收剩餘高度，避免「彈窗外框」與「表格內層」出現兩條捲軸 */
+.modal-body:has(.detail-scroll) { display: flex; flex-direction: column; }
+.modal-body:has(.detail-scroll) .detail-scroll { flex: 1 1 auto; min-height: 0; max-height: none; }
+.modal-body:has(.detail-scroll) > .detail-note { flex-shrink: 0; }
 .detail-table thead th { position: sticky; top: 0; z-index: 5; background: var(--bg2); box-shadow: inset 0 -1px 0 var(--border); }
 .detail-table td, .subdetail-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .detail-table .num, .subdetail-table .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -268,13 +272,14 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .news-prompt-ta { width: 100%; height: 50vh; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 12.5px; line-height: 1.6; padding: 12px; font-family: Consolas, monospace; resize: vertical; box-sizing: border-box; }
 
 /* ── 彈窗 ── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; }
-.modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; max-width: 720px; width: 100%; max-height: 82vh; display: flex; flex-direction: column; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: hidden; }
+.modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; max-width: 720px; width: 100%; max-height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.modal-head { flex-shrink: 0; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid var(--border); }
 .modal-title { font-size: 16px; font-weight: 700; color: var(--accent2); }
 .modal-close { background: none; border: none; color: var(--text2); font-size: 24px; cursor: pointer; line-height: 1; }
 .modal-close:hover { color: var(--text); }
-.modal-body { padding: 16px 22px; overflow-y: auto; }
+.modal-body { padding: 16px 22px; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
 .modal-loading { text-align: center; color: var(--text2); padding: 30px; font-size: 14px; }
 
 /* ── 交易資訊（三框） ── */
@@ -316,7 +321,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-subtab.active { background: rgba(240,204,122,.14); border-color: rgba(240,204,122,.4); color: var(--accent2); font-weight: 700; }
 .sbl-date { font-size: 12px; color: var(--text3); }
 .sbl-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--text2); margin-bottom: 10px; }
-.sbl-inp { width: 64px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 8px; font-size: 13px; font-family: var(--font); text-align: right; }
+.sbl-inp { width: 78px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 8px; font-size: 13px; font-family: var(--font); text-align: right; }
 .sbl-toolbar .tx-refresh { margin-left: auto; }
 .sbl-banner { background: rgba(240,204,122,.12); border: 1px solid rgba(240,204,122,.35); color: var(--accent2); border-radius: 8px; padding: 8px 14px; font-size: 13px; margin-bottom: 10px; line-height: 1.6; }
 .sbl-pill { font-size: 11px; padding: 2px 10px; border-radius: 99px; background: rgba(240,204,122,.15); color: var(--accent2); white-space: nowrap; }
@@ -516,7 +521,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-tw { max-height: none; }
 .swap-table { font-size: 13px; }
 .swap-table td { padding: 5px 10px; }
-.swap-inp { width: 84px; }
+.swap-inp { width: 96px; }
 .swap-code-inp { width: 110px; text-align: left; }
 .swap-mini { background: transparent; border: 1px solid var(--border); color: var(--text2); font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
 .swap-mini:hover { border-color: rgba(240,204,122,.5); color: var(--accent2); }
@@ -564,3 +569,6 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-bond-name { font-size: 12px; font-weight: 400; color: var(--text2); }
 .rs-bond-list { margin: 0; padding-left: 22px; font-size: 13px; color: var(--text); line-height: 1.9; }
 .rs-bond-list li { padding-left: 2px; }
+
+/* 數字輸入框：靠右數字與右側上下微調鈕之間留間距（全站 number input 共用） */
+input[type=number] { padding-right: 20px; }

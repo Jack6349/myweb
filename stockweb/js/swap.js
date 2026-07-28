@@ -141,37 +141,37 @@ function swapCompute() {
   var picks = (_swapState.buyMode === 'exist' ? _swapState.buyExist : _swapState.buyCodes)
     .filter(function (c) { return _swapPrice(c) != null; });
 
-  // 資金分配
+  // 資金分配：平均＝均分賣出淨額；手動＝各檔「佔賣出淨額的百分比」（字面值，未分配的自然留作現金）
   var amt = {};
   if (picks.length) {
     if (_swapState.alloc === 'even') {
       picks.forEach(function (c) { amt[c] = sellNet / picks.length; });
     } else {
-      var sum = 0;
-      picks.forEach(function (c) { var v = parseFloat(_swapState.allocPct[c]); sum += (v > 0 ? v : 0); });
       picks.forEach(function (c) {
-        var v = parseFloat(_swapState.allocPct[c]); v = v > 0 ? v : 0;
-        amt[c] = sum > 0 ? sellNet * v / sum : 0;
+        var v = parseFloat(_swapState.allocPct[c]);
+        amt[c] = (v > 0) ? sellNet * v / 100 : 0;
       });
     }
   }
 
-  // 可買上限（整張模式取整到 1000 股，否則以股為單位無條件捨去）＋手動買入張數覆寫
-  // maxSh/maxLots＝分配金額算得的上限；實際買入＝手動值（預設＝上限，夾在 [0, 上限]）
+  // maxSh/maxLots＝該檔分配金額買得起的張數（「可買股數／＝張」欄顯示、也是買入張數的預設值）
+  // capLots＝以「全部賣出淨額」計的上限，供手動輸入使用（不被該列分配金額卡住，可自由調整）
   var buyRows = [], usedCash = 0;
   picks.forEach(function (code) {
     var px = _swapPrice(code), per = px * (1 + SWAP_BUY_FEE);
     var raw = per > 0 ? (amt[code] || 0) / per : 0;
     var maxSh = _swapState.wholeLot ? Math.floor(raw / 1000) * 1000 : Math.floor(raw);
     var maxLots = maxSh / 1000;
+    var capRaw = per > 0 ? sellNet / per : 0;
+    var capLots = (_swapState.wholeLot ? Math.floor(capRaw / 1000) * 1000 : Math.floor(capRaw)) / 1000;
     var ov = _swapState.buyLots[code];
-    var lots = (ov != null && ov !== '') ? Math.max(0, Math.min(parseFloat(ov) || 0, maxLots)) : maxLots;
-    var sh = Math.min(Math.round(lots * 1000), maxSh);
+    var lots = (ov != null && ov !== '') ? Math.max(0, Math.min(parseFloat(ov) || 0, capLots)) : maxLots;
+    var sh = _swapState.wholeLot ? Math.round(lots) * 1000 : Math.round(lots * 1000);
     var cost = sh * per;
     usedCash += cost;
     newShares[code] = (newShares[code] || 0) + sh;
     if (oldShares[code] == null) oldShares[code] = 0;
-    buyRows.push({ code: code, sh: sh, maxSh: maxSh, maxLots: maxLots, px: px, amt: amt[code] || 0, cost: cost });
+    buyRows.push({ code: code, sh: sh, maxSh: maxSh, maxLots: maxLots, capLots: capLots, px: px, amt: amt[code] || 0, cost: cost });
   });
   var cashLeft = sellNet - usedCash;
 
@@ -457,7 +457,7 @@ function _swapBuyHtml() {
   if (picks.length) {
     h += '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
       '<th>代號</th><th>名稱</th><th class="num">現價</th>' +
-      (_swapState.alloc === 'manual' ? '<th class="num">比例(%)</th>' : '') +
+      (_swapState.alloc === 'manual' ? '<th class="num" title="佔賣出淨額的百分比；未分配的部分自動留作現金">比例(%)</th>' : '') +
       '<th class="num">分配金額</th><th class="num">可買股數</th><th class="num">＝張</th>' +
       '<th class="num">買入張數</th><th class="num">年配息(新增)</th></tr></thead><tbody>';
     picks.forEach(function (code) {
@@ -468,14 +468,14 @@ function _swapBuyHtml() {
         '<td class="inv-name">' + _swapName(code) + '</td>' +
         '<td class="num">' + (px != null ? px.toFixed(2) : '—') + '</td>' +
         (_swapState.alloc === 'manual'
-          ? '<td class="num"><input class="sbl-inp swap-inp" type="number" min="0" step="1" value="' +
+          ? '<td class="num"><input class="sbl-inp swap-inp" type="number" min="0" max="100" step="5" title="佔賣出淨額的百分比；未分配的自動留作現金" value="' +
             (_swapState.allocPct[code] != null ? _swapState.allocPct[code] : '') + '" oninput="swapPctInput(\'' + code + '\',this)"></td>'
           : '') +
         '<td class="num" id="swap-amt-' + code + '">—</td>' +
         '<td class="num" id="swap-sh-' + code + '">—</td>' +
         '<td class="num" id="swap-lot-' + code + '">—</td>' +
         '<td class="num"><input class="sbl-inp swap-inp swap-buylots" id="swap-buylots-' + code + '" type="number" min="0" step="1" value="' +
-          (bov != null ? bov : '') + '" title="預設＝可買張數；可調降以保留現金" oninput="swapBuyLotsInput(\'' + code + '\',this)"></td>' +
+          (bov != null ? bov : '') + '" title="預設＝可買張數；可自行增減以決定買入張數與保留現金（上限為賣出淨額買得起的張數）" oninput="swapBuyLotsInput(\'' + code + '\',this)"></td>' +
         '<td class="num" id="swap-div-' + code + '">—</td>' +
       '</tr>';
     });
@@ -515,16 +515,20 @@ function swapUpdate() {
     var binp = document.getElementById('swap-buylots-' + r.code);
     if (binp) {
       var ov = _swapState.buyLots[r.code];
-      if (ov == null || ov === '') { binp.value = _swapPlain(r.maxLots); }         // 未覆寫 → 跟隨上限
-      else if (parseFloat(ov) > r.maxLots) {                                        // 超過上限 → 夾回
-        _swapState.buyLots[r.code] = r.maxLots; binp.value = _swapPlain(r.maxLots); _swapSave();
+      if (ov == null || ov === '') { binp.value = _swapPlain(r.maxLots); }         // 未覆寫 → 跟隨分配金額算出的可買張數
+      else if (parseFloat(ov) > r.capLots) {                                        // 超過「全部賣出淨額」買得起 → 夾回
+        _swapState.buyLots[r.code] = r.capLots; binp.value = _swapPlain(r.capLots); _swapSave();
       }
+      binp.setAttribute('max', _swapPlain(r.capLots));
     }
     var inc = pc ? pc.after - pc.before : 0;
     set('swap-div-' + r.code, (inc ? '<span class="' + colorClass(inc) + '">' + fmtMoney(inc) + '</span>' : '—'));
   });
   set('swap-buy-total', fmtMoney(c.usedCash));
-  set('swap-cash', fmtMoney(c.cashLeft));
+  // 剩餘現金：買入超過賣出淨額時以紅字標示資金不足（手動調高張數可能超支）
+  set('swap-cash', c.cashLeft < -0.5
+    ? '<span class="up">' + fmtMoney(c.cashLeft) + '　資金不足</span>'
+    : fmtMoney(c.cashLeft));
 
   // 頂部摘要條（清空試算下方）：有賣出才顯示，隨賣出調整即時重算
   set('swap-sumbar', c.sellRows.length ? _swapSumPairs(c) : '');
