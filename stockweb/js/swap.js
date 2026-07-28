@@ -183,7 +183,10 @@ function swapCompute() {
     usedCash += cost;
     newShares[code] = (newShares[code] || 0) + sh;
     if (oldShares[code] == null) oldShares[code] = 0;
-    rowMap[code] = { code: code, sh: sh, maxSh: maxSh, maxLots: maxLots, capLots: capLots, px: px, amt: amt[code] || 0, cost: cost };
+    // ovPct：手動調整買入張數時，反算該檔實際佔賣出淨額的百分比，回填「比例(%)」欄
+    rowMap[code] = { code: code, sh: sh, maxSh: maxSh, maxLots: maxLots, capLots: capLots, px: px,
+      amt: amt[code] || 0, cost: cost, ov: hasOv(code),
+      ovPct: (hasOv(code) && sellNet > 0) ? Math.round(cost / sellNet * 10000) / 100 : null };
   });
   var buyRows = picks.map(function (c) { return rowMap[c]; });  // 顯示順序仍依清單順序
   var cashLeft = Math.max(0, sellNet - usedCash);
@@ -494,7 +497,7 @@ function _swapBuyHtml() {
         '<td class="inv-name">' + _swapName(code) + '</td>' +
         '<td class="num">' + (px != null ? px.toFixed(2) : '—') + '</td>' +
         (_swapState.alloc === 'manual'
-          ? '<td class="num"><input class="sbl-inp swap-inp" type="number" min="0" max="100" step="5" title="佔賣出淨額的百分比；未分配的自動留作現金" value="' +
+          ? '<td class="num"><input class="sbl-inp swap-inp" id="swap-pct-' + code + '" type="number" min="0" max="100" step="5" title="佔賣出淨額的百分比；未分配的自動留作現金。手動調整買入張數時會自動回填" value="' +
             (_swapState.allocPct[code] != null ? _swapState.allocPct[code] : '') + '" oninput="swapPctInput(\'' + code + '\',this)"></td>'
           : '') +
         '<td class="num" id="swap-amt-' + code + '">—</td>' +
@@ -514,6 +517,7 @@ function _swapBuyHtml() {
 }
 
 // 只更新衍生數字＋結果區（不動輸入元素，游標不跳）
+var _pctSynced = false;
 function swapUpdate() {
   var c = swapCompute();
   var set = function (id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; };
@@ -547,9 +551,16 @@ function swapUpdate() {
       }
       binp.setAttribute('max', _swapPlain(r.capLots));
     }
+    // 比例(%)：手動調整買入張數後反算回填，維持兩欄一致（正在輸入中的欄位不覆寫）
+    var pinp = document.getElementById('swap-pct-' + r.code);
+    if (pinp && r.ov && r.ovPct != null && document.activeElement !== pinp) {
+      if (_swapState.allocPct[r.code] !== r.ovPct) { _swapState.allocPct[r.code] = r.ovPct; _pctSynced = true; }
+      pinp.value = String(r.ovPct);
+    }
     var inc = pc ? pc.after - pc.before : 0;
     set('swap-div-' + r.code, (inc ? '<span class="' + colorClass(inc) + '">' + fmtMoney(inc) + '</span>' : '—'));
   });
+  if (_pctSynced) { _pctSynced = false; _swapSave(); }   // 回填後的比例一併存檔
   set('swap-buy-total', fmtMoney(c.usedCash));
   set('swap-cash', fmtMoney(c.cashLeft));
 
