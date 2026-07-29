@@ -516,6 +516,9 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 
 /* ── 換股試算（股利估算子頁籤） ── */
 #divest-tab-est .divest-topbar { margin-top: 0; }
+/* 股利估算子頁籤：固定於頂欄(54)＋導覽列(50)下方，捲動時不跟著跑；滿版底色遮住下方捲過的內容 */
+#divest-view .tx-subtabs { position: sticky; top: 104px; z-index: 8; background: var(--bg);
+  margin: -14px calc(50% - 50vw) 12px; padding: 14px calc(50vw - 50%) 8px; }
 .swap-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .swap-hint { font-size: 11px; color: var(--text3); }
 .swap-tw { max-height: none; }
