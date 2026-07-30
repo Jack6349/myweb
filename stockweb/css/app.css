@@ -575,3 +575,6 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 
 /* 數字輸入框：微調鈕維持在右緣，只在其左側留間距與數字分開（全站 number input 共用） */
 input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
+
+/* 換股試算賣出區：成本均價欄，淡色與現價區隔 */
+.swap-cost { color: var(--text3); }

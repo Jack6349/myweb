@@ -96,6 +96,11 @@ function _swapFree(code) {                                                      
   var p = _swapPos(code);
   return p ? Math.max(0, p.quantity - (p.lentShares || 0)) : _swapHeld(code);
 }
+// 每股成本均價（來自券商庫存 _positions[].price）
+function _swapCostPx(code) {
+  var p = _swapPos(code);
+  return (p && p.price != null) ? p.price : null;
+}
 function _swapPrice(code) {
   code = String(code);
   if (_swapPx[code] != null) return _swapPx[code];
@@ -414,17 +419,20 @@ function _swapSellHtml() {
   var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">賣出</span>' +
     '<span class="swap-hint">輸入張數或按「全部」；零股可輸入小數（0.5＝500 股）</span></div>' +
     '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
-    '<th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">持有(張)</th>' +
+    '<th>代號</th><th>名稱</th><th class="num">現價</th><th class="num" title="每股成本均價（券商庫存）">成本</th>' +
+    '<th class="num">持有(張)</th>' +
     '<th class="num">可賣(張)</th><th class="num">市值</th><th class="num">年配息</th>' +
     '<th class="num">賣出張數</th><th></th><th class="num">賣出淨額</th></tr></thead><tbody>';
   codes.forEach(function (code) {
     var px = _swapPrice(code), held = _swapHeld(code), free = _swapFree(code);
     var val = px != null ? px * held : null;
     var v = _swapState.sells[code];
+    var cost = _swapCostPx(code);
     h += '<tr>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
       '<td class="inv-name">' + _swapName(code) + '</td>' +
       '<td class="num">' + (px != null ? px.toFixed(2) : '—') + '</td>' +
+      '<td class="num swap-cost">' + (cost != null ? cost.toFixed(2) : '—') + '</td>' +
       '<td class="num">' + _swapLots(held) + '</td>' +
       '<td class="num' + (free < held ? ' swap-warn' : '') + '">' + _swapLots(free) + '</td>' +
       '<td class="num">' + (val != null ? fmtMoney(val) : '—') + '</td>' +
