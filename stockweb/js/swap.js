@@ -433,7 +433,9 @@ function _swapSellHtml() {
   var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">賣出</span>' +
     '<span class="swap-hint">輸入張數或按「全部」；零股可輸入小數（0.5＝500 股）</span></div>' +
     '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
-    '<th>代號</th><th>名稱</th><th class="num">現價</th><th class="num" title="每股成本均價（券商庫存）">成本</th>' +
+    '<th>代號</th><th>名稱</th><th class="num">現價</th>' +
+    '<th class="num" title="最近發放股利 × 12 ÷ 現價（月配年化估算）">預估殖利率</th>' +
+    '<th class="num" title="每股成本均價（券商庫存）">成本</th>' +
     '<th class="num">持有(張)</th>' +
     '<th class="num">可賣(張)</th><th class="num">市值</th><th class="num">年配息</th>' +
     '<th class="num">賣出張數</th><th></th><th class="num">賣出淨額</th></tr></thead><tbody>';
@@ -442,10 +444,12 @@ function _swapSellHtml() {
     var val = px != null ? px * held : null;
     var v = _swapState.sells[code];
     var cost = _swapCostPx(code);
+    var yld = _swapYield(code);
     h += '<tr>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
       '<td class="inv-name">' + _swapName(code) + '</td>' +
       '<td class="num">' + (px != null ? px.toFixed(2) : '—') + '</td>' +
+      '<td class="num swap-yield">' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</td>' +
       '<td class="num swap-cost">' + (cost != null ? cost.toFixed(2) : '—') + '</td>' +
       '<td class="num">' + _swapLots(held) + '</td>' +
       '<td class="num' + (free < held ? ' swap-warn' : '') + '">' + _swapLots(free) + '</td>' +
