@@ -101,6 +101,20 @@ function _swapCostPx(code) {
   var p = _swapPos(code);
   return (p && p.price != null) ? p.price : null;
 }
+// 預估殖利率＝最近發放股利 × 12 ÷ 現價 ×100（以最近一次實際配息年化；月配估算）
+function _swapYield(code) {
+  var recs = (typeof _divRecMap !== 'undefined') && _divRecMap[code];
+  var px = _swapPrice(code);
+  if (!recs || !recs.length || !(px > 0)) return null;
+  var today = (typeof _divTwDate === 'function') ? _divTwDate().iso : '9999-99-99';
+  var sorted = recs.filter(function (r) { return r.amount != null && r.exDate; })
+    .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
+  if (!sorted.length) return null;
+  var last = null;                                   // 最近一筆已發放（發放日已過）
+  sorted.forEach(function (r) { if ((r.payDate || r.exDate) <= today) last = r; });
+  if (!last) last = sorted[sorted.length - 1];        // 皆未發放（新檔）→ 取最近一筆
+  return last.amount * 12 / px * 100;
+}
 function _swapPrice(code) {
   code = String(code);
   if (_swapPx[code] != null) return _swapPx[code];
@@ -494,16 +508,19 @@ function _swapBuyHtml() {
   if (picks.length) {
     h += '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
       '<th>代號</th><th>名稱</th><th class="num">現價</th>' +
+      '<th class="num" title="最近發放股利 × 12 ÷ 現價（月配年化估算）">預估殖利率</th>' +
       (_swapState.alloc === 'manual' ? '<th class="num" title="佔賣出淨額的百分比；未分配的部分自動留作現金">比例(%)</th>' : '') +
       '<th class="num">分配金額</th><th class="num">可買股數</th><th class="num">＝張</th>' +
       '<th class="num">買入張數</th><th class="num">年配息(新增)</th></tr></thead><tbody>';
     picks.forEach(function (code) {
       var px = _swapPrice(code);
       var bov = _swapState.buyLots[code];
+      var yld = _swapYield(code);
       h += '<tr>' +
         '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
         '<td class="inv-name">' + _swapName(code) + '</td>' +
         '<td class="num">' + (px != null ? px.toFixed(2) : '—') + '</td>' +
+        '<td class="num swap-yield">' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</td>' +
         (_swapState.alloc === 'manual'
           ? '<td class="num"><input class="sbl-inp swap-inp" id="swap-pct-' + code + '" type="number" min="0" max="100" step="5" title="佔賣出淨額的百分比；未分配的自動留作現金。手動調整買入張數時會自動回填" value="' +
             (_swapState.allocPct[code] != null ? _swapState.allocPct[code] : '') + '" oninput="swapPctInput(\'' + code + '\',this)"></td>'

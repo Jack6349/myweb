@@ -578,3 +578,6 @@ input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
 
 /* 換股試算賣出區：成本均價欄，淡色與現價區隔 */
 .swap-cost { color: var(--text3); }
+
+/* 換股試算買入區：預估殖利率欄 */
+.swap-yield { color: var(--accent2); }
