@@ -101,7 +101,8 @@ function _swapCostPx(code) {
   var p = _swapPos(code);
   return (p && p.price != null) ? p.price : null;
 }
-// 預估殖利率＝最近發放股利 × 12 ÷ 現價 ×100（以最近一次實際配息年化；月配估算）
+// 預估殖利率＝最近一次配息 × 配息期數 ÷ 現價 ×100
+// 配息期數：年配1、半年配2、季配4、月配12（由 _divInferStep 推得的月間隔換算：12÷間隔）
 function _swapYield(code) {
   var recs = (typeof _divRecMap !== 'undefined') && _divRecMap[code];
   var px = _swapPrice(code);
@@ -113,7 +114,9 @@ function _swapYield(code) {
   var last = null;                                   // 最近一筆已發放（發放日已過）
   sorted.forEach(function (r) { if ((r.payDate || r.exDate) <= today) last = r; });
   if (!last) last = sorted[sorted.length - 1];        // 皆未發放（新檔）→ 取最近一筆
-  return last.amount * 12 / px * 100;
+  var step = (typeof _divInferStep === 'function') ? _divInferStep(sorted) : 1;  // 月間隔 1/3/6/12
+  var freq = 12 / step;                               // 配息期數 12/4/2/1
+  return last.amount * freq / px * 100;
 }
 function _swapPrice(code) {
   code = String(code);
@@ -434,7 +437,7 @@ function _swapSellHtml() {
     '<span class="swap-hint">輸入張數或按「全部」；零股可輸入小數（0.5＝500 股）</span></div>' +
     '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
     '<th>代號</th><th>名稱</th><th class="num">現價</th>' +
-    '<th class="num" title="最近發放股利 × 12 ÷ 現價（月配年化估算）">預估殖利率</th>' +
+    '<th class="num" title="最近一次配息 × 配息期數 ÷ 現價（月配12、季配4、半年2、年配1）">預估殖利率</th>' +
     '<th class="num" title="每股成本均價（券商庫存）">成本</th>' +
     '<th class="num">持有(張)</th>' +
     '<th class="num">可賣(張)</th><th class="num">市值</th><th class="num">年配息</th>' +
@@ -512,7 +515,7 @@ function _swapBuyHtml() {
   if (picks.length) {
     h += '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
       '<th>代號</th><th>名稱</th><th class="num">現價</th>' +
-      '<th class="num" title="最近發放股利 × 12 ÷ 現價（月配年化估算）">預估殖利率</th>' +
+      '<th class="num" title="最近一次配息 × 配息期數 ÷ 現價（月配12、季配4、半年2、年配1）">預估殖利率</th>' +
       (_swapState.alloc === 'manual' ? '<th class="num" title="佔賣出淨額的百分比；未分配的部分自動留作現金">比例(%)</th>' : '') +
       '<th class="num">分配金額</th><th class="num">可買股數</th><th class="num">＝張</th>' +
       '<th class="num">買入張數</th><th class="num">年配息(新增)</th></tr></thead><tbody>';
