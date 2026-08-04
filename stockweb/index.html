@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=105">
+<link rel="stylesheet" href="css/app.css?v=107">
 </head>
 <body>
 
@@ -155,6 +155,7 @@
     <div class="tx-subtabs">
       <button id="divest-subtab-est" class="tx-subtab active" onclick="divShowTab('est')">股利估算</button>
       <button id="divest-subtab-swap" class="tx-subtab" onclick="divShowTab('swap')">換股試算</button>
+      <button id="divest-subtab-refill" class="tx-subtab" onclick="divShowTab('refill')">填息追蹤</button>
     </div>
     <div id="divest-tab-est">
       <div class="divest-topbar">
@@ -176,6 +177,15 @@
       </div>
       <div id="swap-sumbar" class="swap-sumbar"></div>
       <div id="swap-wrap"></div>
+    </div>
+
+    <!-- 填息追蹤：各檔歷次除息後多久回到除息前收盤價（近 2 年） -->
+    <div id="divest-tab-refill" style="display:none">
+      <div class="swap-toolbar">
+        <button class="btn-query" onclick="startRefill(true)">↻ 重新整理</button>
+        <span id="refill-info" style="font-size:13px;color:var(--text2)"></span>
+      </div>
+      <div id="refill-wrap"></div>
     </div>
   </div>
 
@@ -324,7 +334,8 @@
 <script src="js/topconst.js?v=7"></script>
 <script src="js/chart.js?v=13"></script>
 <script src="js/dividend-est.js?v=12"></script>
-<script src="js/swap.js?v=15"></script>
+<script src="js/swap.js?v=16"></script>
+<script src="js/refill.js?v=2"></script>
 <script src="js/risk-score.js?v=7"></script>
 <script src="js/news.js?v=28"></script>
 <script src="js/trend.js?v=32"></script>

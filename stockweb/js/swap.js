@@ -33,14 +33,19 @@ function _swapLoad() {
 }
 function _swapSave() { try { localStorage.setItem(SWAP_LS, JSON.stringify(_swapState)); } catch (e) {} }
 
-// ── 子頁籤切換（股利估算 / 換股試算）──
+// ── 子頁籤切換（股利估算 / 換股試算 / 填息追蹤）──
+var DIV_TABS = ['est', 'swap', 'refill'];
 function divShowTab(tab) {
-  var est = tab === 'est';
-  document.getElementById('divest-tab-est').style.display = est ? '' : 'none';
-  document.getElementById('divest-tab-swap').style.display = est ? 'none' : '';
-  document.getElementById('divest-subtab-est').classList.toggle('active', est);
-  document.getElementById('divest-subtab-swap').classList.toggle('active', !est);
-  if (!est) startSwap();
+  if (DIV_TABS.indexOf(tab) < 0) tab = 'est';
+  DIV_TABS.forEach(function (t) {
+    var pane = document.getElementById('divest-tab-' + t);
+    var btn = document.getElementById('divest-subtab-' + t);
+    if (pane) pane.style.display = (t === tab) ? '' : 'none';
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  if (tab === 'swap') startSwap();
+  else if (tab === 'refill' && typeof startRefill === 'function' &&
+    !(typeof _rfResult !== 'undefined' && _rfResult)) startRefill();
 }
 
 // ── 期數/日期工具（ym = 年*12 + 月-1）──
