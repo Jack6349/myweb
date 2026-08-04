@@ -141,7 +141,16 @@ async function rfFetchCMoney(code) {
     var recs = _rfParseCMoney(text);
     if (!recs) throw new Error('解析失敗（CMoney 頁面結構可能已改版）');
     _rfCmSave(code, recs);
-    _rfCmNote = code + ' 已補齊（CMoney，' + recs.length + ' 期）';
+    // 判斷是否真的補到了「日曆上那筆未來除息」；CMoney 只收錄已公告者，未公告時補不到
+    var target = (_rfCal || []).filter(function (e) { return e.code === code; })[0];
+    var hit = target && recs.filter(function (x) { return x.exDate === target.exDate; })[0];
+    if (hit && (hit.amount != null || hit.payDate)) {
+      _rfCmNote = code + ' 已補齊（CMoney，' + recs.length + ' 期）';
+    } else {
+      var newest = recs[0];
+      _rfCmNote = code + '：CMoney 最新只到 ' + (newest ? newest.exDate : '—') +
+        '，尚無 ' + (target ? target.exDate : '') + ' 這筆（投信未公告，各來源皆無）';
+    }
   } catch (err) {
     _rfCmNote = code + ' 補齊失敗：' + err.message;
   }
