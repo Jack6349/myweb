@@ -198,7 +198,8 @@ async function startDividendEst(force) {
   await Promise.all(missing.map(async function (code) {
     try { var yr = await fetchYahooDiv(code, force); if (yr && yr.length) recMap[code] = yr; } catch (e) {}
   }));
-  _divRecMap = recMap;   // 供換股試算共用
+  _divMergeAnnounced(recMap);   // 併入已公告除息（TPEx 預告表／手動補登），估算改採實際公告值
+  _divRecMap = recMap;   // 供換股試算與填息追蹤共用
 
   var tw = _divTwDate();
   var stocks = [];
@@ -326,6 +327,44 @@ function renderDividendEst() {
 function toggleDivStock(code) {
   _divEstOpen[code] = !_divEstOpen[code];
   renderDividendEst();
+}
+
+// 併入「已公告但資料源尚未收錄」的除息：TPEx 除權息預告表（填息追蹤頁快取）＋使用者手動補登
+// 目的：剛公告、e添富/Yahoo 還沒更新時，估算即可改採實際除息日與金額，而非以往年推估
+// 只讀 localStorage 既有快取，不額外發網路請求；同除息日「已有值優先、缺漏才補」
+function _divMergeAnnounced(recMap) {
+  var add = {};
+  var push = function (code, exDate, payDate, amount) {
+    if (!recMap[code] || !exDate) return;          // 僅處理本來就有配息資料的持股
+    (add[code] = add[code] || []).push({ exDate: exDate, payDate: payDate || null, amount: amount });
+  };
+  try {                                            // TPEx 除權息預告（全市場快取，取持股者）
+    var cal = JSON.parse(localStorage.getItem('refill_cal_v1') || 'null');
+    if (cal && cal.rows) cal.rows.forEach(function (r) { push(String(r.code), r.exDate, r.payDate, r.amount); });
+  } catch (e) {}
+  try {                                            // 手動補登（後併入，可補上 TPEx 缺的金額/發放日）
+    var man = JSON.parse(localStorage.getItem('refill_manual_v1') || '{}');
+    Object.keys(man).forEach(function (code) {
+      var m = man[code]; if (m) push(String(code), m.exDate, m.payDate, m.amount);
+    });
+  } catch (e) {}
+
+  Object.keys(add).forEach(function (code) {
+    var list = (recMap[code] || []).map(function (x) { return Object.assign({}, x); }); // 複製，避免污染 e添富 快取物件
+    var byEx = {};
+    list.forEach(function (x) { if (x.exDate) byEx[x.exDate] = x; });
+    add[code].forEach(function (n) {
+      var cur = byEx[n.exDate];
+      if (cur) {                                   // 已有同除息日 → 只補缺漏欄位
+        if (cur.amount == null && n.amount != null) cur.amount = n.amount;
+        if (!cur.payDate && n.payDate) cur.payDate = n.payDate;
+      } else {                                     // 新除息日 → 加入（金額未公告時由估算沿用最近一次）
+        var rec = { code: code, name: '', exDate: n.exDate, payDate: n.payDate, amount: n.amount };
+        list.push(rec); byEx[n.exDate] = rec;
+      }
+    });
+    recMap[code] = list;
+  });
 }
 
 // 取單檔配息紀錄（e添富 優先、Yahoo 後備），結果併入 _divRecMap 快取；供換股試算查「指定代碼」

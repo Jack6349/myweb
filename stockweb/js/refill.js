@@ -5,16 +5,59 @@
 var RF_YEARS = 2;                 // 統計範圍（近 2 年除息）
 var RF_LS = 'refill_px_v1';       // 日K 快取（每日）
 var RF_CAL_LS = 'refill_cal_v1';  // TPEx 除權息預告快取（每日）
-var RF_CM_LS = 'refill_cm_v1';    // CMoney 補齊結果快取（每日）
+var RF_MAN_LS = 'refill_manual_v1'; // 手動補登的除息資料（官方公告後自動被覆蓋）
+
+// ── 手動補登：貼上「股利 除息日 發放日」一行自動解析（分隔可為 Tab／空白／逗號）──
+// 例：0.153	2026/08/18	2026/09/09
+function _rfManLoad() {
+  try { return JSON.parse(localStorage.getItem(RF_MAN_LS) || '{}') || {}; } catch (e) { return {}; }
+}
+function _rfManSave(map) { try { localStorage.setItem(RF_MAN_LS, JSON.stringify(map)); } catch (e) {} }
+// 除息資料異動後，同步重算股利估算（沿用當日快取，不會多打 GAS）；換股試算也會因 _divRecMap 更新而同步
+function _rfSyncDivEst() {
+  if (typeof startDividendEst !== 'function') return;
+  if (typeof _divEstResult === 'undefined' || !_divEstResult) return;   // 尚未載入過就不用重算
+  try { startDividendEst(); } catch (e) { console.warn('[refill sync divest]', e); }
+}
+function _rfManStr(r) {
+  if (!r) return '';
+  return r.amount + '  ' + (r.exDate || '').replace(/-/g, '/') + (r.payDate ? '  ' + r.payDate.replace(/-/g, '/') : '');
+}
+function _rfParseManual(s) {
+  var p = String(s || '').trim().split(/[\s,\t]+/).filter(Boolean);
+  if (p.length < 2) return null;
+  var amt = parseFloat(p[0]);
+  if (isNaN(amt) || amt <= 0) return null;
+  var toIso = function (x) {
+    var m = String(x || '').match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+    return m ? m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : null;
+  };
+  var ex = toIso(p[1]), pay = p.length >= 3 ? toIso(p[2]) : null;
+  if (!ex) return null;
+  return { amount: amt, exDate: ex, payDate: pay };
+}
+function rfManualInput(code, el) {
+  var raw = el.value;
+  var map = _rfManLoad();
+  if (!raw.trim()) { delete map[code]; _rfManSave(map); _rfNote = code + ' 手動資料已清除'; _rfSyncDivEst(); renderRefill(); return; }
+  var r = _rfParseManual(raw);
+  if (!r) { _rfNote = code + ' 格式無法解析，請貼上如：0.153　2026/08/18　2026/09/09'; renderRefill(); return; }
+  map[code] = r;
+  _rfManSave(map);
+  _rfNote = code + ' 已補登：配息 ' + r.amount + '、除息 ' + r.exDate + (r.payDate ? '、發放 ' + r.payDate : '');
+  _rfSyncDivEst();                  // 同步刷新股利估算的預估數字
+  startRefill();                    // 重算日曆（併入手動值）
+}
 var _rfResult = null;             // [{code,name,events:[],filled,total,avgDays,medDays,pending}]
 var _rfOpen = {};                 // code -> 是否展開
 var _rfCal = null;                // 除息日曆：[{code,name,exDate,amount,payDate,src}]
-var _rfCmBusy = {};               // code -> CMoney 抓取中
 
 // ── 上櫃除權息預告表（TPEx OpenAPI，官方 JSON；每日 1 次即涵蓋全市場）──
+var _rfTpexFresh = false;          // 本次是否真的向 TPEx 抓了新資料（用來決定要不要同步刷新股利估算）
 async function _rfFetchTpex() {
   var day = _divTwDate().iso;
   try { var c = JSON.parse(localStorage.getItem(RF_CAL_LS) || 'null'); if (c && c.day === day) return c.rows; } catch (e) {}
+  _rfTpexFresh = true;
   var rows = [];
   try {
     var url = 'https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost';
@@ -35,7 +78,7 @@ async function _rfFetchTpex() {
 
 // ── 除息日曆：上市走 e添富（_divRecMap 已含未來公告）、上櫃走 TPEx；合併後依除息日排序 ──
 async function _rfBuildCalendar(codes, todayIso) {
-  var cal = {}, cm = _rfCmCache();
+  var cal = {};
   // e添富：_divRecMap 內除息日 ≥ 今天者
   codes.forEach(function (code) {
     ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).forEach(function (r) {
@@ -54,110 +97,26 @@ async function _rfBuildCalendar(codes, todayIso) {
     if (!cur) { cal[k] = { code: r.code, name: _swapName(r.code) || r.name, exDate: r.exDate, amount: r.amount, payDate: null, src: 'TPEx' }; }
     else if (cur.amount == null && r.amount != null) { cur.amount = r.amount; cur.src += '＋TPEx'; }
   });
-  // CMoney 手動補齊（已抓過的覆蓋缺漏欄位）
-  Object.keys(cal).forEach(function (k) {
-    var e = cal[k], got = cm[e.code];
-    if (!got) return;
-    var m = (got.recs || []).filter(function (x) { return x.exDate === e.exDate; })[0];
-    if (!m) return;
-    if (e.amount == null && m.amount != null) { e.amount = m.amount; e.cmFilled = true; }
-    if (!e.payDate && m.payDate) { e.payDate = m.payDate; e.cmFilled = true; }
+  // 手動補登：只填官方仍缺的欄位；官方公告後即以官方值為準（不覆蓋已有值）
+  var man = _rfManLoad();
+  Object.keys(man).forEach(function (code) {
+    if (!held[code]) return;
+    var r = man[code];
+    if (!r || !r.exDate || r.exDate < todayIso) return;
+    var k = code + '|' + r.exDate, cur = cal[k];
+    if (!cur) {
+      cal[k] = { code: code, name: _swapName(code) || '', exDate: r.exDate,
+        amount: r.amount, payDate: r.payDate || null, src: '手動', manual: true };
+    } else {
+      if (cur.amount == null && r.amount != null) { cur.amount = r.amount; cur.manual = true; }
+      if (!cur.payDate && r.payDate) { cur.payDate = r.payDate; cur.manual = true; }
+    }
   });
   return Object.keys(cal).map(function (k) { return cal[k]; })
     .sort(function (a, b) { return a.exDate < b.exDate ? -1 : (a.exDate > b.exDate ? 1 : String(a.code).localeCompare(String(b.code))); });
 }
 
-// ── CMoney 手動補齊（僅在 TPEx/e添富 缺金額或發放日時由使用者按鈕觸發）──
-// 頁面為 Nuxt SSR，資料嵌在 window.__NUXT__ 的 minify 變數表中，需以「參數↔引數」對應還原。
-// 註：此為網頁結構解析（非官方 API），CMoney 改版即可能失效 → 失敗只回 null，不影響其他資料。
-function _rfCmCache() {
-  var day = _divTwDate().iso;
-  try { var c = JSON.parse(localStorage.getItem(RF_CM_LS) || 'null'); if (c && c.day === day) return c.map || {}; } catch (e) {}
-  return {};
-}
-function _rfCmSave(code, recs) {
-  var day = _divTwDate().iso, map = _rfCmCache();
-  map[code] = { recs: recs, at: new Date().toISOString() };
-  try { localStorage.setItem(RF_CM_LS, JSON.stringify({ day: day, map: map })); } catch (e) {}
-}
-// 切分頂層逗號（尊重字串與跳脫）
-function _rfSplitArgs(s) {
-  var out = [], buf = '', q = false, esc = false;
-  for (var i = 0; i < s.length; i++) {
-    var ch = s.charAt(i);
-    if (esc) { buf += ch; esc = false; continue; }
-    if (ch === '\\') { buf += ch; esc = true; continue; }
-    if (ch === '"') { q = !q; buf += ch; continue; }
-    if (ch === ',' && !q) { out.push(buf); buf = ''; continue; }
-    buf += ch;
-  }
-  out.push(buf);
-  return out;
-}
-function _rfParseCMoney(html) {
-  var i = html.indexOf('window.__NUXT__=');
-  if (i < 0) return null;
-  var seg = html.slice(i);
-  var end = seg.indexOf('</script>');
-  if (end > 0) seg = seg.slice(0, end);
-  var mh = seg.match(/^window\.__NUXT__=\(function\(([^)]*)\)\{/);
-  if (!mh) return null;
-  var params = mh[1].split(',').map(function (x) { return x.trim(); });
-  var k = seg.lastIndexOf('}('), e2 = seg.lastIndexOf('))');
-  if (k < 0 || e2 <= k) return null;
-  var args = _rfSplitArgs(seg.slice(k + 2, e2)).map(function (x) { return x.trim(); });
-  var mp = {};
-  for (var n = 0; n < params.length && n < args.length; n++) mp[params[n]] = args[n];
-  var val = function (x) {
-    x = String(x).trim();
-    if (/^[A-Za-z_]\w*$/.test(x) && mp[x] != null) x = String(mp[x]).trim();
-    x = x.replace(/^"|"$/g, '');
-    return x;
-  };
-  var num = function (x) { var v = parseFloat(val(x)); return isNaN(v) ? null : v; };
-  var dt = function (x) { return val(x).replace(/\\u002F/g, '/').replace(/\//g, '-'); };
-  var re = /\{formattedDate:"([^"]+)",year:[^,]+,cashDividend:([^,]+),cashDividendExDate:"([^"]+)",cashDividendPaymentDate:"([^"]+)",preExCashDividendPrice:([^,]+),daysToFillCashDividend:([^,]+)/g;
-  var recs = [], m;
-  while ((m = re.exec(seg)) !== null) {
-    var ex = dt(m[3]), pay = dt(m[4]);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(ex)) continue;
-    recs.push({ period: m[1], exDate: ex, payDate: /^\d{4}-\d{2}-\d{2}$/.test(pay) ? pay : null,
-      amount: num(m[2]), preExPx: num(m[5]), fillDays: num(m[6]) });
-  }
-  return recs.length ? recs : null;
-}
-async function rfFetchCMoney(code) {
-  if (_rfCmBusy[code]) return;
-  _rfCmBusy[code] = true;
-  renderRefill();
-  try {
-    var url = 'https://www.cmoney.tw/forum/stock/' + encodeURIComponent(code) + '?s=dividend';
-    var r = await fetch(NEWS_GAS_URL + '?urltext=' + encodeURIComponent(url));
-    var text = await r.text();
-    if (text.charAt(0) === '{') {                     // GAS 端錯誤（配額等）
-      var je = null; try { je = JSON.parse(text); } catch (pe) {}
-      if (je && je.error) throw new Error(je.error);
-    }
-    var recs = _rfParseCMoney(text);
-    if (!recs) throw new Error('解析失敗（CMoney 頁面結構可能已改版）');
-    _rfCmSave(code, recs);
-    // 判斷是否真的補到了「日曆上那筆未來除息」；CMoney 只收錄已公告者，未公告時補不到
-    var target = (_rfCal || []).filter(function (e) { return e.code === code; })[0];
-    var hit = target && recs.filter(function (x) { return x.exDate === target.exDate; })[0];
-    if (hit && (hit.amount != null || hit.payDate)) {
-      _rfCmNote = code + ' 已補齊（CMoney，' + recs.length + ' 期）';
-    } else {
-      var newest = recs[0];
-      _rfCmNote = code + '：CMoney 最新只到 ' + (newest ? newest.exDate : '—') +
-        '，尚無 ' + (target ? target.exDate : '') + ' 這筆（投信未公告，各來源皆無）';
-    }
-  } catch (err) {
-    _rfCmNote = code + ' 補齊失敗：' + err.message;
-  }
-  _rfCmBusy[code] = false;
-  await startRefill();                                 // 重算（併入日曆）
-}
-var _rfCmNote = '';
+var _rfNote = '';   // 頁面提示訊息（手動補登結果）
 
 // ── 日K（含日期、未還原收盤）：Yahoo 2y，經 GAS ?url= 代理；每日快取 ──
 async function _rfFetchDaily(code) {
@@ -260,11 +219,14 @@ async function startRefill(force) {
     return;
   }
 
-  // 除息日曆（未來已公告除息）：上市 e添富＋上櫃 TPEx，缺漏欄位可按鈕由 CMoney 補
+  // 除息日曆（未來已公告除息）：上市 e添富＋上櫃 TPEx，缺漏欄位可由使用者手動補登
   info.textContent = '取得除息預告…';
   var cal = [];
+  _rfTpexFresh = false;
   try { cal = await _rfBuildCalendar(codes, todayIso); } catch (e) { console.warn('[refill calendar]', e); }
   _rfCal = cal;
+  // 首次取得 TPEx 預告表時，股利估算可能是在沒有這些資料前算的 → 同步重算一次
+  if (_rfTpexFresh) { _rfTpexFresh = false; _rfSyncDivEst(); }
 
   var rows = [];
   for (var i = 0; i < withDiv.length; i++) {
@@ -353,23 +315,24 @@ function renderRefill() {
 
 function _rfMd(iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; }
 
-// 除息日曆：未來已公告的除息日；缺金額或發放日的列附「CMoney 補齊」按鈕
+// 除息日曆：未來已公告的除息日；缺金額或發放日的列附手動補登輸入框（貼上整行自動解析）
 function _rfCalHtml() {
   var cal = _rfCal || [];
   var h = '<div class="divest-sec-title">除息日曆（未來已公告）' +
-    (_rfCmNote ? '<span class="rf-cmnote">' + _rfCmNote + '</span>' : '') + '</div>';
+    (_rfNote ? '<span class="rf-cmnote">' + _rfNote + '</span>' : '') + '</div>';
   if (!cal.length) {
     return h + '<div class="rf-cal-empty">目前無已公告的未來除息日（上市查 e添富、上櫃查 TPEx 預告表）。</div>';
   }
+  var man = _rfManLoad();
   h += '<div class="inv-table-wrap"><table class="inv-table swap-table rf-cal"><thead><tr>' +
     '<th>除息日</th><th>代號</th><th>名稱</th><th class="num">預估配息</th><th>發放日</th>' +
-    '<th class="num">持有(張)</th><th class="num">預估可領</th><th>來源</th><th></th></tr></thead><tbody>';
+    '<th class="num">持有(張)</th><th class="num">預估可領</th><th>來源</th>' +
+    '<th title="貼上整行自動解析">手動補登</th></tr></thead><tbody>';
   cal.forEach(function (e) {
     var sh = _swapHeld(e.code);
     var amt = e.amount;
     var get = (amt != null && sh) ? amt * sh : null;
     var lack = (amt == null) || !e.payDate;
-    var busy = !!_rfCmBusy[e.code];
     h += '<tr>' +
       '<td class="rf-cal-date">' + e.exDate + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + e.code + '\')">' + e.code + '</span></td>' +
@@ -378,16 +341,18 @@ function _rfCalHtml() {
       '<td' + (e.payDate ? '' : ' class="swap-warn"') + '>' + (e.payDate || '待公告') + '</td>' +
       '<td class="num">' + _swapLots(sh) + '</td>' +
       '<td class="num">' + (get != null ? fmtMoney(get) : '—') + '</td>' +
-      '<td class="rf-src">' + e.src + (e.cmFilled ? '＋CMoney' : '') + '</td>' +
-      '<td>' + (lack
-        ? '<button class="swap-mini"' + (busy ? ' disabled' : '') +
-          ' onclick="rfFetchCMoney(\'' + e.code + '\')">' + (busy ? '抓取中…' : 'CMoney 補齊') + '</button>'
+      '<td class="rf-src">' + e.src + (e.manual ? '＋手動' : '') + '</td>' +
+      '<td>' + (lack || e.manual
+        ? '<input class="sbl-inp rf-man-inp" type="text" placeholder="貼上：0.153　2026/08/18　2026/09/09"' +
+          ' title="從券商App或看盤網站複製整行貼上，自動解析股利/除息日/發放日；官方公告後會自動改用官方值。清空可移除" value="' +
+          (man[e.code] ? _rfManStr(man[e.code]) : '') + '" onchange="rfManualInput(\'' + e.code + '\',this)">'
         : '') + '</td>' +
     '</tr>';
   });
   h += '</tbody></table></div>' +
     '<div class="rf-cal-note">上市 ETF 取自 e添富、上櫃取自 TPEx 除權息預告表（每日更新一次）。' +
-    '金額或發放日顯示「待公告」時，可按該列「CMoney 補齊」單獨抓取（非官方來源，僅在需要時使用）。' +
+    '投信剛公告、官方資料尚未同步時會顯示「待公告」，此時可在該列「手動補登」貼上整行（例：<code>0.153　2026/08/18　2026/09/09</code>），' +
+    '自動解析股利／除息日／發放日；官方公告後即改用官方值，手動值僅為暫時填補，清空輸入框可移除。' +
     '預估可領＝預估配息 × 持有股數，未扣二代健保與稅。</div>';
   return h;
 }
