@@ -297,6 +297,14 @@ function limitState(code, price) {
   return '';
 }
 function colorClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'flat'); }
+// 成本均價底線色：成本高於現價＝套牢（綠）、低於現價＝獲利（紅）、相等或無報價＝不上色
+// 台股慣例紅漲綠跌；此處以「現價相對成本」的方向著色，與損益欄同向
+function costLineClass(avg, price) {
+  if (avg == null || price == null) return '';
+  if (avg > price) return ' cost-under';   // 成本 > 現價 → 綠
+  if (avg < price) return ' cost-over';    // 成本 < 現價 → 紅
+  return ' cost-even';
+}
 function fmtMoney(v) { return '$' + Math.round(v).toLocaleString('zh-TW'); }
 
 // ── 總覽合計（即時行情 / 持股庫存共用；每筆 tick 即時重算） ──

@@ -74,7 +74,7 @@ function invValRow(p) {
     '<td class="inv-code' + (typeof limitState === 'function' && limitState(code, price) ? ' lim-' + limitState(code, price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     '<td class="inv-name">' + ((c && c.name) || '') + '</td>' +
     '<td class="num">' + shares.toLocaleString('zh-TW') + '</td>' +
-    '<td class="num">' + p.price.toFixed(2) + '</td>' +
+    '<td class="num' + costLineClass(p.price, price) + '">' + p.price.toFixed(2) + '</td>' +
     '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +

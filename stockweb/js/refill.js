@@ -85,7 +85,7 @@ async function _rfBuildCalendar(codes, todayIso) {
       if (!r.exDate || r.exDate < todayIso) return;
       cal[code + '|' + r.exDate] = { code: code, name: _swapName(code) || r.name || '',
         exDate: r.exDate, amount: r.amount, payDate: r.payDate || null,
-        src: (typeof _divByCode !== 'undefined' && _divByCode[code]) ? 'e添富' : 'Yahoo' };
+        src: r._src || ((typeof _divByCode !== 'undefined' && _divByCode[code]) ? 'e添富' : 'Yahoo') };
     });
   });
   // TPEx：僅補持股中的上櫃標的
@@ -108,8 +108,9 @@ async function _rfBuildCalendar(codes, todayIso) {
       cal[k] = { code: code, name: _swapName(code) || '', exDate: r.exDate,
         amount: r.amount, payDate: r.payDate || null, src: '手動', manual: true };
     } else {
-      if (cur.amount == null && r.amount != null) { cur.amount = r.amount; cur.manual = true; }
-      if (!cur.payDate && r.payDate) { cur.payDate = r.payDate; cur.manual = true; }
+      if (cur.amount == null && r.amount != null) cur.amount = r.amount;
+      if (!cur.payDate && r.payDate) cur.payDate = r.payDate;
+      cur.manual = true;   // 只要有手動紀錄就標記，重整後輸入框才會保留、可再編輯或清除
     }
   });
   return Object.keys(cal).map(function (k) { return cal[k]; })

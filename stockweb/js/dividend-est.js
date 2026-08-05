@@ -67,7 +67,8 @@ async function fetchEtfDividendList(force) {
 async function fetchYahooDiv(code, force) {
   var day = _divTwDate().iso, lsKey = 'divest_yf_v1', cache = { day: day, map: {} };
   try { var c = JSON.parse(localStorage.getItem(lsKey) || 'null'); if (c && c.day === day) cache = c; } catch (e) {}
-  if (!force && cache.map[code]) return cache.map[code];
+  // 空陣列在 JS 為 truthy → 需明確檢查長度，否則一次抓取失敗會讓該檔整天都讀到空快取
+  if (!force && cache.map[code] && cache.map[code].length) return cache.map[code];
   var recs = [];
   try {
     var r = await fetch(NEWS_GAS_URL + '?code=' + encodeURIComponent(code));
@@ -81,8 +82,11 @@ async function fetchYahooDiv(code, force) {
       });
     }
   } catch (e) {}
-  cache.map[code] = recs;
-  try { localStorage.setItem(lsKey, JSON.stringify(cache)); } catch (e) {}
+  // 只快取有內容的結果；抓取失敗（空）不寫入，下次進頁面會自動重試
+  if (recs.length) {
+    cache.map[code] = recs;
+    try { localStorage.setItem(lsKey, JSON.stringify(cache)); } catch (e) {}
+  }
   return recs;
 }
 
@@ -334,18 +338,18 @@ function toggleDivStock(code) {
 // 只讀 localStorage 既有快取，不額外發網路請求；同除息日「已有值優先、缺漏才補」
 function _divMergeAnnounced(recMap) {
   var add = {};
-  var push = function (code, exDate, payDate, amount) {
+  var push = function (code, exDate, payDate, amount, src) {
     if (!recMap[code] || !exDate) return;          // 僅處理本來就有配息資料的持股
-    (add[code] = add[code] || []).push({ exDate: exDate, payDate: payDate || null, amount: amount });
+    (add[code] = add[code] || []).push({ exDate: exDate, payDate: payDate || null, amount: amount, src: src });
   };
   try {                                            // TPEx 除權息預告（全市場快取，取持股者）
     var cal = JSON.parse(localStorage.getItem('refill_cal_v1') || 'null');
-    if (cal && cal.rows) cal.rows.forEach(function (r) { push(String(r.code), r.exDate, r.payDate, r.amount); });
+    if (cal && cal.rows) cal.rows.forEach(function (r) { push(String(r.code), r.exDate, r.payDate, r.amount, 'TPEx'); });
   } catch (e) {}
   try {                                            // 手動補登（後併入，可補上 TPEx 缺的金額/發放日）
     var man = JSON.parse(localStorage.getItem('refill_manual_v1') || '{}');
     Object.keys(man).forEach(function (code) {
-      var m = man[code]; if (m) push(String(code), m.exDate, m.payDate, m.amount);
+      var m = man[code]; if (m) push(String(code), m.exDate, m.payDate, m.amount, '手動');
     });
   } catch (e) {}
 
@@ -359,7 +363,7 @@ function _divMergeAnnounced(recMap) {
         if (cur.amount == null && n.amount != null) cur.amount = n.amount;
         if (!cur.payDate && n.payDate) cur.payDate = n.payDate;
       } else {                                     // 新除息日 → 加入（金額未公告時由估算沿用最近一次）
-        var rec = { code: code, name: '', exDate: n.exDate, payDate: n.payDate, amount: n.amount };
+        var rec = { code: code, name: '', exDate: n.exDate, payDate: n.payDate, amount: n.amount, _src: n.src };
         list.push(rec); byEx[n.exDate] = rec;
       }
     });

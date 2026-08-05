@@ -609,3 +609,10 @@ input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
 /* 填息追蹤：手動補登輸入框（貼上整行自動解析） */
 .rf-man-inp { width: 260px; text-align: left; font-size: 12px; }
 .rf-cal-note code { background: var(--bg3); padding: 1px 6px; border-radius: 4px; color: var(--accent2); }
+
+/* 成本均價粗底線：成本高於現價→綠（套牢）、低於現價→紅（獲利）、相等→灰
+   用 td.xxx 提高優先度，蓋過 .inv-table td 的 1px 底線（同特異度、後定義者勝） */
+td.cost-under, td.cost-over, td.cost-even { border-bottom-width: 3px; border-bottom-style: solid; }
+td.cost-under { border-bottom-color: var(--down); }
+td.cost-over  { border-bottom-color: var(--up); }
+td.cost-even  { border-bottom-color: var(--text3); }
