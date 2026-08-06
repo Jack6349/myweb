@@ -49,12 +49,14 @@ async function startAlerts() {
   wrap.innerHTML = '<div class="modal-loading">載入持股與現價…</div>';
 
   await checkServer();
+  // 與「持股庫存／即時持股」共用同一份持股（ensureFeed → _positions）：
+  // 已含出借/匯撥補償與銀行認購成本補正，成本均價才會三頁一致；
+  // 直接呼叫 fetchBrokerPositions() 會拿到未補正的原始值（例：00405A 0.00、00407A 7.15）
   var positions = [];
-  // 優先抓即時券商庫存（含 last_price 現價）；連線異常才退回快取/雲端
-  try { positions = await fetchBrokerPositions(); } catch (e) { positions = []; }
-  if (!positions.length) {
-    try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) {}
-    positions = (_positions && _positions.length) ? _positions : [];
+  try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) {}
+  positions = (_positions && _positions.length) ? _positions : [];
+  if (!positions.length) {                      // 行情引擎未就緒時的最後手段
+    try { positions = await fetchBrokerPositions(); } catch (e) { positions = []; }
   }
   if (!positions.length) { errEl.style.display = 'block'; errEl.textContent = '讀不到持股（券商連線可能未就緒，稍候重試）'; wrap.innerHTML = ''; return; }
 
@@ -80,7 +82,7 @@ async function startAlerts() {
     html += '<tr>' +
       '<td class="inv-code">' + code + '</td>' +
       '<td class="inv-name">' + ((c && c.name) || names[code] || '') + '</td>' +
-      '<td class="num">' + (p.price != null ? p.price.toFixed(2) : '—') + '</td>' +
+      '<td class="num' + costLineClass(p.price, price) + '">' + (p.price != null ? p.price.toFixed(2) : '—') + '</td>' +
       '<td class="num">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
       '<td class="num ' + (prate == null ? 'flat' : (prate >= 0 ? 'up' : 'down')) + '">' + (prate == null ? '—' : (prate >= 0 ? '+' : '') + prate.toFixed(1) + '%') + '</td>' +
       '<td class="num">' + _alInput(code, 'tpPrice', a.tpPrice) + '</td>' +
