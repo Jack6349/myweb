@@ -616,3 +616,7 @@ td.cost-under, td.cost-over, td.cost-even { border-bottom-width: 3px; border-bot
 td.cost-under { border-bottom-color: var(--down); }
 td.cost-over  { border-bottom-color: var(--up); }
 td.cost-even  { border-bottom-color: var(--text3); }
+
+/* 填息追蹤：本月發放 */
+.rf-pay { max-width: 1100px; }
+.rf-pay .rf-paid { opacity: .55; }

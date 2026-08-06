@@ -51,6 +51,7 @@ function rfManualInput(code, el) {
 var _rfResult = null;             // [{code,name,events:[],filled,total,avgDays,medDays,pending}]
 var _rfOpen = {};                 // code -> 是否展開
 var _rfCal = null;                // 除息日曆：[{code,name,exDate,amount,payDate,src}]
+var _rfPay = null;                // 本月發放：[{code,payDate,derived,amount,exDate}]
 
 // ── 上櫃除權息預告表（TPEx OpenAPI，官方 JSON；每日 1 次即涵蓋全市場）──
 var _rfTpexFresh = false;          // 本次是否真的向 TPEx 抓了新資料（用來決定要不要同步刷新股利估算）
@@ -229,6 +230,9 @@ async function startRefill(force) {
   // 首次取得 TPEx 預告表時，股利估算可能是在沒有這些資料前算的 → 同步重算一次
   if (_rfTpexFresh) { _rfTpexFresh = false; _rfSyncDivEst(); }
 
+  // 本月發放（依 _divRecMap 的發放月；含手動補登與 TPEx 已併入的公告）
+  _rfPay = _rfBuildMonthPay(codes, todayIso);
+
   var rows = [];
   for (var i = 0; i < withDiv.length; i++) {
     var code = withDiv[i];
@@ -277,6 +281,9 @@ function renderRefill() {
   // 除息日曆（未來已公告）
   html += _rfCalHtml();
 
+  // 本月發放（介於除息日曆與逐檔填息之間）
+  html += _rfMonthPayHtml();
+
   // 逐檔
   html += '<div class="divest-sec-title">逐檔填息（近 ' + RF_YEARS + ' 年，點列展開歷次）</div><div class="rf-list">';
   rows.forEach(function (r) {
@@ -315,6 +322,66 @@ function renderRefill() {
 }
 
 function _rfMd(iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; }
+
+// 本月發放：_divRecMap 中「發放月＝當月」的配息（含已入帳與待發放）
+// 發放日缺漏時沿用估算慣例以「除息月＋1」推導，並標示為推導值
+function _rfBuildMonthPay(codes, todayIso) {
+  var ym = todayIso.slice(0, 7), out = [];
+  codes.forEach(function (code) {
+    ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).forEach(function (r) {
+      var pay = r.payDate || (r.exDate ? _addMonths(r.exDate, 1) : null);
+      if (!pay || pay.slice(0, 7) !== ym) return;
+      out.push({ code: code, payDate: pay, derived: !r.payDate, amount: r.amount, exDate: r.exDate });
+    });
+  });
+  out.sort(function (a, b) {
+    return a.payDate < b.payDate ? -1 : (a.payDate > b.payDate ? 1 : String(a.code).localeCompare(String(b.code)));
+  });
+  return out;
+}
+
+function _rfMonthPayHtml() {
+  var rows = _rfPay || [];
+  var ymLabel = (_rfResult ? _rfResult.day : _divTwDate().iso).slice(0, 7).replace('-', '/');
+  var h = '<div class="divest-sec-title">本月發放（' + ymLabel + '）</div>';
+  if (!rows.length) return h + '<div class="rf-cal-empty">本月無配息發放。</div>';
+
+  var todayIso = _divTwDate().iso, total = 0;
+  h += '<div class="inv-table-wrap"><table class="inv-table swap-table rf-pay"><thead><tr>' +
+    '<th>發放日</th><th>代號</th><th>名稱</th><th class="num">配息金額</th><th class="num">現價</th>' +
+    '<th class="num" title="配息金額 ÷ 現價">月殖利率</th>' +
+    '<th class="num" title="每股成本均價（券商庫存）">持有成本</th>' +
+    '<th class="num" title="配息金額 ÷ 持有成本">成本月殖利率</th>' +
+    '<th class="num">持有(張)</th><th class="num">可領金額</th></tr></thead><tbody>';
+  rows.forEach(function (e) {
+    var px = _swapPrice(e.code), cost = _swapCostPx(e.code), sh = _swapHeld(e.code);
+    var amt = e.amount;
+    var yPx = (amt != null && px > 0) ? amt / px * 100 : null;
+    var yCost = (amt != null && cost > 0) ? amt / cost * 100 : null;
+    var get = (amt != null && sh) ? amt * sh : null;
+    if (get != null) total += get;
+    var paid = e.payDate <= todayIso;
+    h += '<tr>' +
+      '<td class="rf-cal-date' + (paid ? ' rf-paid' : '') + '" title="' + (paid ? '已發放' : '待發放') +
+        (e.derived ? '（發放日由除息月＋1 推導）' : '') + '">' + e.payDate + (e.derived ? ' *' : '') + '</td>' +
+      '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + e.code + '\')">' + e.code + '</span></td>' +
+      '<td class="inv-name">' + (_swapName(e.code) || '') + '</td>' +
+      '<td class="num' + (amt == null ? ' swap-warn' : '') + '">' + (amt != null ? amt.toFixed(4) : '待公告') + '</td>' +
+      '<td class="num">' + (px != null ? px.toFixed(2) : '—') + '</td>' +
+      '<td class="num swap-yield">' + (yPx != null ? yPx.toFixed(2) + '%' : '—') + '</td>' +
+      '<td class="num' + costLineClass(cost, px) + '">' + (cost != null ? cost.toFixed(2) : '—') + '</td>' +
+      '<td class="num swap-yield">' + (yCost != null ? yCost.toFixed(2) + '%' : '—') + '</td>' +
+      '<td class="num">' + _swapLots(sh) + '</td>' +
+      '<td class="num">' + (get != null ? fmtMoney(get) : '—') + '</td>' +
+    '</tr>';
+  });
+  h += '</tbody></table></div>' +
+    '<div class="swap-foot">本月可領合計 <b>' + fmtMoney(total) + '</b>' +
+    '<span class="swap-dim">（未扣二代健保與稅；「待公告」金額未計入）</span></div>' +
+    '<div class="rf-cal-note">月殖利率＝配息金額 ÷ 現價；成本月殖利率＝配息金額 ÷ 持有成本（月配標的即單月報酬率，年化約 ×12）。' +
+    '發放日標「*」表示該筆尚未公告發放日，以「除息月＋1」推導；日期較淡者為已發放。</div>';
+  return h;
+}
 
 // 除息日曆：未來已公告的除息日；缺金額或發放日的列附手動補登輸入框（貼上整行自動解析）
 function _rfCalHtml() {
