@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=111">
+<link rel="stylesheet" href="css/app.css?v=113">
 </head>
 <body>
 
@@ -42,6 +42,7 @@
   <button data-view="news" onclick="openNews()">新聞情勢</button>
   <button data-view="risk" onclick="openRiskReport()">加減碼報告</button>
   <button data-view="topconst" onclick="openTopConst()">成分股曝險</button>
+  <button data-view="watch" onclick="openWatch()">關注股票</button>
   <button data-view="params" onclick="openParams()">參數設定</button>
 </nav>
 
@@ -103,6 +104,11 @@
       <div class="func-icon">🧩</div>
       <div class="func-name">成分股曝險</div>
       <div class="func-desc">持股 ETF 台股成分股中曝險最高前 10 檔，現價/漲跌盤中即時，含持有 ETF 權重</div>
+    </div>
+    <div class="func-card" onclick="openWatch()">
+      <div class="func-icon">⭐</div>
+      <div class="func-name">關注股票</div>
+      <div class="func-desc">非持股的觀察清單，代碼或名稱搜尋加入，現價/漲跌盤中即時，可查成份股與除息紀錄</div>
     </div>
     <div class="func-card" onclick="openParams()">
       <div class="func-icon">⚙️</div>
@@ -196,6 +202,27 @@
       <span id="topconst-info" style="font-size:13px;color:var(--text2)"></span>
     </div>
     <div id="topconst-wrap"></div>
+  </div>
+
+  <!-- 關注股票：非持股觀察清單（搜尋加入、盤中即時、可查成份股與除息紀錄） -->
+  <div id="watch-view" style="display:none">
+    <div class="tx-subtabs">
+      <button id="wt-subtab-list" class="tx-subtab active" onclick="wtShowTab('list')">關注股票</button>
+      <button id="wt-subtab-bond" class="tx-subtab" onclick="wtShowTab('bond')">債券 ETF</button>
+      <button id="wt-subtab-act" class="tx-subtab" onclick="wtShowTab('act')">主動式 ETF</button>
+    </div>
+    <div id="wt-search-bar" class="tr-toolbar wt-toolbar">
+      <div class="wt-search">
+        <input id="wt-inp" class="sbl-inp wt-inp" type="text" placeholder="輸入代碼或名稱搜尋（例：2330、台積電、00919）"
+               oninput="wtSearch(this)" autocomplete="off">
+        <div id="wt-sug" class="wt-sug" style="display:none"></div>
+      </div>
+      <button class="btn-query" onclick="wtClearSug()">清除</button>
+      <span id="watch-info" style="font-size:13px;color:var(--text2)"></span>
+    </div>
+    <div id="watch-wrap"></div>
+    <div id="wt-bond-wrap"></div>
+    <div id="wt-act-wrap"></div>
   </div>
 
   <!-- 加減碼報告：系統性風險評分 -->
@@ -323,7 +350,7 @@
 <script type="module" src="js/firebase-init.js?v=10"></script>
 <script src="js/auth.js?v=10"></script>
 <script src="js/broker.js?v=17"></script>
-<script src="js/stream.js?v=55"></script>
+<script src="js/stream.js?v=56"></script>
 <script src="js/inventory.js?v=55"></script>
 <script src="js/constituents.js?v=11"></script>
 <script src="js/live.js?v=46"></script>
@@ -332,6 +359,7 @@
 <script src="js/sbl.js?v=9"></script>
 <script src="js/params.js?v=2"></script>
 <script src="js/topconst.js?v=7"></script>
+<script src="js/watch.js?v=3"></script>
 <script src="js/chart.js?v=13"></script>
 <script src="js/dividend-est.js?v=14"></script>
 <script src="js/swap.js?v=18"></script>

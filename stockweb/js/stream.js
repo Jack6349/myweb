@@ -17,16 +17,18 @@ var STREAM_OTHER_N = 15; // 即時行情下段「其他主要成分股」檔數�
 var COST_OVERRIDES = { '00407A': { '2026-06-23': 100000 } }; // 往來銀行認購10張，0手續費
 
 // ── 檢視切換 ──
-var VIEW_TITLES = { stream: '即時行情', inv: '持股庫存', divest: '股利估算', txinfo: '交易資訊', live: '即時持股', news: '新聞情勢', trend: '趨勢評估', signals: '籌碼淨值', alerts: '停損停利', risk: '加減碼報告', params: '參數設定', topconst: '成分股曝險' };
+var VIEW_TITLES = { stream: '即時行情', inv: '持股庫存', divest: '股利估算', txinfo: '交易資訊', live: '即時持股', news: '新聞情勢', trend: '趨勢評估', signals: '籌碼淨值', alerts: '停損停利', risk: '加減碼報告', params: '參數設定', topconst: '成分股曝險', watch: '關注股票' };
 var _curView = 'home';
 function showView(name) {
   // 離開成分股曝險卡片 → 退訂該卡片新訂閱的 tick
   if (_curView === 'topconst' && name !== 'topconst' && typeof stopTopConst === 'function') stopTopConst();
   // 離開即時行情 → 退訂下段成分股的 tick
   if (_curView === 'stream' && name !== 'stream' && typeof stopStreamOthers === 'function') stopStreamOthers();
+  // 離開關注股票 → 退訂該頁新訂閱的 tick
+  if (_curView === 'watch' && name !== 'watch' && typeof stopWatch === 'function') stopWatch();
   _curView = name;
   document.getElementById('home-cards').style.display = name === 'home' ? 'grid' : 'none';
-  ['stream', 'inv', 'divest', 'txinfo', 'live', 'news', 'trend', 'signals', 'alerts', 'risk', 'params', 'topconst'].forEach(function (v) {
+  ['stream', 'inv', 'divest', 'txinfo', 'live', 'news', 'trend', 'signals', 'alerts', 'risk', 'params', 'topconst', 'watch'].forEach(function (v) {
     document.getElementById(v + '-view').style.display = v === name ? 'block' : 'none';
   });
   document.getElementById('crumb').textContent = VIEW_TITLES[name] || '';
@@ -57,6 +59,7 @@ function openSignals() { showView('signals'); if (typeof startSignals === 'funct
 function openAlerts() { showView('alerts'); if (typeof startAlerts === 'function') startAlerts(); }
 function openParams() { showView('params'); if (typeof startParams === 'function') startParams(); }
 function openTopConst() { showView('topconst'); if (typeof startTopConst === 'function') startTopConst(); }
+function openWatch() { showView('watch'); if (typeof startWatch === 'function') startWatch(); }
 function closeStream() { goHome(); } // 相容頂欄返回鈕/標題連結
 
 // ── 服務健康檢查 ──
@@ -454,6 +457,7 @@ function openSSE() {
       if (typeof renderInvRow === 'function') renderInvRow(code);
       if (typeof renderLiveRow === 'function') renderLiveRow(code);
       if (typeof renderTopConstRow === 'function') renderTopConstRow(code);
+      if (typeof renderWatchRow === 'function') renderWatchRow(code);
       if (prev != null && close !== prev) flashCard(code, close > prev ? 1 : -1);
     } catch (e) {}
   });
