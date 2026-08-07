@@ -325,9 +325,13 @@ async function _wtDivOf(code, ym, cache) {
     .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
   if (!recs.length) return { code: code, none: true };
   var last = recs[recs.length - 1];
-  var step = (typeof _divInferStep === 'function') ? _divInferStep(recs) : 12;
+  // 配息頻率：紀錄 ≥2 筆時由除息間隔推得；只有 1 筆時 _divInferStep 會回傳預設「年配」，
+  // 但新上市的債券 ETF 幾乎都是月配 → 依此推定為月配，避免年殖利率被低估 12 倍而漏掉
+  var step, guessed = false;
+  if (recs.length >= 2 && typeof _divInferStep === 'function') step = _divInferStep(recs);
+  else { step = 1; guessed = true; }
   var rec = { code: code, amount: last.amount, exDate: last.exDate, payDate: last.payDate || null,
-              freq: 12 / step, step: step };
+              freq: 12 / step, step: step, guessed: guessed, n: recs.length };
   // 只有「該檔最近一次除息落在本月」才永久存檔（符合：當月已公佈除息日的先存檔、不再重複讀取）
   if (last.exDate.slice(0, 7) === ym) { cache[key] = rec; _wtDivSave(cache); }
   return rec;
@@ -378,7 +382,8 @@ async function wtScanBond() {
       var p = px[r.code] != null ? px[r.code] : (_contracts[r.code] && _contracts[r.code].reference);
       if (!(p > 0)) return;
       rows.push({ code: r.code, name: batch[k].n, px: p, amount: r.amount, exDate: r.exDate, payDate: r.payDate,
-        freq: r.freq, mY: r.amount / p * 100, yY: r.amount * r.freq / p * 100 });
+        freq: r.freq, guessed: !!r.guessed, n: r.n || 0,
+        mY: r.amount / p * 100, yY: r.amount * r.freq / p * 100 });
     });
   }
   var pass = rows.filter(function (r) { return r.yY >= th; }).sort(function (a, b2) { return b2.yY - a.yY; });
@@ -487,7 +492,9 @@ function renderWatchBond() {
       '<td class="num">' + r.px.toFixed(2) + '</td>' +
       '<td class="num">' + r.amount.toFixed(4) + '</td>' +
       '<td class="num swap-yield">' + r.mY.toFixed(2) + '%</td>' +
-      '<td class="num swap-yield"><b>' + r.yY.toFixed(2) + '%</b></td>' +
+      '<td class="num swap-yield" title="' + (r.guessed ? '僅 1 筆配息紀錄，頻率推定為月配（新上市債券 ETF 慣例），待累積紀錄後自動修正'
+        : '依 ' + r.n + ' 筆除息間隔推得年 ' + r.freq + ' 次') + '"><b>' + r.yY.toFixed(2) + '%</b>' +
+        (r.guessed ? '<span class="wt-guess"> *推定</span>' : '') + '</td>' +
       '<td>' + r.exDate + '</td>' +
       '<td>' + (r.payDate || '—') + '</td>' +
     '</tr>';
@@ -495,6 +502,7 @@ function renderWatchBond() {
   h += '</tbody></table></div>' +
     '<div class="detail-note">掃描範圍：代號末碼 B 且名稱含「非投等／非投債／高收益／高息／優先／新興」者（' + _wtBondPool().length +
     ' 檔）；投等債與公債殖利率普遍低於門檻，不掃以節省配額。預估年殖利率＝最近一次配息 × 配息期數 ÷ 現價，依此由高至低排序。' +
+    '配息期數由歷次除息間隔推得；<b>標「*推定」者只有 1 筆配息紀錄</b>（新上市），依債券 ETF 慣例推定為月配，待累積第 2 筆後自動改用實際間隔。' +
     '結果與「當月已公告除息」永久存檔，進頁不重抓，按「重新篩選」才更新。</div>';
   wrap.innerHTML = h;
   _wtPickInfo();

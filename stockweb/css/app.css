@@ -643,3 +643,4 @@ td.cost-even  { border-bottom-color: var(--text3); }
 .wt-bar .sbl-inp { width: 76px; }
 .wt-dim { font-size: 12px; color: var(--text3); }
 .wt-bar input[type=checkbox], .wt-table input[type=checkbox] { accent-color: var(--accent2); cursor: pointer; }
+.wt-guess { font-size: 10px; color: var(--text3); font-weight: 400; }
