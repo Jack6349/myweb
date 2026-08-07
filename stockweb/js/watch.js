@@ -248,16 +248,18 @@ async function wtOpenDiv(code) {
     .sort(function (a, b) { return a.exDate < b.exDate ? 1 : -1; });   // 新→舊
   if (!list.length) { body.innerHTML = '<div class="modal-loading">近 ' + WT_YEARS + ' 年無除息紀錄。</div>'; return; }
 
-  // 配息期數：由除息間隔推得（月配12／季配4／半年2／年配1），與換股試算同一套邏輯
-  var asc = list.slice().reverse();
-  var step = (typeof _divInferStep === 'function') ? _divInferStep(asc) : 12;
-  var freq = 12 / step;
+  // 配息期數：以「全部」紀錄（非僅近 2 年）推得，避免視窗內只剩 1 筆而誤判；債券 ETF 僅 1 筆時推定為月配
+  var allAsc = recs.filter(function (r) { return r.exDate && r.amount != null; })
+    .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
+  var f = _wtFreq(code, allAsc);
+  var step = f.step, freq = f.freq;
   var px = (typeof _swapPrice === 'function') ? _swapPrice(code)
     : ((_rows[code] && _rows[code].close != null) ? _rows[code].close : (c && c.reference) || null);
 
   var h = '<div class="detail-note" style="margin:0 0 8px">現價 <b>' + (px != null ? px.toFixed(2) : '—') +
     '</b>｜配息頻率：' + (step === 1 ? '月配' : step === 3 ? '季配' : step === 6 ? '半年配' : '年配') +
-    '（年 ' + freq + ' 次）｜共 ' + list.length + ' 筆</div>' +
+    '（年 ' + freq + ' 次）' + (f.guessed ? '<span class="wt-guess"> *推定：僅 ' + f.n + ' 筆紀錄，依債券 ETF 慣例假設月配</span>' : '') +
+    '｜共 ' + list.length + ' 筆</div>' +
     '<div class="detail-scroll"><table class="detail-table"><thead><tr>' +
     '<th>發放月</th><th>除息</th><th>除息日</th><th>發放日</th><th class="num">每股金額</th>' +
     '<th class="num" title="每股金額 ÷ 現價">月殖利率</th>' +
@@ -309,6 +311,18 @@ function _wtActPool() {
   return (_wtIdx || []).filter(function (x) { return /^00\d+A$/.test(x.c); });
 }
 
+// 配息頻率（年幾次）：≥2 筆時由除息間隔推得；只有 1 筆時 _divInferStep 會回傳「年配」預設，
+// 但債券 ETF（末碼 B）幾乎都是月配 → 僅該類推定為月配，其餘維持原預設。掃描與除息彈窗共用，避免兩處判斷分歧。
+function _wtFreq(code, recsAsc) {
+  var n = (recsAsc || []).length;
+  if (n >= 2 && typeof _divInferStep === 'function') {
+    var s = _divInferStep(recsAsc);
+    return { step: s, freq: 12 / s, guessed: false, n: n };
+  }
+  if (/^00\d+B$/.test(String(code))) return { step: 1, freq: 12, guessed: true, n: n };
+  return { step: 12, freq: 1, guessed: n < 2, n: n };
+}
+
 // ── 除息資料永久快取：key = code|年月；當月除息日已公告即命中，不再呼叫 Yahoo ──
 function _wtDivCache() {
   try { return JSON.parse(localStorage.getItem(WT_DIV_LS) || '{}') || {}; } catch (e) { return {}; }
@@ -325,13 +339,9 @@ async function _wtDivOf(code, ym, cache) {
     .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
   if (!recs.length) return { code: code, none: true };
   var last = recs[recs.length - 1];
-  // 配息頻率：紀錄 ≥2 筆時由除息間隔推得；只有 1 筆時 _divInferStep 會回傳預設「年配」，
-  // 但新上市的債券 ETF 幾乎都是月配 → 依此推定為月配，避免年殖利率被低估 12 倍而漏掉
-  var step, guessed = false;
-  if (recs.length >= 2 && typeof _divInferStep === 'function') step = _divInferStep(recs);
-  else { step = 1; guessed = true; }
+  var f = _wtFreq(code, recs);
   var rec = { code: code, amount: last.amount, exDate: last.exDate, payDate: last.payDate || null,
-              freq: 12 / step, step: step, guessed: guessed, n: recs.length };
+              freq: f.freq, step: f.step, guessed: f.guessed, n: f.n };
   // 只有「該檔最近一次除息落在本月」才永久存檔（符合：當月已公佈除息日的先存檔、不再重複讀取）
   if (last.exDate.slice(0, 7) === ym) { cache[key] = rec; _wtDivSave(cache); }
   return rec;
