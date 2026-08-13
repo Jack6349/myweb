@@ -8,14 +8,14 @@ var SWAP_N = 12;               // 試算期數（下個月起 12 個月）
 var SWAP_LS = 'swap_state_v2';   // v1→v2：舊版曾把買入張數夾成 0 存檔，遷移時丟棄該欄避免卡住不跟隨
 var SWAP_LS_OLD = 'swap_state_v1';
 
-var _swapState = null;   // {sells:{code:張}, buyMode, buyExist:[], buyCodes:[], buyLots:{code:張}}
+var _swapState = null;   // {sells:{code:張}, buyExist:[], buyCodes:[], buyLots:{code:張}}
 var _swapPx = {};        // code → 鎖定的現價快照（進頁時取，按鈕才刷新）
 var _swapCalc = null;    // 最近一次試算結果
 var _swapNote = '';      // 指定代碼載入訊息
 var _swapBusy = false;
 
 function _swapDefault() {
-  return { sells: {}, buyMode: 'exist', buyExist: [], buyCodes: [], buyLots: {} };
+  return { sells: {}, buyExist: [], buyCodes: [], buyLots: {} };
 }
 function _swapLoad() {
   try {
@@ -135,6 +135,16 @@ function _swapName(code) {
   var c = (typeof _contracts !== 'undefined') && _contracts[code];
   return (c && c.name) || '';
 }
+// 買入清單：勾選的現有持股 ＋ 手動加入的指定代碼，合併去重（同代號以持股為準，避免重複計價）
+function _swapPicks() {
+  var out = [], seen = {};
+  (_swapState.buyExist || []).concat(_swapState.buyCodes || []).forEach(function (c) {
+    c = String(c);
+    if (seen[c]) return;
+    seen[c] = true; out.push(c);
+  });
+  return out;
+}
 function _swapCodes() {  // 持股代號（依代號排序）
   return Object.keys(_sharesMap || {}).filter(function (c) { return _sharesMap[c] > 0; })
     .sort(function (a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true }); });
@@ -168,9 +178,8 @@ function swapCompute() {
     sellRows.push({ code: code, sh: sh, px: px, gross: gross, net: net, recall: need });
   });
 
-  // 買入標的
-  var picks = (_swapState.buyMode === 'exist' ? _swapState.buyExist : _swapState.buyCodes)
-    .filter(function (c) { return _swapPrice(c) != null; });
+  // 買入標的：現有持股與指定代碼可同時買進 → 兩份清單合併（持股在前）並去重
+  var picks = _swapPicks().filter(function (c) { return _swapPrice(c) != null; });
 
   // 買入張數改為完全手動輸入：無自動分配，未輸入即為 0
   // 買入總額以「賣出淨額」為硬上限：逐列用剩餘可用資金夾住，剩餘現金永不為負
@@ -347,7 +356,6 @@ function swapSellAll(code) {
   _swapSave();
   renderSwap();
 }
-function swapSetMode(mode) { _swapState.buyMode = mode; _swapSave(); renderSwap(); }
 function swapToggleBuy(code, el) {
   var i = _swapState.buyExist.indexOf(code);
   if (el.checked) { if (i < 0) _swapState.buyExist.push(code); }
@@ -439,30 +447,27 @@ function _swapSellHtml() {
 }
 
 function _swapBuyHtml() {
-  var exist = _swapState.buyMode === 'exist';
   var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">買入</span>' +
-    '<span class="swap-hint">賣出所得全數買入</span></div>' +
-    '<div class="swap-opts">' +
-      '<label class="swap-radio"><input type="radio" name="swapmode"' + (exist ? ' checked' : '') + ' onchange="swapSetMode(\'exist\')"> 現有持股</label>' +
-      '<label class="swap-radio"><input type="radio" name="swapmode"' + (!exist ? ' checked' : '') + ' onchange="swapSetMode(\'code\')"> 指定代碼</label>' +
-    '</div>';
+    '<span class="swap-hint">現有持股與指定代碼可同時買進</span></div>';
 
-  if (exist) {
-    var codes = _swapCodes();
-    h += '<div class="swap-picks">';
-    codes.forEach(function (code) {
-      var on = _swapState.buyExist.indexOf(code) >= 0;
-      var nm = _swapName(code);
-      h += '<label class="swap-chip' + (on ? ' on' : '') + '" title="' + code + ' ' + nm + '"><input type="checkbox"' + (on ? ' checked' : '') +
-        ' onchange="swapToggleBuy(\'' + code + '\',this)"><span class="swap-chip-c">' + code + '</span>' +
-        '<span class="swap-dim swap-chip-n">' + nm + '</span></label>';
-    });
-    h += '</div>';
-  } else {
-    h += '<div class="swap-opts"><input id="swap-code-inp" class="sbl-inp swap-code-inp" type="text" placeholder="股票代碼" ' +
-      'onkeydown="if(event.key===\'Enter\')swapAddCode()">' +
-      '<button class="btn-query" onclick="swapAddCode()">＋ 加入</button>' +
-      (_swapNote ? '<span class="swap-warn">' + _swapNote + '</span>' : '') + '</div>';
+  // 現有持股（勾選）
+  h += '<div class="swap-sec-lb">現有持股</div><div class="swap-picks">';
+  _swapCodes().forEach(function (code) {
+    var on = _swapState.buyExist.indexOf(code) >= 0;
+    var nm = _swapName(code);
+    h += '<label class="swap-chip' + (on ? ' on' : '') + '" title="' + code + ' ' + nm + '"><input type="checkbox"' + (on ? ' checked' : '') +
+      ' onchange="swapToggleBuy(\'' + code + '\',this)"><span class="swap-chip-c">' + code + '</span>' +
+      '<span class="swap-dim swap-chip-n">' + nm + '</span></label>';
+  });
+  h += '</div>';
+
+  // 指定代碼（手動加入）
+  h += '<div class="swap-sec-lb">加入其他標的</div>' +
+    '<div class="swap-opts"><input id="swap-code-inp" class="sbl-inp swap-code-inp" type="text" placeholder="股票代碼" ' +
+    'onkeydown="if(event.key===\'Enter\')swapAddCode()">' +
+    '<button class="btn-query" onclick="swapAddCode()">＋ 加入</button>' +
+    (_swapNote ? '<span class="swap-warn">' + _swapNote + '</span>' : '') + '</div>';
+  if ((_swapState.buyCodes || []).length) {
     h += '<div class="swap-picks">';
     _swapState.buyCodes.forEach(function (code) {
       var nm = _swapName(code);
@@ -473,7 +478,7 @@ function _swapBuyHtml() {
     h += '</div>';
   }
 
-  var picks = (exist ? _swapState.buyExist : _swapState.buyCodes);
+  var picks = _swapPicks();   // 兩區合併去重，依序分配資金
   if (picks.length) {
     h += '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
       '<th>代號</th><th>名稱</th><th class="num">現價</th>' +

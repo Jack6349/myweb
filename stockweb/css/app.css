@@ -644,3 +644,5 @@ td.cost-even  { border-bottom-color: var(--text3); }
 .wt-dim { font-size: 12px; color: var(--text3); }
 .wt-bar input[type=checkbox], .wt-table input[type=checkbox] { accent-color: var(--accent2); cursor: pointer; }
 .wt-guess { font-size: 10px; color: var(--text3); font-weight: 400; }
+/* 換股試算：買入區小節標題（現有持股／加入其他標的） */
+.swap-sec-lb { font-size: 12px; color: var(--text3); margin: 8px 2px 4px; }
