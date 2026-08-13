@@ -315,12 +315,12 @@ function _wtActPool() {
 // 但債券 ETF（末碼 B）幾乎都是月配 → 僅該類推定為月配，其餘維持原預設。掃描與除息彈窗共用，避免兩處判斷分歧。
 function _wtFreq(code, recsAsc) {
   var n = (recsAsc || []).length;
-  if (n >= 2 && typeof _divInferStep === 'function') {
-    var s = _divInferStep(recsAsc);
-    return { step: s, freq: 12 / s, guessed: false, n: n };
-  }
-  if (/^00\d+B$/.test(String(code))) return { step: 1, freq: 12, guessed: true, n: n };
-  return { step: 12, freq: 1, guessed: n < 2, n: n };
+  // 頻率一律交給 _divInferStep（已內含「紀錄不足時債券 ETF 視為月配」的規則），此處只負責標記是否為推定值
+  var recs = (recsAsc || []).slice();
+  if (!recs.length) recs = [{ code: code }];
+  else if (!recs[0].code) recs = recs.map(function (r) { return Object.assign({ code: code }, r); });
+  var s = (typeof _divInferStep === 'function') ? _divInferStep(recs) : 12;
+  return { step: s, freq: 12 / s, guessed: n < 2, n: n };
 }
 
 // ── 除息資料永久快取：key = code|年月；當月除息日已公告即命中，不再呼叫 Yahoo ──

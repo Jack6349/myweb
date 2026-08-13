@@ -91,15 +91,21 @@ async function fetchYahooDiv(code, force) {
 }
 
 // 依除息日間隔中位數推頻率（月數）：月配1/季配3/半年6/年配12
+// 紀錄不足 2 筆時無從推算：債券 ETF（代號末碼 B）新上市幾乎都是月配 → 回月配，
+// 否則沿用年配保守值。避免新上市月配債 ETF 的年殖利率被低估 12 倍。
+function _divInferStepFallback(recs) {
+  var code = (recs && recs[0] && recs[0].code) || '';
+  return /^00\d+B$/.test(String(code)) ? 1 : 12;
+}
 function _divInferStep(recs) {
-  if (recs.length < 2) return 12;
+  if (recs.length < 2) return _divInferStepFallback(recs);
   var gaps = [];
   for (var i = 1; i < recs.length; i++) {
     var a = recs[i - 1].exDate, b = recs[i].exDate;
     var g = (+b.slice(0, 4) * 12 + +b.slice(5, 7)) - (+a.slice(0, 4) * 12 + +a.slice(5, 7));
     if (g > 0) gaps.push(g);
   }
-  if (!gaps.length) return 12;
+  if (!gaps.length) return _divInferStepFallback(recs);   // 有多筆但同月除息等情況，同樣無從推算
   gaps.sort(function (x, y) { return x - y; });
   var n = gaps.length;
   var med = n % 2 ? gaps[(n - 1) / 2] : (gaps[n / 2 - 1] + gaps[n / 2]) / 2;
