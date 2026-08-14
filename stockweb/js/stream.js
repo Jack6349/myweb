@@ -364,15 +364,16 @@ function renderSummary(targetId) {
   var bookVal = curVal - lentVal; // 帳面現值（不含借出）
   // 點選損益加總：代號前圓點已標記（注意股，live_watch_v1）者的未實現損益合計
   // 沿用 invMetrics 計算，與庫存表的「未實現損益」欄同基準（含/不含稅費隨切換）
-  var pickSum = null, pickN = 0;
+  var pickSum = null, pickN = 0, pickCost = null;
   if (typeof loadWatch === 'function' && typeof invMetrics === 'function') {
     var marked = loadWatch();
     (_positions || []).forEach(function (p) {
       if (!marked.has(String(p.code))) return;
+      pickCost = (pickCost || 0) + p.price * p.quantity;   // 付出成本（與庫存表「付出成本」欄同基準）
+      pickN++;
       var m = invMetrics(p);
       if (m.profit == null) return;
       pickSum = (pickSum || 0) + m.profit;
-      pickN++;
     });
   }
   el.style.display = '';
@@ -382,6 +383,9 @@ function renderSummary(targetId) {
     pair('漲跌幅％', wpct == null ? '—' : fmtPct(wpct), cls2var[wcls]) +
     pair('借出', lentShares.toLocaleString('zh-TW') + ' 股', 'var(--text2)') +
     pair('帳面現值', bookVal.toLocaleString('zh-TW'), 'var(--text2)') +
+    pair('點選成本加總' + (pickN ? '(' + pickN + ')' : ''),
+      pickCost == null ? '—' : Math.round(pickCost).toLocaleString('zh-TW'),
+      pickCost == null ? 'var(--text3)' : 'var(--accent2)') +   // 與頂欄「總現值」同色
     pair('點選損益加總' + (pickN ? '(' + pickN + ')' : ''),
       pickSum == null ? '—' : (pickSum >= 0 ? '+' : '') + Math.round(pickSum).toLocaleString('zh-TW'),
       pickSum == null ? 'var(--text3)' : cls2var[colorClass(pickSum)]) +
