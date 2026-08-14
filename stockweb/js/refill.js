@@ -54,27 +54,9 @@ var _rfCal = null;                // 除息日曆：[{code,name,exDate,amount,pa
 var _rfPay = null;                // 本月發放：[{code,payDate,derived,amount,exDate}]
 
 // ── 上櫃除權息預告表（TPEx OpenAPI，官方 JSON；每日 1 次即涵蓋全市場）──
-var _rfTpexFresh = false;          // 本次是否真的向 TPEx 抓了新資料（用來決定要不要同步刷新股利估算）
+// TPEx 除權息預告表：實作已移至 dividend-est.js 的 fetchTpexExright()（兩頁共用同一份每日快取）
 async function _rfFetchTpex() {
-  var day = _divTwDate().iso;
-  try { var c = JSON.parse(localStorage.getItem(RF_CAL_LS) || 'null'); if (c && c.day === day) return c.rows; } catch (e) {}
-  _rfTpexFresh = true;
-  var rows = [];
-  try {
-    var url = 'https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost';
-    var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
-    var j = await r.json();
-    (Array.isArray(j) ? j : []).forEach(function (x) {
-      var d = String(x.ExRrightsExDividendDate || '');
-      if (d.length !== 7) return;                                   // 民國 yyyMMdd
-      var iso = (+d.slice(0, 3) + 1911) + '-' + d.slice(3, 5) + '-' + d.slice(5, 7);
-      var amt = parseFloat(x.CashDividend);                          // 可能是「尚未公告」
-      rows.push({ code: String(x.SecuritiesCompanyCode), name: x.CompanyName || '',
-        exDate: iso, amount: isNaN(amt) ? null : amt, payDate: null, src: 'TPEx' });
-    });
-  } catch (e) { console.warn('[refill tpex]', e); }
-  if (rows.length) { try { localStorage.setItem(RF_CAL_LS, JSON.stringify({ day: day, rows: rows })); } catch (e) {} }
-  return rows;
+  return (typeof fetchTpexExright === 'function') ? await fetchTpexExright() : [];
 }
 
 // ── 除息日曆：上市走 e添富（_divRecMap 已含未來公告）、上櫃走 TPEx；合併後依除息日排序 ──
@@ -224,11 +206,11 @@ async function startRefill(force) {
   // 除息日曆（未來已公告除息）：上市 e添富＋上櫃 TPEx，缺漏欄位可由使用者手動補登
   info.textContent = '取得除息預告…';
   var cal = [];
-  _rfTpexFresh = false;
+  if (typeof _tpexFresh !== 'undefined') _tpexFresh = false;
   try { cal = await _rfBuildCalendar(codes, todayIso); } catch (e) { console.warn('[refill calendar]', e); }
   _rfCal = cal;
-  // 首次取得 TPEx 預告表時，股利估算可能是在沒有這些資料前算的 → 同步重算一次
-  if (_rfTpexFresh) { _rfTpexFresh = false; _rfSyncDivEst(); }
+  // 若本頁才首次抓到 TPEx（股利估算尚未載入過），同步重算一次讓兩頁數字一致
+  if (typeof _tpexFresh !== 'undefined' && _tpexFresh) { _tpexFresh = false; _rfSyncDivEst(); }
 
   // 本月發放（依 _divRecMap 的發放月；含手動補登與 TPEx 已併入的公告）
   _rfPay = _rfBuildMonthPay(codes, todayIso);

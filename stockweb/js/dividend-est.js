@@ -208,6 +208,8 @@ async function startDividendEst(force) {
   await Promise.all(missing.map(async function (code) {
     try { var yr = await fetchYahooDiv(code, force); if (yr && yr.length) recMap[code] = yr; } catch (e) {}
   }));
+  // 上櫃 ETF 的未來除息只有 TPEx 有；先確保當日快取存在（每日 1 次全市場），股利估算不再相依填息追蹤頁
+  try { await fetchTpexExright(); } catch (e) {}
   _divMergeAnnounced(recMap);   // 併入已公告除息（TPEx 預告表／手動補登），估算改採實際公告值
   _divRecMap = recMap;   // 供換股試算與填息追蹤共用
 
@@ -346,6 +348,36 @@ function renderDividendEst() {
 function toggleDivStock(code) {
   _divEstOpen[code] = !_divEstOpen[code];
   renderDividendEst();
+}
+
+// ── 上櫃除權息預告表（TPEx OpenAPI，官方 JSON；每日 1 次即涵蓋全市場，零額外成本）──
+// 供股利估算與填息追蹤共用：任一頁先用到就抓並快取，不再互相相依
+var TPEX_CAL_LS = 'refill_cal_v1';
+var _tpexFresh = false;                 // 本次是否真的向 TPEx 抓了新資料
+function _tpexCached() {
+  try { var c = JSON.parse(localStorage.getItem(TPEX_CAL_LS) || 'null'); if (c && c.day === _divTwDate().iso) return c.rows; } catch (e) {}
+  return null;
+}
+async function fetchTpexExright() {
+  var hit = _tpexCached();
+  if (hit) return hit;
+  _tpexFresh = true;
+  var rows = [];
+  try {
+    var url = 'https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost';
+    var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
+    var j = await r.json();
+    (Array.isArray(j) ? j : []).forEach(function (x) {
+      var d = String(x.ExRrightsExDividendDate || '');
+      if (d.length !== 7) return;                                    // 民國 yyyMMdd
+      var iso = (+d.slice(0, 3) + 1911) + '-' + d.slice(3, 5) + '-' + d.slice(5, 7);
+      var amt = parseFloat(x.CashDividend);                          // 可能是「尚未公告」
+      rows.push({ code: String(x.SecuritiesCompanyCode), name: x.CompanyName || '',
+        exDate: iso, amount: isNaN(amt) ? null : amt, payDate: null, src: 'TPEx' });
+    });
+  } catch (e) { console.warn('[tpex exright]', e); }
+  if (rows.length) { try { localStorage.setItem(TPEX_CAL_LS, JSON.stringify({ day: _divTwDate().iso, rows: rows })); } catch (e) {} }
+  return rows;
 }
 
 // 併入「已公告但資料源尚未收錄」的除息：TPEx 除權息預告表（填息追蹤頁快取）＋使用者手動補登
