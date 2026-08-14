@@ -318,11 +318,20 @@ function renderDividendEst() {
     else freq = _mos.length || 1;
     var annPerShare = repPS * freq;
     var yld = (price && annPerShare) ? annPerShare / price * 100 : null;
+    // 當月已公告除息（含 TPEx 預告與手動補登，由 _divMergeAnnounced 併入）；無則不顯示
+    var _ym = _divTwDate().iso.slice(0, 7);
+    var _exNow = ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [])
+      .filter(function (r) { return r.exDate && r.exDate.slice(0, 7) === _ym; })
+      .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; })[0];
+    var exHtml = _exNow
+      ? '　<span class="divest-exnow">本月除息 <b>' + md(_exNow.exDate) + '</b>　每股 <b>' +
+        (_exNow.amount != null ? _exNow.amount.toFixed(4) : '待公告') + '</b></span>'
+      : '';
     html += '<div class="divest-stock">' +
       '<div class="divest-shead" onclick="toggleDivStock(\'' + s.code + '\')">' +
         '<div><span class="divest-scode">' + s.code + '</span> <span class="divest-sname">' + s.name + '</span>' +
           '<span class="divest-yield">現價 <b>' + (price != null ? price.toFixed(2) : '—') + '</b>　' +
-          '預估年殖利率 <b>' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</b></span></div>' +
+          '預估年殖利率 <b>' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</b>' + exHtml + '</span></div>' +
         '<div class="divest-smeta">已領 <span style="color:var(--down)">' + money(s.res.actualTotal) + '</span>　估算 <span style="color:var(--accent2)">' + money(s.res.estTotal) + '</span>　' +
           '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span></div>' +
       '</div>' +
