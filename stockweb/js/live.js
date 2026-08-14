@@ -26,6 +26,8 @@ function toggleWatch(code, el) {
   if (s.has(code)) s.delete(code); else s.add(code);
   saveWatch();
   if (el) el.classList.toggle('on', s.has(code));
+  // 持股庫存合計列有「點選損益加總」，標記變動需即時重算
+  if (typeof renderSummaries === 'function') renderSummaries();
 }
 
 // 計算單檔衍生值（現價優先用即時 tick，其次券商 last_price）
