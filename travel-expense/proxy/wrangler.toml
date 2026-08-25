@@ -1,0 +1,11 @@
+name = "travel-expense-ocr-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# 機密值不要寫在這個檔案裡（會進 git），一律用 CLI 設定：
+#   wrangler secret put GEMINI_API_KEY
+#   wrangler secret put APP_SECRET      （可選，前端需帶同樣的值，見 README）
+#
+# 若要限制只有你的網站網域能呼叫這支 Worker，取消下面註解並改成你的網域：
+# [vars]
+# ALLOWED_ORIGIN = "https://jack6349.github.io"

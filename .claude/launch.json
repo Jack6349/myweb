@@ -32,6 +32,17 @@
       ],
       "cwd": "stock",
       "port": 8123
+    },
+    {
+      "name": "travel-expense",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8124"
+      ],
+      "cwd": "travel-expense",
+      "port": 8124
     }
   ]
 }

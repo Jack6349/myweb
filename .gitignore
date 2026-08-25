@@ -1,1 +1,4 @@
 _docs/
+
+# wrangler 本機快取（含 Cloudflare 帳號 ID 與 email），不可推上公開 repo
+.wrangler/
