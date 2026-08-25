@@ -57,8 +57,29 @@ const OCR_CONFIG = {
 
 填好之後，App 拍照記帳會自動改用真的 Gemini 辨識；`proxyUrl` 留空則會退回假資料（Mock），並在瀏覽器 Console 印出提醒。
 
-## 費用與風險提醒
+## 目前的防護與實際保護力
+
+三道防線，效果由強到弱：
+
+1. **API key 隔離（真正有效）**：`GEMINI_API_KEY` 只存在 Cloudflare 環境變數，前端與 git 都拿不到。就算有人濫用 Worker，也偷不走金鑰本身。
+2. **來源網域驗證（有效擋瀏覽器濫用）**：`ALLOWED_ORIGIN` 設為 `https://jack6349.github.io`，Worker 在伺服器端比對 `Origin` 標頭，非此來源直接回 403。這擋得住別人把你的 Worker 網址嵌進自己網站使用。缺點：`curl` 等工具可以偽造 `Origin` 標頭，擋不住刻意繞過的人。
+3. **共用密鑰（只是速度障礙）**：`APP_SECRET` 前端也要帶，而前端程式碼是公開的，所以任何願意讀 `js/data.js` 的人都拿得到。它只擋得住「只知道 Worker 網址、沒讀原始碼」的隨手嘗試。
+
+另有單張圖片大小上限（base64 8MB），避免有人用超大圖片灌爆 token 用量。
+
+**最後的保險是用量上限**：以上都擋不住鐵了心要濫用的人，所以請務必到 [Google AI Studio 用量頁](https://aistudio.google.com/usage) 設定用量警報／上限，把最壞情況的損失鎖死。
+
+## 費用提醒
 
 - Cloudflare Workers 免費額度：每日 10 萬次請求，一般個人使用不會超過。
-- Gemini API 呼叫本身是你 Google 帳號底下的用量，請到 Google AI Studio / Google Cloud 主控台設定用量或預算警報，避免異常扣費。
-- `APP_SECRET` 只是降低隨機濫用門檻，不是強加密；它仍會出現在前端程式碼裡，只是外洩後頂多被拿去打你的 OCR 額度，不會直接動用到你的 Gemini 帳單金鑰本身。
+- Gemini API 呼叫算在你 Google 帳號底下的用量。
+
+## 更換共用密鑰
+
+若要換一組 `APP_SECRET`，兩邊都要改成同一個新值：
+
+```bash
+npx wrangler secret put APP_SECRET
+```
+
+然後更新 [travel-expense/js/data.js](../js/data.js) 的 `OCR_CONFIG.appSecret`，並重新推上 GitHub。

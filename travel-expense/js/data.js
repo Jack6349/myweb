@@ -193,7 +193,10 @@ const MockReceiptService = (() => {
  */
 const OCR_CONFIG = {
   proxyUrl: 'https://travel-expense-ocr-proxy.jack6349.workers.dev',
-  appSecret: '', // 若 Worker 有設定 wrangler secret put APP_SECRET，這裡填一樣的值
+  // 與 Worker 的 APP_SECRET 相同的共用密鑰。注意：前端程式碼是公開的，這串一定看得到，
+  // 它只是提高隨手濫用的門檻，不是真正的存取控制；真正的保護是 Worker 端的來源網域驗證
+  // 與 Google 帳號的用量上限。
+  appSecret: 'QvQzGdHexwGRxKAazuO0f6tqVmu0bJGg',
 };
 
 const RealReceiptService = (() => {

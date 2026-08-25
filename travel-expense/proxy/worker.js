@@ -6,6 +6,9 @@
  * 部署步驟見同目錄 README.md。
  */
 
+// 單張圖片 base64 長度上限（約 6MB 原始檔），避免有人丟超大圖片灌爆 token 用量
+const MAX_IMAGE_BASE64_LENGTH = 8_000_000;
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -15,8 +18,17 @@ export default {
       return jsonError('Method Not Allowed', 405, env);
     }
 
+    // 來源網域驗證：CORS 標頭只是「告訴瀏覽器」，這裡在伺服器端實際擋掉非指定來源。
+    // ALLOWED_ORIGIN 未設定時不驗證（開發階段方便本機測試）。
+    if (env.ALLOWED_ORIGIN) {
+      const origin = request.headers.get('Origin');
+      if (origin && origin !== env.ALLOWED_ORIGIN) {
+        return jsonError('forbidden origin', 403, env);
+      }
+    }
+
     // 簡易共用密鑰驗證：降低「隨便什麼人拿到這個網址就狂打」的風險。
-    // 這不是強加密，只是提高濫用門檻；APP_SECRET 未設定時不驗證。
+    // 這不是強加密（密鑰仍會出現在前端程式碼），只是提高濫用門檻；未設定時不驗證。
     if (env.APP_SECRET) {
       const provided = request.headers.get('X-App-Secret');
       if (provided !== env.APP_SECRET) {
@@ -33,6 +45,9 @@ export default {
 
     const { image, mimeType } = body; // image：base64 字串（不含 "data:image/...;base64," 前綴）
     if (!image) return jsonError('missing image', 400, env);
+    if (typeof image !== 'string' || image.length > MAX_IMAGE_BASE64_LENGTH) {
+      return jsonError('image too large', 413, env);
+    }
     if (!env.GEMINI_API_KEY) return jsonError('server not configured: GEMINI_API_KEY missing', 500, env);
 
     const prompt = `你是收據辨識助手。分析這張收據照片，只回傳 JSON（不要任何其他文字），欄位如下：
