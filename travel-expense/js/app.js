@@ -77,8 +77,8 @@
     document.querySelectorAll('.bottomnav__tab').forEach((b) => b.classList.toggle('is-active', b.dataset.view === view));
     $('topbarTitle').textContent = VIEW_TITLE[view];
     const trip = tripById(state.currentTripId);
-    const showsTripName = view === 'list' || view === 'settle' || view === 'notes' || view === 'home';
-    $('topbarSub').textContent = showsTripName && trip ? trip.name : '';
+    // 成員設定為全域資料，與行程無關，故不顯示行程名稱；其餘畫面都顯示目前行程
+    $('topbarSub').textContent = (view !== 'members' && trip) ? trip.name : '';
     $('fabAdd').style.display = FAB_HIDDEN_VIEWS.has(view) ? 'none' : '';
     render();
   }
@@ -511,20 +511,26 @@
   }
 
   /* ================= 行程設定 ================= */
+  // 切換目前行程，並同步頂欄顯示（頂欄由 switchView 設定，這裡直接更新避免顯示落後）
+  function setCurrentTrip(tripId) {
+    state.currentTripId = tripId;
+    const t = tripById(tripId);
+    $('topbarSub').textContent = t ? t.name : '';
+  }
+
   function renderTrips() {
     const wrap = $('app');
-    let html = '<div class="section-title">我的行程</div>';
+    let html = '<div class="section-title">我的行程（點整列即可切換）</div>';
     TRIPS.forEach((t) => {
       const isCurrent = t.id === state.currentTripId;
       html += `
-        <div class="settings-row ${isCurrent ? 'is-current' : ''}">
+        <div class="settings-row ${isCurrent ? 'is-current' : 'settings-row--clickable'}" ${isCurrent ? '' : `data-switch="${t.id}"`}>
           <div class="settings-row__icon">🧳</div>
           <div class="settings-row__body">
             <div class="settings-row__title">${t.name}${isCurrent ? '<span class="badge-current">目前行程</span>' : ''}</div>
             <div class="settings-row__sub">${tripDateLabel(t)}・幣別 ${t.currency}・${tripMembers(t.id).length} 人</div>
           </div>
           <div class="settings-row__actions">
-            ${isCurrent ? '' : `<button type="button" class="btn btn--mini" data-switch="${t.id}">切換</button>`}
             <button type="button" class="btn btn--mini" data-edit="${t.id}">編輯</button>
             <button type="button" class="btn btn--mini btn--danger" data-del="${t.id}">刪除</button>
           </div>
@@ -532,16 +538,22 @@
       `;
     });
     wrap.innerHTML = html;
-    wrap.querySelectorAll('[data-switch]').forEach((b) => b.addEventListener('click', () => {
-      state.currentTripId = b.dataset.switch;
+    // 整列可點即切換（放大觸控範圍，手機上不必瞄準小按鈕）
+    wrap.querySelectorAll('[data-switch]').forEach((row) => row.addEventListener('click', () => {
+      setCurrentTrip(row.dataset.switch);
       toast('已切換行程：' + tripById(state.currentTripId).name);
       renderTrips();
     }));
-    wrap.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => openTripForm(b.dataset.edit)));
-    wrap.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
+    // 編輯／刪除須阻擋冒泡，否則會連帶觸發整列的切換
+    wrap.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openTripForm(b.dataset.edit);
+    }));
+    wrap.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
       const r = removeTrip(b.dataset.del);
       if (!r.ok) { toast(r.reason); return; }
-      if (state.currentTripId === b.dataset.del) state.currentTripId = TRIPS[0].id;
+      if (state.currentTripId === b.dataset.del) setCurrentTrip(TRIPS[0].id);
       toast('已刪除行程');
       renderTrips();
     }));

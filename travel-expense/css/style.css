@@ -253,6 +253,9 @@ html.light .topbar__icon {
   border: 1px solid var(--line);
 }
 .settings-row.is-current { border-color: var(--accent); }
+/* 可點整列切換（行程列表）：給明確的可點回饋 */
+.settings-row--clickable { cursor: pointer; transition: .12s; }
+.settings-row--clickable:active { transform: scale(.99); border-color: var(--accent); }
 .settings-row__icon {
   width: 36px; height: 36px;
   border-radius: 50%;
