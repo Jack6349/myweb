@@ -36,6 +36,25 @@ function _rfParseManual(s) {
   if (!ex) return null;
   return { amount: amt, exDate: ex, payDate: pay };
 }
+// 清除「已完成」的手動補登，避免舊資料殘留在輸入框造成誤判。
+// 判斷用發放日而非除息日：已除息但未發放的紀錄仍是股利估算的來源
+// （例：8/18 除息、9/9 發放，9 月才入帳），太早刪會讓估算少一筆。
+// 無發放日時保守等除息後 60 天（一般發放日在除息後 3～4 週）。
+function _rfManPrune() {
+  var man = _rfManLoad(), today = _divTwDate().iso, changed = false;
+  Object.keys(man).forEach(function (code) {
+    var r = man[code];
+    if (!r || !r.exDate) return;
+    var done;
+    if (r.payDate) done = r.payDate < today;
+    else done = new Date(new Date(r.exDate + 'T00:00:00+08:00').getTime() + 60 * 86400000)
+      .toISOString().slice(0, 10) < today;
+    if (done) { delete man[code]; changed = true; }
+  });
+  if (changed) _rfManSave(man);
+  return changed;
+}
+
 function rfManualInput(code, el) {
   var raw = el.value;
   var map = _rfManLoad();
@@ -45,6 +64,11 @@ function rfManualInput(code, el) {
   map[code] = r;
   _rfManSave(map);
   _rfNote = code + ' 已補登：配息 ' + r.amount + '、除息 ' + r.exDate + (r.payDate ? '、發放 ' + r.payDate : '');
+  // 貼到過期的除息日時明講：日曆只列未來除息，貼舊資料不會有反應，容易誤以為沒生效
+  if (r.exDate < _divTwDate().iso) {
+    _rfNote += '　※ 此除息日已過，不會顯示在下方除息日曆' +
+      (r.payDate && r.payDate >= _divTwDate().iso ? '（發放日未到，仍計入股利估算）' : '');
+  }
   _rfSyncDivEst();                  // 同步刷新股利估算的預估數字
   startRefill();                    // 重算日曆（併入手動值）
 }
@@ -184,7 +208,10 @@ async function startRefill(force) {
   if (force) { try { localStorage.removeItem(RF_LS); } catch (e) {} }
   wrap.innerHTML = '<div class="modal-loading">載入持股與配息資料…</div>';
 
-  if (!_divEstResult) { try { await startDividendEst(); } catch (e) {} }
+  // 先清掉已完成的補登，再算股利估算，否則估算會先吃到過期資料
+  var pruned = _rfManPrune();
+
+  if (!_divEstResult || pruned) { try { await startDividendEst(); } catch (e) {} }
   var shareMap = (typeof _sharesMap !== 'undefined' && _sharesMap) ? _sharesMap : {};
   var codes = Object.keys(shareMap).filter(function (c) { return shareMap[c] > 0 && isEtfCode(c); })
     .sort(function (a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true }); });
@@ -395,7 +422,10 @@ function _rfCalHtml() {
       '<td>' + (lack || e.manual
         ? '<input class="sbl-inp rf-man-inp" type="text" placeholder="貼上：0.153　2026/08/18　2026/09/09"' +
           ' title="從券商App或看盤網站複製整行貼上，自動解析股利/除息日/發放日；官方公告後會自動改用官方值。清空可移除" value="' +
-          (man[e.code] ? _rfManStr(man[e.code]) : '') + '" onchange="rfManualInput(\'' + e.code + '\',this)">'
+          // 只顯示「除息日與本列相同」的補登：否則上個月的舊資料會殘留在框內，
+          // 看起來像已填好卻不生效（合併時 exDate 對不上就不會採用）
+          ((man[e.code] && man[e.code].exDate === e.exDate) ? _rfManStr(man[e.code]) : '') +
+          '" onchange="rfManualInput(\'' + e.code + '\',this)">'
         : '') + '</td>' +
     '</tr>';
   });
