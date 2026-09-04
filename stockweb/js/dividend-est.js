@@ -341,8 +341,70 @@ function renderDividendEst() {
     '</div>';
   });
   html += '</div>';
+  // ── 股利統計表：縱向個股、橫向 1–12 月＋總計（依發放月歸戶，與月份總覽同一份資料）──
+  html += _divStatTableHtml(stocks, money);
+
   html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。</div>';
   wrap.innerHTML = html;
+}
+
+// ── 股利統計表 ──
+// 縱向＝個股（依總計高→低，可點代號改排序）、橫向＝1–12 月＋總計。
+// 金額顏色沿用月份總覽：綠＝已發放、黃＝預估；空月留白不填 0；全年為 0 的個股不列入。
+var _divStatSort = 'totDesc';
+function divStatSort(key) {
+  _divStatSort = (_divStatSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
+  renderDividendEst();
+}
+function _divStatRows(stocks) {
+  var rows = [];
+  stocks.forEach(function (s) {
+    var r = { code: s.code, m: {}, act: {}, tot: 0 };
+    (s.res.months || []).forEach(function (m) {
+      r.m[m.month] = (r.m[m.month] || 0) + m.total;
+      if (m.status === 'actual') r.act[m.month] = true;
+      r.tot += m.total;
+    });
+    if (r.tot > 0) rows.push(r);          // 全年 0 元（今年尚未配息）不列入
+  });
+  var asc = /Asc$/.test(_divStatSort);
+  rows.sort(function (a, b) {
+    if (/^code/.test(_divStatSort)) {
+      var c = String(a.code).localeCompare(String(b.code), undefined, { numeric: true });
+      return asc ? c : -c;
+    }
+    return asc ? a.tot - b.tot : b.tot - a.tot;
+  });
+  return rows;
+}
+function _divStatTableHtml(stocks, money) {
+  var rows = _divStatRows(stocks);
+  if (!rows.length) return '';
+  var arrow = function (key) {
+    return _divStatSort === key + 'Asc' ? '▲' : (_divStatSort === key + 'Desc' ? '▼' : '↕');
+  };
+  var sorted = function (key) { return _divStatSort.indexOf(key) === 0 ? ' sorted' : ''; };
+  var h = '<div class="divest-divider"></div><div class="divest-sec-title">股利統計</div>' +
+    '<div class="dstat-wrap"><table class="dstat">' +
+    '<thead><tr><th class="dstat-code sort-th' + sorted('code') + '" onclick="divStatSort(\'code\')" title="點擊排序">代號<span class="sort-ind">' + arrow('code') + '</span></th>';
+  for (var mo = 1; mo <= 12; mo++) h += '<th class="num">' + mo + '月</th>';
+  h += '<th class="num dstat-tot sort-th' + sorted('tot') + '" onclick="divStatSort(\'tot\')" title="點擊排序">總計<span class="sort-ind">' + arrow('tot') + '</span></th></tr></thead><tbody>';
+
+  var colT = {}, grand = 0;
+  rows.forEach(function (r) {
+    h += '<tr><td class="dstat-code">' + r.code + '</td>';
+    for (var mo = 1; mo <= 12; mo++) {
+      var v = r.m[mo];
+      if (v) { colT[mo] = (colT[mo] || 0) + v; grand += v; }
+      h += '<td class="num' + (v ? (r.act[mo] ? ' dv-act' : ' dv-est') : '') + '">' +
+        (v ? money(v) : '') + '</td>';
+    }
+    h += '<td class="num dstat-tot">' + money(r.tot) + '</td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td class="dstat-code">合計</td>';
+  for (var k = 1; k <= 12; k++) h += '<td class="num">' + (colT[k] ? money(colT[k]) : '') + '</td>';
+  h += '<td class="num dstat-tot">' + money(grand) + '</td></tr></tfoot></table></div>';
+  return h;
 }
 
 function toggleDivStock(code) {

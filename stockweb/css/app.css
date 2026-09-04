@@ -658,3 +658,22 @@ td.cost-even::after  { background: var(--text3); }
 .swap-sec-lb { font-size: 12px; color: var(--text3); margin: 8px 2px 4px; }
 /* 股利估算：個股標題的本月已公告除息 */
 .divest-exnow { color: var(--accent2); }
+
+/* ── 股利統計表（股利估算頁最下方）：縱向個股、橫向 1–12 月＋總計 ── */
+/* 12 個月份欄會超出版面 → 表格自身橫向捲動；代號欄用 sticky 凍結在左側，捲動時仍看得到是哪一檔 */
+.dstat-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); }
+.dstat { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dstat th, .dstat td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.dstat thead th { background: var(--bg3); color: var(--text2); font-weight: 600; position: sticky; top: 0; z-index: 2; }
+.dstat td.num, .dstat th.num { text-align: right; }
+.dstat tbody tr:hover td { background: rgba(255,255,255,.03); }
+/* 代號欄凍結：header 需更高層級才不會被 tbody 的 sticky 蓋住 */
+.dstat .dstat-code { position: sticky; left: 0; background: var(--bg2); text-align: left; font-weight: 600; }
+.dstat thead .dstat-code { background: var(--bg3); z-index: 3; }
+.dstat tbody tr:hover .dstat-code { background: #1e2a3a; }
+.dstat .dstat-tot { font-weight: 700; color: var(--accent2); border-left: 1px solid var(--border-strong, #435a78); }
+/* 金額配色與月份總覽一致：綠＝已發放、黃＝預估 */
+.dstat td.dv-act { color: var(--down); }
+.dstat td.dv-est { color: var(--accent2); }
+.dstat tfoot td { background: var(--bg3); font-weight: 700; border-bottom: none; border-top: 1px solid var(--border-strong, #435a78); }
+.dstat tfoot .dstat-code { background: var(--bg3); }
