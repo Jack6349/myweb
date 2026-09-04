@@ -351,7 +351,7 @@ function _rfMonthPayHtml() {
       '<td class="num' + (amt == null ? ' swap-warn' : '') + '">' + (amt != null ? amt.toFixed(4) : '待公告') + '</td>' +
       '<td class="num">' + (px != null ? px.toFixed(2) : '—') + '</td>' +
       '<td class="num swap-yield">' + (yPx != null ? yPx.toFixed(2) + '%' : '—') + '</td>' +
-      '<td class="num' + costLineClass(cost, px) + '">' + (cost != null ? cost.toFixed(2) : '—') + '</td>' +
+      costCellHtml(cost, px) +
       '<td class="num swap-yield">' + (yCost != null ? yCost.toFixed(2) + '%' : '—') + '</td>' +
       '<td class="num">' + _swapLots(sh) + '</td>' +
       '<td class="num">' + (get != null ? fmtMoney(get) : '—') + '</td>' +

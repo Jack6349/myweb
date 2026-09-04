@@ -57,7 +57,7 @@ function liveRowHtml(p) {
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + v.code + '\',this)"></button></td>' +
     '<td class="inv-code' + (typeof limitState === 'function' && limitState(v.code, v.price) ? ' lim-' + limitState(v.code, v.price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + v.code + '\')">' + v.code + '</span></td>' +
     '<td class="num">' + (p.quantity != null ? Math.round(p.quantity).toLocaleString('zh-TW') : '—') + '</td>' +
-    '<td class="num' + costLineClass(v.avg, v.price) + '">' + v.avg.toFixed(2) + '</td>' +
+    costCellHtml(v.avg, v.price) +
     '<td class="num ' + ccls + '">' + (v.price != null ? v.price.toFixed(2) : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (v.chgAmt == null ? '—' : fmtChg(v.chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (v.chg == null ? '—' : fmtPct(v.chg)) + '</td>' +

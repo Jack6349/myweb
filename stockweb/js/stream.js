@@ -300,13 +300,36 @@ function limitState(code, price) {
   return '';
 }
 function colorClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'flat'); }
-// 成本均價底線色：成本高於現價＝套牢（綠）、低於現價＝獲利（紅）、相等或無報價＝不上色
+// 成本均價色：成本高於現價＝套牢（綠）、低於現價＝獲利（紅）、相等或無報價＝不上色
 // 台股慣例紅漲綠跌；此處以「現價相對成本」的方向著色，與損益欄同向
 function costLineClass(avg, price) {
   if (avg == null || price == null) return '';
   if (avg > price) return ' cost-under';   // 成本 > 現價 → 綠
   if (avg < price) return ' cost-over';    // 成本 < 現價 → 紅
   return ' cost-even';
+}
+
+// 成本均價儲存格：左緣垂直色條，高度依「現價相對成本的落差%」填色
+// 為何用對數刻度：實際落差橫跨 0%～280%（三個數量級），但半數持股集中在 4% 以內，
+// 線性刻度會讓多數持股只剩看不見的細絲。滿格基準固定 300%，刻度才不會隨當日最大值浮動。
+var COST_BAR_CAP = 300;
+function costBarFill(avg, price) {
+  if (avg == null || price == null || !avg) return null;
+  var gap = Math.abs((price - avg) / avg * 100);
+  var norm = Math.log1p(gap) / Math.log1p(COST_BAR_CAP);   // 0～1
+  return Math.round((8 + Math.min(1, norm) * 80) * 10) / 10;  // 8%～88%，小落差也留可見短柱
+}
+function costCellHtml(avg, price, extraClass) {
+  var cls = costLineClass(avg, price);
+  var txt = (avg != null) ? avg.toFixed(2) : '—';
+  if (!cls) return '<td class="num' + (extraClass || '') + '">' + txt + '</td>';
+  var fill = costBarFill(avg, price);
+  var gap = (price - avg) / avg * 100;
+  var tip = '成本 ' + avg.toFixed(2) + '　現價 ' + price.toFixed(2) +
+    '　落差 ' + (gap > 0 ? '+' : '') + gap.toFixed(2) + '%';
+  return '<td class="num cost-bar' + cls + (extraClass || '') + '"' +
+    (fill != null ? ' style="--fill:' + fill + '%"' : '') +
+    ' title="' + tip + '">' + txt + '</td>';
 }
 function fmtMoney(v) { return '$' + Math.round(v).toLocaleString('zh-TW'); }
 

@@ -82,7 +82,7 @@ async function startAlerts() {
     html += '<tr>' +
       '<td class="inv-code">' + code + '</td>' +
       '<td class="inv-name">' + ((c && c.name) || names[code] || '') + '</td>' +
-      '<td class="num' + costLineClass(p.price, price) + '">' + (p.price != null ? p.price.toFixed(2) : '—') + '</td>' +
+      costCellHtml(p.price, price) +
       '<td class="num">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
       '<td class="num ' + (prate == null ? 'flat' : (prate >= 0 ? 'up' : 'down')) + '">' + (prate == null ? '—' : (prate >= 0 ? '+' : '') + prate.toFixed(1) + '%') + '</td>' +
       '<td class="num">' + _alInput(code, 'tpPrice', a.tpPrice) + '</td>' +

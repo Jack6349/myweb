@@ -612,10 +612,17 @@ input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
 
 /* 成本均價粗底線：成本高於現價→綠（套牢）、低於現價→紅（獲利）、相等→灰
    用 td.xxx 提高優先度，蓋過 .inv-table td 的 1px 底線（同特異度、後定義者勝） */
-td.cost-under, td.cost-over, td.cost-even { border-bottom-width: 3px; border-bottom-style: solid; }
-td.cost-under { border-bottom-color: var(--down); }
-td.cost-over  { border-bottom-color: var(--up); }
-td.cost-even  { border-bottom-color: var(--text3); }
+/* 成本均價：左緣垂直色條，高度依「現價相對成本的落差%」（對數刻度，--fill 由 JS 帶入）
+   用色條而非底色/條紋：停損停利警示列會以 !important 覆蓋整列 background，
+   背景式標示會在最該注意的那幾列消失；色條走 ::before/::after 不受影響。 */
+td.cost-bar { position: relative; padding-left: 12px; }
+td.cost-bar::before,
+td.cost-bar::after { content: ''; position: absolute; left: 4px; width: 3px; border-radius: 2px; }
+td.cost-bar::before { top: 4px; bottom: 4px; background: rgba(255,255,255,.09); }   /* 軌道 */
+td.cost-bar::after  { bottom: 4px; height: var(--fill, 0%); }                        /* 填充 */
+td.cost-under::after { background: var(--down); }
+td.cost-over::after  { background: var(--up); }
+td.cost-even::after  { background: var(--text3); }
 
 /* 填息追蹤：本月發放 */
 .rf-pay { max-width: 1100px; }
