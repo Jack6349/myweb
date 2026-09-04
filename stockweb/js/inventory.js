@@ -75,8 +75,8 @@ function invValRow(p) {
     '<td class="inv-name">' + ((c && c.name) || '') + '</td>' +
     '<td class="num">' + shares.toLocaleString('zh-TW') + '</td>' +
     '<td class="num' + costLineClass(p.price, price) + '">' + p.price.toFixed(2) + '</td>' +
-    '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
+    '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
     '<td class="num inv-cchg ' + estCls + '" ' + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
       (cm && cm.est != null ? fmtPct(cm.est) : '—') + '</td>' +
