@@ -20,7 +20,8 @@ var MACRO_TICKERS = [
   { name: 'VIX 恐慌指數', sym: '^VIX',      fmt: 2 },
   { name: '美10年債殖利率', sym: '^TNX',    fmt: 3 },
   { name: '美元指數',     sym: 'DX-Y.NYB',  fmt: 2 },
-  { name: '美元兌台幣',   sym: 'TWD=X',     fmt: 3 }
+  { name: '美元兌台幣',   sym: 'TWD=X',     fmt: 3 },
+  { name: '日圓兌台幣',   sym: 'JPYTWD=X',  fmt: 4 }
 ];
 
 var _newsItems = []; // {source, title, link, time(Date)}
