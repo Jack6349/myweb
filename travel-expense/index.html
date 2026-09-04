@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>旅行記帳（Prototype）</title>
+<!-- ?v= 為快取版本號：改動 css/js 後一併更新此數字，手機才會抓到新版而非舊快取 -->
+<link rel="stylesheet" href="css/style.css?v=20260812c">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__main">
+    <div class="topbar__title" id="topbarTitle">費用</div>
+    <div class="topbar__sub" id="topbarSub">2026 北海道初夏</div>
+  </div>
+  <button type="button" class="topbar__icon" id="btnTheme" aria-label="日夜模式切換">☀️</button>
+</header>
+
+<main id="app"></main>
+
+<nav class="bottomnav">
+  <button type="button" class="bottomnav__tab is-active" data-view="home">
+    <span class="bottomnav__icon">🏠</span><span>首頁</span>
+  </button>
+  <button type="button" class="bottomnav__tab" data-view="list">
+    <span class="bottomnav__icon">🧾</span><span>費用</span>
+  </button>
+  <button type="button" class="bottomnav__tab" data-view="settle">
+    <span class="bottomnav__icon">📊</span><span>結算</span>
+  </button>
+  <button type="button" class="bottomnav__tab" data-view="notes">
+    <span class="bottomnav__icon">📝</span><span>記事</span>
+  </button>
+  <button type="button" class="bottomnav__tab" data-view="trips">
+    <span class="bottomnav__icon">🧳</span><span>行程</span>
+  </button>
+  <button type="button" class="bottomnav__tab" data-view="members">
+    <span class="bottomnav__icon">👥</span><span>成員</span>
+  </button>
+</nav>
+
+<button type="button" class="fab" id="fabAdd">＋</button>
+
+<!-- 隱藏的檔案輸入：capture=environment 在手機上會直接開啟相機；不帶 capture 則開相簿/檔案選擇 -->
+<input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="galleryInput" accept="image/*" style="display:none">
+
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<div class="modal-root" id="modalRoot"></div>
+
+<script src="js/data.js?v=20260812c"></script>
+<script src="js/app.js?v=20260812c"></script>
+</body>
+</html>
