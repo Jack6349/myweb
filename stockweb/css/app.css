@@ -452,10 +452,13 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-track { width: 120px; flex-shrink: 0; padding-top: 5px; }
 .divest-bar { display: flex; height: 9px; border-radius: 3px; overflow: hidden; }
 .divest-mtot { width: 84px; flex-shrink: 0; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; padding-top: 1px; }
-.divest-mitems { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 0; border-left: 1px solid var(--border-strong, #435a78); padding-left: 10px; }
+/* 改用格線：欄寬固定，換行後各行的代號/日期/金額仍上下對齊。
+   分隔線改由每個項目自帶（不再有容器邊框＋首項例外），
+   否則換行那一行的首項會多出 padding-left 與 border-left，整行往右位移。 */
+.divest-mitems { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, 234px); gap: 4px 0; margin-left: 10px; }
 /* 每檔一個固定寬度區塊、同一行並排：編號 發放日期 發放金額（等寬對齊，跨月同欄對齊）；檔與檔間加分隔線 */
-.divest-item { flex: 0 0 auto; display: grid; grid-template-columns: 56px 46px 84px; gap: 8px; font-size: 12px; font-variant-numeric: tabular-nums; padding: 0 16px; border-left: 1px solid var(--border); }
-.divest-item:first-child { padding-left: 0; border-left: none; }
+.divest-item { display: grid; grid-template-columns: 56px 46px 84px; gap: 8px; font-size: 12px; font-variant-numeric: tabular-nums; padding: 0 16px; border-left: 1px solid var(--border); }
+/* 不設首項例外：每項一律帶左分隔線與等寬內距，換行才不會位移 */
 .di-code { white-space: nowrap; }
 .di-date { text-align: center; }
 .di-amt { text-align: right; }
