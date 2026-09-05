@@ -667,6 +667,14 @@ td.cost-even::after  { background: var(--text3); }
 .dstat thead th { background: var(--bg3); color: var(--text2); font-weight: 600; position: sticky; top: 0; z-index: 2; }
 .dstat td.num, .dstat th.num { text-align: right; }
 .dstat tbody tr:hover td { background: rgba(255,255,255,.03); }
+/* 單數月份欄（1/3/5/7/9/11）加淺色底，方便橫向數月份。
+   欄位順序：1=代號、2–13=1–12月、14=總計 → 單數月落在 nth-child(even)。
+   thead/tfoot 用「不透明」色而非半透明：表頭是 sticky，半透明會讓捲動中的資料列透出來。
+   四條規則的選擇器結構刻意一致，避免優先權互相蓋掉。 */
+.dstat tbody td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: rgba(255,255,255,.045); }
+.dstat thead th:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: #222f40; }
+.dstat tfoot td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: #222f40; }
+.dstat tbody tr:hover td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: rgba(255,255,255,.075); }
 /* 代號欄凍結：header 需更高層級才不會被 tbody 的 sticky 蓋住 */
 .dstat .dstat-code { position: sticky; left: 0; background: var(--bg2); text-align: left; font-weight: 600; }
 .dstat thead .dstat-code { background: var(--bg3); z-index: 3; }
