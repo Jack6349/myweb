@@ -8,6 +8,7 @@ var _rows = {};        // code → 最新 {close, total_volume, time}
 var _es = null;        // EventSource
 var _positions = [];   // 券商庫存原始列（含 id/quantity/price/pnl）
 var _sharesMap = {};   // code → 股數
+var _lotsMap = {};     // code → [{date, shares}] 建倉批次（供股利估算判斷除息日前的持有量）
 var _totalCost = 0;    // 總付出成本（元）
 var _feedReady = null; // ensureFeed 的 Promise（避免重複初始化）
 var STREAM_OTHER_N = 15; // 即時行情下段「其他主要成分股」檔數（依曝險）
@@ -133,6 +134,11 @@ async function loadBrokerPositionsFull(say) {
       try {
         var det = await fetchPositionDetail(pz.id);
         var dq = 0, dcost = 0, dpnl = 0;
+        // 順手記下建倉批次（日期＋股數）：股利估算要判斷「除息日前是否已持有」，
+        // 除息日當天才買進的部位領不到該次配息。此處已抓過明細，不必另外呼叫 API。
+        _lotsMap[String(pz.code)] = (det || []).filter(function (d) { return d.quantity > 0 && d.date; })
+          .map(function (d) { return { date: d.date, shares: d.quantity * 1000 }; })
+          .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
         (det || []).forEach(function (d) {
           if (d.quantity > 0) { dq += d.quantity; dcost += (d.price || 0); dpnl += (d.pnl || 0); }
         });
