@@ -14,11 +14,21 @@ var RS_TH = {
 };
 // 股債同向重挫旗標：股市跌幅≥且美10年債殖利率同步漲幅≥（兩者皆達極端 → 傳統對沖失效）
 var RS_FLAG = { equityDrop: 4, yieldUp: 2 };
-// 債券型（非投等債 00981B/00988B）信用風險兩層 override 門檻（待 6 個月回測校準）
+// 債券型（非投等債，標的自持股偵測）信用風險兩層門檻（待 6 個月回測校準）
 // drop：HYG/JNK 單日跌幅%（近一年 p10≈0.31–0.34%，取 0.35 為初始值）
-// discount：00988B/00981B 折價達 pp（債券 ETF 折溢價常態 <0.2%）；volShrink：當日量 < 近90日中位數 %
+// discount：折價達 pp（債券 ETF 折溢價常態 <0.2%）；volShrink：當日量 < 近90日中位數 %
 var RS_BOND_TH = { drop: 0.35, discount: 0.5, volShrink: 50 };
-var RS_BOND_CODES = ['00981B', '00988B'];
+// 非投等債 ETF 以「持股中自動偵測」為準，不寫死清單（加減碼要看的是手上實際部位）。
+// 用名稱而非代號末碼判斷：末碼 B 是債券 ETF，但主動式非投等債 ETF 末碼是 D（例 00984D），
+// 且 Shioaji 合約名稱截斷至 8 字（「主動聯博全球非投等債」→「主動聯博全球非投」），故關鍵字取「非投」。
+var RS_HY_RE = /非投|高收/;
+function _rsBondHoldings() {
+  var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  return Object.keys(m).filter(function (c) {
+    if (!(m[c] > 0) || !/^00\d+[A-Z]?$/.test(c)) return false;
+    return RS_HY_RE.test((_contracts[c] && _contracts[c].name) || '');
+  }).sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
+}
 
 function _rsScore(v, th) { return v == null ? null : (v < th[0] ? 0 : (v <= th[1] ? 1 : 2)); }
 // 指標說明：直接陳述量的是什麼＋各分數的數字區間（門檻取自 RS_TH，改門檻說明同步）
@@ -109,6 +119,11 @@ async function startRiskReport(force) {
   var info = document.getElementById('risk-info');
   wrap.innerHTML = '<div class="modal-loading">抓取總經與台指夜盤資料…</div>';
 
+  // 債券區塊要依「實際持有的非投等債 ETF」列出 → 本頁需先有持股資料（本頁原本不載入持股）
+  if (typeof ensureFeed === 'function' && !Object.keys((typeof _sharesMap !== 'undefined' && _sharesMap) || {}).length) {
+    try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) {}
+  }
+
   var res = await Promise.all([
     _rsYahoo('^VIX'), _rsYahoo('^TNX'), _rsYahoo('DX-Y.NYB'),
     _rsYahoo('^SOX'), _rsYahoo('^IXIC'), _rsNight()
@@ -138,12 +153,15 @@ async function startRiskReport(force) {
   rows.forEach(function (r) { if (r.score != null) { total += r.score; avail++; } });
 
   // 債券型信用風險子模組資料（美股端 HYG/JNK/OAS ＋ 各檔折溢價/量）；與股票區塊獨立、不影響總分
-  var bd = await Promise.all([
-    _rsYahoo('HYG'), _rsYahoo('JNK'), _rsOAS(),
-    _rsBondNav(RS_BOND_CODES[0]), _rsBondNav(RS_BOND_CODES[1]),
-    _rsBondVol(RS_BOND_CODES[0]), _rsBondVol(RS_BOND_CODES[1])
-  ]);
-  var bond = { hyg: bd[0], jnk: bd[1], oas: bd[2], nav: [bd[3], bd[4]], vol: [bd[5], bd[6]] };
+  var bCodes = _rsBondHoldings();                     // 持股中的非投等債 ETF（檔數隨持股變動）
+  var bd = await Promise.all(
+    [_rsYahoo('HYG'), _rsYahoo('JNK'), _rsOAS()]
+      .concat(bCodes.map(_rsBondNav))
+      .concat(bCodes.map(_rsBondVol))
+  );
+  var bn = bCodes.length;
+  var bond = { hyg: bd[0], jnk: bd[1], oas: bd[2], codes: bCodes,
+    nav: bd.slice(3, 3 + bn), vol: bd.slice(3 + bn, 3 + 2 * bn) };
 
   // 股債同向重挫旗標
   var flag = (equityDrop != null && tnx && tnx.chg != null && equityDrop >= RS_FLAG.equityDrop && tnx.chg >= RS_FLAG.yieldUp);
@@ -206,7 +224,7 @@ function _rsBondBlockHtml(bond, sp) {
   var oas = bond.oas;
 
   // 逐檔判定：美股跌幅達標 且（折價達標 或 量縮達標）→ 暫停；美股達標但本地未確認 → 注意
-  var results = RS_BOND_CODES.map(function (code, i) {
+  var results = (bond.codes || []).map(function (code, i) {
     var nav = bond.nav[i], vol = bond.vol[i];
     var prem = nav && nav.premium != null ? nav.premium : null;   // 正=溢價、負=折價
     var ratio = vol && vol.ratio != null ? vol.ratio : null;
@@ -223,7 +241,11 @@ function _rsBondBlockHtml(bond, sp) {
   var worst = Math.max.apply(null, results.map(function (r) { return r.level; }));
   var dot = function (hit) { return hit ? '🔴' : '🟢'; };
 
-  var h = '<div class="rs-sec-title">債券型信用風險 · 非投等債（' + RS_BOND_CODES.join('／') + '）</div>';
+  if (!results.length) {
+    return '<div class="rs-sec-title">債券型信用風險 · 非投等債</div>' +
+      '<div class="rs-bond-verdict" style="border-color:var(--text3);color:var(--text3)">目前未持有非投等債 ETF</div>';
+  }
+  var h = '<div class="rs-sec-title">債券型信用風險 · 非投等債（' + bond.codes.join('／') + '）</div>';
 
   // 綜合判定（操作語言）
   var vTxt, vColor;
