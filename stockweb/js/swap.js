@@ -278,6 +278,7 @@ async function startSwap() {
     if (info) info.textContent = _swapYmLabel(_swapStartYm()) + ' 起 12 個月';
     renderSwap();
   } finally { _swapBusy = false; }
+
 }
 
 // 鎖定現價快照（進頁時取一次；之後只有按「刷新現價」才更新，避免試算結果隨 tick 跳動）
@@ -567,6 +568,93 @@ function _swapSumPairs(c) {
     sp('今年剩餘增減', _swapSigned(diffYear), cv[colorClass(diffYear)]);
 }
 
+// ── 換手品質：賣出 vs 買入的「相對面」並排比較 ──
+// 為何只看相對面：賣買兩邊若同屬非投等債，存續期與信用曝險相近，利率／信用的方向變動
+// 會同時打到兩邊、大致抵銷。真正決定「這一步換得划不划算」的是兩邊的差：
+//   殖利率差（換過去多賺多少）、折溢價差（買貴賣便宜會直接侵蝕收益）、流動性（能否不滑價成交）。
+// 信用環境（HYG/JNK/OAS）決定的是「要不要持有非投等債」，屬加減碼報告，不在此處重複判斷。
+// 折溢價需 TWSE 淨值、量能需日 K，單檔約 1–2 秒 → 只抓「當前這一對」而非全部持股，
+// 抓過的存在 _swapQual 供後續沿用；抓取中以 _swapQualBusy 去重，避免重繪時重覆發動。
+var _swapQual = {};        // code → {prem, ratio}（已取得）
+var _swapQualBusy = {};    // code → true（抓取中）
+function _swapQualEnsure(codes) {
+  if (typeof _rsBondNav !== 'function' || typeof _rsBondVol !== 'function') return;
+  var need = codes.filter(function (c) { return c && !_swapQual[c] && !_swapQualBusy[c]; });
+  if (!need.length) return;
+  need.forEach(function (c) { _swapQualBusy[c] = true; });
+  Promise.all(need.map(function (c) {
+    return Promise.all([_rsBondNav(c), _rsBondVol(c)]).then(function (a) {
+      return { code: c, nav: a[0], vol: a[1] };
+    }).catch(function () { return { code: c, nav: null, vol: null }; });
+  })).then(function (got) {
+    got.forEach(function (g) {
+      _swapQual[g.code] = {
+        prem: (g.nav && g.nav.premium != null) ? g.nav.premium : null,
+        ratio: (g.vol && g.vol.ratio != null) ? g.vol.ratio : null
+      };
+      delete _swapQualBusy[g.code];
+    });
+    if (document.getElementById('swap-wrap')) renderSwap();
+  }).catch(function (e) {
+    need.forEach(function (c) { delete _swapQualBusy[c]; });
+    console.warn('[swap quality]', e);
+  });
+}
+
+function _swapQualHtml(c) {
+  // 只在「單賣單買」時比較：一對一才有明確的相對關係，多對多沒有可讀的兩欄對照
+  if (!c.sellRows.length || !c.buyRows) return '';
+  var buys = c.buyRows.filter(function (r) { return r && r.sh > 0; });
+  if (c.sellRows.length !== 1 || buys.length !== 1) return '';
+  var s = c.sellRows[0], b = buys[0];
+  _swapQualEnsure([s.code, b.code]);          // 尚未取得就背景抓，完成後自動重繪
+  var q = _swapQual || {};
+  var qs = q[s.code] || {}, qb = q[b.code] || {};
+  var loading = (_swapQualBusy[s.code] || _swapQualBusy[b.code]);
+  var yS = _swapYield(s.code), yB = _swapYield(b.code);
+
+  var num = function (v, dp, suf, sign) {
+    if (v == null) return '<span class="swap-dim">—</span>';
+    return (sign && v > 0 ? '+' : '') + v.toFixed(dp) + (suf || '');
+  };
+  // 差異欄：正向有利＝紅（台股慣例），不利＝綠；無資料留白
+  var diff = function (a, bb, dp, suf, goodIsUp) {
+    if (a == null || bb == null) return '<span class="swap-dim">—</span>';
+    var d = bb - a;
+    var good = goodIsUp ? d > 0 : d < 0;
+    var cls = Math.abs(d) < 1e-9 ? 'flat' : (good ? 'up' : 'down');
+    return '<span class="' + cls + '">' + (d > 0 ? '+' : '') + d.toFixed(dp) + (suf || '') + '</span>';
+  };
+  var nm = function (code) { return _swapName(code) || ''; };
+
+  var h = '<div class="divest-sec-title">換手品質（賣出 vs 買入）</div>' +
+    '<div class="inv-table-wrap"><table class="inv-table swap-table swap-qual"><thead><tr>' +
+    '<th>項目</th><th class="num">' + s.code + ' <span class="swap-dim">' + nm(s.code) + '</span>（賣）</th>' +
+    '<th class="num">' + b.code + ' <span class="swap-dim">' + nm(b.code) + '</span>（買）</th>' +
+    '<th class="num">差異</th></tr></thead><tbody>';
+
+  h += '<tr><td title="最近一次配息 × 配息期數 ÷ 現價">預估年殖利率</td>' +
+    '<td class="num swap-yield">' + num(yS, 2, '%') + '</td>' +
+    '<td class="num swap-yield">' + num(yB, 2, '%') + '</td>' +
+    '<td class="num">' + diff(yS, yB, 2, 'pp', true) + '</td></tr>';
+
+  h += '<tr><td title="市價相對官方淨值；正=溢價（買貴）、負=折價（買便宜）。賣溢價、買折價最有利">折溢價</td>' +
+    '<td class="num">' + num(qs.prem, 2, '%', true) + '</td>' +
+    '<td class="num">' + num(qb.prem, 2, '%', true) + '</td>' +
+    '<td class="num">' + diff(qs.prem, qb.prem, 2, 'pp', false) + '</td></tr>';
+
+  h += '<tr><td title="當日成交量 ÷ 近90日中位數；偏低時大額進出容易滑價">成交量／90日中位</td>' +
+    '<td class="num">' + num(qs.ratio, 0, '%') + '</td>' +
+    '<td class="num">' + num(qb.ratio, 0, '%') + '</td>' +
+    '<td class="num"><span class="swap-dim">—</span></td></tr>';
+
+  h += '</tbody></table></div>' +
+    (loading ? '<div class="swap-qual-note">折溢價與成交量載入中…</div>' : '') +
+    '<div class="swap-qual-note">殖利率差為換股的收益來源；折溢價差是立即成本（賣得比淨值便宜、買得比淨值貴都會侵蝕收益）。' +
+    '成交量偏低時分批進出可降低滑價。<b>此處只比較兩檔的相對條件</b>，非投等債整體該不該持有屬系統性判斷，見「加減碼報告」。</div>';
+  return h;
+}
+
 function _swapResultHtml(c) {
   if (!c.sellRows.length) {
     return '<div class="tx-box"><div class="modal-loading">在「賣出」區輸入張數後即可看到試算結果。</div></div>';
@@ -574,6 +662,8 @@ function _swapResultHtml(c) {
   var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">試算結果</span>' +
     '<span class="swap-hint">' + _swapYmLabel(c.startYm) + ' ～ ' + _swapYmLabel(c.startYm + SWAP_N - 1) + '（未來 12 個月）</span></div>' +
     '<div class="swap-sum">' + _swapSumPairs(c) + '</div>';
+
+  h += _swapQualHtml(c);
 
   // 月度對照
   var maxV = 1;

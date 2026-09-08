@@ -685,3 +685,8 @@ td.cost-even::after  { background: var(--text3); }
 .dstat td.dv-est { color: var(--accent2); }
 .dstat tfoot td { background: var(--bg3); font-weight: 700; border-bottom: none; border-top: 1px solid var(--border-strong, #435a78); }
 .dstat tfoot .dstat-code { background: var(--bg3); }
+
+/* 換股試算：換手品質比較表（賣出 vs 買入的相對條件） */
+.swap-qual td:first-child { color: var(--text2); }
+.swap-qual th.num, .swap-qual td.num { text-align: right; }
+.swap-qual-note { font-size: 11px; color: #9a8028; line-height: 1.6; margin: 6px 2px 0; }
