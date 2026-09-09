@@ -711,5 +711,7 @@ td.cost-even::after  { background: var(--text3); }
   padding: 6px 12px; display: flex; align-items: baseline; gap: 8px; }
 .fred-name { font-size: 12px; color: var(--text2); white-space: nowrap; }
 .fred-month { font-size: 10px; color: var(--text); margin-left: 5px; }
-.fred-val { font-size: 15px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
+/* 數值顏色由 JS 依相對前值方向給 up/down/flat，此處不設定 color 以免蓋掉 */
+.fred-val { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fred-val.flat { color: var(--text); }
 .fred-prev { font-size: 10px; color: var(--text); white-space: nowrap; }

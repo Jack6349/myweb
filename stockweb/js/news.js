@@ -125,9 +125,14 @@ function renderFredBar() {
     var isDelta = m.name === '非農就業';
     var val = (isDelta ? sign(m.value, m.dp) : m.value.toFixed(m.dp)) + m.unit;
     var pv = (isDelta ? sign(m.prev, m.dp) : m.prev.toFixed(m.dp)) + m.unit;
+    // 相對前值的方向（與市場數據列同一套）：上升▲紅、下降▼綠、持平白且不加箭頭。
+    // 純粹標示數值走向，不含好壞判斷（失業率上升同樣顯示紅）。
+    var d = m.value - m.prev;
+    var cls = d > 0 ? 'up' : (d < 0 ? 'down' : 'flat');
+    var arrow = d > 0 ? '▲' : (d < 0 ? '▼' : '');
     return '<div class="fred-cell"><span class="fred-name">' + m.name +
       '<span class="fred-month">' + m.month + '</span></span>' +
-      '<span class="fred-val">' + val + '</span>' +
+      '<span class="fred-val ' + cls + '">' + arrow + val + '</span>' +
       '<span class="fred-prev">前值 ' + pv + '</span></div>';
   });
   el.innerHTML = '<div class="fred-title">美國總經（FRED，各項資料月份不同）</div>' +
