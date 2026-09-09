@@ -55,6 +55,9 @@ function _swapStartYm() { return _swapYm(_divTwDate().iso) + 1; }  // 下個月
 
 // ── 配息事件序列（不含股數；股數由外層依除息日決定套舊或套新）──
 // 三層來源：①已公告的真實紀錄 ②去年同月＋12 投影 ③依頻率補（新配息檔或投影未覆蓋的月份）
+// 後兩層各自推算落點，可能對同一次配息產生兩個相鄰月份（例：半年配的 00922 曾同時排出
+// 2026/10 與 2026/11，年配息被多算一次）。故第②③層加入最小間隔檢查：與既有事件相隔
+// 不足配息週期一半者視為同一次配息的重複推估，跳過。①層為已公告事實，一律保留。
 function _swapEvents(recs, startYm, n) {
   recs = (recs || []).filter(function (r) { return r.exDate; })
     .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
@@ -64,27 +67,32 @@ function _swapEvents(recs, startYm, n) {
   var payOf = function (r) { return r.payDate || _addMonths(r.exDate, 1); };
   var endYm = startYm + n - 1;
   var map = {};
+  var step = _divInferStep(recs);
+  // 最小間隔取週期一半：半年配(6)→3，季配(3)→1，月配(1)→1（月配相鄰本就是 1，不會誤殺）
+  var minGap = Math.max(1, Math.floor(step / 2));
+  var tooClose = function (ym) {
+    return Object.keys(map).some(function (k) { return Math.abs(ym - (+k)) < minGap; });
+  };
 
   recs.forEach(function (r) {
     var pay = payOf(r); if (!pay) return;
     var ym = _swapYm(pay);
     if (ym < startYm || ym > endYm) return;
-    map[ym] = { ym: ym, exDate: r.exDate, payDate: pay, perShare: r.amount != null ? r.amount : lastAmt };
+    map[ym] = { ym: ym, exDate: r.exDate, payDate: pay, perShare: r.amount != null ? r.amount : lastAmt, src: 'actual' };
   });
   recs.forEach(function (r) {
     var pay = payOf(r); if (!pay) return;
     var pj = _addMonths(pay, 12), ym = _swapYm(pj);
-    if (ym < startYm || ym > endYm || map[ym]) return;
-    map[ym] = { ym: ym, exDate: r.exDate ? _addMonths(r.exDate, 12) : null, payDate: pj, perShare: lastAmt };
+    if (ym < startYm || ym > endYm || map[ym] || tooClose(ym)) return;
+    map[ym] = { ym: ym, exDate: r.exDate ? _addMonths(r.exDate, 12) : null, payDate: pj, perShare: lastAmt, src: 'proj12' };
   });
-  var step = _divInferStep(recs);
   if (step > 0) {
     var ym2 = _swapYm(payOf(recs[recs.length - 1]));
     for (var k = 0; k < 40 && ym2 <= endYm; k++) {
       ym2 += step;
-      if (ym2 < startYm || ym2 > endYm || map[ym2]) continue;
+      if (ym2 < startYm || ym2 > endYm || map[ym2] || tooClose(ym2)) continue;
       var payIso = Math.floor(ym2 / 12) + '-' + ('0' + (ym2 % 12 + 1)).slice(-2) + '-15';
-      map[ym2] = { ym: ym2, exDate: _addMonths(payIso, -1), payDate: payIso, perShare: lastAmt };
+      map[ym2] = { ym: ym2, exDate: _addMonths(payIso, -1), payDate: payIso, perShare: lastAmt, src: 'freq' };
     }
   }
   return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return a.ym - b.ym; });
@@ -561,8 +569,14 @@ function _swapSumPairs(c) {
       '<span class="divest-sp-v"' + (color ? ' style="color:' + color + '"' : '') + '>' + v + '</span></span>';
   };
   var cv = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
-  return sp('年配息（前）', fmtMoney(c.annBefore), 'var(--text2)') +
-    sp('年配息（後）', fmtMoney(c.annAfter), 'var(--accent2)') +
+  // 標示期間：本頁為「下個月起 12 個月」的滾動年化，與股利估算頁的「當年曆年」不同基準，
+  // 兩處數字不會相等（今年才建倉的標的，曆年只計得到剩餘幾次）
+  var span = _swapYmLabel(c.startYm) + '–' + _swapYmLabel(c.startYm + SWAP_N - 1);
+  var lb = '<span title="下個月起 12 個月的滾動年化；與股利估算頁的當年曆年總額基準不同">' +
+    '年配息（前）<span class="swap-span">' + span + '</span></span>';
+  var lb2 = '<span title="下個月起 12 個月的滾動年化">年配息（後）<span class="swap-span">' + span + '</span></span>';
+  return sp(lb, fmtMoney(c.annBefore), 'var(--text2)') +
+    sp(lb2, fmtMoney(c.annAfter), 'var(--accent2)') +
     sp('增減', _swapSigned(diff), cv[colorClass(diff)]) +
     sp('殖利率', (yBefore != null ? yBefore.toFixed(2) + '% → ' + yAfter.toFixed(2) + '%' : '—'), 'var(--text)') +
     sp('今年剩餘增減', _swapSigned(diffYear), cv[colorClass(diffYear)]);

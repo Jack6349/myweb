@@ -698,3 +698,6 @@ td.cost-even::after  { background: var(--text3); }
 .rs-trend th.num, .rs-trend td.num { text-align: right; }
 .rs-dim { color: var(--text3); }
 .rs-trend-note { font-size: 11px; color: #9a8028; line-height: 1.6; margin: 6px 2px 0; }
+
+/* 換股試算：年配息標籤後的期間標示（與股利估算的曆年基準區別） */
+.swap-span { display: inline-block; margin-left: 5px; font-size: 10px; color: var(--text3); font-weight: 400; }
