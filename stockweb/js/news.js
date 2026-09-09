@@ -59,6 +59,81 @@ async function fetchNightFutures() {
   } catch (e) { return null; }
 }
 
+// ── 美國總經數據（FRED 官方 CSV，經 GAS ?urltext= 代理；與加減碼報告的 OAS 同一條管道）──
+// 每項標自己的資料月份：非農／失業率由 BLS 月初發布，CPI 約月中發布，兩者常差一個月，
+// 不可混為一談。FRED 轉載 BLS，通常在官方發布當天或隔天更新，不適合搶即時數字。
+// 月頻資料一天最多變一次 → 每日快取，避免重複消耗 GAS 配額。
+var FRED_LS = 'news_fred_v1';
+var FRED_SERIES = [
+  { id: 'PAYEMS',   name: '非農就業', mode: 'mom',  dp: 1, unit: '萬', scale: 0.1 }, // 千人 → 萬人
+  { id: 'UNRATE',   name: '失業率',   mode: 'level', dp: 1, unit: '%' },
+  { id: 'CPIAUCSL', name: 'CPI 年增', mode: 'yoy',  dp: 2, unit: '%' },
+  { id: 'CPILFESL', name: '核心 CPI', mode: 'yoy',  dp: 2, unit: '%' }
+];
+var _fredSnap = [];   // {name, month, value, prev, dp, unit}
+
+async function _fredSeries(s) {
+  try {
+    var url = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=' + s.id;
+    var r = await fetch(NEWS_GAS_URL + '?urltext=' + encodeURIComponent(url));
+    var text = await r.text();
+    if (text.charAt(0) === '{') return null;          // GAS 端錯誤（配額等）會回 JSON
+    var lines = text.trim().split(/\r?\n/), pts = [];
+    for (var i = 1; i < lines.length; i++) {
+      var p = lines[i].split(','), v = parseFloat(p[1]);
+      if (!isNaN(v)) pts.push({ d: (p[0] || '').trim(), v: v });
+    }
+    var n = pts.length;
+    if (n < 14) return null;                          // yoy 需回看 13 期
+    var cur, prev;
+    if (s.mode === 'mom') {                           // 月變化（非農新增就業）
+      cur = pts[n - 1].v - pts[n - 2].v;
+      prev = pts[n - 2].v - pts[n - 3].v;
+    } else if (s.mode === 'yoy') {                    // 年增率
+      cur = (pts[n - 1].v - pts[n - 13].v) / pts[n - 13].v * 100;
+      prev = (pts[n - 2].v - pts[n - 14].v) / pts[n - 14].v * 100;
+    } else {                                          // 直接取值（失業率）
+      cur = pts[n - 1].v; prev = pts[n - 2].v;
+    }
+    if (s.scale) { cur *= s.scale; prev *= s.scale; }
+    return { name: s.name, month: pts[n - 1].d.slice(0, 7).replace('-', '/'),
+             value: cur, prev: prev, dp: s.dp, unit: s.unit };
+  } catch (e) { return null; }
+}
+
+async function loadFred() {
+  var day = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+  try {
+    var c = JSON.parse(localStorage.getItem(FRED_LS) || 'null');
+    if (c && c.day === day && c.rows && c.rows.length) { _fredSnap = c.rows; renderFredBar(); return; }
+  } catch (e) {}
+  var got = await Promise.all(FRED_SERIES.map(_fredSeries));
+  _fredSnap = got.filter(Boolean);
+  if (_fredSnap.length) {
+    try { localStorage.setItem(FRED_LS, JSON.stringify({ day: day, rows: _fredSnap })); } catch (e) {}
+  }
+  renderFredBar();
+}
+
+function renderFredBar() {
+  var el = document.getElementById('fred-bar');
+  if (!el) return;
+  if (!_fredSnap.length) { el.innerHTML = ''; return; }
+  var sign = function (v, dp) { return (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(dp); };
+  var rows = _fredSnap.map(function (m) {
+    // 非農用帶正負號的增減表示，其餘為水準值；前值一律附上供對照
+    var isDelta = m.name === '非農就業';
+    var val = (isDelta ? sign(m.value, m.dp) : m.value.toFixed(m.dp)) + m.unit;
+    var pv = (isDelta ? sign(m.prev, m.dp) : m.prev.toFixed(m.dp)) + m.unit;
+    return '<div class="fred-cell"><span class="fred-name">' + m.name +
+      '<span class="fred-month">' + m.month + '</span></span>' +
+      '<span class="fred-val">' + val + '</span>' +
+      '<span class="fred-prev">前值 ' + pv + '</span></div>';
+  });
+  el.innerHTML = '<div class="fred-title">美國總經（FRED，各項資料月份不同）</div>' +
+    '<div class="fred-row">' + rows.join('') + '</div>';
+}
+
 async function loadMacro() {
   var results = await Promise.allSettled(MACRO_TICKERS.map(fetchYahooQuote));
   _macroSnap = results.map(function (res, i) {
@@ -108,6 +183,7 @@ async function loadNews() {
   listEl.innerHTML = '<div class="modal-loading">抓取 RSS 中…</div>';
 
   loadMacro(); // 市場數據平行抓取，不阻塞新聞
+  loadFred();  // 美國總經（月頻、每日快取），同樣不阻塞
 
   var results = await Promise.allSettled(NEWS_FEEDS.map(fetchFeed));
   var items = [], errs = [];
@@ -165,6 +241,7 @@ async function buildNewsPrompt() {
 
   // 市場數據快照（若尚未載入則現抓）
   if (!_macroSnap.length) { try { await loadMacro(); } catch (e) {} }
+  if (!_fredSnap.length) { try { await loadFred(); } catch (e) {} }
   // 持股技術面趨勢（若尚未載入則靜默計算）
   var trendTxt = '';
   if (typeof ensureTrend === 'function') {
@@ -182,6 +259,15 @@ async function buildNewsPrompt() {
     macroTxt += '\n- 台指期近月夜盤（' + (_nightFut.time || '') + '）：' + _fmtNum(_nightFut.price, 0) +
       '（' + (_nightFut.changePct >= 0 ? '+' : '') + _nightFut.changePct.toFixed(2) + '%）';
   }
+
+  // 美國總經：月頻資料，各項資料月份不同，明確標註以免 AI 誤判為同期
+  var fredTxt = _fredSnap.map(function (m) {
+    var sg = function (v) { return (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(m.dp) + m.unit; };
+    var isDelta = m.name === '非農就業';
+    return '- ' + m.name + '（資料月份 ' + m.month + '）：' +
+      (isDelta ? sg(m.value) : m.value.toFixed(m.dp) + m.unit) +
+      '，前值 ' + (isDelta ? sg(m.prev) : m.prev.toFixed(m.dp) + m.unit);
+  }).join('\n');
 
   var byQ = {};
   _newsItems.forEach(function (it) {
@@ -223,6 +309,9 @@ async function buildNewsPrompt() {
     '  "reasons": []                // 主要判斷依據，2~4 條，每條一句話\n' +
     '}\n```\n\n' +
     '## (A) 即時市場數據快照\n' + (macroTxt || '（暫無）') + '\n\n' +
+    (fredTxt ? '## (A2) 美國總經數據（月頻，FRED 轉載 BLS）\n' +
+      '※ 各項資料月份不同：非農／失業率由 BLS 月初發布，CPI 約月中發布，常差一個月，請勿當作同期數據比較。\n' +
+      fredTxt + '\n\n' : '') +
     (function () {
       var sec = 'C'.charCodeAt(0);
       var out = '## (B) 我的持股\n' + holdings.join('、') + '\n\n';

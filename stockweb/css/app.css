@@ -701,3 +701,15 @@ td.cost-even::after  { background: var(--text3); }
 
 /* 換股試算：年配息標籤後的期間標示（與股利估算的曆年基準區別） */
 .swap-span { display: inline-block; margin-left: 5px; font-size: 10px; color: var(--text3); font-weight: 400; }
+
+/* 新聞情勢：美國總經（FRED 月頻資料，各項資料月份不同故逐項標月） */
+.fred-bar:empty { display: none; }
+.fred-bar { margin: 8px 0 4px; }
+.fred-title { font-size: 11px; color: var(--text3); margin-bottom: 5px; }
+.fred-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.fred-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 12px; display: flex; align-items: baseline; gap: 8px; }
+.fred-name { font-size: 12px; color: var(--text2); white-space: nowrap; }
+.fred-month { font-size: 10px; color: var(--text3); margin-left: 5px; }
+.fred-val { font-size: 15px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
+.fred-prev { font-size: 10px; color: var(--text3); white-space: nowrap; }
