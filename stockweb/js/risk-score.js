@@ -44,7 +44,9 @@ async function _rsYahoo(sym) {
   var c = _rsCache[sym];
   if (c && Date.now() - c.ts < 180000) return c.data;
   try {
-    var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?interval=1d&range=5d';
+    // range 取 3mo（原為 5d）以便同時算近 5 日／20 日趨勢；chg 定義不變（仍為最後兩個交易日的%變化），
+    // 六項評分沿用 chg，不受影響。
+    var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?interval=1d&range=3mo';
     var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
     var j = await r.json();
     var res = j.chart && j.chart.result && j.chart.result[0];
@@ -52,8 +54,17 @@ async function _rsYahoo(sym) {
     var closes = ((res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close) || [])
       .filter(function (x) { return x != null; });
     if (closes.length < 2) return null;
-    var last = closes[closes.length - 1], prev = closes[closes.length - 2];
-    var data = { value: last, chg: prev ? (last - prev) / prev * 100 : null };
+    var n = closes.length;
+    var last = closes[n - 1], prev = closes[n - 2];
+    // 兩種變化並存：abs＝絕對差（殖利率用，單位為百分點）、pct＝%變化（價格型用）
+    var back = function (k) { return n > k ? closes[n - 1 - k] : null; };
+    var absD = function (k) { var b = back(k); return b == null ? null : last - b; };
+    var pctD = function (k) { var b = back(k); return (b == null || !b) ? null : (last - b) / b * 100; };
+    var data = {
+      value: last, chg: prev ? (last - prev) / prev * 100 : null,
+      abs1: absD(1), abs5: absD(5), abs20: absD(20),
+      pct5: pctD(5), pct20: pctD(20), bars: n
+    };
     _rsCache[sym] = { ts: Date.now(), data: data };
     return data;
   } catch (e) { return null; }
@@ -160,7 +171,7 @@ async function startRiskReport(force) {
       .concat(bCodes.map(_rsBondVol))
   );
   var bn = bCodes.length;
-  var bond = { hyg: bd[0], jnk: bd[1], oas: bd[2], codes: bCodes,
+  var bond = { hyg: bd[0], jnk: bd[1], oas: bd[2], tnx: tnx, codes: bCodes,
     nav: bd.slice(3, 3 + bn), vol: bd.slice(3 + bn, 3 + 2 * bn) };
 
   // 股債同向重挫旗標
@@ -214,6 +225,52 @@ async function startRiskReport(force) {
 }
 
 // 債券型信用風險區塊：每檔逐條紅綠燈直述（美股信用債跌幅／折價／成交量），綜合判定用操作語言
+// 利率與信用的多日趨勢：單日變化容易被雜訊主導，近 5 日／20 日才看得出方向。
+// 只呈現數值與方向，不做自動判定：換股決策屬相對面（見換股試算的「換手品質」），
+// 此處回答的是「非投等債的持有環境近期往哪走」。
+// 殖利率與 OAS 本身即為百分比，變化以百分點（pp）表示；HYG／JNK 為價格，用 % 變化。
+function _rsTrendHtml(bond) {
+  var t = bond.tnx, hyg = bond.hyg, jnk = bond.jnk, oas = bond.oas;
+  if (!t && !hyg && !jnk && !oas) return '';
+  // 對「持有非投等債」有利＝紅、不利＝綠（與全站漲跌配色一致）
+  var cell = function (v, dp, suf, goodIsUp) {
+    if (v == null) return '<td class="num"><span class="rs-dim">—</span></td>';
+    var cls = Math.abs(v) < 1e-9 ? 'flat' : ((v > 0) === !!goodIsUp ? 'up' : 'down');
+    return '<td class="num ' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(dp) + suf + '</td>';
+  };
+  var val = function (v, dp, suf) { return v == null ? '—' : v.toFixed(dp) + suf; };
+
+  var h = '<div class="rs-trend-title">利率與信用趨勢</div>' +
+    '<div class="inv-table-wrap"><table class="inv-table rs-trend"><thead><tr>' +
+    '<th>指標</th><th class="num">最新</th><th class="num">近1日</th><th class="num">近5日</th><th class="num">近20日</th>' +
+    '</tr></thead><tbody>';
+
+  // 殖利率上升 → 債券價格下跌 → 對持有人不利（goodIsUp=false）
+  h += '<tr><td title="美國10年期公債殖利率；上升不利於債券價格">美10年債殖利率</td>' +
+    '<td class="num">' + val(t && t.value, 3, '%') + '</td>' +
+    cell(t && t.abs1, 3, 'pp', false) + cell(t && t.abs5, 3, 'pp', false) + cell(t && t.abs20, 3, 'pp', false) + '</tr>';
+
+  [['HYG', hyg, '美國非投等債 ETF（iShares）'], ['JNK', jnk, '美國非投等債 ETF（SPDR）']].forEach(function (p) {
+    var d = p[1];
+    h += '<tr><td title="' + p[2] + '；下跌代表信用債走弱">' + p[0] + '</td>' +
+      '<td class="num">' + val(d && d.value, 2, '') + '</td>' +
+      cell(d && d.chg, 2, '%', true) + cell(d && d.pct5, 2, '%', true) + cell(d && d.pct20, 2, '%', true) + '</tr>';
+  });
+
+  // OAS 走闊＝市場要求更高風險補償＝信用惡化（goodIsUp=false）；FRED 僅取最後兩點，無多日
+  h += '<tr><td title="ICE BofA 美國非投等債選擇權調整利差（FRED BAMLH0A0HYM2）；走闊代表信用風險升高">' +
+    '信用利差 OAS</td>' +
+    '<td class="num">' + val(oas && oas.value, 2, '%') + '</td>' +
+    cell(oas && oas.chg, 2, 'pp', false) +
+    '<td class="num"><span class="rs-dim">—</span></td><td class="num"><span class="rs-dim">—</span></td></tr>';
+
+  h += '</tbody></table></div>' +
+    '<div class="rs-trend-note">紅＝對持有非投等債有利、綠＝不利。' +
+    'OAS 取自 FRED，約有 1 個交易日延遲' + (oas && oas.date ? '（資料日 ' + oas.date + '）' : '') +
+    '，僅提供單日變化。此表只陳述環境走向，不產生買賣判定。</div>';
+  return h;
+}
+
 function _rsBondBlockHtml(bond, sp) {
   var Y = RS_BOND_TH.discount, Z = RS_BOND_TH.volShrink, X = RS_BOND_TH.drop;
   var hygDrop = bond.hyg && bond.hyg.chg != null ? Math.max(0, -bond.hyg.chg) : null;
@@ -254,6 +311,7 @@ function _rsBondBlockHtml(bond, sp) {
   else if (worst === 0) { vTxt = '🟢 正常，可執行換股／加碼計畫'; vColor = 'var(--down)'; }
   else { vTxt = '⚪ 資料暫缺，無法判定'; vColor = 'var(--text3)'; }
   h += '<div class="rs-bond-verdict" style="border-color:' + vColor + ';color:' + vColor + '">綜合判定：' + vTxt + '</div>';
+  h += _rsTrendHtml(bond);
 
   // 各檔三條件逐條列示
   results.forEach(function (r) {

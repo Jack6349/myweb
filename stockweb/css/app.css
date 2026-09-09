@@ -690,3 +690,11 @@ td.cost-even::after  { background: var(--text3); }
 .swap-qual td:first-child { color: var(--text2); }
 .swap-qual th.num, .swap-qual td.num { text-align: right; }
 .swap-qual-note { font-size: 11px; color: #9a8028; line-height: 1.6; margin: 6px 2px 0; }
+
+/* 加減碼報告：利率與信用趨勢表 */
+.rs-trend-title { font-size: 13px; font-weight: 700; color: var(--accent2); margin: 12px 0 6px; }
+.rs-trend { font-size: 12px; font-variant-numeric: tabular-nums; }
+.rs-trend td:first-child { color: var(--text2); white-space: nowrap; }
+.rs-trend th.num, .rs-trend td.num { text-align: right; }
+.rs-dim { color: var(--text3); }
+.rs-trend-note { font-size: 11px; color: #9a8028; line-height: 1.6; margin: 6px 2px 0; }
