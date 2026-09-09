@@ -1,5 +1,6 @@
 /* travel-expense — UI 邏輯。
- * 資料存於本機 localStorage（見 data.js 的 Store），每次異動後自動存檔；尚未接後端。
+ * 需 Google 登入；資料存於 Firestore 並即時同步（見 data.js 的 Sync），
+ * localStorage 僅作為離線／未登入時的本機快取（見 data.js 的 Store）。
  */
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -38,6 +39,50 @@
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${d.getFullYear()}-${m}-${day}`;
+  }
+
+  /* ================= 身分驗證（Google 登入） =================
+   * 「我」由登入的 Google 帳號 email 對應 MEMBERS 判定（比照 travel-v2）。
+   * 信箱未登錄在成員名單中時仍可登入，但不會被標記為任何成員。
+   */
+  const Auth = {
+    user: null,   // Firebase Auth user，未登入為 null
+
+    async init(onChange) {
+      // firebase-init.js 為 deferred module，可能晚於本檔執行
+      await Sync.waitForFB();
+      if (!window.FB || !window.FB.auth) {
+        // Firebase 載入失敗：顯示登入畫面並說明原因，避免使用者以為 App 壞了
+        $('loginView').hidden = false;
+        showLoginError('Firebase 未能載入，請確認網路連線後重新整理。');
+        return;
+      }
+      window.FB.onAuthStateChanged(window.FB.auth, (user) => {
+        this.user = user;
+        setMe(user ? accountByEmail(user.email) : null);
+        onChange(user);
+      });
+    },
+
+    login() {
+      if (!window.FB) return;
+      const provider = new window.FB.GoogleAuthProvider();
+      window.FB.signInWithPopup(window.FB.auth, provider).catch((e) => {
+        // 使用者自行關閉登入視窗不算錯誤，不必提示
+        if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') return;
+        showLoginError('登入失敗：' + e.code);
+      });
+    },
+
+    logout() {
+      if (!window.FB) return;
+      window.FB.signOut(window.FB.auth);
+    },
+  };
+
+  function showLoginError(msg) {
+    const el = $('loginMsg');
+    if (el) el.textContent = msg;
   }
 
   /* ================= Toast ================= */
@@ -423,11 +468,12 @@
             items,
           });
           Store.save();
+          Sync.putExpense(existing);
           closeSheet();
           toast('已更新費用');
         } else {
-          EXPENSES.push({
-            id: 'e-' + Date.now(),
+          const created = {
+            id: newId('e'),
             tripId: state.currentTripId,
             category: sel.category,
             note: sel.note.trim(),
@@ -439,8 +485,10 @@
             split,
             items,
             fromReceipt: fromScan || undefined,
-          });
+          };
+          EXPENSES.push(created);
           Store.save();
+          Sync.putExpense(created);
           closeSheet();
           toast('已新增費用');
         }
@@ -572,7 +620,8 @@
       start: editing ? editing.start : '',
       end: editing ? editing.end : '',
       currency: editing ? editing.currency : CURRENCIES[0],
-      members: new Set(editing ? editing.members : [ME]),
+      // 新行程預設把「我」加進去；若登入信箱未對應到成員（ME 為 null）則預設不選任何人
+      members: new Set(editing ? editing.members : (ME ? [ME] : [])),
     };
 
     function render() {
@@ -634,7 +683,7 @@
           <div class="settings-row__icon">👤</div>
           <div class="settings-row__body">
             <div class="settings-row__title">${m.alias}${m.account === ME ? '<span class="badge-current">我</span>' : ''}</div>
-            <div class="settings-row__sub">帳號 ${m.account}</div>
+            <div class="settings-row__sub">${m.email ? m.email : '未設定信箱（無法用登入身分對應）'}</div>
           </div>
           <div class="settings-row__actions">
             <button type="button" class="btn btn--mini" data-edit="${m.account}">改名</button>
@@ -646,7 +695,6 @@
     html += `
       <div class="section-title">資料儲存</div>
       <div class="storage-note" id="storageNote"></div>
-      <button type="button" class="btn btn--danger" id="btnResetData" style="width:100%;">重設為初始假資料</button>
     `;
     wrap.innerHTML = html;
     wrap.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => openMemberForm(b.dataset.edit)));
@@ -657,24 +705,9 @@
       renderMembers();
     }));
 
-    $('storageNote').textContent = Store.available()
-      ? '資料存在這台裝置的這個瀏覽器，換裝置或清除瀏覽資料就會不見，也無法與他人同步。'
-      : '⚠️ 這個瀏覽器無法使用本機儲存（無痕模式或空間已滿），本次輸入的資料重新整理後不會保留。';
-
-    // 兩段式確認，避免誤按清光所有資料
-    const resetBtn = $('btnResetData');
-    let armed = false;
-    resetBtn.addEventListener('click', () => {
-      if (!armed) {
-        armed = true;
-        resetBtn.textContent = '確定清除所有資料？再按一次';
-        return;
-      }
-      Store.reset();
-      setCurrentTrip(TRIPS[0].id);
-      toast('已重設為初始假資料');
-      switchView('home');
-    });
+    $('storageNote').textContent = Sync.enabled
+      ? '資料存於雲端（Firestore）並即時同步，登入同一個 Google 帳號的其他裝置會看到相同內容。斷網時仍可記帳，恢復連線後自動送出。'
+      : '⚠️ 目前未連上雲端，資料僅存在這台裝置的瀏覽器，換裝置看不到。';
   }
 
   // account 為 null 表新增成員，否則為改名
@@ -682,9 +715,12 @@
     const editing = MEMBERS.find((m) => m.account === account);
     const sheet = openSheet(`
       <div class="sheet__handle"></div>
-      <div class="sheet__title">${editing ? '修改成員別名' : '新增成員'}</div>
+      <div class="sheet__title">${editing ? '修改成員' : '新增成員'}</div>
       <label class="form-label">別名<input id="mf_alias" value="${editing ? editing.alias : ''}" placeholder="如 妹妹"></label>
-      ${editing ? '' : '<div class="scan-banner">新增後可到「行程設定」把此成員加入指定行程。</div>'}
+      <label class="form-label">Google 信箱（可空）
+        <input id="mf_email" type="email" value="${editing ? (editing.email || '') : ''}" placeholder="用於對應登入身分">
+      </label>
+      <div class="scan-banner">填入此人的 Google 信箱後，他用該帳號登入就會被認成這位成員（畫面上標示為「我」）。${editing ? '' : '新增後可到「行程設定」把此成員加入指定行程。'}</div>
       <div class="btn-row">
         <button type="button" class="btn btn--ghost" id="mf_cancel">取消</button>
         <button type="button" class="btn btn--primary" id="mf_save">儲存</button>
@@ -693,12 +729,22 @@
     sheet.querySelector('#mf_cancel').addEventListener('click', closeSheet);
     sheet.querySelector('#mf_save').addEventListener('click', () => {
       const alias = sheet.querySelector('#mf_alias').value.trim();
+      const email = sheet.querySelector('#mf_email').value.trim();
       if (!alias) { toast('請輸入別名'); return; }
       if (aliasExists(alias, account)) { toast('別名已存在'); return; }
-      if (editing) renameMember(account, alias);
-      else addMember(alias);
+      // 同一個信箱不能對應到兩個成員，否則登入時無法判定是誰
+      const dup = MEMBERS.find((m) => m.account !== account && email && m.email && m.email.toLowerCase() === email.toLowerCase());
+      if (dup) { toast('此信箱已對應成員「' + dup.alias + '」'); return; }
+
+      if (editing) renameMember(account, alias, email);
+      else {
+        const m = addMember(alias);
+        if (email) renameMember(m.account, alias, email);
+      }
+      // 改動信箱可能改變「我」是誰，重新判定一次
+      if (Auth.user) setMe(accountByEmail(Auth.user.email));
       closeSheet();
-      toast(editing ? '已更新別名' : '已新增成員');
+      toast(editing ? '已更新成員' : '已新增成員');
       renderMembers();
     });
   }
@@ -851,6 +897,7 @@
     item.querySelector('.note-check').addEventListener('click', () => {
       n.done = !n.done;
       Store.save();
+      Sync.putNote(n);
       renderNotes();
     });
     item.querySelector('[data-act="edit"]').addEventListener('click', () => openNoteForm(n));
@@ -885,7 +932,7 @@
         date: sheet.querySelector('#n_date').value,
         done: sheet.querySelector('#n_done').checked,
       };
-      if (existing) { Object.assign(existing, data); Store.save(); }
+      if (existing) { Object.assign(existing, data); Store.save(); Sync.putNote(existing); }
       else addNote(state.currentTripId, data);
       closeSheet();
       toast(existing ? '已更新記事' : '已新增記事');
@@ -962,10 +1009,57 @@
     else renderSettle();
   }
 
+  /* ================= 帳號選單 ================= */
+  function openAccountSheet() {
+    const u = Auth.user;
+    const acct = u ? accountByEmail(u.email) : null;
+    const sheet = openSheet(`
+      <div class="sheet__handle"></div>
+      <div class="sheet__title">帳號</div>
+      <div class="account-info">
+        <div class="account-info__row"><span>登入身分</span><b>${u ? u.email : '未登入'}</b></div>
+        <div class="account-info__row"><span>對應成員</span><b>${acct ? aliasOf(acct) : '未登錄於成員名單'}</b></div>
+        <div class="account-info__row"><span>同步狀態</span><b>${Sync.enabled ? '雲端同步中' : '僅本機'}</b></div>
+      </div>
+      ${acct ? '' : '<div class="scan-banner">此信箱尚未登錄在成員名單中，記帳時不會被標記為「我」。請到成員設定把這個信箱填入對應成員。</div>'}
+      <div class="btn-row">
+        <button type="button" class="btn btn--ghost" id="ac_close">關閉</button>
+        <button type="button" class="btn btn--danger" id="ac_logout">登出</button>
+      </div>
+    `);
+    sheet.querySelector('#ac_close').addEventListener('click', closeSheet);
+    sheet.querySelector('#ac_logout').addEventListener('click', () => { closeSheet(); Auth.logout(); });
+  }
+
   /* ================= 初始化 ================= */
   Theme.apply(Theme.get());  // 套用已記住的主題
   syncThemeIcon();
   $('btnTheme').addEventListener('click', () => { Theme.toggle(); syncThemeIcon(); });
+  $('btnAccount').addEventListener('click', openAccountSheet);
+  $('btnLogin').addEventListener('click', () => Auth.login());
+
+  // 未登入時顯示登入畫面並鎖住主畫面；登入後開始雲端同步
+  function applyAuthState(user) {
+    $('loginView').hidden = !!user;
+    if (!user) {
+      Sync.stop();
+      return;
+    }
+    showLoginError('');
+    Sync.start(
+      // 收到雲端更新：目前行程若已被別人刪掉就退回第一個，然後重繪
+      () => {
+        if (!tripById(state.currentTripId) && TRIPS.length) state.currentTripId = TRIPS[0].id;
+        switchView(state.view);
+      },
+      (err) => {
+        if (err.code === 'permission-denied') {
+          toast('雲端權限不足，目前僅在本機記錄');
+        }
+      }
+    );
+  }
 
   switchView('home');
+  Auth.init(applyAuthState);
 })();

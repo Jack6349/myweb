@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>旅行記帳（Prototype）</title>
 <!-- ?v= 為快取版本號：改動 css/js 後一併更新此數字，手機才會抓到新版而非舊快取 -->
-<link rel="stylesheet" href="css/style.css?v=20260909a">
+<link rel="stylesheet" href="css/style.css?v=20260909c">
 </head>
 <body>
 
@@ -15,7 +15,19 @@
     <div class="topbar__sub" id="topbarSub">2026 北海道初夏</div>
   </div>
   <button type="button" class="topbar__icon" id="btnTheme" aria-label="日夜模式切換">☀️</button>
+  <button type="button" class="topbar__icon" id="btnAccount" aria-label="帳號">👤</button>
 </header>
+
+<!-- 登入畫面：未登入時覆蓋整個畫面 -->
+<div class="login" id="loginView" hidden>
+  <div class="login__box">
+    <div class="login__icon">🧾</div>
+    <div class="login__title">旅行記帳</div>
+    <div class="login__desc">請以 Google 帳號登入，資料才能在你的手機與電腦之間同步。</div>
+    <button type="button" class="btn btn--primary login__btn" id="btnLogin">以 Google 帳號登入</button>
+    <div class="login__msg" id="loginMsg"></div>
+  </div>
+</div>
 
 <main id="app"></main>
 
@@ -49,7 +61,8 @@
 <div class="sheet-backdrop" id="sheetBackdrop"></div>
 <div class="modal-root" id="modalRoot"></div>
 
-<script src="js/data.js?v=20260909a"></script>
-<script src="js/app.js?v=20260909a"></script>
+<script type="module" src="js/firebase-init.js?v=20260909c"></script>
+<script src="js/data.js?v=20260909c"></script>
+<script src="js/app.js?v=20260909c"></script>
 </body>
 </html>

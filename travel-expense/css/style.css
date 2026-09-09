@@ -277,6 +277,58 @@ html.light .topbar__icon {
   font-weight: 700;
 }
 
+/* ---------- 登入畫面 ---------- */
+.login {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.login[hidden] { display: none; }
+.login__box {
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+}
+.login__icon { font-size: 48px; margin-bottom: 12px; }
+.login__title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.login__desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin-bottom: 24px;
+}
+.login__btn { width: 100%; }
+.login__msg {
+  font-size: 12px;
+  color: var(--danger);
+  margin-top: 14px;
+  min-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 帳號資訊 ---------- */
+.account-info {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.account-info__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding: 5px 0;
+}
+.account-info__row span { color: var(--text-dim); flex-shrink: 0; }
+.account-info__row b { text-align: right; overflow-wrap: anywhere; }
+
 /* 儲存說明文字（成員設定頁底部） */
 .storage-note {
   font-size: 12px;

@@ -1,18 +1,32 @@
 /* travel-expense — 資料層。
- * 下方陣列為初始假資料；實際執行時若本機已有存檔，會由檔尾的 Store.load() 覆蓋。
- * 資料存於 localStorage（單一裝置、單一瀏覽器），尚未接後端，無法跨裝置或多人同步。
+ * 下方陣列為初始種子資料；實際執行時會由 Firestore 即時同步覆蓋（見 Sync），
+ * 離線或尚未登入時則沿用 localStorage 的本機快取（見 Store）。
  * 欄位命名沿用 travel-v2 的費用模型（category/note/amount/currency/payMethod/payer/split/items），
  * 以利之後銜接正式資料結構；items 另加 qty（數量）供本 App 使用。
  */
 
-// 隨行人員（假資料）。帳號為唯一鍵，alias 為顯示名稱。
+/* 隨行人員。account 為唯一鍵（所有引用都存 account，不存別名），
+ * alias 為顯示名稱，email 用來對應 Google 登入身分（比照 travel-v2）。
+ */
 const MEMBERS = [
-  { account: 'jack',   alias: 'Jack' },
-  { account: 'meimei', alias: '妹妹' },
-  { account: 'ershao', alias: '二少' },
-  { account: 'mi',     alias: '咪' },
+  { account: 'jack',   alias: 'Jack', email: 'jack6349@gmail.com' },
+  { account: 'meimei', alias: '妹妹', email: '' },
+  { account: 'ershao', alias: '二少', email: '' },
+  { account: 'mi',     alias: '咪',   email: '' },
 ];
-const ME = 'jack'; // prototype：固定「我」為 jack
+
+/* 「我」是誰：由登入的 Google 帳號 email 對應到 MEMBERS 決定（見 app.js 的 Auth）。
+ * 未登入時為 null，此時畫面上不會標記任何人為「我」。
+ */
+let ME = null;
+function setMe(account) { ME = account; }
+
+// 依 email 找對應成員帳號，找不到回傳 null（代表此信箱未登錄在成員名單中）
+function accountByEmail(email) {
+  if (!email) return null;
+  const m = MEMBERS.find((x) => x.email && x.email.toLowerCase() === email.toLowerCase());
+  return m ? m.account : null;
+}
 
 function aliasOf(account) {
   const m = MEMBERS.find(x => x.account === account);
@@ -26,18 +40,21 @@ function aliasExists(alias, exceptAccount) {
 
 // 新增成員（帳號自動產生），回傳新成員物件
 function addMember(alias) {
-  const account = 'm-' + Date.now().toString(36);
-  const m = { account, alias };
+  const m = { account: newId('m'), alias, email: '' };
   MEMBERS.push(m);
   Store.save();
+  Sync.putMember(m);
   return m;
 }
 
 // 改別名
-function renameMember(account, alias) {
+function renameMember(account, alias, email) {
   const m = MEMBERS.find((x) => x.account === account);
-  if (m) m.alias = alias;
+  if (!m) return;
+  m.alias = alias;
+  if (email !== undefined) m.email = email;
   Store.save();
+  Sync.putMember(m);
 }
 
 // 成員是否已被費用引用（付款人或分攤對象，含分項）→ 用於刪除保護
@@ -57,6 +74,7 @@ function removeMember(account) {
   const idx = MEMBERS.findIndex((m) => m.account === account);
   if (idx >= 0) MEMBERS.splice(idx, 1);
   Store.save();
+  Sync.delMember(account);
   return { ok: true };
 }
 
@@ -85,18 +103,20 @@ function tripDateLabel(t) {
 
 // 新增行程，回傳新行程物件
 function addTrip(data) {
-  const id = 't-' + Date.now().toString(36);
-  const t = { id, name: data.name, start: data.start, end: data.end, currency: data.currency, members: data.members };
+  const t = { id: newId('t'), name: data.name, start: data.start, end: data.end, currency: data.currency, members: data.members };
   TRIPS.push(t);
   Store.save();
+  Sync.putTrip(t);
   return t;
 }
 
 // 編輯行程
 function updateTrip(id, data) {
   const t = tripById(id);
-  if (t) Object.assign(t, data);
+  if (!t) return;
+  Object.assign(t, data);
   Store.save();
+  Sync.putTrip(t);
 }
 
 // 行程是否已被費用引用 → 用於刪除保護
@@ -111,6 +131,7 @@ function removeTrip(id) {
   const idx = TRIPS.findIndex((t) => t.id === id);
   if (idx >= 0) TRIPS.splice(idx, 1);
   Store.save();
+  Sync.delTrip(id);
   return { ok: true };
 }
 
@@ -286,9 +307,10 @@ let NOTES = [
 ];
 
 function addNote(tripId, data) {
-  const n = { id: 'n-' + Date.now(), tripId, owner: ME, ...data };
+  const n = { id: newId('n'), tripId, owner: ME || '', ...data };
   NOTES.push(n);
   Store.save();
+  Sync.putNote(n);
   return n;
 }
 
@@ -296,15 +318,23 @@ function removeNote(id) {
   const idx = NOTES.findIndex((n) => n.id === id);
   if (idx >= 0) NOTES.splice(idx, 1);
   Store.save();
+  Sync.delNote(id);
 }
 
-/* ---------- 本機儲存（localStorage） ----------
- * 只存在「這台裝置的這個瀏覽器」：換裝置、換瀏覽器、清除瀏覽資料都會不見，
- * 也無法多人互通。跨裝置同步需另接後端，屬下一階段。
+/* ---------- 本機快取（localStorage） ----------
+ * 作為離線／未登入時的暫存。登入後以 Firestore 為準（見 Sync），
+ * 每次收到雲端更新也會回寫此快取，讓下次開啟能立即顯示上次的內容。
  */
 
-// 上方假資料的乾淨副本，供「重設為假資料」還原用（須在任何載入/異動之前取得）
+// 上方種子資料的乾淨副本，供首次初始化雲端與「重設」還原用（須在任何載入/異動之前取得）
 const SEED = JSON.parse(JSON.stringify({ members: MEMBERS, trips: TRIPS, expenses: EXPENSES, notes: NOTES }));
+
+/* 產生唯一 id。加上隨機碼，避免兩台裝置在同一毫秒新增時撞號
+ * （只用 Date.now() 在多人同時記帳的情境下會互相覆蓋）。
+ */
+function newId(prefix) {
+  return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+}
 
 // 就地換掉陣列內容（MEMBERS/TRIPS 為 const，不能重新指派，只能改內容）
 function replaceArray(target, src) {
@@ -364,7 +394,7 @@ const Store = {
     }
   },
 
-  // 清空存檔並把資料還原成一開始的假資料
+  // 清空本機快取並把資料還原成種子資料（不影響雲端）
   reset() {
     try { localStorage.removeItem(this.KEY); } catch (e) {}
     const seed = JSON.parse(JSON.stringify(SEED));
@@ -377,3 +407,134 @@ const Store = {
 };
 
 Store.load();
+
+/* ---------- 雲端同步（Firestore） ----------
+ * 以「每筆資料一份文件」寫入，而非整包覆蓋，這樣兩台裝置同時記帳不會互相蓋掉。
+ * 讀取用 onSnapshot 即時訂閱，任一裝置的異動會立即推送到其他裝置。
+ * 未登入或 Firebase 尚未就緒時 enabled=false，所有寫入呼叫直接略過（僅走本機快取）。
+ */
+const COL = {
+  members: 'TravelExpense_members',
+  trips: 'TravelExpense_trips',
+  expenses: 'TravelExpense_expenses',
+  notes: 'TravelExpense_notes',
+};
+
+const Sync = {
+  enabled: false,
+  unsubs: [],
+  onChange: null,   // 收到雲端更新時通知 app.js 重繪
+  onError: null,    // 權限不足等錯誤時通知 app.js
+  _seeded: false,
+
+  // 等待 firebase-init.js（deferred module）就緒
+  waitForFB(timeoutMs = 5000) {
+    if (window.FB) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(!!window.FB), timeoutMs);
+      window.addEventListener('fb-ready', () => { clearTimeout(timer); resolve(true); }, { once: true });
+    });
+  },
+
+  // 登入成功後由 app.js 呼叫，開始即時訂閱四個 collection
+  async start(onChange, onError) {
+    this.onChange = onChange;
+    this.onError = onError;
+    await this.waitForFB();
+    if (!window.FB) { console.warn('[travel-expense] Firebase 未就緒，僅使用本機資料'); return false; }
+
+    const F = window.FB;
+    this.stop();
+    this.enabled = true;
+
+    const subscribe = (colName, targetArray, afterFirst) => {
+      const unsub = F.onSnapshot(
+        F.collection(F.db, colName),
+        (snap) => {
+          replaceArray(targetArray, snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+          if (afterFirst) afterFirst(snap);
+          Store.save();           // 回寫本機快取，供離線/下次開啟使用
+          if (this.onChange) this.onChange();
+        },
+        (err) => {
+          console.warn('[travel-expense] 同步失敗（' + colName + '）：', err.code);
+          if (this.onError) this.onError(err);
+        }
+      );
+      this.unsubs.push(unsub);
+    };
+
+    // 成員以 account 當文件 id，故讀回時要把 id 映射回 account
+    const unsubMembers = F.onSnapshot(
+      F.collection(F.db, COL.members),
+      (snap) => {
+        replaceArray(MEMBERS, snap.docs.map((d) => ({ account: d.id, ...d.data() })));
+        Store.save();
+        if (this.onChange) this.onChange();
+      },
+      (err) => {
+        console.warn('[travel-expense] 同步失敗（members）：', err.code);
+        if (this.onError) this.onError(err);
+      }
+    );
+    this.unsubs.push(unsubMembers);
+
+    // 首次使用（雲端還沒有任何行程）時，把種子資料寫上去，避免 App 開起來是空的
+    subscribe(COL.trips, TRIPS, (snap) => {
+      if (!this._seeded && snap.empty && !snap.metadata.fromCache) {
+        this._seeded = true;
+        this.seedCloud();
+      }
+    });
+    subscribe(COL.expenses, EXPENSES);
+    subscribe(COL.notes, NOTES);
+    return true;
+  },
+
+  stop() {
+    this.unsubs.forEach((u) => { try { u(); } catch (e) {} });
+    this.unsubs = [];
+    this.enabled = false;
+  },
+
+  // 把種子資料寫進雲端（僅在雲端完全沒有行程時執行一次）
+  seedCloud() {
+    const seed = JSON.parse(JSON.stringify(SEED));
+    seed.members.forEach((m) => this.putMember(m));
+    seed.trips.forEach((t) => this.putTrip(t));
+    seed.expenses.forEach((e) => this.putExpense(e));
+    seed.notes.forEach((n) => this.putNote(n));
+    console.log('[travel-expense] 雲端無資料，已寫入初始種子資料');
+  },
+
+  // 寫入單筆文件；未啟用時直接略過。錯誤只記錄不中斷操作（本機仍會顯示）
+  _put(colName, id, data) {
+    if (!this.enabled || !window.FB) return;
+    const F = window.FB;
+    // Firestore 不接受 undefined（例如簡單模式費用的 items、非收據來源的 fromReceipt），須先剔除
+    const clean = {};
+    Object.keys(data).forEach((k) => { if (data[k] !== undefined) clean[k] = data[k]; });
+    F.setDoc(F.doc(F.db, colName, id), clean)
+      .catch((e) => console.warn('[travel-expense] 寫入失敗（' + colName + '）：', e.code));
+  },
+
+  _del(colName, id) {
+    if (!this.enabled || !window.FB) return;
+    const F = window.FB;
+    F.deleteDoc(F.doc(F.db, colName, id))
+      .catch((e) => console.warn('[travel-expense] 刪除失敗（' + colName + '）：', e.code));
+  },
+
+  // account 當文件 id，故資料本身不重複存 account
+  putMember(m) { const { account, ...rest } = m; this._put(COL.members, account, rest); },
+  delMember(account) { this._del(COL.members, account); },
+
+  putTrip(t) { const { id, ...rest } = t; this._put(COL.trips, id, rest); },
+  delTrip(id) { this._del(COL.trips, id); },
+
+  putExpense(e) { const { id, ...rest } = e; this._put(COL.expenses, id, rest); },
+  delExpense(id) { this._del(COL.expenses, id); },
+
+  putNote(n) { const { id, ...rest } = n; this._put(COL.notes, id, rest); },
+  delNote(id) { this._del(COL.notes, id); },
+};
