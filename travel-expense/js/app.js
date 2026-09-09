@@ -357,6 +357,7 @@
           <button type="button" class="btn btn--mini" id="f_items_add">＋ 新增品項</button>
         </div>
 
+        ${editing ? '<button type="button" class="btn btn--danger" id="f_delete" style="width:100%;margin-top:4px;">刪除此筆費用</button>' : ''}
         <div class="btn-row">
           <button type="button" class="btn btn--ghost" id="f_cancel">取消</button>
           <button type="button" class="btn btn--primary" id="f_save">儲存</button>
@@ -439,6 +440,20 @@
       }
 
       sheet.querySelector('#f_cancel').addEventListener('click', closeSheet);
+
+      if (editing) {
+        // 兩段式刪除：第一次點擊要求再確認，避免誤刪（與記事一致）
+        const delBtn = sheet.querySelector('#f_delete');
+        let armed = false;
+        delBtn.addEventListener('click', () => {
+          if (!armed) { armed = true; delBtn.textContent = '確定刪除？再按一次'; return; }
+          removeExpense(existing.id);
+          closeSheet();
+          toast('已刪除費用');
+          renderExpenseList();
+        });
+      }
+
       sheet.querySelector('#f_save').addEventListener('click', () => {
         if (!sel.category) { toast('請選擇分類'); return; }
         let amount, split, items;

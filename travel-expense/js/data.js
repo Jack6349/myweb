@@ -314,6 +314,14 @@ function addNote(tripId, data) {
   return n;
 }
 
+// 刪除費用
+function removeExpense(id) {
+  const idx = EXPENSES.findIndex((e) => e.id === id);
+  if (idx >= 0) EXPENSES.splice(idx, 1);
+  Store.save();
+  Sync.delExpense(id);
+}
+
 function removeNote(id) {
   const idx = NOTES.findIndex((n) => n.id === id);
   if (idx >= 0) NOTES.splice(idx, 1);
