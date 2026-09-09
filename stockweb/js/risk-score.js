@@ -96,8 +96,11 @@ async function _rsOAS() {
       if (!isNaN(v)) pts.push({ date: (p[0] || '').trim(), val: v });
     }
     if (pts.length < 2) return null;
-    var last = pts[pts.length - 1], prev = pts[pts.length - 2];
-    var data = { value: last.val, chg: last.val - prev.val, date: last.date };
+    var n = pts.length, last = pts[n - 1], prev = pts[n - 2];
+    // 多日變化（百分點）：供一致性檢查與信用債價格的近 20 日走勢對等比較
+    var back = function (k) { return n > k ? pts[n - 1 - k].val : null; };
+    var d = function (k) { var b = back(k); return b == null ? null : last.val - b; };
+    var data = { value: last.val, chg: last.val - prev.val, date: last.date, d5: d(5), d20: d(20) };
     _rsCache['__oas'] = { ts: Date.now(), data: data };
     return data;
   } catch (e) { return null; }

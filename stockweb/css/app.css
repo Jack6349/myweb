@@ -715,3 +715,13 @@ td.cost-even::after  { background: var(--text3); }
 .fred-val { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .fred-val.flat { color: var(--text); }
 .fred-prev { font-size: 10px; color: var(--text); white-space: nowrap; }
+
+/* 新聞情勢：訊號一致性（純方向比對，不含買賣判定） */
+.cs-n { color: var(--accent2); }
+.cs-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 2px; font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,.05); }
+.cs-row:last-of-type { border-bottom: none; }
+.cs-dot { flex: 0 0 auto; }
+.cs-title { flex: 0 0 150px; color: var(--text2); }
+.cs-detail { flex: 1; min-width: 0; color: var(--text); font-variant-numeric: tabular-nums; }
+.cs-note { font-size: 11px; color: #9a8028; line-height: 1.6; margin-top: 6px; }

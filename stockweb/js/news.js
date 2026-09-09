@@ -139,6 +139,108 @@ function renderFredBar() {
     '<div class="fred-row">' + rows.join('') + '</div>';
 }
 
+// ── 訊號一致性檢查 ──
+// 只做「方向比對」：陳述哪兩項數據彼此同向或相反，不推論股債會漲會跌。
+// 為何不給趨勢結論：同一組數據在軟著陸與衰退情境下市場解讀相反，程式無從分辨，
+// 壓成單一紅黃綠燈會把不確定性藏起來，且背離本身才是最有資訊量的部分。
+// 資料全部取自既有來源（FRED 月頻 ＋ _rsYahoo 多日 ＋ OAS），不新增 API。
+var _consist = [];   // {level:'ok'|'diverge'|'na', title, detail}
+
+async function loadConsistency() {
+  if (typeof _rsYahoo !== 'function') return;
+  var got = await Promise.all([
+    _rsYahoo('^TNX'), _rsYahoo('^GSPC'), _rsYahoo('^VIX'),
+    _rsYahoo('HYG'), _rsYahoo('JNK'),
+    (typeof _rsOAS === 'function') ? _rsOAS() : null
+  ]);
+  var tnx = got[0], spx = got[1], vix = got[2], hyg = got[3], jnk = got[4], oas = got[5];
+  var fred = {};
+  _fredSnap.forEach(function (m) { fred[m.name] = m; });
+  var cpi = fred['CPI 年增'], nfp = fred['非農就業'];
+
+  var rows = [];
+  var pp = function (v, dp) { return v == null ? '—' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(dp == null ? 3 : dp); };
+  var pct = function (v) { return v == null ? '—' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%'; };
+
+  // 1. 通膨方向 vs 長天期利率方向
+  if (cpi && tnx && tnx.abs20 != null) {
+    var cpiDown = cpi.value < cpi.prev, yUp = tnx.abs20 > 0;
+    var same = (cpiDown && !yUp) || (!cpiDown && yUp);   // 通膨降配殖利率降＝同向
+    rows.push({
+      level: same ? 'ok' : 'diverge',
+      title: '通膨與長天期利率',
+      detail: 'CPI 年增 ' + cpi.value.toFixed(2) + '%（前值 ' + cpi.prev.toFixed(2) + '%，' + (cpiDown ? '下降' : '上升') + '）' +
+        '　美10年債殖利率近20日 ' + pp(tnx.abs20) + 'pp（' + (yUp ? '上升' : '下降') + '）' +
+        (same ? '' : '　兩者方向相反')
+    });
+  }
+  // 2. 就業與通膨對降息預期的推力方向
+  if (cpi && nfp) {
+    var nfpUp = nfp.value > nfp.prev, cpiDown2 = cpi.value < cpi.prev;
+    var conflict = nfpUp && cpiDown2;    // 就業轉強（延後降息）配通膨降溫（支持降息）
+    rows.push({
+      level: conflict ? 'diverge' : 'ok',
+      title: '就業與通膨',
+      detail: '非農 ' + (nfp.value > 0 ? '+' : '') + nfp.value.toFixed(1) + '萬（前值 ' +
+        (nfp.prev > 0 ? '+' : '') + nfp.prev.toFixed(1) + '萬，' + (nfpUp ? '回升' : '走弱') + '）' +
+        '　CPI 年增 ' + (cpiDown2 ? '下降' : '上升') +
+        (conflict ? '　兩者對降息時點的指向相反' : '')
+    });
+  }
+  // 3. 股市與波動率（常態為反向；同向較少見）
+  if (spx && vix && spx.pct20 != null && vix.pct20 != null) {
+    var sUp = spx.pct20 > 0, vUp = vix.pct20 > 0;
+    rows.push({
+      level: (sUp !== vUp) ? 'ok' : 'diverge',
+      title: '股市與波動率',
+      detail: 'S&P 500 近20日 ' + pct(spx.pct20) + '　VIX 近20日 ' + pct(vix.pct20) +
+        ((sUp === vUp) ? '　兩者同向（常態為反向）' : '')
+    });
+  }
+  // 4. 信用債價格 vs 信用利差：價格走弱但利差未擴大，代表壓力來自利率而非信用
+  var bondPx = (hyg && hyg.pct20 != null) ? hyg.pct20 : (jnk && jnk.pct20 != null ? jnk.pct20 : null);
+  if (bondPx != null && oas && oas.d20 != null) {
+    var pxDown = bondPx < 0, oasWide = oas.d20 > 0;
+    var mismatch = pxDown && !oasWide;
+    rows.push({
+      level: mismatch ? 'diverge' : 'ok',
+      title: '非投等債價格與信用利差',
+      detail: 'HYG 近20日 ' + pct(hyg && hyg.pct20) + '／JNK ' + pct(jnk && jnk.pct20) +
+        '　OAS ' + oas.value.toFixed(2) + '%，近20日 ' + pp(oas.d20, 2) + 'pp' +
+        (mismatch ? '　價格下跌但利差未擴大' : '')
+    });
+  }
+  // 5. 股市與信用債（風險偏好的兩個面向，常態同向）
+  if (spx && spx.pct20 != null && hyg && hyg.pct20 != null) {
+    var same5 = (spx.pct20 > 0) === (hyg.pct20 > 0);
+    rows.push({
+      level: same5 ? 'ok' : 'diverge',
+      title: '股市與信用債',
+      detail: 'S&P 500 近20日 ' + pct(spx.pct20) + '　HYG 近20日 ' + pct(hyg.pct20) +
+        (same5 ? '' : '　兩者方向相反')
+    });
+  }
+  _consist = rows;
+  renderConsistency();
+}
+
+function renderConsistency() {
+  var el = document.getElementById('consist-bar');
+  if (!el) return;
+  if (!_consist.length) { el.innerHTML = ''; return; }
+  var n = _consist.filter(function (r) { return r.level === 'diverge'; }).length;
+  var h = '<div class="fred-title">訊號一致性　' +
+    (n ? '<b class="cs-n">' + n + ' 項方向不一致</b>' : '各項方向一致') + '</div>';
+  _consist.forEach(function (r) {
+    h += '<div class="cs-row"><span class="cs-dot">' + (r.level === 'diverge' ? '🔶' : '🟢') + '</span>' +
+      '<span class="cs-title">' + r.title + '</span>' +
+      '<span class="cs-detail">' + r.detail + '</span></div>';
+  });
+  h += '<div class="cs-note">僅比對各項數據的方向是否一致，不推論股債後續走勢。' +
+    '方向不一致代表訊號互相牴觸，通常是需要進一步查證的地方，本身不是買賣訊號。</div>';
+  el.innerHTML = h;
+}
+
 async function loadMacro() {
   var results = await Promise.allSettled(MACRO_TICKERS.map(fetchYahooQuote));
   _macroSnap = results.map(function (res, i) {
@@ -188,7 +290,7 @@ async function loadNews() {
   listEl.innerHTML = '<div class="modal-loading">抓取 RSS 中…</div>';
 
   loadMacro(); // 市場數據平行抓取，不阻塞新聞
-  loadFred();  // 美國總經（月頻、每日快取），同樣不阻塞
+  loadFred().then(loadConsistency);  // 總經（每日快取）→ 完成後做訊號一致性比對，皆不阻塞新聞
 
   var results = await Promise.allSettled(NEWS_FEEDS.map(fetchFeed));
   var items = [], errs = [];
@@ -247,6 +349,7 @@ async function buildNewsPrompt() {
   // 市場數據快照（若尚未載入則現抓）
   if (!_macroSnap.length) { try { await loadMacro(); } catch (e) {} }
   if (!_fredSnap.length) { try { await loadFred(); } catch (e) {} }
+  if (!_consist.length) { try { await loadConsistency(); } catch (e) {} }
   // 持股技術面趨勢（若尚未載入則靜默計算）
   var trendTxt = '';
   if (typeof ensureTrend === 'function') {
@@ -272,6 +375,11 @@ async function buildNewsPrompt() {
     return '- ' + m.name + '（資料月份 ' + m.month + '）：' +
       (isDelta ? sg(m.value) : m.value.toFixed(m.dp) + m.unit) +
       '，前值 ' + (isDelta ? sg(m.prev) : m.prev.toFixed(m.dp) + m.unit);
+  }).join('\n');
+
+  // 一致性檢查：逐條標明「方向一致／不一致」，讓 AI 看得到推理素材而非結論
+  var consistTxt = _consist.map(function (r) {
+    return '- [' + (r.level === 'diverge' ? '方向不一致' : '方向一致') + '] ' + r.title + '：' + r.detail;
   }).join('\n');
 
   var byQ = {};
@@ -314,6 +422,9 @@ async function buildNewsPrompt() {
     '  "reasons": []                // 主要判斷依據，2~4 條，每條一句話\n' +
     '}\n```\n\n' +
     '## (A) 即時市場數據快照\n' + (macroTxt || '（暫無）') + '\n\n' +
+    (consistTxt ? '## (A3) 訊號一致性（各項數據的方向比對）\n' +
+      '※ 這是機械式方向比對，非趨勢預測。標示「方向不一致」處代表訊號互相牴觸，請在分析中說明可能原因，不要直接當作買賣訊號。\n' +
+      consistTxt + '\n\n' : '') +
     (fredTxt ? '## (A2) 美國總經數據（月頻，FRED 轉載 BLS）\n' +
       '※ 各項資料月份不同：非農／失業率由 BLS 月初發布，CPI 約月中發布，常差一個月，請勿當作同期數據比較。\n' +
       fredTxt + '\n\n' : '') +
