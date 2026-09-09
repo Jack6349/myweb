@@ -710,6 +710,6 @@ td.cost-even::after  { background: var(--text3); }
 .fred-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
   padding: 6px 12px; display: flex; align-items: baseline; gap: 8px; }
 .fred-name { font-size: 12px; color: var(--text2); white-space: nowrap; }
-.fred-month { font-size: 10px; color: var(--text3); margin-left: 5px; }
+.fred-month { font-size: 10px; color: var(--text); margin-left: 5px; }
 .fred-val { font-size: 15px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
-.fred-prev { font-size: 10px; color: var(--text3); white-space: nowrap; }
+.fred-prev { font-size: 10px; color: var(--text); white-space: nowrap; }
