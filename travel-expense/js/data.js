@@ -1,5 +1,6 @@
-/* travel-expense — Prototype 假資料層。
- * 純畫面驗證用，不接後端、不持久化，重新整理頁面即重置。
+/* travel-expense — 資料層。
+ * 下方陣列為初始假資料；實際執行時若本機已有存檔，會由檔尾的 Store.load() 覆蓋。
+ * 資料存於 localStorage（單一裝置、單一瀏覽器），尚未接後端，無法跨裝置或多人同步。
  * 欄位命名沿用 travel-v2 的費用模型（category/note/amount/currency/payMethod/payer/split/items），
  * 以利之後銜接正式資料結構；items 另加 qty（數量）供本 App 使用。
  */
@@ -28,6 +29,7 @@ function addMember(alias) {
   const account = 'm-' + Date.now().toString(36);
   const m = { account, alias };
   MEMBERS.push(m);
+  Store.save();
   return m;
 }
 
@@ -35,6 +37,7 @@ function addMember(alias) {
 function renameMember(account, alias) {
   const m = MEMBERS.find((x) => x.account === account);
   if (m) m.alias = alias;
+  Store.save();
 }
 
 // 成員是否已被費用引用（付款人或分攤對象，含分項）→ 用於刪除保護
@@ -53,6 +56,7 @@ function removeMember(account) {
   if (memberInUse(account)) return { ok: false, reason: '此成員已有費用引用，無法刪除' };
   const idx = MEMBERS.findIndex((m) => m.account === account);
   if (idx >= 0) MEMBERS.splice(idx, 1);
+  Store.save();
   return { ok: true };
 }
 
@@ -84,6 +88,7 @@ function addTrip(data) {
   const id = 't-' + Date.now().toString(36);
   const t = { id, name: data.name, start: data.start, end: data.end, currency: data.currency, members: data.members };
   TRIPS.push(t);
+  Store.save();
   return t;
 }
 
@@ -91,6 +96,7 @@ function addTrip(data) {
 function updateTrip(id, data) {
   const t = tripById(id);
   if (t) Object.assign(t, data);
+  Store.save();
 }
 
 // 行程是否已被費用引用 → 用於刪除保護
@@ -104,6 +110,7 @@ function removeTrip(id) {
   if (tripInUse(id)) return { ok: false, reason: '此行程已有費用紀錄，無法刪除' };
   const idx = TRIPS.findIndex((t) => t.id === id);
   if (idx >= 0) TRIPS.splice(idx, 1);
+  Store.save();
   return { ok: true };
 }
 
@@ -281,10 +288,92 @@ let NOTES = [
 function addNote(tripId, data) {
   const n = { id: 'n-' + Date.now(), tripId, owner: ME, ...data };
   NOTES.push(n);
+  Store.save();
   return n;
 }
 
 function removeNote(id) {
   const idx = NOTES.findIndex((n) => n.id === id);
   if (idx >= 0) NOTES.splice(idx, 1);
+  Store.save();
 }
+
+/* ---------- 本機儲存（localStorage） ----------
+ * 只存在「這台裝置的這個瀏覽器」：換裝置、換瀏覽器、清除瀏覽資料都會不見，
+ * 也無法多人互通。跨裝置同步需另接後端，屬下一階段。
+ */
+
+// 上方假資料的乾淨副本，供「重設為假資料」還原用（須在任何載入/異動之前取得）
+const SEED = JSON.parse(JSON.stringify({ members: MEMBERS, trips: TRIPS, expenses: EXPENSES, notes: NOTES }));
+
+// 就地換掉陣列內容（MEMBERS/TRIPS 為 const，不能重新指派，只能改內容）
+function replaceArray(target, src) {
+  target.length = 0;
+  if (Array.isArray(src)) src.forEach((x) => target.push(x));
+}
+
+const Store = {
+  KEY: 'tex-data',
+  VERSION: 1,
+  prefs: { currentTripId: null }, // 目前行程等偏好，一併記住
+
+  save() {
+    try {
+      localStorage.setItem(this.KEY, JSON.stringify({
+        version: this.VERSION,
+        members: MEMBERS,
+        trips: TRIPS,
+        expenses: EXPENSES,
+        notes: NOTES,
+        prefs: this.prefs,
+      }));
+    } catch (e) {
+      // 無痕模式或空間已滿：略過存檔，不讓 App 掛掉
+      console.warn('[travel-expense] 存檔失敗，本次變更不會保留：', e.message);
+    }
+  },
+
+  // 回傳是否成功載入既有存檔；失敗一律沿用假資料
+  load() {
+    let raw;
+    try { raw = localStorage.getItem(this.KEY); } catch (e) { return false; }
+    if (!raw) return false;
+    let data;
+    try { data = JSON.parse(raw); } catch (e) { return false; }
+    // 版本不符（資料結構已改）或行程為空，都退回假資料，避免載入壞掉的舊格式
+    if (!data || data.version !== this.VERSION) return false;
+    if (!Array.isArray(data.trips) || !data.trips.length) return false;
+
+    replaceArray(MEMBERS, data.members);
+    replaceArray(TRIPS, data.trips);
+    replaceArray(EXPENSES, data.expenses);
+    replaceArray(NOTES, data.notes);
+    if (data.prefs && typeof data.prefs === 'object') this.prefs = data.prefs;
+    return true;
+  },
+
+  // 這個瀏覽器能不能用 localStorage（無痕模式、空間已滿時為 false）
+  available() {
+    try {
+      const probe = this.KEY + '-probe';
+      localStorage.setItem(probe, '1');
+      localStorage.removeItem(probe);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  // 清空存檔並把資料還原成一開始的假資料
+  reset() {
+    try { localStorage.removeItem(this.KEY); } catch (e) {}
+    const seed = JSON.parse(JSON.stringify(SEED));
+    replaceArray(MEMBERS, seed.members);
+    replaceArray(TRIPS, seed.trips);
+    replaceArray(EXPENSES, seed.expenses);
+    replaceArray(NOTES, seed.notes);
+    this.prefs = { currentTripId: null };
+  },
+};
+
+Store.load();

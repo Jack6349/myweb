@@ -277,6 +277,14 @@ html.light .topbar__icon {
   font-weight: 700;
 }
 
+/* 儲存說明文字（成員設定頁底部） */
+.storage-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0 2px 10px;
+}
+
 .empty-hint {
   text-align: center;
   color: var(--text-dim);

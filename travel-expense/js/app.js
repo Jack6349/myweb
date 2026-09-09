@@ -1,12 +1,13 @@
-/* travel-expense — Prototype UI 邏輯。
- * 純畫面驗證：不寫真後端、不做持久化，所有狀態存在記憶體（EXPENSES/TRIPS/MEMBERS 見 data.js）。
+/* travel-expense — UI 邏輯。
+ * 資料存於本機 localStorage（見 data.js 的 Store），每次異動後自動存檔；尚未接後端。
  */
 (() => {
   const $ = (id) => document.getElementById(id);
 
   const state = {
     view: 'home', // 'home' | 'list' | 'settle' | 'notes' | 'trips' | 'members'
-    currentTripId: TRIPS[0].id, // 目前作用中的行程，費用/結算/記事皆以此為篩選依據
+    // 目前作用中的行程，費用/結算/記事皆以此為篩選依據；優先沿用上次選擇（存檔中的行程若已不存在則退回第一個）
+    currentTripId: (Store.prefs.currentTripId && tripById(Store.prefs.currentTripId)) ? Store.prefs.currentTripId : TRIPS[0].id,
     expenseGroupBy: 'date', // 費用列表分組方式：'date' | 'category' | 'payMethod'
     noteMode: 'date',       // 記事分組方式：'date' | 'category'
   };
@@ -421,6 +422,7 @@
             split,
             items,
           });
+          Store.save();
           closeSheet();
           toast('已更新費用');
         } else {
@@ -438,6 +440,7 @@
             items,
             fromReceipt: fromScan || undefined,
           });
+          Store.save();
           closeSheet();
           toast('已新增費用');
         }
@@ -514,6 +517,8 @@
   // 切換目前行程，並同步頂欄顯示（頂欄由 switchView 設定，這裡直接更新避免顯示落後）
   function setCurrentTrip(tripId) {
     state.currentTripId = tripId;
+    Store.prefs.currentTripId = tripId;
+    Store.save();
     const t = tripById(tripId);
     $('topbarSub').textContent = t ? t.name : '';
   }
@@ -638,6 +643,11 @@
         </div>
       `;
     });
+    html += `
+      <div class="section-title">資料儲存</div>
+      <div class="storage-note" id="storageNote"></div>
+      <button type="button" class="btn btn--danger" id="btnResetData" style="width:100%;">重設為初始假資料</button>
+    `;
     wrap.innerHTML = html;
     wrap.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => openMemberForm(b.dataset.edit)));
     wrap.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
@@ -646,6 +656,25 @@
       toast('已刪除成員');
       renderMembers();
     }));
+
+    $('storageNote').textContent = Store.available()
+      ? '資料存在這台裝置的這個瀏覽器，換裝置或清除瀏覽資料就會不見，也無法與他人同步。'
+      : '⚠️ 這個瀏覽器無法使用本機儲存（無痕模式或空間已滿），本次輸入的資料重新整理後不會保留。';
+
+    // 兩段式確認，避免誤按清光所有資料
+    const resetBtn = $('btnResetData');
+    let armed = false;
+    resetBtn.addEventListener('click', () => {
+      if (!armed) {
+        armed = true;
+        resetBtn.textContent = '確定清除所有資料？再按一次';
+        return;
+      }
+      Store.reset();
+      setCurrentTrip(TRIPS[0].id);
+      toast('已重設為初始假資料');
+      switchView('home');
+    });
   }
 
   // account 為 null 表新增成員，否則為改名
@@ -821,6 +850,7 @@
     `;
     item.querySelector('.note-check').addEventListener('click', () => {
       n.done = !n.done;
+      Store.save();
       renderNotes();
     });
     item.querySelector('[data-act="edit"]').addEventListener('click', () => openNoteForm(n));
@@ -855,7 +885,7 @@
         date: sheet.querySelector('#n_date').value,
         done: sheet.querySelector('#n_done').checked,
       };
-      if (existing) Object.assign(existing, data);
+      if (existing) { Object.assign(existing, data); Store.save(); }
       else addNote(state.currentTripId, data);
       closeSheet();
       toast(existing ? '已更新記事' : '已新增記事');
