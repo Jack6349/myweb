@@ -317,15 +317,23 @@ async function _chartLoadBidAsk() {
   var area = document.getElementById('chart-area');
   var code = _chartCode;
   _bidLast = null;
-  area.innerHTML = '<div id="bid-wrap">' + _bidAskHtml(null, code) + '</div>';
+  _ticks = [];
+  area.innerHTML = '<div id="bid-wrap">' + _bidAskHtml(null, code) + '</div>' +
+    '<div id="tick-wrap">' + _tickHtml() + '</div>';
   try {
     var ct = _contracts[code] || {};
+    // 同時訂閱 BidAsk（掛單）與 Tick（成交）：五檔看掛單、逐筆看成交，兩者一起才完整
     await fetch(API + '/api/v1/stream/subscribe', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ security_type: 'STK', exchange: ct.exchange || 'TSE', code: code, quote_type: 'BidAsk' })
     });
     _bidSubCode = code;
-  } catch (e) { console.warn('[bidask subscribe]', e); }
+    await fetch(API + '/api/v1/stream/subscribe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ security_type: 'STK', exchange: ct.exchange || 'TSE', code: code, quote_type: 'Tick' })
+    });
+    _tickSubCode = code;
+  } catch (e) { console.warn('[bidask/tick subscribe]', e); }
   if (_bidEs) { _bidEs.close(); _bidEs = null; }
   _bidEs = new EventSource(API + '/api/v1/stream/data/bidask_stk');
   _bidEs.addEventListener('bidask_stk', function (ev) {
@@ -337,9 +345,120 @@ async function _chartLoadBidAsk() {
       if (wrap) wrap.innerHTML = _bidAskHtml(b, b.code);
     } catch (e) {}
   });
+  // 先用歷史逐筆填滿（盤後也看得到內容），再由 SSE 即時往上疊新成交
+  _chartLoadTickHistory(code);
+  _chartStartTickStream();
+}
+
+// ── 逐筆成交 ──
+// A：進頁時以 ticks API 取當日逐筆，只留最後 TICK_N 筆（盤後仍有內容可看）
+// B：訂閱 Tick → SSE tick_stk，新成交即時插到最上方
+// 兩者並用的原因：純即時在盤後是空的、純歷史則不會跳動
+var TICK_N = 20;
+var _tickEs = null, _tickSubCode = null, _ticks = [];
+var _tickHistLoading = false;
+
+async function _chartLoadTickHistory(code) {
+  _tickHistLoading = true;
+  _tickRender();
+  try {
+    var ct = _contracts[code] || {};
+    var day = (typeof _divTwDate === 'function') ? _divTwDate().iso
+      : new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+    var r = await fetch(API + '/api/v1/data/ticks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contract: { security_type: 'STK', exchange: ct.exchange || 'TSE', code: code }, date: day })
+    });
+    if (!r.ok) throw new Error('ticks HTTP ' + r.status);
+    var j = await r.json();
+    var dt = j.datetime || [];
+    var n = dt.length;
+    if (code !== _chartCode) return;                    // 期間已切換標的 → 丟棄
+    var out = [];
+    for (var i = Math.max(0, n - TICK_N); i < n; i++) {
+      out.push({
+        t: String(dt[i]).slice(11, 19),
+        price: (j.close || [])[i] != null ? Number((j.close || [])[i]) : null,
+        vol: (j.volume || [])[i],
+        type: (j.tick_type || [])[i],
+        // 13:30:00＝收盤集合競價、14:30:00＝盤後定價，量常是全日最大，標記避免誤讀
+        mark: String(dt[i]).indexOf('T13:30:00') >= 0 ? '收盤'
+          : (String(dt[i]).indexOf('T14:30:00') >= 0 ? '盤後' : '')
+      });
+    }
+    out.reverse();                                      // 最新在最上（與券商 App 一致）
+    _ticks = out;
+  } catch (e) {
+    console.warn('[ticks history]', e);
+  } finally {
+    _tickHistLoading = false;
+    if (code === _chartCode) _tickRender();
+  }
+}
+
+function _chartStartTickStream() {
+  if (_tickEs) { _tickEs.close(); _tickEs = null; }
+  _tickEs = new EventSource(API + '/api/v1/stream/data/tick_stk');
+  _tickEs.addEventListener('tick_stk', function (ev) {
+    try {
+      var d = JSON.parse(ev.data);
+      if (d.code !== _chartCode || d.simtrade) return;
+      // 即時推送的欄位格式與歷史 API 不同：time 是 "09:05:23.256835"（無日期、無 T），
+      // 且 close/價格為「字串」→ 需自行取 HH:MM:SS 並轉數字，否則時間切錯、toFixed 會噴錯
+      var tv = String(d.time || '');
+      var hhmmss = /^\d{2}:\d{2}:\d{2}/.test(tv) ? tv.slice(0, 8) : String(d.datetime || '').slice(11, 19);
+      _ticks.unshift({
+        t: hhmmss,
+        price: (d.close != null && d.close !== '') ? Number(d.close) : null,
+        vol: d.volume, type: d.tick_type,
+        mark: d.intraday_odd ? '零股' : '', live: true
+      });
+      if (_ticks.length > TICK_N) _ticks.length = TICK_N;
+      _tickRender();
+    } catch (e) {}
+  });
+}
+
+function _chartStopTickStream() {
+  if (_tickEs) { _tickEs.close(); _tickEs = null; }
+  if (_tickSubCode) {
+    var ct = _contracts[_tickSubCode] || {};
+    fetch(API + '/api/v1/stream/unsubscribe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ security_type: 'STK', exchange: ct.exchange || 'TSE', code: _tickSubCode, quote_type: 'Tick' })
+    }).catch(function () {});
+    _tickSubCode = null;
+  }
+}
+
+function _tickRender() {
+  var w = document.getElementById('tick-wrap');
+  if (w) w.innerHTML = _tickHtml();
+}
+
+// tick_type：1＝外盤（買方成交，紅）、2＝內盤（賣方成交，綠）、0/其他＝無法判定
+function _tickHtml() {
+  var h = '<div class="tick-title">逐筆成交 <span class="tick-dim">最近 ' + TICK_N +
+    ' 筆　紅＝外盤（買方主動）、綠＝內盤（賣方主動）</span></div>';
+  if (_tickHistLoading && !_ticks.length) return h + '<div class="modal-loading">載入逐筆成交…</div>';
+  if (!_ticks.length) return h + '<div class="modal-loading">今日尚無成交紀錄</div>';
+  h += '<table class="tick-table"><thead><tr><th>時間</th><th class="num">成交價</th>' +
+    '<th class="num">單量</th><th>內外盤</th></tr></thead><tbody>';
+  _ticks.forEach(function (k) {
+    var cls = k.type === 1 ? 'up' : (k.type === 2 ? 'down' : 'flat');
+    var side = k.type === 1 ? '外盤' : (k.type === 2 ? '內盤' : '—');
+    h += '<tr' + (k.live ? ' class="tick-new"' : '') + '>' +
+      '<td class="tick-t">' + (k.t || '—') + '</td>' +
+      '<td class="num ' + cls + '">' + (k.price != null ? k.price.toFixed(2) : '—') + '</td>' +
+      '<td class="num">' + (k.vol != null ? k.vol.toLocaleString('zh-TW') : '—') + '</td>' +
+      '<td class="' + cls + '">' + side + (k.mark ? ' <span class="tick-mark">' + k.mark + '</span>' : '') + '</td>' +
+    '</tr>';
+  });
+  return h + '</tbody></table>';
 }
 
 function _chartStopBidAsk() {
+  _chartStopTickStream();      // 逐筆與五檔同頁籤，一起退訂才不會佔著行情額度
   if (_bidEs) { _bidEs.close(); _bidEs = null; }
   if (_bidSubCode) {
     var ct = _contracts[_bidSubCode] || {};

@@ -735,3 +735,16 @@ td.cost-even::after  { background: var(--text3); }
 .macro-fx .macro-fx-pair { display: inline-flex; align-items: baseline; gap: 5px; margin-left: auto; }
 .macro-fx .fx-lb { font-size: 10px; color: var(--text3); }
 .macro-fx .fx-v { font-size: 14px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
+
+/* 線圖五檔頁籤：逐筆成交（最近 N 筆，最新在上） */
+.tick-title { font-size: 13px; font-weight: 700; color: var(--accent2); margin: 14px 0 6px; }
+.tick-dim { font-size: 11px; color: var(--text3); font-weight: 400; }
+.tick-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.tick-table th, .tick-table td { padding: 4px 10px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.tick-table thead th { background: var(--bg3); color: var(--text2); font-weight: 600; }
+.tick-table th.num, .tick-table td.num { text-align: right; }
+.tick-t { color: var(--text2); }
+.tick-mark { font-size: 10px; color: var(--accent2); border: 1px solid rgba(240,204,122,.4); border-radius: 4px; padding: 0 4px; }
+/* 新進來的即時成交淡入一次，讓跳動看得出來 */
+.tick-new { animation: tickIn .5s; }
+@keyframes tickIn { 0% { background: rgba(240,204,122,.18); } 100% { background: transparent; } }
