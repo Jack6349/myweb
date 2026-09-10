@@ -357,7 +357,7 @@ async function _chartLoadBidAsk() {
 // A：進頁時以 ticks API 取當日逐筆，只留最後 TICK_N 筆（盤後仍有內容可看）
 // B：訂閱 Tick → SSE tick_stk，新成交即時插到最上方
 // 兩者並用的原因：純即時在盤後是空的、純歷史則不會跳動
-var TICK_N = 20;
+var TICK_N = 10;
 var _tickEs = null, _tickSubCode = null, _ticks = [];
 var _tickHistLoading = false;
 
