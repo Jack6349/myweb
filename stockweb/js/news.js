@@ -28,20 +28,36 @@ var _newsItems = []; // {source, title, link, time(Date)}
 var _macroSnap = []; // {name, price, changePct, fmt}
 var _nightFut = null; // 台指夜盤 {price, changePct, time}
 
-// 抓單一 Yahoo 指數/匯率：以最近兩個日收盤算日變動，避開 chartPreviousClose 基準陷阱
+// 抓單一 Yahoo 指數/匯率：取最新報價，並配對「正確的前一交易日收盤」當變化基準。
+// 兩個基準陷阱都要避開：
+//   ① chartPreviousClose 是區間起點（range=5d 時為 5 天前），拿它算會虛增漲跌幅。
+//   ② 最新價（regularMarketPrice）與日K序列可能不同步：盤前時最新價已跨到新的一天，
+//      但當日 bar 尚未產生，若固定取 closes[n-2] 當基準就會錯抓到「前前一日」。
+// 故以報價時間與最後一根日K的日期比對，決定基準該取哪一根。
 async function fetchYahooQuote(t) {
   var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(t.sym) + '?interval=1d&range=5d';
   var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
   var j = await r.json();
   var res = j.chart && j.chart.result && j.chart.result[0];
   if (!res) throw new Error(t.name + ' no data');
-  var closes = ((res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close) || [])
-    .filter(function (x) { return x != null; });
-  var price = (res.meta && res.meta.regularMarketPrice != null) ? res.meta.regularMarketPrice
-    : (closes.length ? closes[closes.length - 1] : null);
-  var prev = closes.length >= 2 ? closes[closes.length - 2] : null;
+  var m = res.meta || {};
+  var ts = res.timestamp || [];
+  var rawCloses = (res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close) || [];
+  // 保留與 timestamp 的對應關係，才能比對日期
+  var bars = [];
+  for (var i = 0; i < rawCloses.length; i++) {
+    if (rawCloses[i] != null && ts[i] != null) bars.push({ t: ts[i], c: rawCloses[i] });
+  }
+  if (!bars.length) throw new Error(t.name + ' no bars');
+  var n = bars.length;
+  var price = (m.regularMarketPrice != null) ? m.regularMarketPrice : bars[n - 1].c;
+  var asOf = (m.regularMarketTime != null) ? m.regularMarketTime * 1000 : bars[n - 1].t * 1000;
+  var day = function (ms) { return new Date(ms).toISOString().slice(0, 10); };
+  var prev;
+  if (n >= 2 && day(asOf) === day(bars[n - 1].t * 1000)) prev = bars[n - 2].c;  // 最新價仍屬最後一根日K當天
+  else prev = bars[n - 1].c;                                                     // 最新價已跨日（盤前）
   var pct = (price != null && prev) ? (price - prev) / prev * 100 : null;
-  return { name: t.name, price: price, changePct: pct, fmt: t.fmt };
+  return { name: t.name, price: price, changePct: pct, fmt: t.fmt, asOf: asOf };
 }
 
 // 台指夜盤（近月期貨快照，含夜盤最新價）— 經本機 Shioaji
@@ -258,11 +274,29 @@ function _chgTxt(pct) {
 }
 function _chgCls(pct) { return pct == null ? 'flat' : (pct > 0 ? 'up' : (pct < 0 ? 'down' : 'flat')); }
 
+// 報價時間（台北）與距今多久：美股收盤後這些數字會停在收盤價，標明時間才不會誤以為是即時
+function _asOfTxt(ms) {
+  if (!ms) return '';
+  var d = new Date(ms + 8 * 3600000);
+  return ('0' + (d.getUTCMonth() + 1)).slice(-2) + '/' + ('0' + d.getUTCDate()).slice(-2) + ' ' +
+    ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2);
+}
+function _agoTxt(ms) {
+  if (!ms) return '';
+  var mins = Math.round((Date.now() - ms) / 60000);
+  if (mins < 1) return '剛剛';
+  if (mins < 60) return mins + ' 分鐘前';
+  var h = Math.floor(mins / 60);
+  if (h < 24) return h + ' 小時前';
+  return Math.floor(h / 24) + ' 天前';
+}
+
 function renderMacroBar() {
   var el = document.getElementById('macro-bar');
   if (!el) return;
   var cells = _macroSnap.map(function (m) {
-    return '<div class="macro-cell"><span class="macro-name">' + m.name + '</span>' +
+    return '<div class="macro-cell"' + (m.asOf ? ' title="報價時間 ' + _asOfTxt(m.asOf) + '（台北）　' + _agoTxt(m.asOf) + '"' : '') +
+      '><span class="macro-name">' + m.name + '</span>' +
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
       '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + '</span></div>';
   });
@@ -271,7 +305,24 @@ function renderMacroBar() {
       '<span class="macro-price">' + _fmtNum(_nightFut.price, 0) + '</span>' +
       '<span class="macro-chg ' + _chgCls(_nightFut.changePct) + '">' + (_chgTxt(_nightFut.changePct) || '—') + '</span></div>');
   }
-  el.innerHTML = cells.join('');
+  // 整列標報價時間「範圍」而非只標最新：匯率 24 小時交易可能是 1 分鐘前，
+  // 美股收盤後的指數卻是數小時前的收盤價，只寫最新會讓人誤以為全部都是即時。
+  var newest = 0, oldest = Infinity;
+  _macroSnap.forEach(function (m) {
+    if (!m.asOf) return;
+    if (m.asOf > newest) newest = m.asOf;
+    if (m.asOf < oldest) oldest = m.asOf;
+  });
+  var head = '';
+  if (newest) {
+    var same = (newest - oldest) < 120000;   // 相差 2 分鐘內視為同一時點
+    head = '<div class="macro-asof">報價時間 ' +
+      (same ? _asOfTxt(newest) + '（台北）　<b>' + _agoTxt(newest) + '</b>'
+            : _asOfTxt(oldest) + ' ～ ' + _asOfTxt(newest) + '（台北）　最舊 <b>' + _agoTxt(oldest) +
+              '</b>、最新 <b>' + _agoTxt(newest) + '</b>') +
+      '　<span class="macro-dim">美股收盤後為收盤價；滑鼠移到單項可看該項時間</span></div>';
+  }
+  el.innerHTML = head + '<div class="macro-row">' + cells.join('') + '</div>';
 }
 
 async function fetchFeed(feed) {

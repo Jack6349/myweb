@@ -255,9 +255,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .trend-table .inv-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── 新聞情勢 ── */
-.macro-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
-@media (max-width: 1100px) { .macro-bar { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 680px) { .macro-bar { grid-template-columns: repeat(2, 1fr); } }
+.macro-bar { margin-bottom: 14px; }
+/* 卡片格線移至內層 .macro-row，外層留給「最新報價時間」那行 */
+.macro-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.macro-asof { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+.macro-asof b { color: var(--accent2); font-weight: 700; }
+.macro-dim { color: var(--text3); }
+@media (max-width: 1100px) { .macro-row { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 680px) { .macro-row { grid-template-columns: repeat(2, 1fr); } }
 .macro-bar:empty { display: none; }
 .macro-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; display: flex; align-items: baseline; gap: 8px; }
 .macro-name { font-size: 12px; color: var(--text2); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
