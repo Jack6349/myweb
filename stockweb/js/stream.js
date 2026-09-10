@@ -393,13 +393,19 @@ function renderSummary(targetId) {
   var bookVal = curVal - lentVal; // 帳面現值（不含借出）
   // 點選損益加總：代號前圓點已標記（注意股，live_watch_v1）者的未實現損益合計
   // 沿用 invMetrics 計算，與庫存表的「未實現損益」欄同基準（含/不含稅費隨切換）
-  var pickSum = null, pickN = 0, pickCost = null;
+  // 另加「點選現值比加總」：分母沿用 _invTotalVal()（全部持股今日總現值，未扣稅費），
+  // 與庫存表「現值比」欄同一基準，各列相加才等於這個合計
+  var pickSum = null, pickN = 0, pickCost = null, pickVal = null;
+  var totValAll = (typeof _invTotalVal === 'function') ? _invTotalVal() : 0;
   if (typeof loadWatch === 'function' && typeof invMetrics === 'function') {
     var marked = loadWatch();
     (_positions || []).forEach(function (p) {
       if (!marked.has(String(p.code))) return;
       pickCost = (pickCost || 0) + p.price * p.quantity;   // 付出成本（與庫存表「付出成本」欄同基準）
       pickN++;
+      var _r2 = _rows[String(p.code)];
+      var _px2 = (_r2 && _r2.close != null) ? _r2.close : (p.last_price != null ? p.last_price : null);
+      if (_px2 != null) pickVal = (pickVal || 0) + _px2 * p.quantity;   // 現值（同 _invTotalVal 基準）
       var m = invMetrics(p);
       if (m.profit == null) return;
       pickSum = (pickSum || 0) + m.profit;
@@ -418,6 +424,9 @@ function renderSummary(targetId) {
     pair('點選損益加總' + (pickN ? '(' + pickN + ')' : ''),
       pickSum == null ? '—' : (pickSum >= 0 ? '+' : '') + Math.round(pickSum).toLocaleString('zh-TW'),
       pickSum == null ? 'var(--text3)' : cls2var[colorClass(pickSum)]) +
+    pair('點選現值比加總' + (pickN ? '(' + pickN + ')' : ''),
+      (pickVal == null || !totValAll) ? '—' : (pickVal / totValAll * 100).toFixed(2) + '%',
+      (pickVal == null || !totValAll) ? 'var(--text3)' : 'var(--accent2)') +
   '</div>';
 }
 
