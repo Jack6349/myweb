@@ -748,3 +748,12 @@ td.cost-even::after  { background: var(--text3); }
 /* 新進來的即時成交淡入一次，讓跳動看得出來 */
 .tick-new { animation: tickIn .5s; }
 @keyframes tickIn { 0% { background: rgba(240,204,122,.18); } 100% { background: transparent; } }
+
+/* 五檔頁籤：左右並排（左＝五檔掛單、右＝逐筆成交）
+   原本上下排時內容高 971px > 可見 787px 需捲動，但兩者各自都用不到全寬；
+   改為橫向分欄後總高降至約 600px，彈窗不再出現捲軸。 */
+.bid-cols { display: grid; grid-template-columns: 6fr 4fr; gap: 16px; align-items: start; }
+.bid-cols .bid-col-r { min-width: 0; }              /* 讓表格可在欄內收縮，不撐破格線 */
+.bid-cols .tick-title { margin-top: 0; }            /* 與左欄頂端對齊 */
+/* 窄螢幕回到上下排，避免兩欄都被擠扁 */
+@media (max-width: 900px) { .bid-cols { grid-template-columns: 1fr; } }

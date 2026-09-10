@@ -318,8 +318,11 @@ async function _chartLoadBidAsk() {
   var code = _chartCode;
   _bidLast = null;
   _ticks = [];
-  area.innerHTML = '<div id="bid-wrap">' + _bidAskHtml(null, code) + '</div>' +
-    '<div id="tick-wrap">' + _tickHtml() + '</div>';
+  // 左右並排：五檔（掛單）在左、逐筆（成交）在右。
+  // 兩者原本上下排會超出彈窗高度需捲動，但各自都用不到全寬 → 改用橫向分欄消化寬度。
+  area.innerHTML = '<div class="bid-cols">' +
+    '<div id="bid-wrap" class="bid-col-l">' + _bidAskHtml(null, code) + '</div>' +
+    '<div id="tick-wrap" class="bid-col-r">' + _tickHtml() + '</div></div>';
   try {
     var ct = _contracts[code] || {};
     // 同時訂閱 BidAsk（掛單）與 Tick（成交）：五檔看掛單、逐筆看成交，兩者一起才完整
