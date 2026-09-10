@@ -20,8 +20,8 @@ var MACRO_TICKERS = [
   { name: 'VIX 恐慌指數', sym: '^VIX',      fmt: 2 },
   { name: '美10年債殖利率', sym: '^TNX',    fmt: 3 },
   { name: '美元指數',     sym: 'DX-Y.NYB',  fmt: 2 },
-  { name: '美元兌台幣',   sym: 'TWD=X',     fmt: 3 },
-  { name: '日圓兌台幣',   sym: 'JPYTWD=X',  fmt: 4 }
+  { name: '美元兌台幣',   sym: 'TWD=X',     fmt: 3 }
+  // 日圓改用玉山牌告即期匯率（買入/賣出雙價，見 loadEsunFx），不再取 Yahoo 中間價
 ];
 
 var _newsItems = []; // {source, title, link, time(Date)}
@@ -73,6 +73,40 @@ async function fetchNightFutures() {
     if (!s || s.close == null) return null;
     return { price: s.close, changePct: s.change_rate, time: (s.datetime || '').slice(11, 16) };
   } catch (e) { return null; }
+}
+
+// ── 玉山銀行牌告匯率（實際換匯用得到的價格，非中間價）──
+// 來源頁內嵌 schema.org 的 ExchangeRateSpecification（JSON-LD），非一般 HTML 表格，
+// 改版時較不易失效。以該標記切塊後逐塊解析，避免正則跨塊誤配或漏抓。
+// 牌告一天變動多次 → 快取 10 分鐘即可，不必每次進頁重抓。
+var ESUN_URL = 'https://www.esunbank.com/zh-tw/personal/deposit/rate/forex/foreign-exchange-rates';
+var _esun = null;        // {at, rates:{幣別:{spotBuy, spotSell, cashBuy, cashSell}}}
+var _esunTs = 0;
+
+async function loadEsunFx(force) {
+  if (!force && _esun && Date.now() - _esunTs < 600000) return _esun;
+  try {
+    var r = await fetch(NEWS_GAS_URL + '?urltext=' + encodeURIComponent(ESUN_URL));
+    var t = await r.text();
+    if (t.charAt(0) === '{') return _esun;                 // GAS 端錯誤（配額等）→ 沿用舊值
+    var parts = t.split('"@type":"ExchangeRateSpecification"');
+    var rates = {}, at = null;
+    for (var i = 1; i < parts.length; i++) {
+      var seg = parts[i];
+      var nm = seg.match(/"name":"([^"]+)"/);
+      var pr = seg.match(/"price":"([\d.]+)"/);
+      if (!nm || !pr) continue;
+      var vf = seg.match(/"validFrom":"([^"]+)"/);
+      if (vf && !at) at = vf[1];
+      var p = nm[1].split(/\s+/);                          // 例：日圓 即期匯率 銀行買入
+      if (p.length < 3) continue;
+      var cur = p[0], kind = p[1], side = p[2];
+      var key = (kind.indexOf('即期') >= 0 ? 'spot' : 'cash') + (side.indexOf('買入') >= 0 ? 'Buy' : 'Sell');
+      (rates[cur] = rates[cur] || {})[key] = +pr[1];
+    }
+    if (Object.keys(rates).length) { _esun = { at: at, rates: rates }; _esunTs = Date.now(); }
+  } catch (e) { console.warn('[esun fx]', e); }
+  return _esun;
 }
 
 // ── 美國總經數據（FRED 官方 CSV，經 GAS ?urltext= 代理；與加減碼報告的 OAS 同一條管道）──
@@ -264,6 +298,8 @@ async function loadMacro() {
   });
   _nightFut = await fetchNightFutures();
   renderMacroBar();
+  // 玉山牌告匯率（10 分鐘快取）非阻塞補上，回來後重繪
+  loadEsunFx().then(function () { renderMacroBar(); });
 }
 
 function _fmtNum(v, dp) { return v == null ? '—' : Number(v).toLocaleString('zh-TW', { minimumFractionDigits: dp, maximumFractionDigits: dp }); }
@@ -300,6 +336,19 @@ function renderMacroBar() {
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
       '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + '</span></div>';
   });
+  // 玉山日圓即期匯率：換匯實際成交的價格（買入＝銀行跟你買，賣出＝銀行賣你）。
+  // Yahoo 的 JPYTWD=X 是國際中間價，換匯時拿不到，故另列一格供實際判斷。
+  if (_esun && _esun.rates && _esun.rates['日圓']) {
+    var jp = _esun.rates['日圓'];
+    cells.push('<div class="macro-cell macro-fx" title="玉山銀行牌告即期匯率　掛牌時間 ' +
+      (_esun.at ? _esun.at.slice(5, 16).replace('T', ' ') : '—') +
+      '　銀行買入＝你賣日圓可換得的台幣；銀行賣出＝你買日圓要付的台幣">' +
+      '<span class="macro-name">日圓即期<span class="macro-dim"> 玉山</span></span>' +
+      '<span class="macro-fx-pair"><span class="fx-lb">買入</span><span class="fx-v">' +
+      (jp.spotBuy != null ? jp.spotBuy.toFixed(4) : '—') + '</span>' +
+      '<span class="fx-lb">賣出</span><span class="fx-v">' +
+      (jp.spotSell != null ? jp.spotSell.toFixed(4) : '—') + '</span></span></div>');
+  }
   if (_nightFut) {
     cells.push('<div class="macro-cell"><span class="macro-name">台指夜盤 ' + (_nightFut.time || '') + '</span>' +
       '<span class="macro-price">' + _fmtNum(_nightFut.price, 0) + '</span>' +
@@ -399,6 +448,7 @@ async function buildNewsPrompt() {
 
   // 市場數據快照（若尚未載入則現抓）
   if (!_macroSnap.length) { try { await loadMacro(); } catch (e) {} }
+  if (!_esun) { try { await loadEsunFx(); } catch (e) {} }
   if (!_fredSnap.length) { try { await loadFred(); } catch (e) {} }
   if (!_consist.length) { try { await loadConsistency(); } catch (e) {} }
   // 持股技術面趨勢（若尚未載入則靜默計算）
@@ -417,6 +467,13 @@ async function buildNewsPrompt() {
   if (_nightFut) {
     macroTxt += '\n- 台指期近月夜盤（' + (_nightFut.time || '') + '）：' + _fmtNum(_nightFut.price, 0) +
       '（' + (_nightFut.changePct >= 0 ? '+' : '') + _nightFut.changePct.toFixed(2) + '%）';
+  }
+  // 日圓走玉山牌告（買賣雙價；牌告無前日基準，故不附漲跌幅）
+  if (_esun && _esun.rates && _esun.rates['日圓']) {
+    var _jp = _esun.rates['日圓'];
+    macroTxt += '\n- 日圓兌台幣（玉山牌告即期，掛牌 ' + (_esun.at ? _esun.at.slice(0, 16).replace('T', ' ') : '—') +
+      '）：銀行買入 ' + (_jp.spotBuy != null ? _jp.spotBuy.toFixed(4) : '—') +
+      '／銀行賣出 ' + (_jp.spotSell != null ? _jp.spotSell.toFixed(4) : '—') + '（牌告價，非中間價）';
   }
 
   // 美國總經：月頻資料，各項資料月份不同，明確標註以免 AI 誤判為同期

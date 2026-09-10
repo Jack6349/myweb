@@ -730,3 +730,8 @@ td.cost-even::after  { background: var(--text3); }
 .cs-title { flex: 0 0 150px; color: var(--text2); }
 .cs-detail { flex: 1; min-width: 0; color: var(--text); font-variant-numeric: tabular-nums; }
 .cs-note { font-size: 11px; color: #9a8028; line-height: 1.6; margin-top: 6px; }
+
+/* 新聞情勢：銀行牌告匯率卡片（買入／賣出雙價） */
+.macro-fx .macro-fx-pair { display: inline-flex; align-items: baseline; gap: 5px; margin-left: auto; }
+.macro-fx .fx-lb { font-size: 10px; color: var(--text3); }
+.macro-fx .fx-v { font-size: 14px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
