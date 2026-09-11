@@ -13,7 +13,7 @@ function invMetrics(p) {
   var profit = netVal != null ? netVal - cost : null;
   var prate = (profit != null && cost) ? profit / cost * 100 : null;
   var chg = (price != null && c && c.reference) ? (price - c.reference) / c.reference * 100 : null;
-  return { val: netVal, profit: profit, prate: prate, chg: chg };
+  return { val: netVal, profit: profit, prate: prate, chg: chg, shares: shares };
 }
 
 // 整欄表頭可點：第一次點降冪（▼ 高→低），再點升冪（▲），再點又降冪…（兩態切換，恆有排序）
@@ -74,12 +74,12 @@ function invValRow(p) {
     '<td class="inv-code' + (typeof limitState === 'function' && limitState(code, price) ? ' lim-' + limitState(code, price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     '<td class="inv-name">' + ((c && c.name) || '') + '</td>' +
     '<td class="num">' + shares.toLocaleString('zh-TW') + '</td>' +
-    costCellHtml(p.price, price) +
-    '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
+    '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
     '<td class="num inv-cchg ' + estCls + '" ' + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
       (cm && cm.est != null ? fmtPct(cm.est) : '—') + '</td>' +
+    costCellHtml(p.price, price) +
     '<td class="num">' + Math.round(cost).toLocaleString('zh-TW') + '</td>' +
     '<td class="num">' + (val != null ? Math.round(val).toLocaleString('zh-TW') : '—') + '</td>' +
     '<td class="num ' + pcls + '">' + (profit == null ? '—' : (profit >= 0 ? '+' : '') + Math.round(profit).toLocaleString('zh-TW')) + '</td>' +
@@ -115,6 +115,12 @@ function renderInvTable() {
       case 'pnlAsc': return num(invMetrics(a).profit) - num(invMetrics(b).profit);
       case 'prateDesc': return num(invMetrics(b).prate) - num(invMetrics(a).prate);
       case 'prateAsc': return num(invMetrics(a).prate) - num(invMetrics(b).prate);
+      case 'sharesDesc': return num(invMetrics(b).shares) - num(invMetrics(a).shares);
+      case 'sharesAsc': return num(invMetrics(a).shares) - num(invMetrics(b).shares);
+      // 現值率 = 未實現損益 ÷ 總現值；分母全表相同，排序結果等同比損益，
+      // 直接比 profit 可避開每次比較都重算一次 _invTotalVal()
+      case 'vrateDesc': return num(invMetrics(b).profit) - num(invMetrics(a).profit);
+      case 'vrateAsc': return num(invMetrics(a).profit) - num(invMetrics(b).profit);
       default: return String(a.code).localeCompare(String(b.code), undefined, { numeric: true }); // codeAsc
     }
   });
