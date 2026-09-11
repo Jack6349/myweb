@@ -337,6 +337,18 @@ function renderDividendEst() {
   wrap.innerHTML = html;
 }
 
+// 出借中股數（股）：從 _positions 的 lentShares 取（與持股庫存「借出」欄同一來源）。
+// 借券期間仍可由券商補償股利，所以借出張數本來就包含在持有張數內，此處只是標註。
+function _divLentShares(code) {
+  if (typeof _positions === 'undefined' || !_positions) return 0;
+  var n = 0;
+  _positions.forEach(function (p) {
+    if (String(p.code) !== String(code) || !p.lent) return;
+    n += (p.lentShares != null ? p.lentShares : p.quantity);
+  });
+  return n;
+}
+
 // ── 本月除息個股 ──
 // 來源：各檔 computeEtfYear 產生的 months（已含 TPEx 預告與手動補登），取「除息日落在本月」者。
 // 排序：除息日由近至遠（月初→月底）。持有張數＝該次除息實際可領股數（除息日當天之後買進的批次已排除）。
@@ -350,7 +362,9 @@ function _divExMonthHtml(stocks, money, md) {
       var price = (_r && _r.close != null) ? _r.close
         : ((typeof _contracts !== 'undefined' && _contracts[s.code] && _contracts[s.code].reference) || null);
       list.push({ code: s.code, price: price, exDate: mo.exDate, payDate: mo.payDate,
-        shares: mo.shares, perShare: mo.perShare, total: mo.total, status: mo.status });
+        shares: mo.shares, lent: _divLentShares(s.code),
+        after: !!(mo.partial && !mo.shares),   // 除息日當天（含）之後才買進 → 領不到這次配息
+        perShare: mo.perShare, total: mo.total, status: mo.status });
     });
   });
   list.sort(function (a, b) { return a.exDate < b.exDate ? -1 : (a.exDate > b.exDate ? 1 : 0); });
@@ -370,7 +384,9 @@ function _divExMonthHtml(stocks, money, md) {
       '<td class="num">' + (it.price != null ? it.price.toFixed(2) : '—') + '</td>' +
       '<td class="num' + c + '">' + md(it.exDate) + '</td>' +
       '<td class="num">' + md(it.payDate) + '</td>' +
-      '<td class="num">' + (it.shares / 1000).toLocaleString('zh-TW') + '</td>' +
+      '<td class="num">' + (it.shares / 1000).toLocaleString('zh-TW') +
+        (it.lent ? ' <span class="dexm-lent">(借出 ' + (it.lent / 1000).toLocaleString('zh-TW') + ' 張)</span>' : '') +
+        (it.after ? ' <span class="dexm-lent">(除息後買進)</span>' : '') + '</td>' +
       '<td class="num">' + (it.perShare ? it.perShare.toFixed(4) : '<span style="color:var(--text3)">待公告</span>') + '</td>' +
       '<td class="num dstat-tot">' + (it.perShare ? money(it.total) : '<span style="color:var(--text3)">—</span>') + '</td></tr>';
   });
