@@ -691,6 +691,13 @@ td.cost-even::after  { background: var(--text3); }
 .dstat tfoot td { background: var(--bg3); font-weight: 700; border-bottom: none; border-top: 1px solid var(--border-strong, #435a78); }
 .dstat tfoot .dstat-code { background: var(--bg3); }
 
+/* ── 本月除息個股（股利估算頁最上方）── */
+/* 沿用 .dstat 外觀，但欄位不是月份，隔欄底色沒有意義 → 用多一個 class 的選擇器蓋掉 */
+.dstat.dexm tbody td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: var(--bg2); }
+.dstat.dexm thead th:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: var(--bg3); }
+.dstat.dexm tfoot td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: var(--bg3); }
+.dstat.dexm tbody tr:hover td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: rgba(255,255,255,.03); }
+
 /* 換股試算：換手品質比較表（賣出 vs 買入的相對條件） */
 .swap-qual td:first-child { color: var(--text2); }
 .swap-qual th.num, .swap-qual td.num { text-align: right; }

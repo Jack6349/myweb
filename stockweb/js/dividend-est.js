@@ -250,19 +250,9 @@ function renderDividendEst() {
   var stocks = _divEstResult.stocks, year = _divEstResult.year;
 
   // 各月彙總
-  var mActual = new Array(13).fill(0), mEst = new Array(13).fill(0);
-  var mItems = {}; for (var i = 1; i <= 12; i++) mItems[i] = [];
   var grandActual = 0, grandEst = 0;
-  stocks.forEach(function (s) {
-    grandActual += s.res.actualTotal; grandEst += s.res.estTotal;
-    s.res.months.forEach(function (mo) {
-      if (mo.status === 'actual') mActual[mo.month] += mo.total; else mEst[mo.month] += mo.total;
-      mItems[mo.month].push({ code: s.code, total: mo.total, status: mo.status, payDate: mo.payDate });
-    });
-  });
+  stocks.forEach(function (s) { grandActual += s.res.actualTotal; grandEst += s.res.estTotal; });
   var grand = grandActual + grandEst;
-  var maxTotal = 1;
-  for (var m = 1; m <= 12; m++) maxTotal = Math.max(maxTotal, mActual[m] + mEst[m]);
 
   var money = function (v) { return '$' + Math.round(v).toLocaleString('zh-TW'); };
   var md = function (iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; };
@@ -276,28 +266,8 @@ function renderDividendEst() {
   if (sumEl) sumEl.innerHTML = sp('年估總額', money(grand), 'var(--accent)') +
     sp('已入帳', money(grandActual), 'var(--down)') + sp('月均', money(grand / 12), 'var(--accent2)');
 
-  // ── 月份總覽（依發放月）──
-  var html = '<div class="divest-sec-title">月份總覽（依發放月）</div><div class="divest-months">';
-  for (var mo = 1; mo <= 12; mo++) {
-    var act = mActual[mo], est = mEst[mo], tot = act + est;
-    var wPct = tot > 0 ? Math.max(4, Math.round(tot / maxTotal * 100)) : 0;
-    var actW = tot > 0 ? Math.round(act / tot * 100) : 0;
-    var totColor = tot === 0 ? 'var(--text3)' : (est === 0 ? 'var(--down)' : (act === 0 ? 'var(--accent2)' : 'var(--text)'));
-    var items = mItems[mo].sort(function (a, b) { return b.total - a.total; }).map(function (it) {
-      return '<div class="divest-item ' + (it.status === 'actual' ? 'dv-act' : 'dv-est') + '">' +
-        '<span class="di-code">' + it.code + '</span>' +
-        '<span class="di-date">' + md(it.payDate) + '</span>' +
-        '<span class="di-amt">' + money(it.total) + '</span></div>';
-    }).join('');
-    html += '<div class="divest-mrow">' +
-      '<span class="divest-mlabel">' + mo + '月</span>' +
-      '<span class="divest-track">' + (tot > 0 ? '<span class="divest-bar" style="width:' + wPct + '%">' +
-        '<span style="width:' + actW + '%;background:var(--down)"></span><span style="width:' + (100 - actW) + '%;background:var(--accent2)"></span></span>' : '') + '</span>' +
-      '<span class="divest-mtot" style="color:' + totColor + '">' + (tot > 0 ? money(tot) : '—') + '</span>' +
-      '<span class="divest-mitems">' + items + '</span>' +
-    '</div>';
-  }
-  html += '</div>';
+  // ── 本月除息個股（按除息日由近至遠）──
+  var html = _divExMonthHtml(stocks, money, md);
 
   // ── 個股明細（可折疊）──
   html += '<div class="divest-divider"></div><div class="divest-sec-title">個股明細</div><div class="divest-stocks">';
@@ -360,16 +330,59 @@ function renderDividendEst() {
     '</div>';
   });
   html += '</div>';
-  // ── 股利統計表：縱向個股、橫向 1–12 月＋總計（依發放月歸戶，與月份總覽同一份資料）──
+  // ── 月份總覽（依發放月）：縱向個股、橫向 1–12 月＋總計 ──
   html += _divStatTableHtml(stocks, money);
 
   html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。<b>各次配息依建倉明細判定可領張數：除息日當天（含）之後才買進的批次不計</b>（已賣出的部位不在建倉明細中，過去月份的已領金額可能低估）。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。</div>';
   wrap.innerHTML = html;
 }
 
-// ── 股利統計表 ──
+// ── 本月除息個股 ──
+// 來源：各檔 computeEtfYear 產生的 months（已含 TPEx 預告與手動補登），取「除息日落在本月」者。
+// 排序：除息日由近至遠（月初→月底）。持有張數＝該次除息實際可領股數（除息日當天之後買進的批次已排除）。
+function _divExMonthHtml(stocks, money, md) {
+  var ym = _divTwDate().iso.slice(0, 7);
+  var list = [];
+  stocks.forEach(function (s) {
+    (s.res.months || []).forEach(function (mo) {
+      if (!mo.exDate || mo.exDate.slice(0, 7) !== ym) return;
+      var _r = (typeof _rows !== 'undefined') && _rows[s.code];
+      var price = (_r && _r.close != null) ? _r.close
+        : ((typeof _contracts !== 'undefined' && _contracts[s.code] && _contracts[s.code].reference) || null);
+      list.push({ code: s.code, price: price, exDate: mo.exDate, payDate: mo.payDate,
+        shares: mo.shares, perShare: mo.perShare, total: mo.total, status: mo.status });
+    });
+  });
+  list.sort(function (a, b) { return a.exDate < b.exDate ? -1 : (a.exDate > b.exDate ? 1 : 0); });
+
+  var h = '<div class="divest-sec-title">本月除息個股</div>';
+  if (!list.length) return h + '<div class="divest-note">本月無除息個股。</div>';
+
+  h += '<div class="dstat-wrap"><table class="dstat dexm"><thead><tr>' +
+    '<th class="dstat-code">代號</th><th class="num">現價</th>' +
+    '<th class="num">除息日</th><th class="num">發放日</th><th class="num">持有張數</th>' +
+    '<th class="num">除息金額</th><th class="num dstat-tot">總金額</th></tr></thead><tbody>';
+  var sum = 0;
+  list.forEach(function (it) {
+    sum += it.total;
+    var c = it.status === 'actual' ? ' dv-act' : ' dv-est';
+    h += '<tr><td class="dstat-code">' + it.code + '</td>' +
+      '<td class="num">' + (it.price != null ? it.price.toFixed(2) : '—') + '</td>' +
+      '<td class="num' + c + '">' + md(it.exDate) + '</td>' +
+      '<td class="num">' + md(it.payDate) + '</td>' +
+      '<td class="num">' + (it.shares / 1000).toLocaleString('zh-TW') + '</td>' +
+      '<td class="num">' + (it.perShare ? it.perShare.toFixed(4) : '<span style="color:var(--text3)">待公告</span>') + '</td>' +
+      '<td class="num dstat-tot">' + (it.perShare ? money(it.total) : '<span style="color:var(--text3)">—</span>') + '</td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td class="dstat-code">合計</td><td class="num"></td><td class="num"></td>' +
+    '<td class="num"></td><td class="num"></td><td class="num"></td>' +
+    '<td class="num dstat-tot">' + money(sum) + '</td></tr></tfoot></table></div>';
+  return h;
+}
+
+// ── 月份總覽（依發放月）──
 // 縱向＝個股（依總計高→低，可點代號改排序）、橫向＝1–12 月＋總計。
-// 金額顏色沿用月份總覽：綠＝已發放、黃＝預估；空月留白不填 0；全年為 0 的個股不列入。
+// 綠＝已發放、黃＝預估；空月留白不填 0；全年為 0 的個股不列入。
 var _divStatSort = 'totDesc';
 function divStatSort(key) {
   _divStatSort = (_divStatSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
@@ -403,7 +416,7 @@ function _divStatTableHtml(stocks, money) {
     return _divStatSort === key + 'Asc' ? '▲' : (_divStatSort === key + 'Desc' ? '▼' : '↕');
   };
   var sorted = function (key) { return _divStatSort.indexOf(key) === 0 ? ' sorted' : ''; };
-  var h = '<div class="divest-divider"></div><div class="divest-sec-title">股利統計</div>' +
+  var h = '<div class="divest-divider"></div><div class="divest-sec-title">月份總覽（依發放月）</div>' +
     '<div class="dstat-wrap"><table class="dstat">' +
     '<thead><tr><th class="dstat-code sort-th' + sorted('code') + '" onclick="divStatSort(\'code\')" title="點擊排序">代號<span class="sort-ind">' + arrow('code') + '</span></th>';
   for (var mo = 1; mo <= 12; mo++) h += '<th class="num">' + mo + '月</th>';
