@@ -758,7 +758,7 @@ td.cost-even::after  { background: var(--text3); }
 .cat-chev:hover { color: var(--accent2); }
 
 .cat-item { display: inline-flex; align-items: baseline; gap: 5px; }
-.cat-name { color: var(--text); font-weight: 700; font-size: .75em; display: inline-flex; align-items: baseline; gap: 3px; }
+.cat-name { color: var(--text); font-weight: 700; font-size: 1em; display: inline-flex; align-items: baseline; gap: 3px; }
 .cat-n { color: var(--text3); font-size: .8em; font-weight: 400; }
 .cat-cost { color: #f5d87a; font-weight: 700; letter-spacing: -.5px; }   /* 與頂欄「總付出成本」同色 */
 .cat-cp   { color: #f5d87a; opacity: .65; font-size: .75em; }
@@ -770,7 +770,7 @@ td.cost-even::after  { background: var(--text3); }
 .cat-cell { display: grid; grid-template-columns: auto auto auto; column-gap: 6px; row-gap: 2px;
   align-items: baseline; padding-left: 10px; border-left: 2px solid var(--border); }
 .cat-cell-tot { border-left-color: var(--accent2); }
-.cat-cname { grid-column: 1 / -1; color: var(--text); font-weight: 700; font-size: 12px;
+.cat-cname { grid-column: 1 / -1; color: var(--text); font-weight: 700; font-size: 15px;
   display: flex; align-items: baseline; gap: 4px; }
 .cat-grid .cat-lb { color: var(--text2); font-size: 11px; font-weight: 600; }
 .cat-grid .cat-cost, .cat-grid .cat-val { font-size: 16px; text-align: right; }
