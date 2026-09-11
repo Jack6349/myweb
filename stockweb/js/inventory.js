@@ -99,8 +99,10 @@ function invAlert(p) {
   return (typeof evalAlert === 'function') ? evalAlert(code, price, prate) : null;
 }
 
-// ── 分類配置列（表格上方一行）──
-// 每類列：名稱、檔數、總成本＋占比、總現值＋占比。
+// ── 分類配置列（表格上方）──
+// 字型固定與上方合計列一致（標題 12px、數字 16px），塞不下就換行，
+// 不再縮字（七類擠一行會被逐到 10px 讀不了）。
+// 現值高於成本用紅、低於用綠（台股慣例）。
 // 兩個分母各自獨立：成本占比除以總成本、現值占比除以總現值；
 // 後者與庫存表「現值比」欄同基準（未扣稅費），同類各列相加等於這裡的值。
 function renderInvCats() {
@@ -110,39 +112,23 @@ function renderInvCats() {
   if (!groups.length) { el.style.display = 'none'; return; }
   var totCost = 0, totVal = 0;
   groups.forEach(function (g) { totCost += g.cost; totVal += g.val; });
+  var money = function (v) { return Math.round(v).toLocaleString('zh-TW'); };
   var pct = function (v, t) { return t ? (v / t * 100).toFixed(1) + '%' : '—'; };
-  // 金額以「萬」為單位：七類 × 六欄完整數字要塞一行會被逐到 8px（讀不了），
-  // 改成萬元後字型才停得住；完整金額放在 title。
-  var wan = function (v) { return Math.round(v / 10000).toLocaleString('zh-TW') + '萬'; };
-  var full = function (v) { return Math.round(v).toLocaleString('zh-TW'); };
+  var cls2var = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
   el.innerHTML = groups.map(function (g) {
-    return '<span class="cat-item" title="' + g.cat + '：' + g.n + ' 檔　成本 ' + full(g.cost) +
-        '　現值 ' + full(g.val) + '">' +
-      '<span class="cat-name">' + g.cat + '</span>' +
-      '<span class="cat-n">' + g.n + '</span>' +
-      '<span class="cat-cost">' + wan(g.cost) + '</span>' +
+    // 現值 vs 成本：高於→紅、低於→綠、相等→灰
+    var vc = cls2var[colorClass(g.val - g.cost)];
+    return '<span class="cat-item" title="' + g.cat + '：' + g.n + ' 檔">' +
+      '<span class="cat-name">' + g.cat + '<span class="cat-n">' + g.n + '</span></span>' +
+      '<span class="cat-lb">成本</span>' +
+      '<span class="cat-cost">' + money(g.cost) + '</span>' +
       '<span class="cat-cp">' + pct(g.cost, totCost) + '</span>' +
-      '<span class="cat-val">' + wan(g.val) + '</span>' +
-      '<span class="cat-vp">' + pct(g.val, totVal) + '</span></span>';
+      '<span class="cat-lb">現值</span>' +
+      '<span class="cat-val" style="color:' + vc + '">' + money(g.val) + '</span>' +
+      '<span class="cat-vp" style="color:' + vc + '">' + pct(g.val, totVal) + '</span></span>';
   }).join('');
   el.style.display = '';
-  _catBarFit(el);
 }
-// 字型自動縮小直到塞得進一行（不換行、不橫向捲動）；下限 9px。
-// 頁面還沒佈局（clientWidth 0，例如分頁還是 display:none）時不量測，
-// 否則會一路縮到下限；下一次 renderInvTable（行情 tick）會重量。
-function _catBarFit(el) {
-  if (!el.clientWidth) return;
-  for (var fs = 12; fs >= 9; fs -= 0.5) {
-    el.style.fontSize = fs + 'px';
-    if (el.scrollWidth <= el.clientWidth) return;
-  }
-}
-// 視窗寬度改變 → 重新量測（變寬時才能變回大字）
-window.addEventListener('resize', function () {
-  var el = document.getElementById('inv-cats');
-  if (el && el.clientWidth) _catBarFit(el);
-});
 
 function renderInvTable() {
   var tb = document.getElementById('inv-tbody');

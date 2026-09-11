@@ -746,15 +746,17 @@ td.cost-even::after  { background: var(--text3); }
 @media (max-width: 900px) { .bid-cols { grid-template-columns: 1fr; } }
 
 /* ── 持股分類配置列（持股庫存表格上方）── */
-/* 固定一行：nowrap ⬍ 字型由 _catBarFit() 量測後逐步調小，不換行也不捲動 */
-.cat-bar { display: flex; gap: 14px; white-space: nowrap; overflow: hidden; align-items: baseline;
+/* 字型與上方合計列（.sum-plabel 12px / .sum-pval 16px）一致；
+   七類塞不進一行 → flex-wrap 換行，不縮字。項目間不畫分隔線，
+   否則換行後第二行第一項會多一條懸在左邊的線。 */
+.cat-bar { display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: baseline;
   background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 6px 10px; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
-.cat-item { display: inline-flex; align-items: baseline; gap: 4px; }
-.cat-name { color: var(--text); font-weight: 700; }
-.cat-n { color: var(--text3); font-size: .85em; }
-.cat-cost { color: #f5d87a; }                 /* 與頂欄「總付出成本」同色 */
-.cat-cp   { color: #f5d87a; opacity: .65; }
-.cat-val  { color: var(--accent2); }          /* 與頂欄「總現值」同色 */
-.cat-vp   { color: var(--accent2); opacity: .65; }
-.cat-item + .cat-item { border-left: 1px solid var(--border); padding-left: 14px; }
+  padding: 8px 10px; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.cat-item { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.cat-name { color: var(--text); font-weight: 700; font-size: 12px; display: inline-flex; align-items: baseline; gap: 3px; }
+.cat-n { color: var(--text3); font-size: 11px; font-weight: 400; }
+.cat-lb { color: var(--text2); font-size: 11px; font-weight: 600; margin-left: 3px; }
+.cat-cost { color: #f5d87a; font-size: 16px; font-weight: 700; letter-spacing: -.5px; }  /* 與頂欄「總付出成本」同色 */
+.cat-cp   { color: #f5d87a; opacity: .65; font-size: 12px; }
+.cat-val  { font-size: 16px; font-weight: 700; letter-spacing: -.5px; }  /* 色走 inline style：現值＞成本紅、＜綠 */
+.cat-vp   { opacity: .7; font-size: 12px; }
