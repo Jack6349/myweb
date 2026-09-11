@@ -21,12 +21,13 @@ var RS_BOND_TH = { drop: 0.35, discount: 0.5, volShrink: 50 };
 // 非投等債 ETF 以「持股中自動偵測」為準，不寫死清單（加減碼要看的是手上實際部位）。
 // 用名稱而非代號末碼判斷：末碼 B 是債券 ETF，但主動式非投等債 ETF 末碼是 D（例 00984D），
 // 且 Shioaji 合約名稱截斷至 8 字（「主動聯博全球非投等債」→「主動聯博全球非投」），故關鍵字取「非投」。
-var RS_HY_RE = /非投|高收/;
+// 判定改呼叫 category.js 的 catOf()（同一套規則，不再兩處各判一次）；
+// 非投等債的分類名為「非投債」（被動）與「主動非投債」，兩者都要納入。
 function _rsBondHoldings() {
   var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
   return Object.keys(m).filter(function (c) {
-    if (!(m[c] > 0) || !/^00\d+[A-Z]?$/.test(c)) return false;
-    return RS_HY_RE.test((_contracts[c] && _contracts[c].name) || '');
+    if (!(m[c] > 0)) return false;
+    return typeof catOf === 'function' && /非投債$/.test(catOf(c));
   }).sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
 }
 
@@ -221,10 +222,52 @@ async function startRiskReport(force) {
     '門檻為初始值、待 6 個月歷史回測校準。<b>本面板為依你設定規則自動算分的參考，非投資建議。</b>' +
     '</div>';
 
+  // ── 區塊：持股配置結構（依分類）──
+  html += _rsCatBlockHtml();
+
   // ── 區塊 B：債券型（非投等債）信用風險（獨立兩層 override，不影響上方股票總分）──
   html += _rsBondBlockHtml(bond, sp);
 
   wrap.innerHTML = html;
+}
+
+// 持股配置結構：依分類加總成本/現值/損益，回答「現在偏向哪一類」。
+// 加減碼前先看這張：分數說的是時機，這裡說的是部位，兩者分開看。
+// 金額一律未扣稅費（與庫存表「付出成本」「現值」同基準），不隨含稅費切換變動。
+function _rsCatBlockHtml() {
+  if (typeof catAggregate !== 'function' || typeof _positions === 'undefined') return '';
+  var groups = catAggregate(_positions);
+  if (!groups.length) return '';
+  var tc = 0, tv = 0;
+  groups.forEach(function (g) { tc += g.cost; tv += g.val; });
+  var money = function (v) { return Math.round(v).toLocaleString('zh-TW'); };
+  var pct = function (v, t) { return t ? (v / t * 100).toFixed(1) + '%' : '\u2014'; };
+  var pnlTd = function (v, base) {
+    var cls = v == null ? 'flat' : (typeof colorClass === 'function' ? colorClass(v) : 'flat');
+    var c = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' }[cls];
+    return '<td class="num" style="color:' + c + '">' + (v >= 0 ? '+' : '') + money(v) + '</td>' +
+      '<td class="num" style="color:' + c + '">' + (base ? (v / base * 100 >= 0 ? '+' : '') + (v / base * 100).toFixed(1) + '%' : '\u2014') + '</td>';
+  };
+  var h = '<div class="rs-sec-title">\u6301\u80a1\u914d\u7f6e\u7d50\u69cb\uff08\u4f9d\u5206\u985e\uff09</div>' +
+    '<table class="rs-table"><thead><tr><th>\u5206\u985e</th><th class="num">\u6a94\u6578</th>' +
+    '<th class="num">\u4ed8\u51fa\u6210\u672c</th><th class="num">\u6210\u672c\u5360\u6bd4</th>' +
+    '<th class="num">\u73fe\u503c</th><th class="num">\u73fe\u503c\u5360\u6bd4</th>' +
+    '<th class="num">\u640d\u76ca</th><th class="num">\u640d\u76ca\u7387</th></tr></thead><tbody>';
+  groups.forEach(function (g) {
+    h += '<tr><td>' + g.cat + '</td><td class="num">' + g.n + '</td>' +
+      '<td class="num">' + money(g.cost) + '</td><td class="num">' + pct(g.cost, tc) + '</td>' +
+      '<td class="num">' + money(g.val) + '</td><td class="num">' + pct(g.val, tv) + '</td>' +
+      pnlTd(g.val - g.cost, g.cost) + '</tr>';
+  });
+  h += '</tbody><tfoot><tr><td>\u5408\u8a08</td><td class="num">' +
+    groups.reduce(function (a, g) { return a + g.n; }, 0) + '</td>' +
+    '<td class="num">' + money(tc) + '</td><td class="num">100.0%</td>' +
+    '<td class="num">' + money(tv) + '</td><td class="num">100.0%</td>' +
+    pnlTd(tv - tc, tc) + '</tr></tfoot></table>';
+  h += '<div class="rs-note">\u5206\u985e\u4f9d\u4ee3\u78bc\u5c3e\u78bc\uff08A\uff1d\u4e3b\u52d5\u80a1\u7968\u3001B\uff1d\u88ab\u52d5\u50b5\u5238\u3001D\uff1d\u4e3b\u52d5\u50b5\u5238\u3001L/R\uff1d\u69d3\u687f\u53cd\u5411\uff09' +
+    '\u52a0\u4e0a\u5408\u7d04\u540d\u7a31\u95dc\u9375\u5b57\u5224\u5b9a\uff1b\u540d\u7a31\u6703\u88ab\u622a\u65b7\u81f3 8 \u5b57\uff0c\u65b0\u8cb7\u9032\u7684 ETF \u82e5\u6b78\u985e\u4e0d\u5c0d\u8acb\u544a\u8a34\u6211\u3002' +
+    '\u91d1\u984d\u672a\u6263\u7a05\u8cbb\u3002</div>';
+  return h;
 }
 
 // 債券型信用風險區塊：每檔逐條紅綠燈直述（美股信用債跌幅／折價／成交量），綜合判定用操作語言

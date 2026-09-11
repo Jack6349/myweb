@@ -647,6 +647,17 @@ function _swapQualHtml(c) {
     '<th class="num">' + b.code + ' <span class="swap-dim">' + nm(b.code) + '</span>（買）</th>' +
     '<th class="num">差異</th></tr></thead><tbody>';
 
+  // 分類：同類換股（换標的，配置不變）還是跨類調節（風險結構改變）
+  var catS = (typeof catOf === 'function') ? catOf(s.code) : null;
+  var catB = (typeof catOf === 'function') ? catOf(b.code) : null;
+  if (catS && catB) {
+    var same = catS === catB;
+    h += '<tr><td title="依代碼尾碼＋ETF 名稱關鍵字判定">分類</td>' +
+      '<td class="num">' + catS + '</td><td class="num">' + catB + '</td>' +
+      '<td class="num" style="color:' + (same ? 'var(--text3)' : 'var(--accent2)') + ';font-weight:700">' +
+      (same ? '同類換股' : '跨類調節') + '</td></tr>';
+  }
+
   h += '<tr><td title="最近一次配息 × 配息期數 ÷ 現價">預估年殖利率</td>' +
     '<td class="num swap-yield">' + num(yS, 2, '%') + '</td>' +
     '<td class="num swap-yield">' + num(yB, 2, '%') + '</td>' +
@@ -665,7 +676,11 @@ function _swapQualHtml(c) {
   h += '</tbody></table></div>' +
     (loading ? '<div class="swap-qual-note">折溢價與成交量載入中…</div>' : '') +
     '<div class="swap-qual-note">殖利率差為換股的收益來源；折溢價差是立即成本（賣得比淨值便宜、買得比淨值貴都會侵蝕收益）。' +
-    '成交量偏低時分批進出可降低滑價。<b>此處只比較兩檔的相對條件</b>，非投等債整體該不該持有屬系統性判斷，見「加減碼報告」。</div>';
+    '成交量偏低時分批進出可降低滑價。' +
+    '<b>同類換股</b>只換標的，配置比重不變，比的就是上面這幾項；' +
+    '<b>跨類調節</b>會改變風險結構（例如股轉債、市值轉高息），殖利率高低不足以判斷好壞，' +
+    '要搭配「加減碼報告」的持股配置結構一起看。' +
+    '<b>此處只比較兩檔的相對條件</b>，非投等債整體該不該持有屬系統性判斷，見「加減碼報告」。</div>';
   return h;
 }
 

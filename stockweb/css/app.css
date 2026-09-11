@@ -744,3 +744,17 @@ td.cost-even::after  { background: var(--text3); }
 .bid-cols .tick-title { margin-top: 0; }            /* 與左欄頂端對齊 */
 /* 窄螢幕回到上下排，避免兩欄都被擠扁 */
 @media (max-width: 900px) { .bid-cols { grid-template-columns: 1fr; } }
+
+/* ── 持股分類配置列（持股庫存表格上方）── */
+/* 固定一行：nowrap ⬍ 字型由 _catBarFit() 量測後逐步調小，不換行也不捲動 */
+.cat-bar { display: flex; gap: 14px; white-space: nowrap; overflow: hidden; align-items: baseline;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.cat-item { display: inline-flex; align-items: baseline; gap: 4px; }
+.cat-name { color: var(--text); font-weight: 700; }
+.cat-n { color: var(--text3); font-size: .85em; }
+.cat-cost { color: #f5d87a; }                 /* 與頂欄「總付出成本」同色 */
+.cat-cp   { color: #f5d87a; opacity: .65; }
+.cat-val  { color: var(--accent2); }          /* 與頂欄「總現值」同色 */
+.cat-vp   { color: var(--accent2); opacity: .65; }
+.cat-item + .cat-item { border-left: 1px solid var(--border); padding-left: 14px; }
