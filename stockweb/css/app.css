@@ -746,17 +746,32 @@ td.cost-even::after  { background: var(--text3); }
 @media (max-width: 900px) { .bid-cols { grid-template-columns: 1fr; } }
 
 /* ── 持股分類配置列（持股庫存表格上方）── */
-/* 字型與上方合計列（.sum-plabel 12px / .sum-pval 16px）一致；
-   七類塞不進一行 → flex-wrap 換行，不縮字。項目間不畫分隔線，
-   否則換行後第二行第一項會多一條懸在左邊的線。 */
-.cat-bar { display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: baseline;
+/* 收起＝單行摘要（字型由 _catLineFit 量測），右侧箭頭展開成 4×2 格線。
+   格線每格內部用子格線（標籤|金額|占比），金額靠右，跨格的欄位才會對齊。 */
+.cat-bar { display: flex; align-items: flex-start; gap: 8px;
   background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
   padding: 8px 10px; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
-.cat-item { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
-.cat-name { color: var(--text); font-weight: 700; font-size: 12px; display: inline-flex; align-items: baseline; gap: 3px; }
-.cat-n { color: var(--text3); font-size: 11px; font-weight: 400; }
-.cat-lb { color: var(--text2); font-size: 11px; font-weight: 600; margin-left: 3px; }
-.cat-cost { color: #f5d87a; font-size: 16px; font-weight: 700; letter-spacing: -.5px; }  /* 與頂欄「總付出成本」同色 */
-.cat-cp   { color: #f5d87a; opacity: .65; font-size: 12px; }
-.cat-val  { font-size: 16px; font-weight: 700; letter-spacing: -.5px; }  /* 色走 inline style：現值＞成本紅、＜綠 */
-.cat-vp   { opacity: .7; font-size: 12px; }
+.cat-line { flex: 1; min-width: 0; display: flex; gap: 22px; align-items: baseline;
+  white-space: nowrap; overflow: hidden; }
+.cat-chev { flex: none; background: none; border: none; color: var(--text2); cursor: pointer;
+  font-size: 12px; padding: 2px 4px; line-height: 1; }
+.cat-chev:hover { color: var(--accent2); }
+
+.cat-item { display: inline-flex; align-items: baseline; gap: 5px; }
+.cat-name { color: var(--text); font-weight: 700; font-size: .75em; display: inline-flex; align-items: baseline; gap: 3px; }
+.cat-n { color: var(--text3); font-size: .8em; font-weight: 400; }
+.cat-cost { color: #f5d87a; font-weight: 700; letter-spacing: -.5px; }   /* 與頂欄「總付出成本」同色 */
+.cat-cp   { color: #f5d87a; opacity: .65; font-size: .75em; }
+.cat-val  { font-weight: 700; letter-spacing: -.5px; }                   /* 色走 inline style：現值＞成本紅、＜綠 */
+.cat-vp   { opacity: .7; font-size: .75em; }
+
+/* 展開：4 欄 × 2 列 */
+.cat-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 18px; }
+.cat-cell { display: grid; grid-template-columns: auto auto auto; column-gap: 6px; row-gap: 2px;
+  align-items: baseline; padding-left: 10px; border-left: 2px solid var(--border); }
+.cat-cell-tot { border-left-color: var(--accent2); }
+.cat-cname { grid-column: 1 / -1; color: var(--text); font-weight: 700; font-size: 12px;
+  display: flex; align-items: baseline; gap: 4px; }
+.cat-grid .cat-lb { color: var(--text2); font-size: 11px; font-weight: 600; }
+.cat-grid .cat-cost, .cat-grid .cat-val { font-size: 16px; text-align: right; }
+.cat-grid .cat-cp, .cat-grid .cat-vp { font-size: 12px; text-align: right; }

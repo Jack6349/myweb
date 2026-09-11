@@ -100,11 +100,19 @@ function invAlert(p) {
 }
 
 // ── 分類配置列（表格上方）──
-// 字型固定與上方合計列一致（標題 12px、數字 16px），塞不下就換行，
-// 不再縮字（七類擠一行會被逐到 10px 讀不了）。
+// 收起＝單行摘要（名稱・檔數・成本萬・占比・現值萬・占比），字型量測後自動塞進一行；
+// 展開＝4×2 格線，欄位上下對齐、字型與上方合計列一致，並顯示完整金額與合計。
+// 折疊狀態寫 localStorage，與股利估算的個股明細同一個使用習慣。
 // 現值高於成本用紅、低於用綠（台股慣例）。
 // 兩個分母各自獨立：成本占比除以總成本、現值占比除以總現值；
 // 後者與庫存表「現值比」欄同基準（未扣稅費），同類各列相加等於這裡的值。
+var CAT_LS = 'inv_cats_open_v1';
+var _catOpen = (function () { try { return localStorage.getItem(CAT_LS) === '1'; } catch (e) { return false; } })();
+function toggleInvCats() {
+  _catOpen = !_catOpen;
+  try { localStorage.setItem(CAT_LS, _catOpen ? '1' : '0'); } catch (e) {}
+  renderInvCats();
+}
 function renderInvCats() {
   var el = document.getElementById('inv-cats');
   if (!el || typeof catAggregate !== 'function') return;
@@ -113,22 +121,60 @@ function renderInvCats() {
   var totCost = 0, totVal = 0;
   groups.forEach(function (g) { totCost += g.cost; totVal += g.val; });
   var money = function (v) { return Math.round(v).toLocaleString('zh-TW'); };
+  var wan = function (v) { return Math.round(v / 10000).toLocaleString('zh-TW') + '萬'; };
   var pct = function (v, t) { return t ? (v / t * 100).toFixed(1) + '%' : '—'; };
   var cls2var = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
-  el.innerHTML = groups.map(function (g) {
-    // 現值 vs 成本：高於→紅、低於→綠、相等→灰
-    var vc = cls2var[colorClass(g.val - g.cost)];
-    return '<span class="cat-item" title="' + g.cat + '：' + g.n + ' 檔">' +
-      '<span class="cat-name">' + g.cat + '<span class="cat-n">' + g.n + '</span></span>' +
-      '<span class="cat-lb">成本</span>' +
-      '<span class="cat-cost">' + money(g.cost) + '</span>' +
-      '<span class="cat-cp">' + pct(g.cost, totCost) + '</span>' +
-      '<span class="cat-lb">現值</span>' +
-      '<span class="cat-val" style="color:' + vc + '">' + money(g.val) + '</span>' +
-      '<span class="cat-vp" style="color:' + vc + '">' + pct(g.val, totVal) + '</span></span>';
-  }).join('');
+  // 現值 vs 成本：高於→紅、低於→綠、相等→灰
+  var vcOf = function (g) { return cls2var[colorClass(g.val - g.cost)]; };
+  var chev = '<button class="cat-chev" onclick="toggleInvCats()" title="' +
+    (_catOpen ? '收起' : '展開分類明細') + '">' + (_catOpen ? '▼' : '▶') + '</button>';
+
+  var html;
+  if (!_catOpen) {
+    html = '<div class="cat-line">' + groups.map(function (g) {
+      return '<span class="cat-item" title="' + g.cat + '：' + g.n + ' 檔　成本 ' + money(g.cost) +
+          '　現值 ' + money(g.val) + '">' +
+        '<span class="cat-name">' + g.cat + '<span class="cat-n">' + g.n + '</span></span>' +
+        '<span class="cat-cost">' + wan(g.cost) + '</span>' +
+        '<span class="cat-cp">' + pct(g.cost, totCost) + '</span>' +
+        '<span class="cat-val" style="color:' + vcOf(g) + '">' + wan(g.val) + '</span>' +
+        '<span class="cat-vp" style="color:' + vcOf(g) + '">' + pct(g.val, totVal) + '</span></span>';
+    }).join('') + '</div>' + chev;
+  } else {
+    var cell = function (name, n, cost, cp, val, vp, vc, cls) {
+      return '<div class="cat-cell' + (cls || '') + '">' +
+        '<div class="cat-cname">' + name + (n != null ? '<span class="cat-n">' + n + '</span>' : '') + '</div>' +
+        '<div class="cat-lb">成本</div><div class="cat-cost">' + cost + '</div><div class="cat-cp">' + cp + '</div>' +
+        '<div class="cat-lb">現值</div><div class="cat-val" style="color:' + vc + '">' + val + '</div>' +
+        '<div class="cat-vp" style="color:' + vc + '">' + vp + '</div></div>';
+    };
+    html = '<div class="cat-grid">' + groups.map(function (g) {
+      return cell(g.cat, g.n, money(g.cost), pct(g.cost, totCost), money(g.val), pct(g.val, totVal), vcOf(g));
+    }).join('') +
+      cell('合計', groups.reduce(function (a, g) { return a + g.n; }, 0),
+        money(totCost), '100.0%', money(totVal), '100.0%',
+        cls2var[colorClass(totVal - totCost)], ' cat-cell-tot') +
+      '</div>' + chev;
+  }
+  el.innerHTML = html;
+  el.className = 'cat-bar' + (_catOpen ? ' open' : '');
   el.style.display = '';
+  if (!_catOpen) _catLineFit(el.querySelector('.cat-line'));
 }
+// 收起狀態才需要量測：七類塞一行，從 16px（與上方合計列同尺）逐步調小至塞得進，下限 11px。
+// 頁面還沒佈局（clientWidth 0）時不量，否則會一路縮到下限；
+// 下一次 renderInvTable（行情 tick）或 resize 會重量。
+function _catLineFit(line) {
+  if (!line || !line.clientWidth) return;
+  for (var fs = 16; fs >= 11; fs -= 0.5) {
+    line.style.fontSize = fs + 'px';
+    if (line.scrollWidth <= line.clientWidth) return;
+  }
+}
+window.addEventListener('resize', function () {
+  var line = document.querySelector('#inv-cats .cat-line');
+  if (line && line.clientWidth) _catLineFit(line);
+});
 
 function renderInvTable() {
   var tb = document.getElementById('inv-tbody');
