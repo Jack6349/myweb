@@ -337,7 +337,7 @@ function renderDividendEst() {
           '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span></div>' +
       '</div>' +
       (open ? '<div class="divest-detail">' + det +
-        (DIV_HIST_CODES[s.code] ? '<div class="divest-hist" data-code="' + s.code + '"></div>' : '') +
+        '<div class="divest-hist" data-code="' + s.code + '"></div>' +
         '</div>' : '') +
     '</div>';
   });
@@ -355,7 +355,6 @@ function renderDividendEst() {
 // 區間＝當月往前兩年；上市不足兩年則從第一次除息開始（直接取區間內有的紀錄即可）。
 // 資料：除息紀錄沿用 _divRecMap（已併 TPEx 預告／手動補登）；收盤價由 Yahoo 2 年日 K（經 GAS，每檔每日 1 次）。
 // 價格抓不到時仍畫直條，只是不畫折線。
-var DIV_HIST_CODES = { '00981B': true };   // 範例階段：先開 00981B，確認樣式後再全面開放
 var DIV_PX_LS = 'divest_px_v1';
 var _divPx = {}, _divPxBusy = {};
 function _divHistPrices(code) {
@@ -409,6 +408,27 @@ window.addEventListener('resize', function () {
   if (document.querySelector('#divest-wrap .divest-hist')) _divHistDrawAll();
 });
 
+// 除息紀錄（圖用）：_divRecMap 為主。上市 ETF 的主來源 e添富 只保留約 2025/01 之後的資料，
+// 畫兩年區間會缺前面幾次 → 以 Yahoo 歷史（fetchYahooDiv，當日快取）補「早於 e添富 第一筆」的部分。
+// 只補更早的日期，不覆蓋重疊區間（兩邊金額在重疊期間實測一致，e添富 另含發放日，以它為準）。
+var _divHistYf = {}, _divHistYfBusy = {};
+function _divHistRecs(code) {
+  var base = ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).filter(function (r) { return r.exDate; });
+  var fromEtf = (typeof _divByCode !== 'undefined') && _divByCode && _divByCode[code] && _divByCode[code].length;
+  if (fromEtf && base.length) {
+    if (_divHistYf[code]) {
+      var first = base.reduce(function (m, r) { return r.exDate < m ? r.exDate : m; }, base[0].exDate);
+      base = base.concat(_divHistYf[code].filter(function (r) { return r.exDate < first; }));
+    } else if (!_divHistYfBusy[code]) {
+      _divHistYfBusy[code] = true;
+      fetchYahooDiv(code, false).then(function (recs) { _divHistYf[code] = recs || []; })
+        .catch(function () { _divHistYf[code] = []; })
+        .then(function () { _divHistYfBusy[code] = false; if (_divEstOpen[code]) _divHistDrawAll(); });
+    }
+  }
+  return base.slice().sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
+}
+
 function _divHistDraw(el, code) {
   var W = el.clientWidth;
   if (!W) return;
@@ -416,12 +436,13 @@ function _divHistDraw(el, code) {
   var y = +today.slice(0, 4), m = +today.slice(5, 7);
   var startIso = (y - 2) + '-' + ('0' + m).slice(-2) + '-01';
   var endIso = y + '-' + ('0' + m).slice(-2) + '-31';
-  var all = ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || [])
-    .filter(function (r) { return r.exDate; })
-    .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
+  var all = _divHistRecs(code);
   var ev = all.filter(function (r) { return r.exDate >= startIso && r.exDate <= endIso && r.amount > 0; });
-  if (!ev.length) { el.innerHTML = '<div class="divest-hist-note">區間內無除息紀錄</div>'; return; }
+  if (!ev.length) { el.innerHTML = '<div class="divest-hist-note">兩年內尚無已公布金額的除息紀錄</div>'; return; }
 
+  // 上市 ETF 要等 Yahoo 補完早期紀錄，才能判斷「區間前真的沒有紀錄」；補抓中或補抓失敗時不下「未滿兩年」的結論
+  var fromEtf = (typeof _divByCode !== 'undefined') && _divByCode && _divByCode[code] && _divByCode[code].length;
+  var histComplete = !fromEtf || (_divHistYf[code] && _divHistYf[code].length);
   var bars = _divHistPrices(code);          // null＝抓取中；[]＝抓不到
   var step = _divInferStep(all), perYear = 12 / step;
   var closeBefore = function (iso) {
@@ -500,9 +521,10 @@ function _divHistDraw(el, code) {
 
   var note = bars === null ? '收盤價載入中，殖利率折線稍後出現…'
     : (!bars.length ? '收盤價暫時抓不到（Yahoo／GAS），僅顯示除息金額。' : '');
+  if (_divHistYfBusy[code]) note = (note ? note + '　' : '') + '較早的除息紀錄補抓中…';
   var span = ev[0].exDate.slice(0, 7).replace('-', '/') + '–' + ev[ev.length - 1].exDate.slice(0, 7).replace('-', '/');
   el.innerHTML = '<div class="divest-hist-title">歷年配息　<span>' + span + '・' + n + ' 次' +
-      (ev[0].exDate > startIso ? '（上市未滿兩年，自首次除息起）' : '') + '</span></div>' +
+      (histComplete && all[0].exDate >= startIso ? '（上市未滿兩年，自首次除息起）' : '') + '</span></div>' +   // 區間前完全沒有紀錄才算；半年配剛好落在區間外不算
     '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" class="divest-hist-svg">' + lg + g + '</svg>' +
     (note ? '<div class="divest-hist-note">' + note + '</div>' : '');
 }
