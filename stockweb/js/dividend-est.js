@@ -108,6 +108,8 @@ function _divInferStepFallback(recs) {
   return /^00\d+B$/.test(String(code)) ? 1 : 12;
 }
 function _divInferStep(recs) {
+  var ov = _divFreqOverride(recs && recs[0] && recs[0].code);
+  if (ov) return ov;
   if (recs.length < 2) return _divInferStepFallback(recs);
   var gaps = [];
   for (var i = 1; i < recs.length; i++) {
@@ -230,7 +232,7 @@ async function startDividendEst(force) {
   });
   await Promise.all(missing.map(async function (code) {
     try { var yr = await fetchYahooDiv(code, force); if (yr && yr.length) recMap[code] = yr; } catch (e) {}
-  }));
+  }).concat([divMetaLoad(codes).catch(function () {})]));   // 官方 ETF 規格＋手動輸入（配息頻率估算要用，須在 computeEtfYear 前就緒；見 div-meta.js）
   // 上櫃 ETF 的未來除息只有 TPEx 有；先確保當日快取存在（每日 1 次全市場），股利估算不再相依填息追蹤頁
   try { await fetchTpexExright(); } catch (e) {}
   _divMergeAnnounced(recMap);   // 併入已公告除息（TPEx 預告表／手動補登），估算改採實際公告值
@@ -313,10 +315,11 @@ function renderDividendEst() {
     var _rep = _mos.filter(function (m) { return m.status === 'est'; })[0] ||
       _mos.filter(function (m) { return m.status === 'actual'; }).slice(-1)[0];
     var repPS = _rep ? _rep.perShare : 0;
-    // 配息頻率：由相鄰兩次配息的月份間隔推估（月配→12、季配→4、半年→2、年配→1）
-    var freq;
-    if (_mos.length >= 2) { var gap = _mos[_mos.length - 1].month - _mos[_mos.length - 2].month; freq = gap > 0 ? Math.max(1, Math.round(12 / gap)) : _mos.length; }
-    else freq = _mos.length || 1;
+    // 配息頻率：與估算、換股試算共用 _divInferStep（含頻率覆寫與「紀錄不足」規則），不再另用發放月間隔自算
+    var _recsAsc = ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [{ code: s.code }])
+      .slice().sort(function (a, b) { return (a.exDate || '') < (b.exDate || '') ? -1 : 1; });
+    if (!_recsAsc[0].code) _recsAsc[0] = Object.assign({ code: s.code }, _recsAsc[0]);
+    var freq = 12 / _divInferStep(_recsAsc);
     var annPerShare = repPS * freq;
     var yld = (price && annPerShare) ? annPerShare / price * 100 : null;
     // 當月已公告除息（含 TPEx 預告與手動補登，由 _divMergeAnnounced 併入）；無則不顯示

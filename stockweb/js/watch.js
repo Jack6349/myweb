@@ -320,7 +320,8 @@ function _wtFreq(code, recsAsc) {
   if (!recs.length) recs = [{ code: code }];
   else if (!recs[0].code) recs = recs.map(function (r) { return Object.assign({ code: code }, r); });
   var s = (typeof _divInferStep === 'function') ? _divInferStep(recs) : 12;
-  return { step: s, freq: 12 / s, guessed: n < 2, n: n };
+  var known = (typeof _divFreqOverride === 'function') && _divFreqOverride(code);   // 手動登錄或 TWSE 官方頻率 → 不是推定值
+  return { step: s, freq: 12 / s, guessed: n < 2 && !known, n: n };
 }
 
 // ── 除息資料永久快取：key = code|年月；當月除息日已公告即命中，不再呼叫 Yahoo ──

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=141">
+<link rel="stylesheet" href="css/app.css?v=142">
 </head>
 <body>
 
@@ -165,6 +165,7 @@
       <button id="divest-subtab-est" class="tx-subtab active" onclick="divShowTab('est')">股利估算</button>
       <button id="divest-subtab-swap" class="tx-subtab" onclick="divShowTab('swap')">換股試算</button>
       <button id="divest-subtab-refill" class="tx-subtab" onclick="divShowTab('refill')">填息追蹤</button>
+      <button id="divest-subtab-meta" class="tx-subtab" onclick="divShowTab('meta')">配息資料</button>
     </div>
     <div id="divest-tab-est">
       <div class="divest-topbar">
@@ -195,6 +196,15 @@
         <span id="refill-info" style="font-size:13px;color:var(--text2)"></span>
       </div>
       <div id="refill-wrap"></div>
+    </div>
+
+    <!-- 配息資料：持有 ETF 的配息頻率／費用／除息紀錄總表；官方抓不到的可手動輸入（存 Firestore） -->
+    <div id="divest-tab-meta" style="display:none">
+      <div class="swap-toolbar">
+        <button class="btn-query" onclick="startDivMeta(true)">↻ 重抓官方規格</button>
+        <span id="divmeta-info" style="font-size:13px;color:var(--text2)"></span>
+      </div>
+      <div id="divmeta-wrap"></div>
     </div>
   </div>
 
@@ -365,10 +375,11 @@
 <script src="js/sbl.js?v=9"></script>
 <script src="js/params.js?v=2"></script>
 <script src="js/topconst.js?v=7"></script>
-<script src="js/watch.js?v=6"></script>
+<script src="js/watch.js?v=8"></script>
 <script src="js/chart.js?v=17"></script>
-<script src="js/dividend-est.js?v=30"></script>
-<script src="js/swap.js?v=25"></script>
+<script src="js/div-meta.js?v=1"></script>
+<script src="js/dividend-est.js?v=34"></script>
+<script src="js/swap.js?v=26"></script>
 <script src="js/refill.js?v=12"></script>
 <script src="js/risk-score.js?v=12"></script>
 <script src="js/news.js?v=39"></script>

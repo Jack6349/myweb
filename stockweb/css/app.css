@@ -785,3 +785,28 @@ td.cost-even::after  { background: var(--text3); }
 .divest-hist-svg .dh-val { font-size: 11px; font-weight: 700; }
 .divest-hist-svg .dh-lg { font-size: 11px; fill: var(--text2); }
 .divest-hist-note { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+/* ── 股利估算：配息資料頁籤 ── */
+.dm-table td { vertical-align: middle; }
+.dm-dim { color: var(--text3); }
+.dm-lv { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+.dm-lv-red { background: var(--up); }
+.dm-lv-yellow { background: var(--accent2); }
+.dm-lv-green { background: var(--down); }
+.dm-lv-gray { background: var(--text3); }
+.dm-freq { white-space: nowrap; }
+.dm-sel { background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 4px;
+  font-size: 12px; padding: 2px 4px; font-family: var(--font); }
+.dm-src { display: inline-block; margin-left: 6px; font-size: 10px; padding: 0 5px; border-radius: 3px;
+  border: 1px solid var(--border); color: var(--text2); }
+.dm-src-off { border-color: rgba(38,217,98,.5); color: var(--down); }        /* 官方 TWSE／TPEx */
+.dm-src-manual, .dm-src-code { border-color: rgba(240,204,122,.6); color: var(--accent2); }
+.dm-src-infer { color: var(--text2); }
+.dm-src-guess { border-color: rgba(255,82,82,.6); color: var(--up); }
+.dm-fee { width: 58px; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 3px;
+  text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; padding: 1px 3px; font-family: var(--font); }
+.dm-fee::placeholder { color: var(--text2); }
+.dm-fee:hover, .dm-fee:focus { border-color: var(--border); background: var(--bg3); outline: none; }
+.dm-fee.dm-manual { color: var(--accent2); font-weight: 700; }                /* 手動值：黃字 */
+.dm-tier { font-size: 10px; color: var(--text3); margin: 0 1px; }
+.dm-warn { color: var(--up); font-weight: 700; }

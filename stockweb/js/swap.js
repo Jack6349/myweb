@@ -34,7 +34,7 @@ function _swapLoad() {
 function _swapSave() { try { localStorage.setItem(SWAP_LS, JSON.stringify(_swapState)); } catch (e) {} }
 
 // ── 子頁籤切換（股利估算 / 換股試算 / 填息追蹤）──
-var DIV_TABS = ['est', 'swap', 'refill'];
+var DIV_TABS = ['est', 'swap', 'refill', 'meta'];
 function divShowTab(tab) {
   if (DIV_TABS.indexOf(tab) < 0) tab = 'est';
   DIV_TABS.forEach(function (t) {
@@ -46,6 +46,7 @@ function divShowTab(tab) {
   if (tab === 'swap') startSwap();
   else if (tab === 'refill' && typeof startRefill === 'function' &&
     !(typeof _rfResult !== 'undefined' && _rfResult)) startRefill();
+  else if (tab === 'meta' && typeof startDivMeta === 'function') startDivMeta();
 }
 
 // ── 期數/日期工具（ym = 年*12 + 月-1）──
