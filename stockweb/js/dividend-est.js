@@ -64,6 +64,16 @@ async function fetchEtfDividendList(force) {
 }
 
 // Yahoo 配息後備（GAS ?code=）：e添富（上市）沒有的持股（上櫃/債券 ETF）用此補；每日快取
+// fetch 加逾時：GAS 偶發卡住不回應；但正常回應也可能慢到 28 秒（實測 2026-09-13），逾時取 40 秒。
+// 各檔並行抓取，所以最壞情況是整頁多等 40 秒，不是每檔累加。
+// 沒有逾時的 await 會讓整個股利估算頁停在「讀取中」；逾時即丟錯，由呼叫端的 try/catch 當作抓取失敗。
+function _divFetchT(url, ms) {
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = ctl ? setTimeout(function () { ctl.abort(); }, ms) : null;
+  return fetch(url, ctl ? { signal: ctl.signal } : undefined)
+    .finally(function () { if (timer) clearTimeout(timer); });
+}
+
 async function fetchYahooDiv(code, force) {
   var day = _divTwDate().iso, lsKey = 'divest_yf_v1', cache = { day: day, map: {} };
   try { var c = JSON.parse(localStorage.getItem(lsKey) || 'null'); if (c && c.day === day) cache = c; } catch (e) {}
@@ -71,7 +81,7 @@ async function fetchYahooDiv(code, force) {
   if (!force && cache.map[code] && cache.map[code].length) return cache.map[code];
   var recs = [];
   try {
-    var r = await fetch(NEWS_GAS_URL + '?code=' + encodeURIComponent(code));
+    var r = await _divFetchT(NEWS_GAS_URL + '?code=' + encodeURIComponent(code), 40000);
     var j = await r.json();
     if (j.stat === 'OK') {
       (j.dividends || []).forEach(function (d) {
@@ -326,7 +336,9 @@ function renderDividendEst() {
         '<div class="divest-smeta">已領 <span style="color:var(--down)">' + money(s.res.actualTotal) + '</span>　估算 <span style="color:var(--accent2)">' + money(s.res.estTotal) + '</span>　' +
           '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span></div>' +
       '</div>' +
-      (open ? '<div class="divest-detail">' + det + '</div>' : '') +
+      (open ? '<div class="divest-detail">' + det +
+        (DIV_HIST_CODES[s.code] ? '<div class="divest-hist" data-code="' + s.code + '"></div>' : '') +
+        '</div>' : '') +
     '</div>';
   });
   html += '</div>';
@@ -335,6 +347,164 @@ function renderDividendEst() {
 
   html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。<b>各次配息依建倉明細判定可領張數：除息日當天（含）之後才買進的批次不計</b>（已賣出的部位不在建倉明細中，過去月份的已領金額可能低估）。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。</div>';
   wrap.innerHTML = html;
+  _divHistDrawAll();   // 圖要量容器實際寬度，必須在插入 DOM 之後畫
+}
+
+// ── 歷年配息圖（個股明細展開後顯示）──
+// 直條＝每股除息金額（頂端標數字）；折線＝當次年化殖利率＝每股 × 年配息次數 ÷ 除息前一交易日收盤。
+// 區間＝當月往前兩年；上市不足兩年則從第一次除息開始（直接取區間內有的紀錄即可）。
+// 資料：除息紀錄沿用 _divRecMap（已併 TPEx 預告／手動補登）；收盤價由 Yahoo 2 年日 K（經 GAS，每檔每日 1 次）。
+// 價格抓不到時仍畫直條，只是不畫折線。
+var DIV_HIST_CODES = { '00981B': true };   // 範例階段：先開 00981B，確認樣式後再全面開放
+var DIV_PX_LS = 'divest_px_v1';
+var _divPx = {}, _divPxBusy = {};
+function _divHistPrices(code) {
+  var day = _divTwDate().iso;
+  var mem = _divPx[code];
+  if (mem && mem.day === day && (mem.bars.length || Date.now() - mem.failTs < 60000)) return mem.bars;
+  try {
+    var c = JSON.parse(localStorage.getItem(DIV_PX_LS) || 'null');
+    if (c && c.day === day && c.map && c.map[code]) { _divPx[code] = { day: day, bars: c.map[code] }; return c.map[code]; }
+  } catch (e) {}
+  if (_divPxBusy[code]) return null;
+  _divPxBusy[code] = true;
+  (async function () {
+    var ex = (_contracts[code] && _contracts[code].exchange) || '';
+    var syms = ex === 'OTC' ? [code + '.TWO', code + '.TW'] : [code + '.TW', code + '.TWO'];
+    var bars = [];
+    for (var i = 0; i < syms.length && !bars.length; i++) {
+      try {
+        var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + syms[i] + '?interval=1d&range=2y';
+        var r = await _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(url), 40000);
+        var j = await r.json();   // GAS 偶發回 HTML 錯誤頁 → 這裡丟錯，換下一個代號或放棄
+        var res = j.chart && j.chart.result && j.chart.result[0];
+        var ts = (res && res.timestamp) || [], cl = (res && res.indicators.quote[0].close) || [];
+        for (var k = 0; k < ts.length; k++) {
+          if (cl[k] != null) bars.push([new Date(ts[k] * 1000 + 8 * 3600000).toISOString().slice(0, 10), cl[k]]);
+        }
+      } catch (e) {}
+    }
+    _divPxBusy[code] = false;
+    // 失敗記空陣列＋時間：60 秒內重繪不重打 GAS，之後再開明細會重試（GAS 是偶發失敗，不能整天放棄）
+    _divPx[code] = { day: day, bars: bars, failTs: bars.length ? 0 : Date.now() };
+    if (bars.length) {
+      try {
+        var c = JSON.parse(localStorage.getItem(DIV_PX_LS) || 'null');
+        if (!c || c.day !== day) c = { day: day, map: {} };
+        c.map[code] = bars;
+        localStorage.setItem(DIV_PX_LS, JSON.stringify(c));
+      } catch (e) {}
+    }
+    if (_divEstOpen[code]) _divHistDrawAll();
+  })();
+  return null;
+}
+
+function _divHistDrawAll() {
+  document.querySelectorAll('#divest-wrap .divest-hist[data-code]').forEach(function (el) {
+    _divHistDraw(el, el.getAttribute('data-code'));
+  });
+}
+window.addEventListener('resize', function () {
+  if (document.querySelector('#divest-wrap .divest-hist')) _divHistDrawAll();
+});
+
+function _divHistDraw(el, code) {
+  var W = el.clientWidth;
+  if (!W) return;
+  var tw = _divTwDate(), today = tw.iso;
+  var y = +today.slice(0, 4), m = +today.slice(5, 7);
+  var startIso = (y - 2) + '-' + ('0' + m).slice(-2) + '-01';
+  var endIso = y + '-' + ('0' + m).slice(-2) + '-31';
+  var all = ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || [])
+    .filter(function (r) { return r.exDate; })
+    .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
+  var ev = all.filter(function (r) { return r.exDate >= startIso && r.exDate <= endIso && r.amount > 0; });
+  if (!ev.length) { el.innerHTML = '<div class="divest-hist-note">區間內無除息紀錄</div>'; return; }
+
+  var bars = _divHistPrices(code);          // null＝抓取中；[]＝抓不到
+  var step = _divInferStep(all), perYear = 12 / step;
+  var closeBefore = function (iso) {
+    if (!bars || !bars.length) return null;
+    var px = null;
+    for (var i = 0; i < bars.length && bars[i][0] < iso; i++) px = bars[i][1];
+    return px;
+  };
+  var pts = ev.map(function (r) {
+    var px = closeBefore(r.exDate);
+    return { ex: r.exDate, amt: r.amount, future: r.exDate > today, px: px,
+      yld: px ? r.amount * perYear / px * 100 : null };
+  });
+
+  // 版面
+  var H = 220, mt = 34, mb = 26, ml = 46, mr = 52;
+  var pw = W - ml - mr, ph = H - mt - mb, n = pts.length;
+  var slot = pw / n, bw = Math.min(38, slot * 0.6);
+  // 左軸取「整齊刻度」：四等分的每格取 1/2/2.5/5×10^k，否則 0.0864 會標成 0.00/0.02/0.04/0.06/0.09 看起來不等距
+  var rawMax = Math.max.apply(null, pts.map(function (p) { return p.amt; })) * 1.15;
+  var mag = Math.pow(10, Math.floor(Math.log10(rawMax / 4)));
+  var stepA = [1, 2, 2.5, 5, 10].map(function (k) { return k * mag; }).filter(function (v) { return v * 4 >= rawMax; })[0];
+  var maxAmt = stepA * 4;
+  var axDp = Math.max(0, -Math.floor(Math.log10(stepA) + 1e-9)) + (String(stepA / mag).indexOf('.') >= 0 ? 1 : 0);
+  var yA = function (v) { return mt + ph - v / maxAmt * ph; };
+  var ys = pts.filter(function (p) { return p.yld != null; }).map(function (p) { return p.yld; });
+  var yMin = ys.length ? Math.min.apply(null, ys) : 0, yMax = ys.length ? Math.max.apply(null, ys) : 1;
+  var pad = Math.max(0.5, (yMax - yMin) * 0.25); yMin = Math.max(0, yMin - pad); yMax = yMax + pad;
+  var yY = function (v) { return mt + ph - (v - yMin) / (yMax - yMin) * ph; };
+  var cx = function (i) { return ml + slot * (i + 0.5); };
+  var f3 = function (v) { return v.toFixed(3); };
+  var LINE = '#5aa9ff';
+
+  var g = '';
+  // 左軸（每股金額）格線 4 等分
+  for (var t = 0; t <= 4; t++) {
+    var v = maxAmt / 4 * t, yy = yA(v);
+    g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--border)" stroke-opacity=".45" stroke-width="1"/>' +
+      '<text x="' + (ml - 6) + '" y="' + (yy + 4) + '" text-anchor="end" class="dh-ax">' + v.toFixed(axDp) + '</text>';
+  }
+  // 右軸（殖利率 %）
+  if (ys.length) {
+    for (var t2 = 0; t2 <= 4; t2++) {
+      var v2 = yMin + (yMax - yMin) / 4 * t2;
+      g += '<text x="' + (W - mr + 6) + '" y="' + (yY(v2) + 4) + '" class="dh-ax" fill="' + LINE + '">' + v2.toFixed(1) + '%</text>';
+    }
+  }
+  // 直條＋頂端金額＋X 軸月份
+  pts.forEach(function (p, i) {
+    var x = cx(i) - bw / 2, top = yA(p.amt);
+    var col = p.future ? 'var(--accent2)' : 'var(--down)';
+    var tip = p.ex + (p.future ? '（已公告）' : '') + '　除息 ' + f3(p.amt) +
+      (p.yld != null ? '　年化殖利率 ' + p.yld.toFixed(2) + '%（除息前收盤 ' + p.px.toFixed(2) + '）' : '');
+    g += '<g><title>' + tip + '</title>' +
+      '<rect x="' + x + '" y="' + top + '" width="' + bw + '" height="' + (mt + ph - top) + '" rx="2" fill="' + col + '" fill-opacity="' + (p.future ? '.55' : '.8') + '"/>' +
+      '<text x="' + cx(i) + '" y="' + (top - 5) + '" text-anchor="middle" class="dh-val" fill="' + col + '">' + f3(p.amt) + '</text>' +
+      '<text x="' + cx(i) + '" y="' + (H - 8) + '" text-anchor="middle" class="dh-ax">' + p.ex.slice(2, 4) + '/' + p.ex.slice(5, 7) + '</text></g>';
+  });
+  // 折線＋點
+  var lp = pts.map(function (p, i) { return p.yld != null ? [cx(i), yY(p.yld)] : null; }).filter(Boolean);
+  if (lp.length >= 2) {
+    g += '<polyline points="' + lp.map(function (q) { return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' ') +
+      '" fill="none" stroke="' + LINE + '" stroke-width="2" stroke-linejoin="round"/>';
+  }
+  lp.forEach(function (q) {
+    g += '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="3" fill="var(--bg2)" stroke="' + LINE + '" stroke-width="2"/>';
+  });
+  // 圖例
+  var lg = '<rect x="' + ml + '" y="8" width="10" height="10" rx="2" fill="var(--down)" fill-opacity=".8"/>' +
+    '<text x="' + (ml + 14) + '" y="17" class="dh-lg">每股除息金額</text>' +
+    '<rect x="' + (ml + 100) + '" y="8" width="10" height="10" rx="2" fill="var(--accent2)" fill-opacity=".55"/>' +
+    '<text x="' + (ml + 114) + '" y="17" class="dh-lg">已公告未除息</text>' +
+    '<line x1="' + (ml + 204) + '" x2="' + (ml + 224) + '" y1="13" y2="13" stroke="' + LINE + '" stroke-width="2"/>' +
+    '<circle cx="' + (ml + 214) + '" cy="13" r="3" fill="var(--bg2)" stroke="' + LINE + '" stroke-width="2"/>' +
+    '<text x="' + (ml + 230) + '" y="17" class="dh-lg">年化殖利率（右軸）</text>';
+
+  var note = bars === null ? '收盤價載入中，殖利率折線稍後出現…'
+    : (!bars.length ? '收盤價暫時抓不到（Yahoo／GAS），僅顯示除息金額。' : '');
+  var span = ev[0].exDate.slice(0, 7).replace('-', '/') + '–' + ev[ev.length - 1].exDate.slice(0, 7).replace('-', '/');
+  el.innerHTML = '<div class="divest-hist-title">歷年配息　<span>' + span + '・' + n + ' 次' +
+      (ev[0].exDate > startIso ? '（上市未滿兩年，自首次除息起）' : '') + '</span></div>' +
+    '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" class="divest-hist-svg">' + lg + g + '</svg>' +
+    (note ? '<div class="divest-hist-note">' + note + '</div>' : '');
 }
 
 // 出借中股數（股）：從 _positions 的 lentShares 取（與持股庫存「借出」欄同一來源）。

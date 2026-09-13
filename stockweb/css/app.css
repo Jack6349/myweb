@@ -469,7 +469,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-dpay { width: 48px; }
 .divest-dps { width: 56px; text-align: right; }
 .divest-dtot { width: 84px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
-.divest-dst { width: 34px; text-align: right; }
+.divest-dst { flex: none; white-space: nowrap; padding-left: 4px; }   /* 不設固定寬：「已領（計 12 張）」「除息後才買進，未持有」要一行顯示 */
 .divest-note { font-size: 11px; color: var(--text3); margin-top: 12px; line-height: 1.5; }
 /* 已發放=綠、預估=黃：除發放月外整列上色（靠繼承），金額加亮（亮色＋粗體） */
 .divest-drow.dv-act { color: #1a9e49; }
@@ -775,3 +775,13 @@ td.cost-even::after  { background: var(--text3); }
 .cat-grid .cat-lb { color: var(--text2); font-size: 11px; font-weight: 600; }
 .cat-grid .cat-cost, .cat-grid .cat-val { font-size: 16px; text-align: right; }
 .cat-grid .cat-cp, .cat-grid .cat-vp { font-size: 12px; text-align: right; }
+
+/* ── 股利估算：歷年配息圖（個股明細展開後）── */
+.divest-hist { margin: 10px 0 2px; max-width: 100%; }   /* 寬度＝明細區塊寬，與下方月份總覽表同寬，不會超出 */
+.divest-hist-title { font-size: 12px; color: var(--text2); font-weight: 600; margin-bottom: 2px; }
+.divest-hist-title span { color: var(--text3); font-weight: 400; }
+.divest-hist-svg { display: block; font-variant-numeric: tabular-nums; }
+.divest-hist-svg .dh-ax { font-size: 10px; fill: var(--text3); }
+.divest-hist-svg .dh-val { font-size: 11px; font-weight: 700; }
+.divest-hist-svg .dh-lg { font-size: 11px; fill: var(--text2); }
+.divest-hist-note { font-size: 11px; color: var(--text3); margin-top: 2px; }
