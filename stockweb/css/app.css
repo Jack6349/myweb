@@ -683,6 +683,7 @@ td.cost-even::after  { background: var(--text3); }
 .dstat.dexm th, .dstat.dexm td { padding: 6px 18px; }
 .dstat.dexm th:first-child, .dstat.dexm td:first-child { padding-left: 12px; }
 .dstat.dexm .dexm-yld { color: var(--accent2); }
+.dstat.dexm .dexm-cyld { color: #5aa9ff; }   /* 成本殖利率：藍，與現價殖利率（黃）區分 */
 
 /* 換股試算：換手品質比較表（賣出 vs 買入的相對條件） */
 .swap-qual td:first-child { color: var(--text2); }
