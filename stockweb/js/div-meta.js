@@ -212,8 +212,10 @@ function _divMetaRow(code) {
   var cust = man.cust != null ? man.cust : _divFeePct(o.cust);
   // 狀態：red＝頻率靠猜（紀錄 ≤1 筆且無官方／手動）、yellow＝由紀錄推算、green＝官方或手動、gray＝不配息
   var lv = src === 'none' ? 'gray' : (src === 'guess' ? 'red' : (src === 'infer' ? 'yellow' : 'green'));
+  var chk = (typeof _divBrokerCheck === 'function') ? _divBrokerCheck(code) : null;
+  if (chk && chk.bad.length) lv = 'red';                        // 與券商實領不符 → 除息紀錄有缺漏，列最上面
   return { code: code, name: c.name || '', cat: (typeof catOf === 'function') ? catOf(code) : '', o: o, man: man,
-    step: step, src: src, lv: lv, recs: recs, last: last, next: next, in12: in12, sum12: sum12,
+    step: step, src: src, lv: lv, chk: chk, recs: recs, last: last, next: next, in12: in12, sum12: sum12,
     yld1: yld1, yld12: yld12, mgmt: mgmt, cust: cust };
 }
 
@@ -230,7 +232,7 @@ function renderDivMeta() {
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); };
   var dim = function (s) { return '<span class="dm-dim">' + s + '</span>'; };
   var srcName = { manual: '手動', code: '程式登錄', TWSE: 'TWSE', TPEx: 'TPEx', infer: '紀錄推算', guess: '推定', none: '官方' };
-  var lvTip = { red: '頻率靠推定（紀錄 ≤1 筆、無官方或手動資料），請確認', yellow: '頻率由除息紀錄推算', green: '頻率來自官方或手動輸入', gray: '官方標示不配息' };
+  var lvTip = { red: '頻率靠推定（紀錄 ≤1 筆、無官方或手動資料），或除息紀錄與券商實領金額不符，請確認', yellow: '頻率由除息紀錄推算', green: '頻率來自官方或手動輸入', gray: '官方標示不配息' };
   var rfMan = (typeof _rfManLoad === 'function') ? _rfManLoad() : {};
 
   var store = _divManStore === 'firestore'
@@ -249,7 +251,8 @@ function renderDivMeta() {
     '<th class="num" title="近 12 個月已除息之每股金額合計">近12月每股</th>' +
     '<th class="num" title="最新一次每股 × 年配息次數 ÷ 現價">年化殖利率</th>' +
     '<th class="num" title="近 12 個月每股合計 ÷ 現價；上市未滿一年會偏低">近12月殖利率</th>' +
-    '<th class="num">紀錄</th></tr></thead><tbody>';
+    '<th class="num">紀錄</th>' +
+    '<th title="已賣出批次：券商記錄的持有期間實領股利 vs 依除息紀錄重算，不符代表紀錄缺漏">券商核對</th></tr></thead><tbody>';
 
   rows.forEach(function (r) {
     var o = r.o, man = r.man;
@@ -299,6 +302,7 @@ function renderDivMeta() {
       '<td class="num">' + (r.yld1 == null ? dim('—') : r.yld1.toFixed(2) + '%') + '</td>' +
       '<td class="num">' + y12 + '</td>' +
       '<td class="num' + (r.recs.length <= 1 ? ' dm-warn' : '') + '">' + r.recs.length + '</td>' +
+      '<td>' + _divChkCell(r.chk) + '</td>' +
       '</tr>';
   });
   h += '</tbody></table></div>' +
@@ -308,6 +312,18 @@ function renderDivMeta() {
     '官方規格：上市＝TWSE、上櫃＝TPEx「ETF 商品資訊」，每 30 天更新一次。' +
     '配息頻率、管理費、保管費可手動輸入，會覆蓋官方值；清空即回到自動。除息日與金額的手動補登請到「填息追蹤」。</div>';
   wrap.innerHTML = h;
+}
+
+function _divChkCell(chk) {
+  if (!chk) return '<span class="dm-dim" title="近 12 個月沒有賣出紀錄，無可比對">—</span>';
+  if (!chk.bad.length) return '<span class="dm-ok" title="已賣出 ' + chk.n + ' 批的實領股利與除息紀錄一致">✓ ' + chk.n + ' 批</span>';
+  var ps = chk.bad.map(function (b) { return b.perShare; });
+  var same = ps.every(function (v) { return Math.abs(v - ps[0]) < 0.0015; });
+  var tip = chk.bad.map(function (b) {
+    return b.buy + ' 買 → ' + b.sell + ' 賣　' + (b.shares / 1000) + ' 張　券商實領 ' + b.broker + '／紀錄推算 ' + b.ours;
+  }).join('\n');
+  return '<span class="dm-warn" title="' + tip + '">⚠ ' + chk.bad.length + '/' + chk.n + ' 批不符' +
+    (same ? '，每股差 ' + (ps[0] > 0 ? '+' : '') + ps[0].toFixed(3) : '') + '</span>';
 }
 
 async function divMetaSet(code, key, raw) {

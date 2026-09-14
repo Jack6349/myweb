@@ -65,7 +65,7 @@ function _swapEvents(recs, startYm, n) {
   if (!recs.length) return [];
   var lastAmt = 0;
   for (var i = recs.length - 1; i >= 0; i--) { if (recs[i].amount != null) { lastAmt = recs[i].amount; break; } }
-  var payOf = function (r) { return r.payDate || _addMonths(r.exDate, 1); };
+  var payOf = function (r) { return r.payDate || _divDerivePay(r.exDate); };   // 與股利估算同一推算規則
   var endYm = startYm + n - 1;
   var map = {};
   var step = _divInferStep(recs);

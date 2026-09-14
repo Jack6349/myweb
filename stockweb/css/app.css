@@ -810,3 +810,4 @@ td.cost-even::after  { background: var(--text3); }
 .dm-fee.dm-manual { color: var(--accent2); font-weight: 700; }                /* 手動值：黃字 */
 .dm-tier { font-size: 10px; color: var(--text3); margin: 0 1px; }
 .dm-warn { color: var(--up); font-weight: 700; }
+.dm-ok { color: var(--down); }

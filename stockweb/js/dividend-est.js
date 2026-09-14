@@ -125,6 +125,14 @@ function _divInferStep(recs) {
   return med <= 1.4 ? 1 : (med <= 4.5 ? 3 : (med <= 9 ? 6 : 12));
 }
 
+// 缺發放日時的推算值：除息日 ＋ 28 天。
+// 實際間隔多為 27–30 天（例：00988B 9/15→10/15、00918 9/18→10/15、00404A 9/16→10/13）。
+// 原本用「＋1 個月」：月初除息會被推到下個月（00981B 3/3 除息被算成 4 月發放，並與 3/19 那次撞在同月），
+// 月底除息還會產生 2026-02-31 這種不存在的日期。
+function _divDerivePay(exIso) {
+  if (!exIso) return null;
+  return new Date(Date.parse(exIso) + 28 * 86400000).toISOString().slice(0, 10);
+}
 function _addMonths(iso, n) {
   var y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1, d = iso.slice(8, 10);
   var t = y * 12 + m + n;
@@ -133,15 +141,72 @@ function _addMonths(iso, n) {
 
 // 單檔當年 1–12 月，依「發放月」分組（跨年：去年12月除息→今年1月發放算今年）
 // 已過發放日=已領(actual)、未來=預估(est)。發放日：有則用，無則「除息月＋1」推導。
-// 某次除息可領股數：需在「除息日前一交易日」收盤時已持有，故建倉日必須早於除息日。
-// 除息日當天（含）之後才買進的批次領不到該次配息（例：9/1 除息、9/1 買進 → 不計）。
+// 某次除息可領股數＝除息日當時實際持有的股數，由兩部分組成：
+//   1) 目前仍持有的批次（建倉明細 _lotsMap）：建倉日早於除息日才算
+//      （除息日當天（含）之後才買進的領不到，例：9/1 除息、9/1 買進 → 不計）
+//   2) 已賣出的批次（已實現損益明細 _soldLotsMap）：建倉日早於除息日、且賣出日在除息日當天（含）之後才算
+//      （除息日當天賣出仍可領；除息日前就賣掉的領不到）
+// 少了第 2 部分時，除息後才賣掉的張數會被漏算（00981B：7/21 除息時持有 322 張，8/25、9/1 各賣 50 張，
+// 原本只算到現存 222 張，8 月發放估 $13,986，實際 $20,286）。
 // 無建倉明細（Firestore 後備、或該檔查不到）時退回總股數，行為與加這段之前相同。
 function _divSharesAsOf(code, exDate, fallback) {
   var lots = (typeof _lotsMap !== 'undefined') && _lotsMap[String(code)];
   if (!lots || !lots.length || !exDate) return fallback;
   var s = 0;
   lots.forEach(function (l) { if (l.date < exDate) s += l.shares; });
+  (_soldLotsMap[String(code)] || []).forEach(function (l) {
+    if (l.buy < exDate && l.sell >= exDate) s += l.shares;
+  });
   return s;
+}
+
+// 券商實領核對：每個已賣出批次，券商有「持有期間實領股利」；拿我們的除息紀錄重算同一段期間應領金額比對。
+// 不符代表除息紀錄缺漏或金額錯（例：少一次除息 → 每股差額剛好是那次的金額）。只能發現「有缺」，不知道缺哪天。
+// 建倉早於我們最早一筆除息紀錄的批次無從比對（資料不足），略過不計。
+function _divBrokerCheck(code) {
+  var lots = (_soldLotsMap[String(code)] || []).filter(function (l) { return l.exdiv != null; });
+  var recs = ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).filter(function (r) { return r.exDate && r.amount > 0; });
+  if (!lots.length || !recs.length) return null;
+  var first = recs.reduce(function (m, r) { return r.exDate < m ? r.exDate : m; }, recs[0].exDate);
+  var bad = [], n = 0;
+  lots.forEach(function (l) {
+    if (l.buy < _addMonths(first, -1)) return;                // 資料涵蓋不到該批的全部持有期間
+    n++;
+    var ps = recs.filter(function (r) { return r.exDate > l.buy && r.exDate <= l.sell; })
+      .reduce(function (a, r) { return a + r.amount; }, 0);
+    var diff = l.exdiv - ps * l.shares;
+    if (Math.abs(diff) > Math.max(2, l.shares * 0.0005)) bad.push({ buy: l.buy, sell: l.sell, shares: l.shares, broker: l.exdiv, ours: Math.round(ps * l.shares), perShare: diff / l.shares });
+  });
+  return n ? { n: n, bad: bad } : null;
+}
+
+// 已賣出批次：券商已實現損益（近 12 個月，API 查詢區間上限即 12 個月）逐筆展開明細，
+// 明細列出該次賣出所沖銷的各買進批次（買進日、股數）。
+// 12 個月足夠：今年度估算最早的除息在 1 月，更早賣掉的批次不可能在今年除息日還持有。
+// 結果 → _soldLotsMap[code] = [{ buy, sell, shares }]；查詢失敗時維持空表（退回只算現存批次）。
+var _soldLotsMap = {}, _soldLotsDay = null;
+async function _divLoadSoldLots(force) {
+  var today = _divTwDate().iso;
+  if (!force && _soldLotsDay === today) return;
+  var begin = new Date(Date.parse(today) - 364 * 86400000).toISOString().slice(0, 10);
+  try {
+    var pl = await brokerPost('profit_loss', { begin_date: begin, end_date: today, unit: 'Share' });
+    var sells = (pl || []).filter(function (x) { return x && x.quantity > 0 && isEtfCode(String(x.code)); });
+    var map = {};
+    await Promise.all(sells.map(async function (x) {
+      try {
+        var det = await brokerPost('profit_loss_detail', { detail_id: x.id, unit: 'Share' });
+        (det || []).forEach(function (d) {
+          if (!(d.quantity > 0) || !d.date) return;
+          var code = String(x.code);
+          (map[code] = map[code] || []).push({ buy: d.date, sell: x.date, shares: d.quantity,
+            exdiv: d.ex_dividend_amt != null ? +d.ex_dividend_amt : null });   // 券商記錄該批持有期間實領股利
+        });
+      } catch (e) { console.warn('[已實現損益明細] ' + x.code + ' ' + x.date, e); }
+    }));
+    _soldLotsMap = map;
+    _soldLotsDay = today;
+  } catch (e) { console.warn('[已實現損益] 讀取失敗，過去月份僅以現存批次計算', e); }
 }
 
 function computeEtfYear(recs, shares, todayIso, year, code) {
@@ -149,30 +214,34 @@ function computeEtfYear(recs, shares, todayIso, year, code) {
   if (!recs.length) return null;
   var lastAmt = 0;
   for (var i = recs.length - 1; i >= 0; i--) { if (recs[i].amount != null) { lastAmt = recs[i].amount; break; } }
-  var payOf = function (r) { return r.payDate || _addMonths(r.exDate, 1); };
+  var payOf = function (r) { return r.payDate || _divDerivePay(r.exDate); };
 
-  var byMonth = {};  // 發放月(1-12) → 資料
+  // 一個發放月可能有兩次除息（00981B：3/3、3/19 兩次除息分別在 3、4 月發放；推算發放日若撞月不能互相覆蓋）
+  // → 以「發放月｜除息日」為鍵；taken 記錄已有資料的月份，供下方預估判斷是否補月
+  var byMonth = {}, taken = {};
   recs.forEach(function (r) {
     var pay = payOf(r); if (!pay) return;
     if (+pay.slice(0, 4) !== year) return;   // 只算發放年為今年者
     var pm = +pay.slice(5, 7);
-    byMonth[pm] = {
-      exDate: r.exDate, payDate: pay, derivedPay: !r.payDate,
+    byMonth[pm + '|' + r.exDate] = {
+      month: pm, exDate: r.exDate, payDate: pay, derivedPay: !r.payDate,
       perShare: r.amount != null ? r.amount : lastAmt,
       status: pay <= todayIso ? 'actual' : 'est'
     };
+    taken[pm] = true;
   });
   // 預估（僅補未填、晚於最後已領月的發放月）
   var lastActualM = 0;
-  Object.keys(byMonth).forEach(function (mk) { if (byMonth[mk].status === 'actual' && +mk > lastActualM) lastActualM = +mk; });
+  Object.keys(byMonth).forEach(function (k) { var e = byMonth[k]; if (e.status === 'actual' && e.month > lastActualM) lastActualM = e.month; });
   var hasPrior = recs.some(function (r) { var p = payOf(r); return p && +p.slice(0, 4) === year - 1; });
   if (hasPrior) {
     // 有去年同期：以「去年發放月 ＋12」投影（自然吻合不規則配息的實際月份）
     recs.forEach(function (r) {
       var pay = payOf(r); if (!pay || +pay.slice(0, 4) !== year - 1) return;
       var projPay = _addMonths(pay, 12), pm = +projPay.slice(5, 7);
-      if (byMonth[pm] || pm <= lastActualM) return;
-      byMonth[pm] = { exDate: r.exDate ? _addMonths(r.exDate, 12) : null, payDate: projPay, derivedPay: !r.payDate, perShare: lastAmt, status: 'est' };
+      if (taken[pm] || pm <= lastActualM) return;
+      byMonth[pm + '|proj'] = { month: pm, exDate: r.exDate ? _addMonths(r.exDate, 12) : null, payDate: projPay, derivedPay: !r.payDate, perShare: lastAmt, status: 'est' };
+      taken[pm] = true;
     });
   } else {
     // 新配息檔（無去年資料）：依頻率自最近一次發放往後推
@@ -183,8 +252,9 @@ function computeEtfYear(recs, shares, todayIso, year, code) {
       ym += step;
       var yy = Math.floor(ym / 12), mm = (ym % 12) + 1;
       if (yy > year) break;
-      if (yy === year && !byMonth[mm] && mm > lastActualM) {
-        byMonth[mm] = { exDate: null, payDate: yy + '-' + ('0' + mm).slice(-2) + '-15', derivedPay: true, perShare: lastAmt, status: 'est' };
+      if (yy === year && !taken[mm] && mm > lastActualM) {
+        byMonth[mm + '|proj'] = { month: mm, exDate: null, payDate: yy + '-' + ('0' + mm).slice(-2) + '-15', derivedPay: true, perShare: lastAmt, status: 'est' };
+        taken[mm] = true;
       }
     }
   }
@@ -193,10 +263,10 @@ function computeEtfYear(recs, shares, todayIso, year, code) {
   Object.keys(byMonth).forEach(function (mk) {
     var e = byMonth[mk];
     var sh = _divSharesAsOf(code, e.exDate, shares);   // 逐次除息各自判定可領股數
-    months.push({ month: +mk, exDate: e.exDate, payDate: e.payDate, derivedPay: e.derivedPay,
+    months.push({ month: e.month, exDate: e.exDate, payDate: e.payDate, derivedPay: e.derivedPay,
       perShare: e.perShare, shares: sh, partial: sh !== shares, total: e.perShare * sh, status: e.status });
   });
-  months.sort(function (a, b) { return a.month - b.month; });
+  months.sort(function (a, b) { return (a.month - b.month) || ((a.exDate || '') < (b.exDate || '') ? -1 : 1); });
   var actualTotal = 0, estTotal = 0;
   months.forEach(function (mo) { if (mo.status === 'actual') actualTotal += mo.total; else estTotal += mo.total; });
   return { months: months, actualTotal: actualTotal, estTotal: estTotal };
@@ -232,7 +302,22 @@ async function startDividendEst(force) {
   });
   await Promise.all(missing.map(async function (code) {
     try { var yr = await fetchYahooDiv(code, force); if (yr && yr.length) recMap[code] = yr; } catch (e) {}
-  }).concat([divMetaLoad(codes).catch(function () {})]));   // 官方 ETF 規格＋手動輸入（配息頻率估算要用，須在 computeEtfYear 前就緒；見 div-meta.js）
+  }).concat([
+    divMetaLoad(codes).catch(function () {}),        // 官方 ETF 規格＋手動輸入（配息頻率估算要用，須在 computeEtfYear 前就緒；見 div-meta.js）
+    _divLoadSoldLots(force)                           // 已賣出批次：過去除息日的實際持股
+  ]));
+  // 官方除權息歷史（補 e添富／Yahoo 漏掉的除息）：GAS 慢時 8 段要抓到一分鐘，不擋畫面——
+  // 今日快取就緒 → 同步併入；否則先用現有資料顯示，背景抓完（完整）再重算一次，第二次即命中快取。
+  if (!force && _divOffHistReady(codes)) {
+    _divMergeOfficialHist(recMap, codes);
+  } else if (!_divOffHistBusy) {
+    _divOffHistBusy = true;
+    if (_divOffHistStored()) _divMergeOfficialHist(recMap, codes);   // 前次完整資料先頂著（過去的除息不會變）
+    _divLoadOfficialHist(codes, true).catch(function () {}).then(function () {
+      _divOffHistBusy = false;
+      if (_divOffHistReady(codes)) startDividendEst(false);
+    });
+  }
   // 上櫃 ETF 的未來除息只有 TPEx 有；先確保當日快取存在（每日 1 次全市場），股利估算不再相依填息追蹤頁
   try { await fetchTpexExright(); } catch (e) {}
   _divMergeAnnounced(recMap);   // 併入已公告除息（TPEx 預告表／手動補登），估算改採實際公告值
@@ -348,7 +433,7 @@ function renderDividendEst() {
   // ── 月份總覽（依發放月）：縱向個股、橫向 1–12 月＋總計 ──
   html += _divStatTableHtml(stocks, money);
 
-  html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。<b>各次配息依建倉明細判定可領張數：除息日當天（含）之後才買進的批次不計</b>（已賣出的部位不在建倉明細中，過去月份的已領金額可能低估）。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。</div>';
+  html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。<b>各次配息依建倉明細判定可領張數：除息日當天（含）之後才買進的批次不計</b>（含近 12 個月內已賣出、但除息日當時仍持有的批次，依券商已實現損益明細計入）。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。</div>';
   wrap.innerHTML = html;
   _divHistDrawAll();   // 圖要量容器實際寬度，必須在插入 DOM 之後畫
 }
@@ -688,6 +773,108 @@ async function fetchTpexExright() {
 // 併入「已公告但資料源尚未收錄」的除息：TPEx 除權息預告表（填息追蹤頁快取）＋使用者手動補登
 // 目的：剛公告、e添富/Yahoo 還沒更新時，估算即可改採實際除息日與金額，而非以往年推估
 // 只讀 localStorage 既有快取，不額外發網路請求；同除息日「已有值優先、缺漏才補」
+// ── 官方除權息歷史（第二資料源）──
+// e添富只到約 2025/01、Yahoo 會漏筆（00981B 漏掉 2026-03-03 每股 0.062，券商實領金額證實確有此次）。
+// 上櫃：TPEx「除權除息計算結果表」exDailyQ；上市：TWSE「除權除息計算結果表」TWT49U。兩者皆可指定日期區間。
+// 抓近兩年（歷年配息圖要用），每半年一段、上市上櫃並行共 8 次；只留持有代號，當日快取。
+// 不用一年一段：TPEx 一年約 1,300 筆，GAS 端常逾時（回 {"error":"逾時…"}），半年一段並各重試一次。
+var DIV_OFFHIST_LS = 'divest_offhist_v2';
+// { day: 最後一次完整更新日, codes: 持股代號組合, map: { code: [{ exDate, amount, src }] } }
+// 過去的除權息結果不會再變 → 保留上次完整資料（不限當天），每日只補抓「上次更新日前 7 天～今天」這段。
+// GAS 壅塞時全部 8 段常逾時；增量只需 2 段，且抓不到時仍可用前次資料，不致漏掉已知的除息。
+var _divOffHist = null;
+function _divOffHistStored() {
+  if (!_divOffHist) { try { _divOffHist = JSON.parse(localStorage.getItem(DIV_OFFHIST_LS) || 'null'); } catch (e) {} }
+  return _divOffHist;
+}
+function _divOffHistReady(codes) {
+  var c = _divOffHistStored();
+  return !!(c && c.day === _divTwDate().iso && c.codes === codes.slice().sort().join(','));
+}
+var _divOffHistBusy = false;
+async function _divLoadOfficialHist(codes, force) {
+  var today = _divTwDate().iso, key = codes.slice().sort().join(',');
+  if (!force && _divOffHistReady(codes)) return;
+  var prev = _divOffHistStored();
+  var t = Date.parse(today), DAY = 86400000, horizon = t - 730 * DAY;   // 歷年配息圖要兩年
+  // 增量：同一組持股且有前次完整資料 → 從前次更新日前 7 天抓起（重疊一週，避免邊界漏筆）；否則抓滿兩年
+  var from = (prev && prev.codes === key && prev.day) ? Math.max(horizon, Date.parse(prev.day) - 7 * DAY) : horizon;
+  var spans = [];
+  for (var end = t; end > from; end -= 183 * DAY) spans.push([new Date(Math.max(from, end - 182 * DAY)), new Date(end)]);
+
+  var want = {}; codes.forEach(function (c) { want[c] = true; });
+  var fresh = {}, okCount = 0;
+  var add = function (code, iso, amt, src) {
+    code = String(code).trim();
+    if (!want[code] || !iso || !(amt > 0)) return;
+    (fresh[code] = fresh[code] || []).push({ exDate: iso, amount: amt, src: src });
+  };
+  var via = async function (u) {           // GAS 逾時會回 {error}（HTTP 200），當作失敗重試一次
+    for (var a = 0; a < 2; a++) {
+      try {
+        var j = await _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(u), 40000).then(function (r) { return r.json(); });
+        if (j && !j.error) return j;
+      } catch (e) {}
+    }
+    throw new Error('GAS 抓取失敗：' + u);
+  };
+  var roc = function (d) { return (d.getUTCFullYear() - 1911) + '/' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '/' + ('0' + d.getUTCDate()).slice(-2); };
+  var ymd = function (d) { return d.toISOString().slice(0, 10).replace(/-/g, ''); };
+  var rocToIso = function (txt) {   // 「115/03/03」或「115年03月03日」
+    var m = String(txt || '').match(/(\d{2,3})\D(\d{1,2})\D(\d{1,2})/);
+    return m ? (+m[1] + 1911) + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : null;
+  };
+  await Promise.all(spans.map(async function (sp) {
+    try {       // TPEx：欄位 0 除權息日期、1 代號、6 息值
+      var j = await via('https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=' + roc(sp[0]) + '&endDate=' + roc(sp[1]) + '&response=json');
+      var tb = j && j.tables && j.tables[0];
+      if (j && j.stat === 'ok' && tb) { okCount++; (tb.data || []).forEach(function (x) { add(x[1], rocToIso(x[0]), parseFloat(x[6]), 'TPEx'); }); }
+    } catch (e) { console.warn('[TPEx 除權息歷史]', e); }
+  }).concat(spans.map(async function (sp) {
+    try {       // TWSE：欄位 0 資料日期、1 代號、5 權值＋息值、6 權/息（ETF 只取「息」）
+      var j = await via('https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate=' + ymd(sp[0]) + '&endDate=' + ymd(sp[1]) + '&response=json');
+      var tb = j && (j.tables ? j.tables[0] : j);
+      if (j && /ok/i.test(j.stat || '') && tb) {
+        okCount++;
+        (tb.data || []).forEach(function (x) { if (/息/.test(x[6]) && !/權/.test(x[6])) add(x[1], rocToIso(x[0]), parseFloat(x[5]), 'TWSE'); });
+      }
+    } catch (e) { console.warn('[TWSE 除權息歷史]', e); }
+  })));
+  if (okCount < spans.length * 2) return;          // 有任一段失敗 → 不更新（沿用前次完整資料），下次再試
+
+  // 組合：前次資料中早於本次抓取起點的保留，其餘以本次結果為準；超過兩年的丟掉
+  var fromIso = new Date(from).toISOString().slice(0, 10), horizonIso = new Date(horizon).toISOString().slice(0, 10);
+  var map = {};
+  codes.forEach(function (c) {
+    var keep = ((prev && prev.codes === key && prev.map[c]) || []).filter(function (r) { return r.exDate < fromIso && r.exDate >= horizonIso; });
+    var list = keep.concat(fresh[c] || []);
+    if (list.length) map[c] = list;
+  });
+  _divOffHist = { day: today, codes: key, map: map };
+  try { localStorage.setItem(DIV_OFFHIST_LS, JSON.stringify(_divOffHist)); } catch (e) {}
+}
+// 併入：同一檔、除息日相差 3 天內視為同一次（各來源時區／登錄日可能差一天）→ 以官方金額為準、保留原發放日；
+// 找不到對應的 → 新增一筆（發放日未知，由 _divDerivePay 推算）。
+function _divMergeOfficialHist(recMap, codes) {
+  var hist = _divOffHist && _divOffHist.map;
+  if (!hist) return;
+  var near = function (a, b) { return Math.abs(Date.parse(a) - Date.parse(b)) <= 3 * 86400000; };
+  codes.forEach(function (code) {
+    var off = hist[code];
+    if (!off || !off.length) return;
+    var list = (recMap[code] || []).map(function (x) { return Object.assign({}, x); });   // 複製，避免污染 e添富 快取物件
+    off.forEach(function (o) {
+      var cur = list.filter(function (x) { return x.exDate && near(x.exDate, o.exDate); })[0];
+      if (cur) {
+        if (cur.amount == null || Math.abs(cur.amount - o.amount) > 1e-6) { cur.amount = o.amount; cur._src = (cur._src ? cur._src + '＋' : '') + o.src; }
+      } else {
+        list.push({ code: code, name: (_contracts[code] && _contracts[code].name) || '', exDate: o.exDate, payDate: null, amount: o.amount, _src: o.src + '歷史' });
+      }
+    });
+    recMap[code] = list;
+  });
+}
+
 function _divMergeAnnounced(recMap) {
   var add = {};
   var push = function (code, exDate, payDate, amount, src) {

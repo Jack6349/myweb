@@ -338,7 +338,7 @@ function _rfBuildMonthPay(codes, todayIso) {
   var ym = todayIso.slice(0, 7), out = [];
   codes.forEach(function (code) {
     ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).forEach(function (r) {
-      var pay = r.payDate || (r.exDate ? _addMonths(r.exDate, 1) : null);
+      var pay = r.payDate || _divDerivePay(r.exDate);   // 與股利估算同一推算規則
       if (!pay || pay.slice(0, 7) !== ym) return;
       out.push({ code: code, payDate: pay, derived: !r.payDate, amount: r.amount, exDate: r.exDate });
     });
