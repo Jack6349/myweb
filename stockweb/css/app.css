@@ -677,6 +677,12 @@ td.cost-even::after  { background: var(--text3); }
 .dstat.dexm tfoot td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: var(--bg3); }
 .dstat.dexm tbody tr:hover td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: rgba(255,255,255,.03); }
 .dexm-lent { color: var(--text3); font-size: 11px; }
+/* 本月除息個股：欄位多、數字短，撐滿整頁寬會讓欄距過大 → 表格依內容寬、欄距固定 */
+.dstat.dexm { width: auto; }
+.dexm-wrap { width: fit-content; max-width: 100%; }   /* 外框跟著表格寬，右側不留空白帶；窄螢幕仍可橫向捲動 */
+.dstat.dexm th, .dstat.dexm td { padding: 6px 18px; }
+.dstat.dexm th:first-child, .dstat.dexm td:first-child { padding-left: 12px; }
+.dstat.dexm .dexm-yld { color: var(--accent2); }
 
 /* 換股試算：換手品質比較表（賣出 vs 買入的相對條件） */
 .swap-qual td:first-child { color: var(--text2); }

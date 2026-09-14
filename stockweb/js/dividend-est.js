@@ -641,7 +641,17 @@ function _divExMonthHtml(stocks, money, md) {
       var _r = (typeof _rows !== 'undefined') && _rows[s.code];
       var price = (_r && _r.close != null) ? _r.close
         : ((typeof _contracts !== 'undefined' && _contracts[s.code] && _contracts[s.code].reference) || null);
+      // 持股成本（每股成本均價，同持股庫存「成本均價」）；預估年殖利率＝每股配息 × 年配息次數 ÷ 現價（同個股明細標頭）
+      var pos = (typeof _positions !== 'undefined' && _positions || []).filter(function (p) { return String(p.code) === s.code; })[0];
+      var recsAsc = ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [])
+        .filter(function (x) { return x.exDate; }).slice()
+        .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; })
+        .map(function (x) { return Object.assign({ code: s.code }, x); });
+      var known = recsAsc.filter(function (x) { return x.amount > 0; }).slice(-1)[0];
+      var ps = mo.perShare > 0 ? mo.perShare : (known ? known.amount : 0);   // 本次待公告 → 用最近一次已知金額
+      var yld = (price && ps && recsAsc.length) ? ps * (12 / _divInferStep(recsAsc)) / price * 100 : null;
       list.push({ code: s.code, price: price, exDate: mo.exDate, payDate: mo.payDate,
+        cost: pos && pos.price > 0 ? pos.price : null, yld: yld, yldGuess: !(mo.perShare > 0),
         shares: mo.shares, lent: _divLentShares(s.code),
         after: !!(mo.partial && !mo.shares),   // 除息日當天（含）之後才買進 → 領不到這次配息
         perShare: mo.perShare, total: mo.total, status: mo.status });
@@ -652,9 +662,12 @@ function _divExMonthHtml(stocks, money, md) {
   var h = '<div class="divest-sec-title">本月除息個股</div>';
   if (!list.length) return h + '<div class="divest-note">本月無除息個股。</div>';
 
-  h += '<div class="dstat-wrap"><table class="dstat dexm"><thead><tr>' +
+  h += '<div class="dstat-wrap dexm-wrap"><table class="dstat dexm"><thead><tr>' +
     '<th class="dstat-code">代號</th><th class="num">現價</th>' +
-    '<th class="num">除息日</th><th class="num">發放日</th><th class="num">持有張數</th>' +
+    '<th class="num">除息日</th><th class="num">發放日</th>' +
+    '<th class="num" title="每股成本均價（同持股庫存）">持股成本</th>' +
+    '<th class="num" title="每股配息 × 年配息次數 ÷ 現價">預估年殖利率</th>' +
+    '<th class="num">持有張數</th>' +
     '<th class="num">除息金額</th><th class="num dstat-tot">總金額</th></tr></thead><tbody>';
   var sum = 0;
   list.forEach(function (it) {
@@ -664,6 +677,9 @@ function _divExMonthHtml(stocks, money, md) {
       '<td class="num">' + (it.price != null ? it.price.toFixed(2) : '—') + '</td>' +
       '<td class="num' + c + '">' + md(it.exDate) + '</td>' +
       '<td class="num">' + md(it.payDate) + '</td>' +
+      '<td class="num">' + (it.cost != null ? it.cost.toFixed(2) : '<span style="color:var(--text3)">—</span>') + '</td>' +
+      '<td class="num dexm-yld"' + (it.yldGuess && it.yld != null ? ' title="本次金額待公告，以最近一次已知配息估算"' : '') + '>' +
+        (it.yld != null ? it.yld.toFixed(2) + '%' + (it.yldGuess ? '<span class="dexm-lent">*</span>' : '') : '<span style="color:var(--text3)">—</span>') + '</td>' +
       '<td class="num">' + (it.shares / 1000).toLocaleString('zh-TW') +
         (it.lent ? ' <span class="dexm-lent">(借出 ' + (it.lent / 1000).toLocaleString('zh-TW') + ' 張)</span>' : '') +
         (it.after ? ' <span class="dexm-lent">(除息後買進)</span>' : '') + '</td>' +
@@ -671,7 +687,7 @@ function _divExMonthHtml(stocks, money, md) {
       '<td class="num dstat-tot">' + (it.perShare ? money(it.total) : '<span style="color:var(--text3)">—</span>') + '</td></tr>';
   });
   h += '</tbody><tfoot><tr><td class="dstat-code">合計</td><td class="num"></td><td class="num"></td>' +
-    '<td class="num"></td><td class="num"></td><td class="num"></td>' +
+    '<td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td>' +
     '<td class="num dstat-tot">' + money(sum) + '</td></tr></tfoot></table></div>';
   return h;
 }
