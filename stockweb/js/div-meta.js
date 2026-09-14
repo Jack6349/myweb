@@ -244,7 +244,7 @@ function renderDivMeta() {
   var h = '<div class="inv-table-wrap"><table class="inv-table dm-table"><thead><tr>' +
     '<th>狀態</th><th>代號</th><th>名稱</th><th>分類</th>' +
     '<th title="選「自動」＝依官方規格或除息紀錄；手動選擇會覆蓋全站（股利估算、換股試算、關注股票、歷年配息圖）">配息頻率</th>' +
-    '<th title="官方規格列出的收益評價／分配月份">評價月份</th>' +
+    '<th title="近 13 個月實際除息（含已公告）的月份；尚無紀錄時以官方收益評價月推估">除息月份</th>' +
     '<th class="num" title="年率 %；級距制顯示最低規模級距，完整文字見提示">管理費</th><th class="num">保管費</th>' +
     '<th class="num" title="管理費＋保管費">總費用</th><th>上市櫃日</th>' +
     '<th>最近除息</th><th>下次除息</th>' +
@@ -266,8 +266,29 @@ function renderDivMeta() {
     var srcTag = '<span class="dm-src dm-src-' + (r.src === 'TWSE' || r.src === 'TPEx' ? 'off' : r.src) + '" title="' +
       esc(o.dist ? '官方原文：' + o.dist : '') + '">' + srcName[r.src] + '</span>';
 
-    var months = _divDistMonths(o.dist);
-    var monthsTxt = /每月|月配/.test(o.dist || '') ? '每月' : (months.length ? months.join('/') + '月' : dim('—'));
+    // 除息月份：取實際除息紀錄（近 13 個月＋已公告未除息），不用官方原文的月份——
+    // 官方寫的多是「收益評價日」（00918：二、五、八、十一月），比除息早約一個月，直接顯示會被誤認為除息月。
+    // 紀錄不足（新上市）時才退回官方月份，並標「評價」以示區別。
+    var d13 = new Date(Date.parse(_divTwDate().iso) - 395 * 86400000).toISOString().slice(0, 10);
+    var exM = {};
+    r.recs.forEach(function (x) { if (x.exDate >= d13) exM[+x.exDate.slice(5, 7)] = true; });
+    var exList = Object.keys(exM).map(Number).sort(function (a, b) { return a - b; });
+    var offM = _divDistMonths(o.dist), offTip = o.dist ? '官方收益分配：' + o.dist : '';
+    var monthsTxt;
+    if (r.step === 1 && exList.length >= 3) monthsTxt = '每月';
+    else if (exList.length && r.step && 12 % r.step === 0 && exList.length < 12 / r.step) {
+      // 紀錄還不滿一輪（新上市，例 00404A 只除息過 9 月）：依配息頻率從最近一次往後推，推估的月份淡色顯示
+      var last = +r.recs.filter(function (x) { return x.exDate >= d13; }).slice(-1)[0].exDate.slice(5, 7);
+      var all = {};
+      for (var k = 0; k < 12 / r.step; k++) all[((last - 1 + k * r.step) % 12) + 1] = true;
+      monthsTxt = Object.keys(all).map(Number).sort(function (a, b) { return a - b; })
+        .map(function (mm) { return exM[mm] ? String(mm) : dim(String(mm)); }).join('/') + '月';
+    }
+    else if (exList.length) monthsTxt = exList.join('/') + '月';
+    else if (/每月|月配/.test(o.dist || '')) monthsTxt = dim('每月');
+    else if (offM.length) monthsTxt = dim('評價 ' + offM.join('/') + '月');
+    else monthsTxt = dim('—');
+    monthsTxt = '<span title="' + esc(offTip) + '">' + monthsTxt + '</span>';
 
     var feeCell = function (key, val, raw) {
       var manual = man[key] != null;
