@@ -767,7 +767,9 @@ td.cost-even::after  { background: var(--text3); }
 
 /* 展開：4 欄 × 2 列 */
 .cat-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 18px; }
-.cat-cell { display: grid; grid-template-columns: auto auto auto; column-gap: 6px; row-gap: 2px;
+/* 欄寬不能用 auto：各格內容寬度不同（例 +172.0% 比 +0.9% 寬）會把金額欄推歪，上下兩排格子對不齊。
+   → 百分比欄固定寬、金額欄吃剩餘空間並靠右；各格等寬（repeat(4,1fr)），所有格子的兩欄右緣就在同一條線上。 */
+.cat-cell { display: grid; grid-template-columns: auto minmax(0, 1fr) 4.6rem; column-gap: 8px; row-gap: 2px;
   align-items: baseline; padding-left: 10px; border-left: 2px solid var(--border); }
 .cat-cell-tot { border-left-color: var(--accent2); }
 .cat-cname { grid-column: 1; color: var(--text); font-weight: 700; font-size: 15px;
