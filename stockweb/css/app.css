@@ -770,11 +770,14 @@ td.cost-even::after  { background: var(--text3); }
 .cat-cell { display: grid; grid-template-columns: auto auto auto; column-gap: 6px; row-gap: 2px;
   align-items: baseline; padding-left: 10px; border-left: 2px solid var(--border); }
 .cat-cell-tot { border-left-color: var(--accent2); }
-.cat-cname { grid-column: 1 / -1; color: var(--text); font-weight: 700; font-size: 15px;
+.cat-cname { grid-column: 1; color: var(--text); font-weight: 700; font-size: 15px;
   display: flex; align-items: baseline; gap: 4px; }
 .cat-grid .cat-lb { color: var(--text2); font-size: 11px; font-weight: 600; }
 .cat-grid .cat-cost, .cat-grid .cat-val { font-size: 16px; text-align: right; }
 .cat-grid .cat-cp, .cat-grid .cat-vp { font-size: 12px; text-align: right; }
+/* 標題列損益：金額與現值同字級、百分比與下方占比同字級，同欄靠右對齊 */
+.cat-grid .cat-pnl { font-size: 16px; font-weight: 700; letter-spacing: -.5px; text-align: right; }
+.cat-grid .cat-pp { font-size: 12px; font-weight: 700; text-align: right; }
 
 /* ── 股利估算：歷年配息圖（個股明細展開後）── */
 .divest-hist { margin: 10px 0 2px; max-width: 100%; }   /* 寬度＝明細區塊寬，與下方月份總覽表同寬，不會超出 */

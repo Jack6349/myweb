@@ -141,19 +141,26 @@ function renderInvCats() {
         '<span class="cat-vp" style="color:' + vcOf(g) + '">' + pct(g.val, totVal) + '</span></span>';
     }).join('') + '</div>' + chev;
   } else {
-    var cell = function (name, n, cost, cp, val, vp, vc, cls) {
+    // 標題列：名稱｜損益金額｜損益率，與下方「成本／現值」共用同一組三欄格線 → 金額、百分比上下對齊。
+    // 損益＝現值－成本、損益率＝損益÷成本，皆未扣稅費（與本格成本、現值同基準，損益剛好等於兩行相減）。
+    // 注意：下方兩行的百分比是「占全部持股比重」，標題列的是「本類報酬率」，只是同欄對齊。
+    var cell = function (name, n, cost, val, cp, vp, cls) {
+      var pnl = val - cost, pc = cls2var[colorClass(pnl)];
+      var sign = function (v) { return v > 0 ? '+' : ''; };
       return '<div class="cat-cell' + (cls || '') + '">' +
         '<div class="cat-cname">' + name + (n != null ? '<span class="cat-n">' + n + '</span>' : '') + '</div>' +
-        '<div class="cat-lb">成本</div><div class="cat-cost">' + cost + '</div><div class="cat-cp">' + cp + '</div>' +
-        '<div class="cat-lb">現值</div><div class="cat-val" style="color:' + vc + '">' + val + '</div>' +
-        '<div class="cat-vp" style="color:' + vc + '">' + vp + '</div></div>';
+        '<div class="cat-pnl" style="color:' + pc + '" title="損益＝現值－成本（未扣稅費）">' + sign(pnl) + money(pnl) + '</div>' +
+        '<div class="cat-pp" style="color:' + pc + '" title="損益率＝損益÷成本">' +
+          (cost ? sign(pnl) + (pnl / cost * 100).toFixed(1) + '%' : '—') + '</div>' +
+        '<div class="cat-lb">成本</div><div class="cat-cost">' + money(cost) + '</div><div class="cat-cp">' + cp + '</div>' +
+        '<div class="cat-lb">現值</div><div class="cat-val" style="color:' + pc + '">' + money(val) + '</div>' +
+        '<div class="cat-vp" style="color:' + pc + '">' + vp + '</div></div>';
     };
     html = '<div class="cat-grid">' + groups.map(function (g) {
-      return cell(g.cat, g.n, money(g.cost), pct(g.cost, totCost), money(g.val), pct(g.val, totVal), vcOf(g));
+      return cell(g.cat, g.n, g.cost, g.val, pct(g.cost, totCost), pct(g.val, totVal));
     }).join('') +
       cell('合計', groups.reduce(function (a, g) { return a + g.n; }, 0),
-        money(totCost), '100.0%', money(totVal), '100.0%',
-        cls2var[colorClass(totVal - totCost)], ' cat-cell-tot') +
+        totCost, totVal, '100.0%', '100.0%', ' cat-cell-tot') +
       '</div>' + chev;
   }
   el.innerHTML = html;
