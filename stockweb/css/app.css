@@ -809,11 +809,16 @@ td.cost-even::after  { background: var(--text3); }
 .dm-src-manual, .dm-src-code { border-color: rgba(240,204,122,.6); color: var(--accent2); }
 .dm-src-infer { color: var(--text2); }
 .dm-src-guess { border-color: rgba(255,82,82,.6); color: var(--up); }
-.dm-fee { width: 58px; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 3px;
-  text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; padding: 1px 3px; font-family: var(--font); }
+/* 費率輸入：number 型別的上下箭頭會吃掉寬度把 0.035 截斷 → 隱藏箭頭、加寬；% 緊貼數字、級距標記固定佔位 */
+.dm-feewrap { display: inline-flex; align-items: baseline; justify-content: flex-end; white-space: nowrap; }
+.dm-fee { width: 4.2em; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 3px;
+  text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; padding: 1px 2px; font-family: var(--font);
+  -moz-appearance: textfield; appearance: textfield; }
+.dm-fee::-webkit-outer-spin-button, .dm-fee::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .dm-fee::placeholder { color: var(--text2); }
 .dm-fee:hover, .dm-fee:focus { border-color: var(--border); background: var(--bg3); outline: none; }
 .dm-fee.dm-manual { color: var(--accent2); font-weight: 700; }                /* 手動值：黃字 */
-.dm-tier { font-size: 10px; color: var(--text3); margin: 0 1px; }
+.dm-pct { color: var(--text2); font-size: 12px; margin-left: 1px; }
+.dm-tier { display: inline-block; width: 1.3em; font-size: 10px; color: var(--text3); text-align: left; padding-left: 2px; }
 .dm-warn { color: var(--up); font-weight: 700; }
 .dm-ok { color: var(--down); }

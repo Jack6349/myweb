@@ -272,11 +272,13 @@ function renderDivMeta() {
     var feeCell = function (key, val, raw) {
       var manual = man[key] != null;
       var ph = _divFeePct(raw);
-      return '<td class="num" title="' + esc(raw || '') + '">' +
+      // 數字、%、級距標記包成一組靠右：% 緊貼數字；「級」固定佔位（沒有也留空），各列 % 才上下對齊
+      return '<td class="num" title="' + esc(raw || '') + '"><span class="dm-feewrap">' +
         '<input class="dm-fee' + (manual ? ' dm-manual' : '') + '" type="number" step="0.001" min="0" max="5" ' +
         'value="' + (manual ? man[key] : '') + '" placeholder="' + (ph != null ? ph : '—') + '" ' +
         'onchange="divMetaSet(\'' + r.code + '\',\'' + key + '\',this.value)">' +
-        (!manual && _divFeeTiered(raw) ? '<span class="dm-tier" title="級距制">級</span>' : '') + '%</td>';
+        '<span class="dm-pct">%</span>' +
+        '<span class="dm-tier"' + (!manual && _divFeeTiered(raw) ? ' title="級距制">級' : '>') + '</span></span></td>';
     };
     var tot = (r.mgmt != null && r.cust != null) ? (r.mgmt + r.cust).toFixed(3).replace(/0+$/, '').replace(/\.$/, '') + '%' : dim('—');
 
