@@ -156,12 +156,14 @@ function renderInvCats() {
         '<div class="cat-lb">現值</div><div class="cat-val" style="color:' + pc + '">' + money(val) + '</div>' +
         '<div class="cat-vp" style="color:' + pc + '">' + vp + '</div></div>';
     };
-    html = '<div class="cat-grid">' + groups.map(function (g) {
+    var cells = groups.map(function (g) {
       return cell(g.cat, g.n, g.cost, g.val, pct(g.cost, totCost), pct(g.val, totVal));
-    }).join('') +
-      cell('合計', groups.reduce(function (a, g) { return a + g.n; }, 0),
-        totCost, totVal, '100.0%', '100.0%', ' cat-cell-tot') +
-      '</div>' + chev;
+    }).concat([cell('合計', groups.reduce(function (a, g) { return a + g.n; }, 0),
+      totCost, totVal, '100.0%', '100.0%', ' cat-cell-tot')]);
+    // 每 4 格（一排）之間插一條橫跨整排的分隔線；分類數不固定，依格數自動決定排數
+    html = '<div class="cat-grid">' + cells.map(function (h, i) {
+      return (i && i % 4 === 0 ? '<div class="cat-sep"></div>' : '') + h;
+    }).join('') + '</div>' + chev;
   }
   el.innerHTML = html;
   el.className = 'cat-bar' + (_catOpen ? ' open' : '');
