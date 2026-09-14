@@ -684,7 +684,12 @@ function _divExMonthHtml(stocks, money, md) {
       '<td class="num">' + (it.cost != null ? it.cost.toFixed(2) : '<span style="color:var(--text3)">—</span>') + '</td>' +
       '<td class="num dexm-yld"' + (it.yldGuess && it.yld != null ? ' title="本次金額待公告，以最近一次已知配息估算"' : '') + '>' +
         (it.yld != null ? it.yld.toFixed(2) + '%' + (it.yldGuess ? '<span class="dexm-lent">*</span>' : '') : '<span style="color:var(--text3)">—</span>') + '</td>' +
-      '<td class="num dexm-cyld"' + (it.yldGuess && it.cyld != null ? ' title="本次金額待公告，以最近一次已知配息估算"' : '') + '>' +
+      // 成本殖利率相對預估年殖利率：高→紅、低→綠、相同→白（依畫面顯示的兩位小數比較，看起來一樣就算相同）
+      '<td class="num dexm-cyld" style="color:' + (function () {
+        if (it.cyld == null || it.yld == null) return 'var(--text3)';
+        var d = +it.cyld.toFixed(2) - +it.yld.toFixed(2);
+        return d > 0 ? 'var(--up)' : (d < 0 ? 'var(--down)' : 'var(--text)');
+      })() + '"' + (it.yldGuess && it.cyld != null ? ' title="本次金額待公告，以最近一次已知配息估算"' : '') + '>' +
         (it.cyld != null ? it.cyld.toFixed(2) + '%' + (it.yldGuess ? '<span class="dexm-lent">*</span>' : '') : '<span style="color:var(--text3)">—</span>') + '</td>' +
       '<td class="num">' + (it.shares / 1000).toLocaleString('zh-TW') +
         (it.lent ? ' <span class="dexm-lent">(借出 ' + (it.lent / 1000).toLocaleString('zh-TW') + ' 張)</span>' : '') +
