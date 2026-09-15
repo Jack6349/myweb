@@ -220,7 +220,7 @@ function _sblRender() {
     '<th class="num sbl-my">借出數量</th><th class="num sbl-my">借出費率％</th><th class="num sbl-my">年收(元)</th>' +
     '<th class="num">借券賣出餘額(張)</th>' +
     '<th class="num">競價費率% 加權/最高</th><th class="num">最近成交</th><th class="num">期間成交(張)</th>' +
-    '<th class="num">估年收(元)</th><th class="num sbl-calc">年增(元)</th><th class="num sbl-calc">回本(天)</th>' +
+    '<th class="num">估年收(元)</th><th class="num sbl-calc" title="召回後改用市場加權費率重新出借，一年可多賺多少；現有費率較高時顯示「現有較佳」">召回年增(元)</th><th class="num sbl-calc">回本(天)</th>' +
     '<th style="text-align:center">提醒</th></tr></thead><tbody>';
   rows.forEach(function (r) {
     var balHtml = '—';
@@ -251,9 +251,12 @@ function _sblRender() {
       '<td class="num">' + (r.f ? r.f.vol.toLocaleString('zh-TW') : '0') + '</td>' +
       '<td class="num"' + (r.est != null ? ' title="基準：' + (r.estOnLent ? '出借股數（與左側年收同基準）' : '總庫存（全額出借的潛力）') + '"' : '') + '>' +
         (r.est != null ? Math.round(r.est).toLocaleString('zh-TW') : '—') + '</td>' +
+      // 召回年增：負值代表現有費率優於市場（召回反而少賺），直接顯示負數容易被誤讀成虧損 → 改文字表達
       '<td class="num sbl-calc">' + (r.gain == null ? '<span class="sbl-dim">—</span>'
-        : (r.gain > 0 ? '<b class="up">+' + Math.round(r.gain).toLocaleString('zh-TW') + '</b>'
-          : '<span class="down">' + Math.round(r.gain).toLocaleString('zh-TW') + '</span>')) + '</td>' +
+        : (Math.round(r.gain) > 0 ? '<b class="up">+' + Math.round(r.gain).toLocaleString('zh-TW') + '</b>'
+          : (Math.round(r.gain) < 0 ? '<span class="sbl-better" title="現有費率 ' + r.rate + '% 高於市場加權，維持出借每年多 ' +
+              Math.round(-r.gain).toLocaleString('zh-TW') + ' 元">現有較佳 ' + Math.round(-r.gain).toLocaleString('zh-TW') + '</span>'
+            : '<span class="sbl-dim">持平</span>'))) + '</td>' +
       '<td class="num sbl-calc">' + (r.gain == null ? '<span class="sbl-dim">—</span>'
         : (r.bDays == null ? '<span class="down">優於市場</span>' : '<b>' + r.bDays.toFixed(1) + '</b>')) + '</td>' +
       '<td style="text-align:center">' + (r.hit ? '<span class="sbl-pill">值得出借</span>' : '<span class="sbl-dim">—</span>') + '</td></tr>';
@@ -262,14 +265,14 @@ function _sblRender() {
   // 已借出合計（有偵測到借出才顯示）
   var lentQ = 0, lentInc = 0, lentN = 0, gainSum = 0;
   rows.forEach(function (r) {
-    if (r.lentLots > 0) { lentN++; lentQ += r.lentLots; lentInc += r.lentInc || 0; gainSum += r.gain || 0; }
+    if (r.lentLots > 0) { lentN++; lentQ += r.lentLots; lentInc += r.lentInc || 0; if (r.gain > 0) gainSum += r.gain; }   // 只加總召回有利者
   });
   if (lentN) {
     html += '<tfoot><tr class="sbl-total"><td>已借出合計（' + lentN + ' 檔）</td><td></td>' +
       '<td class="num sbl-my">' + _sblLots(lentQ) + '</td><td></td>' +
       '<td class="num sbl-my">' + Math.round(lentInc).toLocaleString('zh-TW') + '</td>' +
       '<td colspan="5"></td>' +
-      '<td class="num sbl-calc">' + (gainSum ? (gainSum > 0 ? '+' : '') + Math.round(gainSum).toLocaleString('zh-TW') : '') + '</td>' +
+      '<td class="num sbl-calc" title="只加總召回重借有利的檔">' + (Math.round(gainSum) > 0 ? '+' + Math.round(gainSum).toLocaleString('zh-TW') : '<span class="sbl-dim">無可增</span>') + '</td>' +
       '<td colspan="2"></td></tr></tfoot>';
   }
   html += '</table></div>';

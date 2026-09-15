@@ -824,3 +824,6 @@ td.cost-even::after  { background: var(--text3); }
 .dm-tier { display: inline-block; width: 1.3em; font-size: 10px; color: var(--text3); text-align: left; padding-left: 2px; }
 .dm-warn { color: var(--up); font-weight: 700; }
 .dm-ok { color: var(--down); }
+
+/* 出借行情：現有費率優於市場（召回年增為負時的文字表示，避免負數被誤讀為虧損） */
+.sbl-better { color: var(--accent2); }
