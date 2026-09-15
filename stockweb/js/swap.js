@@ -246,6 +246,28 @@ function swapCompute() {
 
   perCode.sort(function (a, b) { return (b.after - b.before) - (a.after - a.before); });
 
+  // ── 除息還原（只還原「下一次」除息）──
+  // 賣出未除息的股票：該次配息領不到，但賣價仍含息（除息後股價才會扣掉）→ 等於已在賣價中收回 → 加回
+  // 買進未除息的股票：領得到該次配息，但買價也含息、除息後股價會跌同額 → 扣回
+  // 只還原下一次：現價只反映即將到來的那次配息，更後面的配息要持有時間累積，本來就該比兩邊的配息現金流。
+  // 與「今年剩餘增減」同口徑：只計發放在今年的那次（除息 12 月、明年 1 月發放者不在今年剩餘增減內，也不還原）。
+  var restoreYear = 0, restoreRows = [];
+  var nextEx = function (code) {
+    var recs = (typeof _divRecMap !== 'undefined') && _divRecMap[code];
+    if (!recs || !recs.length) return null;
+    return _swapEvents(recs, startYm - 1, SWAP_N + 1)          // 含本月發放，才不會漏掉這個月就除息的那次
+      .filter(function (e) { return e.exDate && e.exDate > todayIso && e.perShare > 0; })[0] || null;
+  };
+  var addRestore = function (code, sh, sign) {
+    var e = nextEx(code);
+    if (!e || !(sh > 0) || Math.floor(e.ym / 12) !== thisYear) return;
+    var v = sign * e.perShare * sh;
+    restoreYear += v;
+    restoreRows.push({ code: code, side: sign > 0 ? '賣' : '買', exDate: e.exDate, perShare: e.perShare, sh: sh, v: v, est: e.src !== 'actual' });
+  };
+  sellRows.forEach(function (r) { addRestore(r.code, r.sh, 1); });
+  buyRows.forEach(function (r) { if (r) addRestore(r.code, r.sh, -1); });
+
   var annBefore = before.reduce(function (a, b) { return a + b; }, 0);
   var annAfter = after.reduce(function (a, b) { return a + b; }, 0);
 
@@ -258,6 +280,7 @@ function swapCompute() {
     sellRows: sellRows, buyRows: buyRows, sellNet: sellNet, sellGross: sellGross,
     usedCash: usedCash, cashLeft: cashLeft, recallShares: recallShares,
     annBefore: annBefore, annAfter: annAfter, beforeYear: beforeYear, afterYear: afterYear,
+    restoreYear: restoreYear, restoreRows: restoreRows,
     totalVal: totalVal
   };
   return _swapCalc;
@@ -559,7 +582,7 @@ function swapUpdate() {
   set('swap-result', _swapResultHtml(c));
 }
 
-// 摘要 5 項（年配息前/後、增減、殖利率、今年剩餘增減）；結果區與頂部摘要條共用，隨賣出即時重算
+// 摘要 7 項（年配息前/後、增減、殖利率、今年剩餘增減、除息還原、今年剩餘實質增減）；結果區與頂部摘要條共用，隨賣出即時重算
 function _swapSumPairs(c) {
   var diff = c.annAfter - c.annBefore;
   var diffYear = c.afterYear - c.beforeYear;
@@ -580,7 +603,17 @@ function _swapSumPairs(c) {
     sp(lb2, fmtMoney(c.annAfter), 'var(--accent2)') +
     sp('增減', _swapSigned(diff), cv[colorClass(diff)]) +
     sp('殖利率', (yBefore != null ? yBefore.toFixed(2) + '% → ' + yAfter.toFixed(2) + '%' : '—'), 'var(--text)') +
-    sp('今年剩餘增減', _swapSigned(diffYear), cv[colorClass(diffYear)]);
+    sp('<span title="今年剩餘月份：換股後配息現金 − 換股前配息現金">今年剩餘增減</span>', _swapSigned(diffYear), cv[colorClass(diffYear)]) +
+    sp('<span title="' + _swapRestoreTip(c) + '">除息還原</span>', _swapSigned(c.restoreYear || 0), cv[colorClass(c.restoreYear || 0)]) +
+    sp('<span title="今年剩餘增減 ＋ 除息還原">今年剩餘實質增減</span>', _swapSigned(diffYear + (c.restoreYear || 0)), cv[colorClass(diffYear + (c.restoreYear || 0))]);
+}
+function _swapRestoreTip(c) {
+  var head = '只還原各檔「下一次」除息（發放在今年者）：賣出未除息→賣價含息，加回；買進未除息→買價含息，扣回。';
+  if (!c.restoreRows || !c.restoreRows.length) return head + '\n本次試算沒有需要還原的除息。';
+  return head + '\n' + c.restoreRows.map(function (r) {
+    return r.side + ' ' + r.code + '　' + r.exDate.slice(5).replace('-', '/') + ' 除息 ' + r.perShare.toFixed(4) +
+      (r.est ? '（預估）' : '') + ' × ' + r.sh.toLocaleString('zh-TW') + ' 股 = ' + _swapSigned(r.v);
+  }).join('\n');
 }
 
 // ── 換手品質：賣出 vs 買入的「相對面」並排比較 ──
