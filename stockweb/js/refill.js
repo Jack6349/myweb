@@ -127,10 +127,16 @@ async function _rfBuildCalendar(codes, todayIso) {
 var _rfNote = '';   // 頁面提示訊息（手動補登結果）
 
 // ── 日K（含日期、未還原收盤）：Yahoo 2y，經 GAS ?url= 代理；每日快取 ──
+// 台北時間是否已過收盤資料可取得時間（13:30 收盤，Yahoo 日 K 約延遲 30 分鐘，取 14:00）
+function _rfAfterClose(ms) { return new Date((ms == null ? Date.now() : ms) + 8 * 3600000).getUTCHours() >= 14; }
 async function _rfFetchDaily(code) {
-  var day = _divTwDate().iso, cache = { day: day, map: {} };
+  var day = _divTwDate().iso, cache = { day: day, map: {}, at: {} };
   try { var c = JSON.parse(localStorage.getItem(RF_LS) || 'null'); if (c && c.day === day) cache = c; } catch (e) {}
-  if (cache.map[code]) return cache.map[code];
+  cache.at = cache.at || {};
+  var hit = cache.map[code];
+  // 當日快取若是收盤前抓的、且還沒有今天的 K 棒 → 收盤後重抓（假日重抓一次後時間戳更新，不會重複抓）
+  var stale = hit && hit.length && hit[hit.length - 1].d < day && _rfAfterClose() && !_rfAfterClose(cache.at[code] || 0);
+  if (hit && !stale) return hit;
 
   var syms = /^\d/.test(String(code)) ? [code + '.TW', code + '.TWO'] : [code];
   var bars = null;
@@ -151,8 +157,9 @@ async function _rfFetchDaily(code) {
       if (out.length >= 20) bars = out;
     } catch (e) {}
   }
+  if (!bars && stale) return hit;                    // 重抓失敗 → 沿用收盤前的資料
   if (bars) {
-    cache.map[code] = bars; cache.day = day;
+    cache.map[code] = bars; cache.day = day; cache.at[code] = Date.now();
     try { localStorage.setItem(RF_LS, JSON.stringify(cache)); } catch (e) {}
   }
   return bars;
@@ -166,7 +173,9 @@ function _rfCheckOne(bars, exDate, amount, todayIso) {
   if (iPrev < 0) return null;                       // 價格資料未涵蓋該除息日
   var base = bars[iPrev].c;
   var iEx = iPrev + 1;
-  if (iEx >= bars.length) return null;              // 除息日尚無價格
+  if (iEx >= bars.length) {                         // 除息日尚無 K 棒（今日除息、尚未收盤）→ 仍列出，不計入統計
+    return { exDate: exDate, amount: amount, base: base, filledDate: null, days: 0, pending: true, waiting: true, gapPct: null, lastPx: null };
+  }
   for (var j = iEx; j < bars.length; j++) {
     if (bars[j].c >= base) {
       return { exDate: exDate, amount: amount, base: base, filledDate: bars[j].d, days: j - iPrev, pending: false };
@@ -191,13 +200,15 @@ function _rfComputeCode(code, recs, bars, todayIso) {
       if (e) evs.push(e);
     });
   if (!evs.length) return null;
-  var done = evs.filter(function (e) { return !e.pending; });
+  var counted = evs.filter(function (e) { return !e.waiting; });   // 待收盤資料的那次不算入填息率／平均天數
+  var done = counted.filter(function (e) { return !e.pending; });
   var days = done.map(function (e) { return e.days; }).sort(function (a, b) { return a - b; });
   var avg = days.length ? days.reduce(function (a, b) { return a + b; }, 0) / days.length : null;
   var med = days.length ? (days.length % 2 ? days[(days.length - 1) / 2] : (days[days.length / 2 - 1] + days[days.length / 2]) / 2) : null;
-  var pend = evs.filter(function (e) { return e.pending; });
+  var pend = counted.filter(function (e) { return e.pending; });
   return { code: code, name: _swapName(code) || '', events: evs.slice().reverse(),
-    filled: done.length, total: evs.length, avgDays: avg, medDays: med, pending: pend[0] || null };
+    filled: done.length, total: counted.length, avgDays: avg, medDays: med,
+    pending: (evs[evs.length - 1] && evs[evs.length - 1].waiting) ? null : (pend[pend.length - 1] || null) };
 }
 
 // ── 進入頁面 ──
@@ -251,9 +262,16 @@ async function startRefill(force) {
     var r = _rfComputeCode(code, _divRecMap[code], bars, todayIso);
     if (r) rows.push(r);
   }
-  _rfResult = { rows: rows, noDiv: noDiv, day: todayIso };
+  _rfResult = { rows: rows, noDiv: noDiv, day: todayIso, at: Date.now() };
   info.textContent = '近 ' + RF_YEARS + ' 年除息｜' + rows.length + ' 檔';
   renderRefill();
+}
+
+// 切回填息追蹤頁籤時是否需重算：跨日，或收盤前算的而現在已收盤（今日除息那幾檔才有 K 棒可判定）
+function _rfNeedsRefresh() {
+  if (!_rfResult) return true;
+  if (_rfResult.day !== _divTwDate().iso) return true;
+  return _rfAfterClose() && !_rfAfterClose(_rfResult.at || 0);
 }
 
 function toggleRefill(code) { _rfOpen[code] = !_rfOpen[code]; renderRefill(); }
@@ -302,7 +320,9 @@ function renderRefill() {
     var latest = r.events[0];
     var lastTxt;
     if (!latest) lastTxt = '—';
-    else if (latest.pending) {
+    else if (latest.waiting) {
+      lastTxt = '<span class="flat">今日除息，待收盤資料</span>';
+    } else if (latest.pending) {
       lastTxt = '<span class="up">貼息中 ' + latest.days + ' 天　距填息 ' + latest.gapPct.toFixed(2) + '%</span>';
     } else {
       lastTxt = '<span class="down">' + latest.days + ' 天填息</span>';
@@ -447,9 +467,9 @@ function _rfDetailHtml(r) {
       '<td class="num">' + e.amount.toFixed(3) + '</td>' +
       '<td class="num">' + e.base.toFixed(2) + '</td>' +
       '<td>' + (e.filledDate || '—') + '</td>' +
-      '<td class="num">' + e.days + '</td>' +
-      '<td class="' + (e.pending ? 'up' : 'down') + '">' +
-        (e.pending ? '貼息中　現價 ' + e.lastPx.toFixed(2) + ' < 基準 ' + e.base.toFixed(2) : '已填息') +
+      '<td class="num">' + (e.waiting ? '—' : e.days) + '</td>' +
+      '<td class="' + (e.waiting ? 'flat' : (e.pending ? 'up' : 'down')) + '">' +
+        (e.waiting ? '待收盤資料' : (e.pending ? '貼息中　現價 ' + e.lastPx.toFixed(2) + ' < 基準 ' + e.base.toFixed(2) : '已填息')) +
       '</td></tr>';
   });
   h += '</tbody></table></div>';

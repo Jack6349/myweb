@@ -45,7 +45,7 @@ function divShowTab(tab) {
   });
   if (tab === 'swap') startSwap();
   else if (tab === 'refill' && typeof startRefill === 'function' &&
-    !(typeof _rfResult !== 'undefined' && _rfResult)) startRefill();
+    (typeof _rfNeedsRefresh !== 'function' || _rfNeedsRefresh())) startRefill();   // 未算過、跨日、或收盤前算的 → 重算
   else if (tab === 'meta' && typeof startDivMeta === 'function') startDivMeta();
 }
 
