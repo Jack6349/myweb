@@ -2,7 +2,7 @@
 // 每列前置〔明細〕按鈕 → 彈出該檔「交易紀錄」（建倉明細 position_detail）
 
 var _invStarted = false;
-var _invSort = 'codeAsc';
+var _invSort = 'exDesc';   // 預設：最近除息由近至遠（配息紀錄載入前全為空，排序維持原順序，載入後自動重排）
 
 // 排序用衍生值
 function invMetrics(p) {
@@ -58,17 +58,19 @@ function invValRow(p) {
   var chgAmt = (price != null && c && c.reference) ? price - c.reference : null; // 今日漲跌金額（現價−昨收）
   var pcls = profit == null ? 'flat' : colorClass(profit);
   var ccls = chg == null ? 'flat' : colorClass(chg);
-  // 現值比＝該檔現值佔總現值%；現值率＝該檔未實現損益佔總現值%（貢獻值，有正負）
+  // 現值比＝該檔現值佔總現值%
   var totVal = _invTotalVal();
   var vRatio = (val != null && totVal) ? val / totVal * 100 : null;
-  var pRatio = (profit != null && totVal) ? profit / totVal * 100 : null;
   var cm = (typeof constEst === 'function') ? constEst(code) : null; // 成份股估算（覆蓋率達標才有）
   var estCls = (cm && cm.est != null) ? colorClass(cm.est) : 'flat';
   // 注意股圓點：與即時持股共用識別色（_liveColorMap）與標記狀態（live_watch_v1），兩頁互通
   var dotOn = (typeof loadWatch === 'function') && loadWatch().has(code);
   var dotColor = (typeof _liveColorMap !== 'undefined' && _liveColorMap[code]) || '#888';
+  // 成份股按鈕在資料載入完成後才會出現 → 載入中先放同寬的佔位（轉圈），避免整列/整頁事後位移
+  var constWait = (typeof constLoading === 'function') && constLoading(code);
   return '<td class="inv-detail"><button class="btn-detail" onclick="openTradeDetail(\'' + code + '\',' + p.id + ')">明細</button>' +
-      (cm ? '<button class="btn-detail" style="margin-left:4px" onclick="openConstituents(\'' + code + '\')">成份股</button>' : '') + '</td>' +
+      (cm ? '<button class="btn-detail" style="margin-left:4px" onclick="openConstituents(\'' + code + '\')">成份股</button>'
+          : (constWait ? '<span class="btn-detail btn-ghost" style="margin-left:4px" title="成份股資料載入中"><i class="spin"></i></span>' : '')) + '</td>' +
     '<td class="live-dot-cell"><button class="live-dot' + (dotOn ? ' on' : '') + '" style="--dot:' + dotColor +
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + code + '\',this)"></button></td>' +
     '<td class="inv-code' + (typeof limitState === 'function' && limitState(code, price) ? ' lim-' + limitState(code, price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
@@ -78,14 +80,52 @@ function invValRow(p) {
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
     '<td class="num inv-cchg ' + estCls + '" ' + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
-      (cm && cm.est != null ? fmtPct(cm.est) : '—') + '</td>' +
+      (cm && cm.est != null ? fmtPct(cm.est) : (constWait ? '<i class="spin"></i>' : '—')) + '</td>' +
     costCellHtml(p.price, price) +
     '<td class="num">' + Math.round(cost).toLocaleString('zh-TW') + '</td>' +
     '<td class="num">' + (val != null ? Math.round(val).toLocaleString('zh-TW') : '—') + '</td>' +
     '<td class="num ' + pcls + '">' + (profit == null ? '—' : (profit >= 0 ? '+' : '') + Math.round(profit).toLocaleString('zh-TW')) + '</td>' +
     '<td class="num ' + pcls + '">' + (prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%') + '</td>' +
     '<td class="num">' + (vRatio == null ? '—' : vRatio.toFixed(2) + '%') + '</td>' +
-    '<td class="num ' + pcls + '">' + (pRatio == null ? '—' : (pRatio > 0 ? '+' : '') + pRatio.toFixed(2) + '%') + '</td>';
+    _invExCell(code);
+}
+
+// ── 最近一次除息日 ──
+// 取「今天之後最近一次」除息（含 TPEx 預告與手動補登，資料同股利估算的 _divRecMap）：
+//   本月且尚未除息 → 亮橘（要留意，買了才領得到）；本月之後 → 白字；
+//   都已過（今天之後沒有紀錄）→ 顯示最近一次已過的除息日，灰字。
+// 除息日當天視為「已過」：當天買進領不到該次配息。
+function _invExInfo(code) {
+  var map = (typeof _divRecMap !== 'undefined' && _divRecMap) || {};
+  var recs = (map[String(code)] || []).filter(function (r) { return r.exDate; })
+    .slice().sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
+  if (!recs.length) return { iso: null, loaded: !!Object.keys(map).length };
+  var today = _divTwDate().iso;
+  var next = recs.filter(function (r) { return r.exDate > today; })[0];
+  var iso = next ? next.exDate : recs[recs.length - 1].exDate;
+  var cls = next ? (iso.slice(0, 7) === today.slice(0, 7) ? 'inv-ex-soon' : 'inv-ex-next') : 'inv-ex-past';
+  return { iso: iso, cls: cls, past: !next, loaded: true,
+    amount: (recs.filter(function (r) { return r.exDate === iso; })[0] || {}).amount };
+}
+function _invExCell(code) {
+  var e = _invExInfo(code);
+  if (!e.iso) {
+    _invEnsureDiv();   // 股利估算尚未載入 → 背景載一次（配息資料每日快取，之後切頁不再抓）
+    return '<td class="num inv-ex inv-ex-none">' + (e.loaded ? '—' : '<i class="spin"></i>') + '</td>';
+  }
+  return '<td class="num inv-ex ' + e.cls + '" title="' + e.iso + (e.amount > 0 ? '　每股 ' + e.amount.toFixed(4) : '　金額待公告') +
+    (e.past ? '（已除息）' : '') + '">' + e.iso.slice(5).replace('-', '/') + '</td>';
+}
+// 持股庫存單獨開啟時 _divRecMap 還是空的 → 背景跑一次股利估算載入配息紀錄，完成後重繪本表
+var _invDivLoading = false;
+function _invEnsureDiv() {
+  if (_invDivLoading || typeof startDividendEst !== 'function') return;
+  if (typeof _divRecMap !== 'undefined' && Object.keys(_divRecMap).length) return;
+  _invDivLoading = true;
+  startDividendEst(false).catch(function () {}).then(function () {
+    _invDivLoading = false;
+    if (document.getElementById('inv-tbody') && document.getElementById('inv-tbody').children.length) renderInvTable();
+  });
 }
 
 // 停損停利觸發評估（sell/buy/null）
@@ -207,6 +247,14 @@ function renderInvTable() {
       // 直接比 val 可避開每次比較都重算一次 _invTotalVal()
       case 'vratioDesc': return num(invMetrics(b).val) - num(invMetrics(a).val);
       case 'vratioAsc': return num(invMetrics(a).val) - num(invMetrics(b).val);
+      // 最近除息：依畫面顯示的日期排；沒有除息紀錄的一律墊底（升冪降冪皆然）
+      case 'exDesc': case 'exAsc': {
+        var ia = _invExInfo(a.code).iso, ib = _invExInfo(b.code).iso;
+        if (!ia && !ib) return 0;
+        if (!ia) return 1;
+        if (!ib) return -1;
+        return _invSort === 'exAsc' ? (ia < ib ? -1 : (ia > ib ? 1 : 0)) : (ib < ia ? -1 : (ib > ia ? 1 : 0));
+      }
       default: return String(a.code).localeCompare(String(b.code), undefined, { numeric: true }); // codeAsc
     }
   });

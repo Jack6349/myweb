@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=153">
+<link rel="stylesheet" href="css/app.css?v=155">
 </head>
 <body>
 
@@ -144,7 +144,7 @@
           <th class="num sort-th" data-key="pnl" onclick="invSortCol('pnl')" title="點擊排序">未實現損益<span class="sort-ind">↕</span></th>
           <th class="num sort-th" data-key="prate" onclick="invSortCol('prate')" title="點擊排序">獲利率<span class="sort-ind">↕</span></th>
           <th class="num sort-th" data-key="vratio" onclick="invSortCol('vratio')" title="該檔現值佔總現值%；點擊排序">現值比<span class="sort-ind">↕</span></th>
-          <th class="num" title="該檔未實現損益佔總現值%（貢獻值）">現值率</th>
+          <th class="num sort-th" data-key="ex" onclick="invSortCol('ex')" title="今天之後最近一次除息日；橘＝本月尚未除息、白＝本月之後、灰＝已過（顯示最近一次已除息日）；點擊排序">最近除息<span class="sort-ind">↕</span></th>
         </tr></thead>
         <tbody id="inv-tbody"></tbody>
       </table>
@@ -368,8 +368,8 @@
 <script src="js/stream.js?v=61"></script>
 <script src="js/nav-usage.js?v=1"></script>
 <script src="js/category.js?v=1"></script>
-<script src="js/inventory.js?v=66"></script>
-<script src="js/constituents.js?v=11"></script>
+<script src="js/inventory.js?v=70"></script>
+<script src="js/constituents.js?v=12"></script>
 <script src="js/live.js?v=48"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=3"></script>

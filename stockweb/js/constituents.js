@@ -77,6 +77,9 @@ var _constCtr = {};        // 台股成份股代號 → {exchange}（每日快�
 var _constTwTimer = null, _constUsTimer = null;
 var _constPop = null;      // 彈窗中的 etf code
 var _constInit = false;
+var _constDone = false;    // 首輪（清單＋報價）是否已完成；持股庫存據此顯示載入中圖示、先占住欄寬
+// 給 inventory.js 用：該檔的成份股資料是否仍在載入（尚未有結果，欄位先顯示轉圈）
+function constLoading(code) { return !_constDone && isEtfCode(String(code)); }
 
 function _constDay() { return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10); }
 function _twMarketLive() { // 台股盤中（週一~五 09:00–13:35 台灣時間）
@@ -169,6 +172,8 @@ async function initConstituents() {
     await Promise.allSettled([pollTwConst(true), pollUsConst(true)]);
     _constEnsureTimers();
   } catch (e) { console.warn('[constituents]', e); }
+  _constDone = true;
+  if (_invVisible() && typeof renderInvTable === 'function') renderInvTable();
 }
 
 function _constEnsureTimers() {

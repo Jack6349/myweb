@@ -828,3 +828,17 @@ td.cost-even::after  { background: var(--text3); }
 /* 出借行情：現有費率優於市場（召回年增為負時的文字表示，避免負數被誤讀為虧損） */
 .sbl-better { color: var(--accent2); }
 .sbl-inc { color: var(--accent2); }   /* 年收(元)：黃字 */
+
+/* ── 持股庫存：最近一次除息日 ── */
+.inv-ex-past { color: var(--text3); }        /* 已過（含今天）：當天買進領不到 */
+.inv-ex-soon { color: #ff9f43; font-weight: 700; }   /* 本月尚未除息：亮橘，要留意 */
+.inv-ex-next { color: var(--text); }         /* 本月之後才除息 */
+.inv-ex-none { color: var(--text3); }
+
+/* ── 背景載入中的轉圈（持股庫存：成份股／成份股漲跌／最近除息）── */
+/* 資料到齊前先占住欄寬與按鈕位置，避免載入完成後整列右移 */
+.spin { display: inline-block; width: 10px; height: 10px; border: 1.5px solid var(--border);
+  border-top-color: var(--accent2); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -1px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn-ghost { display: inline-flex; align-items: center; justify-content: center; min-width: 53px;
+  border-color: transparent !important; background: transparent !important; cursor: default; }
