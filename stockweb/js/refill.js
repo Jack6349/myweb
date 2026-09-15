@@ -320,13 +320,9 @@ function renderRefill() {
     var latest = r.events[0];
     var lastTxt;
     if (!latest) lastTxt = '—';
-    else if (latest.waiting) {
-      lastTxt = '<span class="flat">今日除息，待收盤資料</span>';
-    } else if (latest.pending) {
-      lastTxt = '<span class="up">貼息中 ' + latest.days + ' 天　距填息 ' + latest.gapPct.toFixed(2) + '%</span>';
-    } else {
-      lastTxt = '<span class="down">' + latest.days + ' 天填息</span>';
-    }
+    else if (latest.waiting) lastTxt = '<span class="flat">待收盤資料</span>';
+    else if (latest.pending) lastTxt = '<span class="up">貼息中</span>';
+    else lastTxt = '<span class="down">已填息</span>';
     html += '<div class="rf-item">' +
       '<div class="rf-head" onclick="toggleRefill(\'' + r.code + '\')">' +
         '<span class="rf-code">' + r.code + '</span>' +
@@ -469,7 +465,9 @@ function _rfDetailHtml(r) {
       '<td>' + (e.filledDate || '—') + '</td>' +
       '<td class="num">' + (e.waiting ? '—' : e.days) + '</td>' +
       '<td class="' + (e.waiting ? 'flat' : (e.pending ? 'up' : 'down')) + '">' +
-        (e.waiting ? '待收盤資料' : (e.pending ? '貼息中　現價 ' + e.lastPx.toFixed(2) + ' < 基準 ' + e.base.toFixed(2) : '已填息')) +
+        (e.waiting ? '待收盤資料'
+          : (e.pending ? '貼息中 ' + e.days + ' 天　距填息 ' + e.gapPct.toFixed(2) + '%　現價 ' + e.lastPx.toFixed(2) + '＜基準 ' + e.base.toFixed(2)
+            : '已填息（' + e.days + ' 天）')) +
       '</td></tr>';
   });
   h += '</tbody></table></div>';
