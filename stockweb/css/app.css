@@ -827,3 +827,4 @@ td.cost-even::after  { background: var(--text3); }
 
 /* 出借行情：現有費率優於市場（召回年增為負時的文字表示，避免負數被誤讀為虧損） */
 .sbl-better { color: var(--accent2); }
+.sbl-inc { color: var(--accent2); }   /* 年收(元)：黃字 */

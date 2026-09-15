@@ -242,7 +242,7 @@ function _sblRender() {
         ? '<input class="sbl-inp sbl-lent-inp" type="number" min="0" step="0.01" value="' + (r.rate || '') + '"' +
           ' placeholder="輸入" onchange="sblLentInp(this,\'' + r.code + '\')">'
         : '<span class="sbl-dim">—</span>') + '</td>' +
-      '<td class="num sbl-my">' + (r.lentInc != null ? Math.round(r.lentInc).toLocaleString('zh-TW')
+      '<td class="num sbl-my">' + (r.lentInc != null ? '<span class="sbl-inc">' + Math.round(r.lentInc).toLocaleString('zh-TW') + '</span>'
         : (r.lentLots > 0 ? '<span class="sbl-dim">填費率</span>' : '<span class="sbl-dim">—</span>')) + '</td>' +
       '<td class="num">' + balHtml + '</td>' +
       '<td class="num"' + negTip + '>' + (r.w != null ? '<b>' + r.w.toFixed(2) + '</b> / ' + r.f.max.toFixed(2)
@@ -270,7 +270,7 @@ function _sblRender() {
   if (lentN) {
     html += '<tfoot><tr class="sbl-total"><td>已借出合計（' + lentN + ' 檔）</td><td></td>' +
       '<td class="num sbl-my">' + _sblLots(lentQ) + '</td><td></td>' +
-      '<td class="num sbl-my">' + Math.round(lentInc).toLocaleString('zh-TW') + '</td>' +
+      '<td class="num sbl-my"><span class="sbl-inc">' + Math.round(lentInc).toLocaleString('zh-TW') + '</span></td>' +
       '<td colspan="5"></td>' +
       '<td class="num sbl-calc" title="只加總召回重借有利的檔">' + (Math.round(gainSum) > 0 ? '+' + Math.round(gainSum).toLocaleString('zh-TW') : '<span class="sbl-dim">無可增</span>') + '</td>' +
       '<td colspan="2"></td></tr></tfoot>';
