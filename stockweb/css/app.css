@@ -834,6 +834,7 @@ td.cost-even::after  { background: var(--text3); }
 .inv-ex-soon { color: #ff9f43; font-weight: 700; }   /* 本月尚未除息：亮橘，要留意 */
 .inv-ex-next { color: var(--text); }         /* 本月之後才除息 */
 .inv-ex-none { color: var(--text3); }
+.inv-ex-est { color: var(--text3); font-size: 10px; margin-left: 1px; }   /* 預估除息日標記 */
 
 /* ── 背景載入中的轉圈（持股庫存：成份股／成份股漲跌／最近除息）── */
 /* 資料到齊前先占住欄寬與按鈕位置，避免載入完成後整列右移 */

@@ -90,31 +90,51 @@ function invValRow(p) {
     _invExCell(code);
 }
 
-// ── 最近一次除息日 ──
-// 取「今天之後最近一次」除息（含 TPEx 預告與手動補登，資料同股利估算的 _divRecMap）：
-//   本月且尚未除息 → 亮橘（要留意，買了才領得到）；本月之後 → 白字；
-//   都已過（今天之後沒有紀錄）→ 顯示最近一次已過的除息日，灰字。
-// 除息日當天視為「已過」：當天買進領不到該次配息。
+// ── 最近／下次除息日 ──
+// 規則：本月有除息 → 顯示本月那次（已過含當天＝灰、尚未到＝亮橘）；
+//       本月沒有 → 顯示下月起到年底最近一次（含股利估算的預估除息日）＝白字；年底前都沒有 → —。
+// 資料：已公告紀錄取自 _divRecMap（含 TPEx 預告與手動補登）；預估取自股利估算 _divEstResult 的月度結果
+//      （預估月若無除息日，以發放日往前推 28 天回推，與 _divDerivePay 同一組規則）。
 function _invExInfo(code) {
+  code = String(code);
   var map = (typeof _divRecMap !== 'undefined' && _divRecMap) || {};
-  var recs = (map[String(code)] || []).filter(function (r) { return r.exDate; })
-    .slice().sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
-  if (!recs.length) return { iso: null, loaded: !!Object.keys(map).length };
-  var today = _divTwDate().iso;
-  var next = recs.filter(function (r) { return r.exDate > today; })[0];
-  var iso = next ? next.exDate : recs[recs.length - 1].exDate;
-  var cls = next ? (iso.slice(0, 7) === today.slice(0, 7) ? 'inv-ex-soon' : 'inv-ex-next') : 'inv-ex-past';
-  return { iso: iso, cls: cls, past: !next, loaded: true,
-    amount: (recs.filter(function (r) { return r.exDate === iso; })[0] || {}).amount };
+  var loaded = !!Object.keys(map).length;
+  var today = _divTwDate().iso, ym = today.slice(0, 7), yearEnd = today.slice(0, 4) + '-12-31';
+
+  // 候選：已公告紀錄 ＋ 股利估算的預估除息（同一天以已公告者為準）
+  var cand = {};
+  (map[code] || []).forEach(function (r) {
+    if (r.exDate) cand[r.exDate] = { iso: r.exDate, amount: r.amount, est: false };
+  });
+  var st = (typeof _divEstResult !== 'undefined' && _divEstResult) &&
+    _divEstResult.stocks.filter(function (x) { return x.code === code; })[0];
+  if (st) st.res.months.forEach(function (m) {
+    if (m.status !== 'est') return;
+    var iso = m.exDate || (m.payDate ? new Date(Date.parse(m.payDate) - 28 * 86400000).toISOString().slice(0, 10) : null);
+    if (iso && !cand[iso]) cand[iso] = { iso: iso, amount: m.perShare, est: true };
+  });
+  var list = Object.keys(cand).sort().map(function (k) { return cand[k]; });
+  if (!list.length) return { iso: null, loaded: loaded };
+
+  var inMonth = list.filter(function (x) { return x.iso.slice(0, 7) === ym; })[0];
+  if (inMonth) return Object.assign({ cls: inMonth.iso <= today ? 'inv-ex-past' : 'inv-ex-soon',
+    past: inMonth.iso <= today, loaded: true }, inMonth);
+  var nxt = list.filter(function (x) { return x.iso > today && x.iso <= yearEnd; })[0];
+  if (nxt) return Object.assign({ cls: 'inv-ex-next', past: false, loaded: true }, nxt);
+  return { iso: null, loaded: true, none: true };
 }
 function _invExCell(code) {
   var e = _invExInfo(code);
   if (!e.iso) {
     _invEnsureDiv();   // 股利估算尚未載入 → 背景載一次（配息資料每日快取，之後切頁不再抓）
-    return '<td class="num inv-ex inv-ex-none">' + (e.loaded ? '—' : '<i class="spin"></i>') + '</td>';
+    return '<td class="num inv-ex inv-ex-none"' + (e.none ? ' title="年底前無除息（含預估）"' : '') + '>' +
+      (e.loaded ? '—' : '<i class="spin"></i>') + '</td>';
   }
-  return '<td class="num inv-ex ' + e.cls + '" title="' + e.iso + (e.amount > 0 ? '　每股 ' + e.amount.toFixed(4) : '　金額待公告') +
-    (e.past ? '（已除息）' : '') + '">' + e.iso.slice(5).replace('-', '/') + '</td>';
+  var tip = e.iso + (e.est ? '（預估）' : '') +
+    (e.amount > 0 ? '　每股 ' + e.amount.toFixed(4) + (e.est ? '（預估）' : '') : '　金額待公告') +
+    (e.past ? '　已除息' : '');
+  return '<td class="num inv-ex ' + e.cls + '" title="' + tip + '">' + e.iso.slice(5).replace('-', '/') +
+    (e.est ? '<span class="inv-ex-est">*</span>' : '') + '</td>';
 }
 // 持股庫存單獨開啟時 _divRecMap 還是空的 → 背景跑一次股利估算載入配息紀錄，完成後重繪本表
 var _invDivLoading = false;
