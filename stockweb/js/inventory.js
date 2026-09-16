@@ -133,8 +133,12 @@ function _invExCell(code) {
   var tip = e.iso + (e.est ? '（預估）' : '') +
     (e.amount > 0 ? '　每股 ' + e.amount.toFixed(4) + (e.est ? '（預估）' : '') : '　金額待公告') +
     (e.past ? '　已除息' : '');
-  // 預估標記放日期前面：欄位靠右對齊，星號放後面會把日期往左推、與其他列對不齊
-  return '<td class="num inv-ex ' + e.cls + '" title="' + tip + '">' +
+  // 除息在兩天內（今天之後、含第 2 天）→ 前面加閃爍 ★ 提醒：要買就得在除息日前一個交易日之前完成
+  var dLeft = e.past ? null : Math.round((Date.parse(e.iso) - Date.parse(_divTwDate().iso)) / 86400000);
+  var soon = dLeft != null && dLeft > 0 && dLeft <= 2;
+  // 標記放日期前面：欄位靠右對齊，放後面會把日期往左推、與其他列對不齊
+  return '<td class="num inv-ex ' + e.cls + '" title="' + tip + (soon ? '　還有 ' + dLeft + ' 天除息' : '') + '">' +
+    (soon ? '<span class="inv-ex-star">★</span>' : '') +
     (e.est ? '<span class="inv-ex-est">*</span>' : '') + e.iso.slice(5).replace('-', '/') + '</td>';
 }
 // 持股庫存單獨開啟時 _divRecMap 還是空的 → 背景跑一次股利估算載入配息紀錄，完成後重繪本表

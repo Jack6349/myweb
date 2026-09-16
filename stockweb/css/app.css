@@ -835,6 +835,10 @@ td.cost-even::after  { background: var(--text3); }
 .inv-ex-next { color: var(--text); }         /* 本月之後才除息 */
 .inv-ex-none { color: var(--text3); }
 .inv-ex-est { color: var(--text3); font-size: 10px; margin-right: 1px; }   /* 預估除息日標記（放日期前，日期右緣才對齊） */
+/* 兩天內就要除息：★ 閃爍提醒（系統設定為減少動態時不閃） */
+.inv-ex-star { color: #ff9f43; margin-right: 2px; animation: exblink 1.1s ease-in-out infinite; }
+@keyframes exblink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .inv-ex-star { animation: none; } }
 
 /* ── 背景載入中的轉圈（持股庫存：成份股／成份股漲跌／最近除息）── */
 /* 資料到齊前先占住欄寬與按鈕位置，避免載入完成後整列右移 */
