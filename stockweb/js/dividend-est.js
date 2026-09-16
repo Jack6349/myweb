@@ -133,6 +133,12 @@ function _divDerivePay(exIso) {
   if (!exIso) return null;
   return new Date(Date.parse(exIso) + 28 * 86400000).toISOString().slice(0, 10);
 }
+// 2026-02-31 這類不存在的日期 → 收到該月最後一天
+function _divClampIso(iso) {
+  var y = +iso.slice(0, 4), m = +iso.slice(5, 7), d = +iso.slice(8, 10);
+  var last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return iso.slice(0, 8) + ('0' + Math.min(d, last)).slice(-2);
+}
 function _addMonths(iso, n) {
   var y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1, d = iso.slice(8, 10);
   var t = y * 12 + m + n;
@@ -245,15 +251,20 @@ function computeEtfYear(recs, shares, todayIso, year, code) {
     });
   } else {
     // 新配息檔（無去年資料）：依頻率自最近一次發放往後推
+    // 預估除息日＝最近一次除息日＋頻率月數（同日；月底不存在的日期往前收）；
+    // 預估發放日＝預估除息日＋最近一次「除息→發放」天數（無公告發放日時即 28 天）。
+    // 原本只推發放月、固定 15 日且無除息日：00984D 9/1 除息後的下一次（約 10/1 除息、10/23 發放）
+    // 會出現在 10 月發放，卻因沒有除息日而不在「本月除息個股」，兩表 10 月合計對不起來。
     var step = _divInferStep(recs);
-    var lastPay = payOf(recs[recs.length - 1]);
-    var ym = (+lastPay.slice(0, 4)) * 12 + (+lastPay.slice(5, 7) - 1);
-    for (var k = 0; k < 24; k++) {
-      ym += step;
-      var yy = Math.floor(ym / 12), mm = (ym % 12) + 1;
+    var last = recs[recs.length - 1];
+    var gap = Math.round((Date.parse(payOf(last)) - Date.parse(last.exDate)) / 86400000);
+    for (var k = 1; k <= 24; k++) {
+      var pex = _divClampIso(_addMonths(last.exDate, step * k));
+      var ppay = new Date(Date.parse(pex) + gap * 86400000).toISOString().slice(0, 10);
+      var yy = +ppay.slice(0, 4), mm = +ppay.slice(5, 7);
       if (yy > year) break;
       if (yy === year && !taken[mm] && mm > lastActualM) {
-        byMonth[mm + '|proj'] = { month: mm, exDate: null, payDate: yy + '-' + ('0' + mm).slice(-2) + '-15', derivedPay: true, perShare: lastAmt, status: 'est' };
+        byMonth[mm + '|proj'] = { month: mm, exDate: pex, payDate: ppay, derivedPay: true, perShare: lastAmt, status: 'est' };
         taken[mm] = true;
       }
     }
@@ -706,6 +717,22 @@ function _divExMonthHtml(stocks, money, md) {
   h += '</tbody><tfoot><tr><td class="dstat-code">合計</td><td class="num"></td><td class="num"></td>' +
     '<td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td>' +
     '<td class="num dstat-tot">' + money(sum) + '</td></tr></tfoot></table></div>';
+
+  // 對帳：本表以「除息日在本月」歸類，月份總覽以「發放月」歸類 → 列出兩邊不一致的除息（金額為 0 的略過）
+  var notes = [];
+  var payMs = {};
+  list.forEach(function (it) { if (it.payDate && it.total > 0) payMs[+it.payDate.slice(5, 7)] = true; });   // 本表有金額的發放月才對帳
+  Object.keys(payMs).forEach(function (pm) {
+    stocks.forEach(function (s) {
+      (s.res.months || []).forEach(function (mo) {
+        if (mo.month !== +pm || !(mo.total > 0)) return;
+        if (mo.exDate && mo.exDate.slice(0, 7) === ym) return;
+        notes.push(pm + ' 月發放另含 ' + s.code + (mo.exDate ? ' ' + md(mo.exDate) + ' 除息' : '') +
+          (mo.status === 'actual' ? '' : '（預估）') + ' ' + money(mo.total));
+      });
+    });
+  });
+  if (notes.length) h += '<div class="divest-note">※ 本表依除息日歸月，月份總覽依發放月：' + notes.join('；') + '</div>';
   return h;
 }
 
