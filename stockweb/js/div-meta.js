@@ -305,8 +305,13 @@ function renderDivMeta() {
 
     var nextTxt = r.next
       ? md(r.next.exDate) + '　' + (r.next.amount > 0 ? r.next.amount.toFixed(4) : dim('待公告')) +
-        (r.next.payDate ? dim('　發 ' + md(r.next.payDate)) : '') + (rfMan[r.code] ? ' <span class="dm-src dm-src-manual" title="填息追蹤頁已手動補登">補登</span>' : '')
+        (r.next.payDate ? dim('　發 ' + md(r.next.payDate)) : '') + (rfMan[r.code] ? ' <span class="dm-src dm-src-manual" title="已手動補登">補登</span>' : '')
       : dim('—');
+    // 手動補登下次除息：投信已公告、但官方預告表（約前兩週）與 e添富 都還沒收錄時用；官方收錄後以官方值為準
+    var mv = rfMan[r.code] && rfMan[r.code].exDate >= _divTwDate().iso ? _rfManStr(rfMan[r.code]) : '';
+    nextTxt += '<input class="sbl-inp dm-next-inp' + (mv ? ' dm-manual' : '') + '" type="text" value="' + esc(mv) + '"' +
+      ' placeholder="補登 10/05 [金額] [發放日]" title="投信已公告但尚未收錄時手動輸入：除息日必填，金額、發放日可省略（省略發放日時依該檔過去的除息→發放天數推算）。清空即移除"' +
+      ' onchange="divMetaNextEx(\'' + r.code + '\',this.value)">';
     var y12 = r.yld12 == null ? dim('—')
       : r.yld12.toFixed(2) + '%' + (r.step && r.in12.length < 12 / r.step ? dim('（' + r.in12.length + ' 次）') : '');
 
@@ -333,7 +338,7 @@ function renderDivMeta() {
     '<span class="dm-lv dm-lv-red"></span> 頻率靠推定，需確認　<span class="dm-lv dm-lv-yellow"></span> 由除息紀錄推算　' +
     '<span class="dm-lv dm-lv-green"></span> 官方或手動　<span class="dm-lv dm-lv-gray"></span> 不配息。' +
     '官方規格：上市＝TWSE、上櫃＝TPEx「ETF 商品資訊」，每 30 天更新一次。' +
-    '配息頻率、管理費、保管費可手動輸入，會覆蓋官方值；清空即回到自動。除息日與金額的手動補登請到「填息追蹤」。</div>';
+    '配息頻率、管理費、保管費可手動輸入，會覆蓋官方值；清空即回到自動。「下次除息」欄可手動補登投信已公告、官方尚未收錄的除息日（金額與發放日可省略）。</div>';
   wrap.innerHTML = h;
 }
 
@@ -349,6 +354,18 @@ function _divChkCell(chk) {
     (same ? '，每股差 ' + (ps[0] > 0 ? '+' : '') + ps[0].toFixed(3) : '') + '</span>';
 }
 
+async function divMetaNextEx(code, raw) {
+  var map = _rfManLoad();
+  if (!String(raw || '').trim()) delete map[code];
+  else {
+    var r = _rfParseManual(raw);
+    if (!r) { alert('無法解析，請輸入如：10/05　或　2026/10/05 0.085 2026/10/27'); return; }
+    map[code] = r;
+  }
+  _rfManSave(map);
+  try { await startDividendEst(false); } catch (e) {}   // 重算估算（沿用當日快取），本頁「下次除息」同步更新
+  renderDivMeta();
+}
 async function divMetaSet(code, key, raw) {
   var rec = Object.assign({}, _divMan[code] || {});
   var oldStep = rec.step || null;

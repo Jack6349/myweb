@@ -857,3 +857,5 @@ td.cost-even::after  { background: var(--text3); }
 .tx-ahead-mid { color: var(--accent2); }  /* 101–500 張 */
 .tx-ahead-high { color: var(--up); }      /* >500 張：排很後面 */
 .tx-dim { color: var(--text3); }
+
+.dm-next-inp { width: 150px; margin-left: 6px; font-size: 12px; padding: 1px 4px; }

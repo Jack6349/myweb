@@ -220,7 +220,20 @@ function computeEtfYear(recs, shares, todayIso, year, code) {
   if (!recs.length) return null;
   var lastAmt = 0;
   for (var i = recs.length - 1; i >= 0; i--) { if (recs[i].amount != null) { lastAmt = recs[i].amount; break; } }
-  var payOf = function (r) { return r.payDate || _divDerivePay(r.exDate); };
+  // 缺發放日：沿用該檔最近一次有公告發放日的間隔（各投信天數不同，00984D 約 22 天、00981B 約 28 天），
+  // 沒有可參考的紀錄才用 _divDerivePay 的 28 天。手動只填除息日（例 00984D 10/05）時發放月才不會被推錯。
+  var gapDays = null;
+  for (var gi = recs.length - 1; gi >= 0; gi--) {
+    if (recs[gi].payDate) {
+      var gd = Math.round((Date.parse(recs[gi].payDate) - Date.parse(recs[gi].exDate)) / 86400000);
+      if (gd >= 7 && gd <= 60) { gapDays = gd; break; }
+    }
+  }
+  var payOf = function (r) {
+    if (r.payDate) return r.payDate;
+    if (gapDays == null || !r.exDate) return _divDerivePay(r.exDate);
+    return new Date(Date.parse(r.exDate) + gapDays * 86400000).toISOString().slice(0, 10);
+  };
 
   // 一個發放月可能有兩次除息（00981B：3/3、3/19 兩次除息分別在 3、4 月發放；推算發放日若撞月不能互相覆蓋）
   // → 以「發放月｜除息日」為鍵；taken 記錄已有資料的月份，供下方預估判斷是否補月
@@ -802,7 +815,7 @@ function toggleDivStock(code) {
 
 // ── 上櫃除權息預告表（TPEx OpenAPI，官方 JSON；每日 1 次即涵蓋全市場，零額外成本）──
 // 供股利估算與填息追蹤共用：任一頁先用到就抓並快取，不再互相相依
-var TPEX_CAL_LS = 'refill_cal_v1';
+var TPEX_CAL_LS = 'refill_cal_v2';   // v2：併入上市 TWSE 預告表
 var _tpexFresh = false;                 // 本次是否真的向 TPEx 抓了新資料
 function _tpexCached() {
   try { var c = JSON.parse(localStorage.getItem(TPEX_CAL_LS) || 'null'); if (c && c.day === _divTwDate().iso) return c.rows; } catch (e) {}
@@ -826,6 +839,19 @@ async function fetchTpexExright() {
         exDate: iso, amount: isNaN(amt) ? null : amt, payDate: null, src: 'TPEx' });
     });
   } catch (e) { console.warn('[tpex exright]', e); }
+  // 上市：TWSE 除權除息預告表（OpenAPI TWT48U_ALL，約涵蓋未來兩週）；只取有除息者
+  try {
+    var r2 = await _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent('https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL'), 40000);
+    var j2 = await r2.json();
+    (Array.isArray(j2) ? j2 : []).forEach(function (x) {
+      var d = String(x.Date || '');
+      if (d.length !== 7 || String(x.Exdividend || '').indexOf('息') < 0) return;
+      var amt = parseFloat(x.CashDividend);
+      rows.push({ code: String(x.Code), name: x.Name || '',
+        exDate: (+d.slice(0, 3) + 1911) + '-' + d.slice(3, 5) + '-' + d.slice(5, 7),
+        amount: isNaN(amt) || amt <= 0 ? null : amt, payDate: null, src: 'TWSE' });
+    });
+  } catch (e) { console.warn('[twse exright]', e); }
   if (rows.length) { try { localStorage.setItem(TPEX_CAL_LS, JSON.stringify({ day: _divTwDate().iso, rows: rows })); } catch (e) {} }
   return rows;
 }
@@ -942,8 +968,8 @@ function _divMergeAnnounced(recMap) {
     (add[code] = add[code] || []).push({ exDate: exDate, payDate: payDate || null, amount: amount, src: src });
   };
   try {                                            // TPEx 除權息預告（全市場快取，取持股者）
-    var cal = JSON.parse(localStorage.getItem('refill_cal_v1') || 'null');
-    if (cal && cal.rows) cal.rows.forEach(function (r) { push(String(r.code), r.exDate, r.payDate, r.amount, 'TPEx'); });
+    var cal = JSON.parse(localStorage.getItem(TPEX_CAL_LS) || 'null');
+    if (cal && cal.rows) cal.rows.forEach(function (r) { push(String(r.code), r.exDate, r.payDate, r.amount, r.src || 'TPEx'); });
   } catch (e) {}
   try {                                            // 手動補登（後併入，可補上 TPEx 缺的金額/發放日）
     var man = JSON.parse(localStorage.getItem('refill_manual_v1') || '{}');
