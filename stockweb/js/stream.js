@@ -369,6 +369,10 @@ async function refreshPositions() {
     if (typeof renderTopbarTotals === 'function') renderTopbarTotals();
     if (_positions[0] && _positions[0].id !== null) syncPositionsToFirestore(_positions);
     try { _posRawSig = _posSig(await fetchBrokerPositions()); } catch (e) {}   // 更新輪詢基準
+    // 股利估算的可領張數依建倉明細計算 → 持股一變就重算（已載入過才做；用快取不重打外部來源）
+    if (typeof _divEstResult !== 'undefined' && _divEstResult && typeof startDividendEst === 'function') {
+      startDividendEst(false).catch(function () {});
+    }
     console.log('[positions] 委託事件重抓完成：' + _positions.length + ' 檔');
   } catch (e) {
     // 重抓失敗（如券商暫時查無資料）→ 還原原快取，等下次事件再試

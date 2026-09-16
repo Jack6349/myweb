@@ -281,6 +281,12 @@ async function startDividendEst(force) {
 
   // 持股/股數（沿用行情引擎的 _sharesMap；失敗容忍）
   try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) {}
+  // ensureFeed 只在首次建立時讀庫存，之後直接沿用 → 盤中成交後張數會停在開頁時的值。
+  // 按「重新整理」時強制重抓一次券商庫存（含建倉明細），可領張數才會跟上今日買賣。
+  if (force && typeof refreshPositions === 'function') {
+    info.textContent = '重抓券商庫存…';
+    try { await refreshPositions(); } catch (e) {}
+  }
   var shareMap = (typeof _sharesMap !== 'undefined' && _sharesMap) ? _sharesMap : {};
   var codes = Object.keys(shareMap).filter(isEtfCode);
   if (!codes.length) { wrap.innerHTML = '<div class="modal-loading">無持有 ETF</div>'; return; }
