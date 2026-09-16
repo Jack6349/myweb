@@ -64,21 +64,58 @@ function openWatch() { showView('watch'); if (typeof startWatch === 'function') 
 function closeStream() { goHome(); } // 相容頂欄返回鈕/標題連結
 
 // ── 服務健康檢查 ──
+// /health 只回報 server 本身（token、合約數），不含與永豐的 Solace 連線；
+// 實際發生過 health 顯示 healthy、但所有 API 都回 SessionNotEstablished（2026-09-16）。
+// → 另打一支真正要走券商連線的 API（snapshots）當探測，兩者分開顯示。
+var _srvState = 'unknown';   // up / session / down
 async function checkServer() {
   var el = document.getElementById('conn-status');
+  var alive = false;
   try {
     var r = await fetch(API + '/api/v1/health', { cache: 'no-store' });
-    if (r.ok) { el.textContent = '● 行情服務連線中'; el.className = 'conn-status ok'; return true; }
+    alive = r.ok;
   } catch (e) {}
-  el.textContent = '● 行情服務未啟動';
+  if (!alive) {
+    _srvState = 'down';
+    el.textContent = '● 行情服務未啟動';
+    el.className = 'conn-status off';
+    el.title = '';
+    return false;
+  }
+  var probe = await probeSession();
+  if (probe.ok) {
+    _srvState = 'up';
+    el.textContent = '● 行情服務連線中';
+    el.className = 'conn-status ok';
+    el.title = '';
+    return true;
+  }
+  _srvState = 'session';
+  el.textContent = '● 券商連線中斷';
   el.className = 'conn-status off';
+  el.title = probe.msg || '';
   return false;
 }
+// 探測：打一支一定要經過券商連線的 API（任一檔快照），只看有沒有回資料
+async function probeSession() {
+  try {
+    var r = await fetch(API + '/api/v1/data/snapshots', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+      body: JSON.stringify({ contracts: [{ security_type: 'STK', exchange: 'TSE', code: '2330' }] })
+    });
+    var j = await r.json();
+    if (r.ok && Array.isArray(j) && j.length) return { ok: true };
+    return { ok: false, msg: (j && j.message) || ('HTTP ' + r.status) };
+  } catch (e) { return { ok: false, msg: String(e) }; }
+}
 function serverDownHtml() {
-  return '本機行情服務未啟動。請在電腦上執行：\n' +
-    '<code>cd C:\\Users\\jack6\\shioaji-server</code>\n' +
-    '<code>shioaji server start --production --no-open</code>\n' +
-    '啟動後重新整理本頁。';
+  var FIX = '<code>C:\\Users\\jack6\\shioaji-server\\fix-server.cmd</code>';
+  if (_srvState === 'session') {
+    return '本機行情服務有在跑，但<b>與永豐的連線已中斷</b>（API 回 SessionNotEstablished），重新整理網頁無效。\n' +
+      '請在電腦上執行一鍵修復（會自動判斷該啟動或重啟）：\n' + FIX +
+      '\n跑完約 15 秒後重新整理本頁。';
+  }
+  return '本機行情服務未啟動。請在電腦上執行：\n' + FIX + '\n啟動後重新整理本頁。';
 }
 
 // ── Firestore 持股（備援：券商查詢失敗時使用） ──
@@ -233,7 +270,9 @@ function ensureFeed(statusCb) {
     for (var j = 0; j < list.length; j++) await subscribeTick(list[j]);
 
     openSSE();
+    await subscribeTradeEvents();   // 必須先訂閱，order_event 才會推送（見下方說明）
     openOrderEvents(); // 盤中成交自動更新庫存
+    _posPollStart();   // 保險：定期比對券商庫存，事件漏接時仍會更新
 
     // 背景：券商持倉回寫 Firestore（手機版共用），不阻塞畫面
     if (_positions[0] && _positions[0].id !== null) {
@@ -247,6 +286,49 @@ function ensureFeed(statusCb) {
 // ── 盤中成交自動更新：訂閱委託/成交事件（SSE），事件後重抓庫存並重繪 ──
 // 修正「今日買入成交但持股庫存/即時持股數量沒變」：_positions 原本只在首載抓一次
 var _orderEs = null, _posRefreshTimer = null, _posRefreshing = false;
+// 委託／成交事件必須先向 server 訂閱（對應 Python api.subscribe_trade），
+// 否則 relay 不會轉發 SORDER/SDEAL，order_event 這條 SSE 一直收不到東西，
+// 成交後庫存也就不會自動重抓（2026-09-16 發現：賣出成交後餘額仍停在舊值）。
+var _tradeSubbed = false;
+async function subscribeTradeEvents() {
+  if (_tradeSubbed) return true;
+  try {
+    var r = await fetch(API + '/api/v1/auth/subscribe_trade', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+    });
+    var j = r.ok ? await r.json() : null;
+    _tradeSubbed = !!(j && j.subscribe_trade);
+    if (!_tradeSubbed) console.warn('[subscribe_trade] 未訂閱成功', j);
+  } catch (e) { console.warn('[subscribe_trade]', e); }
+  return _tradeSubbed;
+}
+
+// 庫存輪詢（保險機制）：事件漏接、SSE 斷線或訂閱失敗時，仍能在一分鐘內反映成交。
+// 只打一支 position_unit 比對「代號:股數」簽章，有變動才做完整重抓（完整重抓要逐檔查建倉明細，較重）。
+var _posPollTimer = null, _posRawSig = null;
+function _posSig(list) {
+  return (list || []).map(function (p) { return p.code + ':' + p.quantity; }).sort().join('|');
+}
+async function _posPollOnce(force) {
+  if (!_feedReady || _posRefreshing || (document.hidden && !force)) return;
+  try {
+    var raw = await fetchBrokerPositions();
+    var sig = _posSig(raw);
+    if (_posRawSig == null) { _posRawSig = sig; return; }   // 首次僅記錄基準
+    if (sig === _posRawSig) return;
+    _posRawSig = sig;
+    console.log('[positions] 輪詢發現庫存變動 → 重抓');
+    await refreshPositions();
+  } catch (e) { /* 券商暫時查不到 → 下次再比 */ }
+}
+function _posPollStart() {
+  if (_posPollTimer) return;
+  _posPollTimer = setInterval(function () { _posPollOnce(); }, 60000);
+  // 分頁切回前台時立刻比對一次（背景分頁不輪詢，回來才補）
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) _posPollOnce(); });
+  _posPollOnce(true);
+}
+
 function openOrderEvents() {
   if (_orderEs) return;
   try {
@@ -285,6 +367,7 @@ async function refreshPositions() {
     if (typeof renderSummaries === 'function') renderSummaries();
     if (typeof renderTopbarTotals === 'function') renderTopbarTotals();
     if (_positions[0] && _positions[0].id !== null) syncPositionsToFirestore(_positions);
+    try { _posRawSig = _posSig(await fetchBrokerPositions()); } catch (e) {}   // 更新輪詢基準
     console.log('[positions] 委託事件重抓完成：' + _positions.length + ' 檔');
   } catch (e) {
     // 重抓失敗（如券商暫時查無資料）→ 還原原快取，等下次事件再試

@@ -54,10 +54,89 @@ function _stPill(t) {
   }
   return '<span class="st-pill st-wait">委託中</span>'; // PendingSubmit / PreSubmitted / Submitted
 }
+// ── 委託排隊前方張數（推估）──
+// 交易所與券商都不揭露排隊序位，只能用逐筆成交回推：
+//   1) 取委託時間之後第一筆成交，讀當下同價位的委賣（賣單）／委買（買單）總量，扣掉自己未成交張數＝掛單當下前方張數
+//   2) 之後累加「成交價＝委託價」的成交量，視為前方隊伍被消化的部分
+//   3) 前方張數 − 已消化＝目前推估；已有部分成交代表前面清空，直接回 0
+// 誤差：前方有人取消看不到（估計偏高）；委託到第一筆成交之間的變化算在前方；委託價非當時最佳一檔時無法估計。
+var _txTicks = {};   // code → 當次查詢的逐筆成交（每次重新整理清空）
+async function _txTicksOf(code) {
+  if (_txTicks[code] !== undefined) return _txTicks[code];
+  try {
+    var day = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+    var r = await fetch('/api/v1/data/ticks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contract: { security_type: 'STK', exchange: ((typeof _contracts !== 'undefined' && _contracts[code]) || {}).exchange || 'TSE', code: code }, date: day })
+    });
+    _txTicks[code] = r.ok ? await r.json() : null;
+  } catch (e) { _txTicks[code] = null; }
+  return _txTicks[code];
+}
+function _txLive(t) {
+  var st = (t.status || {}).status || '';
+  return st === 'PendingSubmit' || st === 'PreSubmitted' || st === 'Submitted' || st === 'PartFilled' || st === 'Filling';
+}
+// all＝今日全部委託，用來找「同代號同買賣同價位、比本筆更早且仍未成交」的自己人：
+// 基準的價位總量把它們也算在裡面，不扣掉會高估前方張數（同一價位分批掛單時特別明顯）。
+function _txOwnEarlier(t, all) {
+  var o = t.order || {}, s = t.status || {}, code = (t.contract || {}).code || '';
+  var sum = 0;
+  (all || []).forEach(function (x) {
+    if (x === t || !_txLive(x)) return;
+    var xo = x.order || {}, xs = x.status || {};
+    if ((x.contract || {}).code !== code || xo.action !== o.action || +xo.price !== +o.price) return;
+    if ((xs.order_ts || 0) > (s.order_ts || 0)) return;            // 晚於本筆 → 排在後面，不算前方
+    sum += (xo.quantity || 0) - (xs.deal_quantity || 0);
+  });
+  return sum;
+}
+async function _txAhead(t, all) {
+  var o = t.order || {}, s = t.status || {}, code = (t.contract || {}).code || '';
+  var left = (o.quantity || 0) - (s.deal_quantity || 0);
+  if (!_txLive(t) || left <= 0) return null;                                  // 已成交／取消／失敗
+  if (o.order_lot && o.order_lot !== 'Common') return { na: '盤中零股另一本委託簿，無法用逐筆五檔推估' };
+  if (s.deal_quantity > 0) return { ahead: 0, note: '已有部分成交，前方已清空' };
+  var j = await _txTicksOf(code);
+  var dt = j && j.datetime;
+  if (!dt || !dt.length) return { na: '今日尚無逐筆成交資料' };
+  var hm = new Date((s.order_ts || 0) * 1000 + 8 * 3600000).toISOString().slice(11, 19);
+  var base = -1;
+  for (var i = 0; i < dt.length; i++) { if (String(dt[i]).slice(11, 19) >= hm) { base = i; break; } }
+  if (base < 0) return { na: '委託後尚無成交，無法取基準' };
+  var buy = o.action === 'Buy';
+  var lvlP = buy ? j.bid_price : j.ask_price, lvlV = buy ? j.bid_volume : j.ask_volume;
+  if (+lvlP[base] !== o.price) return { na: '委託價非當時最佳一檔（逐筆只揭示最佳檔），無法估計' };
+  var atOrder = lvlV[base];
+  var own = _txOwnEarlier(t, all);                                 // 自己較早、同價位未成交的張數（仍排在前面，但標示出來）
+  var ahead0 = Math.max(0, atOrder - left);
+  var used = 0;
+  for (var k = base; k < dt.length; k++) { if (+j.close[k] === o.price) used += j.volume[k]; }
+  var lastLvl = null;
+  for (var m = dt.length - 1; m >= 0; m--) { if (+lvlP[m] === o.price) { lastLvl = { t: String(dt[m]).slice(11, 19), v: lvlV[m] }; break; } }
+  return { ahead: Math.max(0, ahead0 - used), ahead0: ahead0, used: used, atOrder: atOrder, own: own,
+    baseT: String(dt[base]).slice(11, 19), lastLvl: lastLvl };
+}
+// 顏色分級：越少越快輪到 → 綠；中等 → 黃；很多 → 紅
+function _txAheadCls(n) { return n <= 100 ? 'tx-ahead-low' : (n <= 500 ? 'tx-ahead-mid' : 'tx-ahead-high'); }
+function _txAheadHtml(a) {
+  if (!a) return '<span class="tx-dim">—</span>';
+  if (a.na) return '<span class="tx-dim" title="' + a.na + '">無法估計</span>';
+  var tip = a.note ? a.note :
+    ('掛單當下（' + a.baseT + '）同價位 ' + a.atOrder + ' 張，扣掉自己這筆 ' + (a.atOrder - a.ahead0) + ' 張 → 前方 ' + a.ahead0 + ' 張\n' +
+     (a.own ? '其中同價位還有你自己較早的委託 ' + a.own + ' 張\n' : '') +
+     '委託後該價位已成交 ' + a.used + ' 張 → 目前前方約 ' + a.ahead + ' 張' +
+     (a.lastLvl ? '\n最新（' + a.lastLvl.t + '）該價位總量 ' + a.lastLvl.v + ' 張（含排在你後面的）' : '') +
+     '\n推估值：前方有人取消看不到，實際可能更少');
+  return '<span class="tx-ahead ' + _txAheadCls(a.ahead) + '" title="' + tip + '">' +
+    (a.ahead > 0 ? '約 ' + a.ahead.toLocaleString('zh-TW') : '0') + '</span>';
+}
+
 async function loadOrderBox() {
   var el = document.getElementById('tx-order-body');
   el.innerHTML = '<div class="modal-loading">查詢中…</div>';
   try {
+    _txTicks = {};                                  // 每次重新整理重抓逐筆（盤中持續增加）
     var trades = await fetchOrderTrades();
     if (!trades || !trades.length) { el.innerHTML = '<div class="modal-loading">今日無委託</div>'; return; }
     trades.sort(function (a, b) { return ((b.status || {}).order_ts || 0) - ((a.status || {}).order_ts || 0); }); // 新→舊
@@ -73,8 +152,10 @@ async function loadOrderBox() {
     var buyAmt = 0, sellAmt = 0;
     var html = '<div class="tx-otable-wrap"><table class="tx-otable"><thead><tr>' +
       '<th>商品</th><th>買賣</th><th class="num">委託</th><th class="num">成交</th>' +
-      '<th>狀態</th><th>書號</th><th class="num">委託時間</th></tr></thead><tbody>';
-    trades.forEach(function (t) {
+      '<th>狀態</th><th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
+      '<th>書號</th><th class="num">委託時間</th></tr></thead><tbody>';
+    var aheads = await Promise.all(trades.map(function (t) { return _txAhead(t, trades).catch(function () { return null; }); }));
+    trades.forEach(function (t, ti) {
       var o = t.order || {}, s = t.status || {}, code = (t.contract || {}).code || '';
       var c = (typeof _contracts !== 'undefined' && _contracts[code]) || null;
       var buy = o.action === 'Buy';
@@ -96,6 +177,7 @@ async function loadOrderBox() {
         '<td class="num"' + (dealTitle ? ' title="' + dealTitle + '"' : '') + '>' +
           (dq ? dq + unit + ' @' + avg.toFixed(2) + (deals.length > 1 ? ' ×' + deals.length : '') : '—') + '</td>' +
         '<td>' + _stPill(t) + '</td>' +
+        '<td class="num">' + _txAheadHtml(aheads[ti]) + '</td>' +
         '<td class="tx-dseq">' + ((o.ordno || '').trim() || '—') + '</td>' +
         '<td class="num">' + _hms(s.order_ts) + '</td></tr>';
     });

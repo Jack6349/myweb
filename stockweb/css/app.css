@@ -850,3 +850,10 @@ td.cost-even::after  { background: var(--text3); }
 
 /* 頂欄刷新鈕（沿用返回鈕外觀） */
 .btn-refresh { margin-left: 6px; }
+
+/* 交易資訊：委託排隊前方張數（推估值） */
+.tx-ahead { font-weight: 700; }
+.tx-ahead-low { color: var(--down); }     /* ≤100 張：很快輪到 */
+.tx-ahead-mid { color: var(--accent2); }  /* 101–500 張 */
+.tx-ahead-high { color: var(--up); }      /* >500 張：排很後面 */
+.tx-dim { color: var(--text3); }

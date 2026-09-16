@@ -272,6 +272,13 @@ function renderInvTable() {
       // 直接比 val 可避開每次比較都重算一次 _invTotalVal()
       case 'vratioDesc': return num(invMetrics(b).val) - num(invMetrics(a).val);
       case 'vratioAsc': return num(invMetrics(a).val) - num(invMetrics(b).val);
+      // 注意股圓點：已標記優先（降冪）／未標記優先（升冪）；同組維持代號順序
+      case 'dotDesc': case 'dotAsc': {
+        var marked = (typeof loadWatch === 'function') ? loadWatch() : new Set();
+        var da = marked.has(String(a.code)) ? 1 : 0, db = marked.has(String(b.code)) ? 1 : 0;
+        if (da !== db) return _invSort === 'dotAsc' ? da - db : db - da;
+        return String(a.code).localeCompare(String(b.code), undefined, { numeric: true });
+      }
       // 最近除息：依畫面顯示的日期排；沒有除息紀錄的一律墊底（升冪降冪皆然）
       case 'exDesc': case 'exAsc': {
         var ia = _invExInfo(a.code).iso, ib = _invExInfo(b.code).iso;
