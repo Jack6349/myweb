@@ -271,6 +271,7 @@ function ensureFeed(statusCb) {
 
     openSSE();
     await subscribeTradeEvents();   // 必須先訂閱，order_event 才會推送（見下方說明）
+    _tickWatchStart();              // tick 漏推的檔改用快照補價（見下方說明）
     openOrderEvents(); // 盤中成交自動更新庫存
     _posPollStart();   // 保險：定期比對券商庫存，事件漏接時仍會更新
 
@@ -582,6 +583,61 @@ function flashCard(code, dir) {
 }
 
 // ── SSE 接收（全畫面共用一條連線） ──
+// ── tick 補價（watchdog）──
+// 實測：server 重啟後，個別代號的 tick 不再推送（重新訂閱回 success、重開 SSE 也沒用），
+// 其他代號正常，快照卻查得到成交量持續增加（2026-09-16：00984D 停在 11:03，快照已到 11:22）。
+// 推送端的問題客戶端修不了 → 盤中每 30 秒檢查，超過 90 秒沒 tick 的檔以快照補價，
+// 價格就不會整段時間停在舊值。快照一次可帶多檔，成本低。
+var _tickWatchTimer = null;
+var TICK_STALE_MS = 90000;
+function _twOpen() {           // 台股盤中（週一~五 09:00–13:35 台灣時間）
+  var d = new Date(Date.now() + 8 * 3600000);
+  var wd = d.getUTCDay(); if (wd === 0 || wd === 6) return false;
+  var m = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return m >= 9 * 60 && m <= 13 * 60 + 35;
+}
+function _tickAgeMs(code) {
+  var t = _rows[code] && _rows[code].time;                 // 'HH:MM:SS'（台北）
+  if (!t) return Infinity;
+  var d = new Date(Date.now() + 8 * 3600000);
+  var nowSec = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+  var p = t.split(':');
+  var tickSec = (+p[0]) * 3600 + (+p[1]) * 60 + (+p[2] || 0);
+  return Math.max(0, nowSec - tickSec) * 1000;
+}
+async function _tickWatchOnce(force) {
+  if (!_twOpen() || (document.hidden && !force)) return;
+  var stale = Object.keys(_contracts).filter(function (c) { return _tickAgeMs(c) > TICK_STALE_MS; });
+  if (!stale.length) return;
+  try {
+    var snaps = await fetchSnapshots(stale.map(function (c) { return _contracts[c]; }));
+    var changed = [];
+    (snaps || []).forEach(function (sn) {
+      var code = sn.code, cur = _rows[code];
+      var t = (sn.datetime || '').slice(11, 19);
+      if (!cur || (cur.close === sn.close && cur.total_volume === sn.total_volume)) return;
+      _rows[code] = { close: sn.close, total_volume: sn.total_volume, time: t };
+      changed.push(code);
+    });
+    if (!changed.length) return;
+    console.log('[tick watchdog] 快照補價：' + changed.join('、'));
+    changed.forEach(function (code) {
+      if (typeof renderCard === 'function') renderCard(code);
+      if (typeof renderInvRow === 'function') renderInvRow(code);
+      if (typeof renderLiveRow === 'function') renderLiveRow(code);
+      if (typeof renderTopConstRow === 'function') renderTopConstRow(code);
+      if (typeof renderWatchRow === 'function') renderWatchRow(code);
+    });
+    renderSummaries();
+  } catch (e) { console.warn('[tick watchdog]', e); }
+}
+function _tickWatchStart() {
+  if (_tickWatchTimer) return;
+  _tickWatchTimer = setInterval(function () { _tickWatchOnce(); }, 30000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) _tickWatchOnce(); });
+  _tickWatchOnce(true);
+}
+
 function openSSE() {
   if (_es) { _es.close(); _es = null; }
   _es = new EventSource(API + '/api/v1/stream/data/tick_stk');
