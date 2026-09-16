@@ -133,8 +133,9 @@ function _invExCell(code) {
   var tip = e.iso + (e.est ? '（預估）' : '') +
     (e.amount > 0 ? '　每股 ' + e.amount.toFixed(4) + (e.est ? '（預估）' : '') : '　金額待公告') +
     (e.past ? '　已除息' : '');
-  return '<td class="num inv-ex ' + e.cls + '" title="' + tip + '">' + e.iso.slice(5).replace('-', '/') +
-    (e.est ? '<span class="inv-ex-est">*</span>' : '') + '</td>';
+  // 預估標記放日期前面：欄位靠右對齊，星號放後面會把日期往左推、與其他列對不齊
+  return '<td class="num inv-ex ' + e.cls + '" title="' + tip + '">' +
+    (e.est ? '<span class="inv-ex-est">*</span>' : '') + e.iso.slice(5).replace('-', '/') + '</td>';
 }
 // 持股庫存單獨開啟時 _divRecMap 還是空的 → 背景跑一次股利估算載入配息紀錄，完成後重繪本表
 var _invDivLoading = false;
