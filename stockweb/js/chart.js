@@ -312,12 +312,29 @@ function _chartBindIntraHover(b) {
 // ── 頁籤二：即時買賣五檔（訂閱 BidAsk → SSE bidask_stk）──
 // 行情訂閱有 200 檔額度上限 → 只在本頁籤開啟時訂閱，切走/關窗立即退訂
 var _bidEs = null, _bidSubCode = null, _bidLast = null;
+var _bidHL = null;   // { code, high, low }：五檔標 H／L 用
+function _bidHLUpdate(code, hi, lo) {
+  if (code !== _chartCode) return;
+  if (!_bidHL || _bidHL.code !== code) _bidHL = { code: code, high: null, low: null };
+  var changed = false;
+  if (hi > 0 && (_bidHL.high == null || hi > _bidHL.high)) { _bidHL.high = hi; changed = true; }
+  if (lo > 0 && (_bidHL.low == null || lo < _bidHL.low)) { _bidHL.low = lo; changed = true; }
+  if (changed && _bidLast) {
+    var wrap = document.getElementById('bid-wrap');
+    if (wrap) wrap.innerHTML = _bidAskHtml(_bidLast, code);
+  }
+}
 
 async function _chartLoadBidAsk() {
   var area = document.getElementById('chart-area');
   var code = _chartCode;
   _bidLast = null;
+  _bidHL = null;
   _ticks = [];
+  fetchSnapshots([_contracts[code] || { exchange: 'TSE', code: code }]).then(function (sn) {
+    var x = (sn || [])[0];
+    if (x) _bidHLUpdate(code, +x.high, +x.low);
+  }).catch(function () {});
   // 左右並排：五檔（掛單）在左、逐筆（成交）在右。
   // 兩者原本上下排會超出彈窗高度需捲動，但各自都用不到全寬 → 改用橫向分欄消化寬度。
   area.innerHTML = '<div class="bid-cols">' +
@@ -418,6 +435,10 @@ function _chartStartTickStream() {
       });
       if (_ticks.length > TICK_N) _ticks.length = TICK_N;
       _tickRender();
+      if (!d.intraday_odd) {
+        var px = Number(d.close);
+        _bidHLUpdate(d.code, d.high != null ? Number(d.high) : px, d.low != null ? Number(d.low) : px);
+      }
     } catch (e) {}
   });
 }
@@ -475,7 +496,8 @@ function _chartStopBidAsk() {
 
 // 五檔表：左右兩欄深度對照（買盤左、賣盤右，各 5 檔，買1/賣1 在最上）
 // 版面 左→右：〔量條→買量→買價 ‖ 賣價→賣量→量條〕；量條在最外側、價格在中央面對面
-// 顏色：買價紅、賣價綠、買賣量黃；成交價漲紅/平黃/跌綠
+// 顏色（同券商 App）：價格與昨收比，高於紅、平盤黃、低於綠；買賣量黃。
+// 標記：等於當日最高價標紅色 H、最低價標綠色 L（買盤標在價格左側、賣盤標在右側）；等於最新成交價加黃底線。
 function _bidAskHtml(b, code) {
   var r = _rows[code] || {}, ct = _contracts[code] || {}, ref = ct.reference;
   var dealCls = (r.close != null && ref != null) ? (r.close > ref ? 'up' : (r.close < ref ? 'down' : 'flat')) : '';
@@ -497,6 +519,15 @@ function _bidAskHtml(b, code) {
   bv.concat(av).forEach(function (v) { if (v > maxV) maxV = v; });
   var diff = function (d) { return d ? '<span class="bid-diff ' + (d > 0 ? 'up' : 'down') + '">' + (d > 0 ? '+' : '') + d + '</span>' : ''; };
   var barW = function (v) { return (v / maxV * 100).toFixed(1); };
+  var hl = (_bidHL && _bidHL.code === code) ? _bidHL : {};
+  var same = function (a, b2) { return a != null && b2 != null && Math.abs(a - b2) < 1e-6; };
+  var pxCell = function (raw, side) {
+    var p = parseFloat(raw);
+    var cls = ref == null ? 'bid-flat' : (p > ref + 1e-6 ? 'up' : (p < ref - 1e-6 ? 'down' : 'bid-flat'));
+    var mk = same(p, hl.high) ? '<span class="bid-hl up">H</span>' : (same(p, hl.low) ? '<span class="bid-hl down">L</span>' : '');
+    var txt = '<span class="bid-pxv' + (same(p, r.close) ? ' bid-last' : '') + '">' + p.toFixed(2) + '</span>';
+    return '<td class="num bid-px ' + side + ' ' + cls + '">' + (side === 'buy' ? mk + txt : txt + mk) + '</td>';
+  };
 
   // 內外盤比 Bar（移到最上方、加高，兩側放張數與百分比）
   var sumB = 0, sumA = 0;
@@ -518,9 +549,9 @@ function _bidAskHtml(b, code) {
       // 買盤（左）：量條 → 買量 → 買價
       '<td class="bid-bar-cell bid-bar-r">' + (hasB ? '<span class="bid-bar bid" style="width:' + barW(bv[i]) + '%"></span>' : '') + '</td>' +
       '<td class="num bid-vol">' + (hasB ? diff(dbv[i]) + (bv[i] || 0).toLocaleString('zh-TW') : '') + '</td>' +
-      '<td class="num bid-px buy">' + (hasB ? parseFloat(bp[i]).toFixed(2) : '') + '</td>' +
+      (hasB ? pxCell(bp[i], 'buy') : '<td class="num bid-px buy"></td>') +
       // 賣盤（右）：賣價 → 賣量 → 量條
-      '<td class="num bid-px sell">' + (hasA ? parseFloat(ap[i]).toFixed(2) : '') + '</td>' +
+      (hasA ? pxCell(ap[i], 'sell') : '<td class="num bid-px sell"></td>') +
       '<td class="num bid-vol">' + (hasA ? diff(dav[i]) + (av[i] || 0).toLocaleString('zh-TW') : '') + '</td>' +
       '<td class="bid-bar-cell">' + (hasA ? '<span class="bid-bar ask" style="width:' + barW(av[i]) + '%"></span>' : '') + '</td>' +
       '</tr>';

@@ -57,6 +57,12 @@ async function fillToastCheck() {
     var rank = { order: 0, fill: 1, cancel: 2, fail: 2 };
     events.sort(function (a, b) { return ((a.ts || 0) - (b.ts || 0)) || (rank[a.kind] - rank[b.kind]); });
     events.forEach(_ftShow);
+    if (events.length) {
+      var pick = events.filter(function (e) { return e.kind === 'fail'; })[0] ||
+        events.filter(function (e) { return e.kind === 'fill'; })[0] ||
+        events.filter(function (e) { return e.kind === 'cancel'; })[0] || events[0];
+      _ftBeep(pick.kind === 'fill' ? ((pick.t.order || {}).action === 'Buy' ? 'fill_buy' : 'fill_sell') : pick.kind);
+    }
   } catch (e) { console.warn('[委託提示] 查詢委託失敗，下次再試', e); }
   finally { _ftBusy = false; }
 }
@@ -80,6 +86,49 @@ function fillToastStart() {
     if (wd === 0 || wd === 6 || m < 8 * 60 + 30 || m > 14 * 60 + 35) return;   // 含盤後零股
     fillToastCheck();
   }, 15000);
+}
+
+// ── 提示音（Web Audio 合成，不需音效檔）──
+// 成交：上揚兩聲（買高→更高、賣略低）；委託成功：短單聲；取消：下降兩聲；失敗：低音三短聲。
+// 瀏覽器規定頁面要先有過點擊／按鍵才能出聲 → 第一次互動時解鎖 AudioContext；解鎖前的提示只顯示不出聲。
+var _ftAudio = null;
+function _ftAudioCtx() {
+  if (!_ftAudio) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    _ftAudio = new AC();
+  }
+  if (_ftAudio.state === 'suspended') _ftAudio.resume();
+  return _ftAudio;
+}
+['pointerdown', 'keydown'].forEach(function (evn) {
+  window.addEventListener(evn, function () { try { _ftAudioCtx(); } catch (e) {} }, { capture: true, passive: true });
+});
+var FT_SOUND = {
+  //        [頻率 Hz, 開始秒, 長度秒]
+  fill_buy:  [[880, 0, .12], [1320, .13, .22]],
+  fill_sell: [[784, 0, .12], [1047, .13, .22]],
+  order:     [[1047, 0, .12]],
+  cancel:    [[784, 0, .12], [523, .13, .2]],
+  fail:      [[330, 0, .1], [330, .14, .1], [330, .28, .16]]
+};
+function _ftBeep(key) {
+  try {
+    var ctx = _ftAudioCtx();
+    if (!ctx || ctx.state !== 'running') return;
+    var now = ctx.currentTime;
+    (FT_SOUND[key] || []).forEach(function (n) {
+      var osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = key === 'fail' ? 'square' : 'sine';
+      osc.frequency.value = n[0];
+      var t0 = now + n[1], t1 = t0 + n[2];
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(key === 'fail' ? 0.08 : 0.25, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t1);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(t0); osc.stop(t1 + 0.02);
+    });
+  } catch (e) {}
 }
 
 function _ftShow(ev) {

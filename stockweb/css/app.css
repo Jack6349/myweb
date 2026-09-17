@@ -422,8 +422,12 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .bid-table td { padding: 6px 8px; border-bottom: 1px solid rgba(58,79,104,.6); }
 .bid-table .num { text-align: right; }
 .bid-px { font-weight: 700; width: 74px; }
-.bid-px.buy { color: var(--up); }
-.bid-px.sell { color: var(--down); }
+/* 五檔價格：與昨收比 高紅／平黃／低綠（同券商 App），不再以買賣方向配色 */
+.bid-px.up { color: var(--up); }
+.bid-px.down { color: var(--down); }
+.bid-px.bid-flat { color: var(--accent2); }
+.bid-hl { font-size: .8em; font-weight: 700; margin: 0 5px; }
+.bid-last { border-bottom: 2px solid var(--accent2); padding-bottom: 1px; }
 .bid-vol { color: var(--accent2); width: 82px; }
 .bid-bar-cell { width: 20%; position: relative; }
 .bid-bar { display: block; height: 13px; border-radius: 2px; }
