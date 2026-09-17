@@ -272,6 +272,7 @@ function ensureFeed(statusCb) {
     openSSE();
     await subscribeTradeEvents();   // 必須先訂閱，order_event 才會推送（見下方說明）
     _tickWatchStart();              // tick 漏推的檔改用快照補價（見下方說明）
+    if (typeof fillToastStart === 'function') fillToastStart();   // 成交提示（fill-toast.js）
     openOrderEvents(); // 盤中成交自動更新庫存
     _posPollStart();   // 保險：定期比對券商庫存，事件漏接時仍會更新
 
@@ -335,6 +336,7 @@ function openOrderEvents() {
   try {
     _orderEs = new EventSource(API + '/api/v1/stream/data/order_event');
     _orderEs.onmessage = function () {
+      if (typeof fillToastOnEvent === 'function') fillToastOnEvent();   // 成交提示
       // 任何委託/成交/取消事件都可能改變庫存 → 去抖 3 秒後重抓一次（連續多筆成交只抓一次）
       clearTimeout(_posRefreshTimer);
       _posRefreshTimer = setTimeout(function () { refreshPositions(); }, 3000);

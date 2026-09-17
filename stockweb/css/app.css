@@ -859,3 +859,22 @@ td.cost-even::after  { background: var(--text3); }
 .tx-dim { color: var(--text3); }
 
 .dm-next-inp { width: 150px; margin-left: 6px; font-size: 12px; padding: 1px 4px; }
+
+/* ── 成交提示（全站，顯示 5 秒）── 置頂置中，蓋在 Header 上方；多筆往下疊 */
+#fill-toasts { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9999;
+  display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+.fill-toast { pointer-events: auto; cursor: pointer; display: flex; align-items: baseline; gap: 10px;
+  padding: 9px 16px; border-radius: 8px; background: var(--bg2); border: 1px solid var(--border);
+  box-shadow: 0 6px 24px rgba(0,0,0,.45); font-size: 16px; white-space: nowrap;
+  font-variant-numeric: tabular-nums; animation: ft-in .25s ease-out; transition: opacity .3s, transform .3s; }
+.fill-toast.ft-buy  { border-left: 5px solid var(--up); }
+.fill-toast.ft-sell { border-left: 5px solid var(--down); }
+.ft-tag { font-weight: 700; }
+.ft-buy .ft-tag { color: var(--up); }
+.ft-sell .ft-tag { color: var(--down); }
+.ft-code { font-weight: 700; color: var(--text); }
+.ft-name { color: var(--text2); font-size: .85em; }
+.ft-qty { color: #f5d87a; font-weight: 600; }
+.ft-time { color: var(--text3); font-size: .8em; }
+.fill-toast.ft-out { opacity: 0; transform: translateY(-8px); }
+@keyframes ft-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
