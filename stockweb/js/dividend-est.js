@@ -215,7 +215,7 @@ async function _divLoadSoldLots(force) {
   } catch (e) { console.warn('[已實現損益] 讀取失敗，過去月份僅以現存批次計算', e); }
 }
 
-function computeEtfYear(recs, shares, todayIso, year, code) {
+function computeEtfYear(recs, shares, todayIso, year, code, forceStep) {
   recs = recs.filter(function (r) { return r.exDate; }).sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
   if (!recs.length) return null;
   var lastAmt = 0;
@@ -253,7 +253,7 @@ function computeEtfYear(recs, shares, todayIso, year, code) {
   var lastActualM = 0;
   Object.keys(byMonth).forEach(function (k) { var e = byMonth[k]; if (e.status === 'actual' && e.month > lastActualM) lastActualM = e.month; });
   var hasPrior = recs.some(function (r) { var p = payOf(r); return p && +p.slice(0, 4) === year - 1; });
-  if (hasPrior) {
+  if (hasPrior && !forceStep) {
     // 有去年同期：以「去年發放月 ＋12」投影（自然吻合不規則配息的實際月份）
     recs.forEach(function (r) {
       var pay = payOf(r); if (!pay || +pay.slice(0, 4) !== year - 1) return;
@@ -361,7 +361,9 @@ async function startDividendEst(force) {
     var res = computeEtfYear(recs, shareMap[code], tw.iso, tw.y, code);
     if (!res || (!res.months.length)) return;
     var name = (recs[0].name) || (_contracts[code] && _contracts[code].name) || '';
-    stocks.push({ code: code, name: name, res: res, src: (byCode[code] && byCode[code].length) ? 'e添富' : 'Yahoo' });
+    var resNext = null;
+    try { resNext = computeEtfNextYear(recs, res, shareMap[code], tw.iso, tw.y, code); } catch (e) { console.warn('[明年預估] ' + code, e); }
+    stocks.push({ code: code, name: name, res: res, resNext: resNext, src: (byCode[code] && byCode[code].length) ? 'e添富' : 'Yahoo' });
   });
   if (!stocks.length) { wrap.innerHTML = '<div class="modal-loading">持有 ETF 皆無配息紀錄</div>'; return; }
   stocks.sort(function (a, b) { return String(a.code).localeCompare(String(b.code), undefined, { numeric: true }); });
@@ -369,6 +371,28 @@ async function startDividendEst(force) {
   _divEstResult = { stocks: stocks, year: tw.y };
   info.textContent = tw.y + ' 年・' + stocks.length + ' 檔配息 ETF';
   renderDividendEst();
+}
+
+// ── 明年預估（依發放月）──
+// 估算方式與今年相同（computeEtfYear）：
+//   把今年各次配息（已發放＋預估，預估的金額＝最近一次已知金額）當作紀錄，年份改成明年再算一次 →
+//   有完整一輪的檔以「今年發放月＋12」投影；今年還不滿一輪的新檔（例 00404A 9 月才首次除息）改依配息頻率往後推。
+// 可領張數：明年除息日都在未來 → 等於目前持股（_divSharesAsOf 對未來日期即現存全部批次）。
+function computeEtfNextYear(recs, res, shares, todayIso, year, code) {
+  if (!res || !res.months.length) return null;
+  var real = recs.filter(function (r) { return r.exDate; });
+  var have = {};
+  real.forEach(function (r) { have[r.exDate] = true; });
+  var aug = real.map(function (r) { return Object.assign({ code: code }, r); });
+  res.months.forEach(function (m) {
+    if (!m.exDate || have[m.exDate]) return;           // 已是實際紀錄者不重複加
+    aug.push({ code: code, exDate: m.exDate, payDate: m.payDate, amount: m.perShare, _proj: true });
+  });
+  aug.sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
+  var step = _divInferStep(real.map(function (r) { return Object.assign({ code: code }, r); }));
+  var thisYearN = res.months.length;
+  var forceStep = step && thisYearN < 12 / step;       // 今年不滿一輪 → 依頻率推
+  return computeEtfYear(aug, shares, todayIso, year + 1, code, forceStep);
 }
 
 function renderDividendEst() {
@@ -462,8 +486,11 @@ function renderDividendEst() {
   html += '</div>';
   // ── 月份總覽（依發放月）：縱向個股、橫向 1–12 月＋總計 ──
   html += _divStatTableHtml(stocks, money);
+  // ── 明年預估（依發放月）：同樣算法往後推一年，全部為預估（黃）──
+  html += _divStatTableHtml(stocks.filter(function (s) { return s.resNext && s.resNext.months.length; })
+    .map(function (s) { return { code: s.code, res: s.resNext }; }), money, (year + 1) + ' 明年預估（依發放月）');
 
-  html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。<b>各次配息依建倉明細判定可領張數：除息日當天（含）之後才買進的批次不計</b>（含近 12 個月內已賣出、但除息日當時仍持有的批次，依券商已實現損益明細計入）。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。</div>';
+  html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。<b>各次配息依建倉明細判定可領張數：除息日當天（含）之後才買進的批次不計</b>（含近 12 個月內已賣出、但除息日當時仍持有的批次，依券商已實現損益明細計入）。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。<br>明年預估：沿用同一套估算，以今年各次配息（含預估）投影一年；每股金額用最近一次已知金額、張數用目前持股。</div>';
   wrap.innerHTML = html;
   _divHistDrawAll();   // 圖要量容器實際寬度，必須在插入 DOM 之後畫
 }
@@ -778,14 +805,14 @@ function _divStatRows(stocks) {
   });
   return rows;
 }
-function _divStatTableHtml(stocks, money) {
+function _divStatTableHtml(stocks, money, title) {
   var rows = _divStatRows(stocks);
   if (!rows.length) return '';
   var arrow = function (key) {
     return _divStatSort === key + 'Asc' ? '▲' : (_divStatSort === key + 'Desc' ? '▼' : '↕');
   };
   var sorted = function (key) { return _divStatSort.indexOf(key) === 0 ? ' sorted' : ''; };
-  var h = '<div class="divest-divider"></div><div class="divest-sec-title">月份總覽（依發放月）</div>' +
+  var h = '<div class="divest-divider"></div><div class="divest-sec-title">' + (title || '月份總覽（依發放月）') + '</div>' +
     '<div class="dstat-wrap"><table class="dstat">' +
     '<thead><tr><th class="dstat-code sort-th' + sorted('code') + '" onclick="divStatSort(\'code\')" title="點擊排序">代號<span class="sort-ind">' + arrow('code') + '</span></th>';
   for (var mo = 1; mo <= 12; mo++) h += '<th class="num">' + mo + '月</th>';
