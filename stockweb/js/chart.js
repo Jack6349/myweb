@@ -524,7 +524,7 @@ function _bidAskHtml(b, code) {
   var pxCell = function (raw, side) {
     var p = parseFloat(raw);
     var cls = ref == null ? 'bid-flat' : (p > ref + 1e-6 ? 'up' : (p < ref - 1e-6 ? 'down' : 'bid-flat'));
-    var mk = same(p, hl.high) ? '<span class="bid-hl up">H</span>' : (same(p, hl.low) ? '<span class="bid-hl down">L</span>' : '');
+    var mk = same(p, hl.high) ? '<span class="bid-hl up">H</span>' : (same(p, hl.low) ? '<span class="bid-hl down">L</span>' : '<span class="bid-hl"></span>');
     var txt = '<span class="bid-pxv' + (same(p, r.close) ? ' bid-last' : '') + '">' + p.toFixed(2) + '</span>';
     return '<td class="num bid-px ' + side + ' ' + cls + '">' + (side === 'buy' ? mk + txt : txt + mk) + '</td>';
   };

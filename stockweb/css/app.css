@@ -405,8 +405,8 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 /* 內外盤比 Bar（頂部，加高，兩側放張數/百分比） */
 .bid-ratio { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .bid-ratio-bar { flex: 1; display: flex; height: 19px; border-radius: 4px; overflow: hidden; }
-.bid-ratio-bar i.bid { background: var(--up); }
-.bid-ratio-bar i.ask { background: var(--down); }
+.bid-ratio-bar i.bid { background: var(--down); }
+.bid-ratio-bar i.ask { background: var(--up); }
 .bid-ratio-side { font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bid-ratio-side.left { text-align: right; min-width: 120px; }
 .bid-ratio-side.right { text-align: left; min-width: 120px; }
@@ -426,13 +426,13 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .bid-px.up { color: var(--up); }
 .bid-px.down { color: var(--down); }
 .bid-px.bid-flat { color: var(--accent2); }
-.bid-hl { font-size: .8em; font-weight: 700; margin: 0 5px; }
+.bid-hl { display: inline-block; width: 1.3em; text-align: center; font-size: .8em; font-weight: 700; }
 .bid-last { border-bottom: 2px solid var(--accent2); padding-bottom: 1px; }
 .bid-vol { color: var(--accent2); width: 82px; }
 .bid-bar-cell { width: 20%; position: relative; }
 .bid-bar { display: block; height: 13px; border-radius: 2px; }
-.bid-bar.bid { background: rgba(255,82,82,.5); float: right; }
-.bid-bar.ask { background: rgba(38,217,98,.5); }
+.bid-bar.bid { background: rgba(38,217,98,.5); float: right; }
+.bid-bar.ask { background: rgba(255,82,82,.5); }
 /* 中央分隔：買賣兩欄之間 */
 .bid-table td.bid-px.sell, .bid-table .bid-side-h.sell, .bid-table thead tr:nth-child(2) th:nth-child(4) { border-left: 2px solid var(--border); }
 .bid-diff { font-size: 11px; margin: 0 4px; color: var(--text3); }
