@@ -877,4 +877,12 @@ td.cost-even::after  { background: var(--text3); }
 .ft-qty { color: #f5d87a; font-weight: 600; }
 .ft-time { color: var(--text3); font-size: .8em; }
 .fill-toast.ft-out { opacity: 0; transform: translateY(-8px); }
+/* 委託成功／取消／失敗：色邊與標籤改用中性色，和成交（紅買綠賣）區分 */
+.fill-toast.ft-order  { border-left-color: #5aa9ff; }
+.fill-toast.ft-order .ft-tag { color: #5aa9ff; }
+.fill-toast.ft-cancel { border-left-color: var(--text3); }
+.fill-toast.ft-cancel .ft-tag { color: var(--text2); }
+.fill-toast.ft-cancel .ft-qty { color: var(--text2); }
+.fill-toast.ft-fail   { border-left-color: #ff8a3d; }
+.fill-toast.ft-fail .ft-tag { color: #ff8a3d; }
 @keyframes ft-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
