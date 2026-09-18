@@ -376,6 +376,7 @@ async function refreshPositions() {
     if (typeof _divEstResult !== 'undefined' && _divEstResult && typeof startDividendEst === 'function') {
       startDividendEst(false).catch(function () {});
     }
+    if (typeof loadInvSettle === 'function') loadInvSettle();   // 成交後待交割金額跟著變
     console.log('[positions] 委託事件重抓完成：' + _positions.length + ' 檔');
   } catch (e) {
     // 重抓失敗（如券商暫時查無資料）→ 還原原快取，等下次事件再試

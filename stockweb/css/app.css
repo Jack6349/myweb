@@ -901,3 +901,8 @@ td.cost-even::after  { background: var(--text3); }
 .tx-pnl .tx-flat { color: var(--accent2); }
 #tx-pnl-sum .tx-flat { color: var(--accent2); }
 .tx-gap { display: inline-block; width: 10px; }   /* 委託／成交欄：數量與價格之間的間距（取代 @） */
+/* 持股庫存最上方：待交割 */
+.inv-settle { margin-bottom: 8px; }
+.inv-settle-h { color: var(--accent2); }
+.inv-settle-t { color: var(--text3); font-weight: 400; font-size: 11px; margin-left: 2px; }
+.inv-settle-note { color: var(--text3); font-size: 11px; margin-left: auto; }
