@@ -156,8 +156,10 @@ function _addMonths(iso, n) {
 // 原本只算到現存 222 張，8 月發放估 $13,986，實際 $20,286）。
 // 無建倉明細（Firestore 後備、或該檔查不到）時退回總股數，行為與加這段之前相同。
 function _divSharesAsOf(code, exDate, fallback) {
-  var lots = (typeof _lotsMap !== 'undefined') && _lotsMap[String(code)];
-  if (!lots || !lots.length || !exDate) return fallback;
+  var lots = ((typeof _lotsMap !== 'undefined') && _lotsMap[String(code)]) || [];
+  var sold = _soldLotsMap[String(code)] || [];
+  // 已出清的檔（例 00900）沒有建倉明細，只有已賣出批次 → 也要走下面的重建，不能直接回 fallback(0)
+  if ((!lots.length && !sold.length) || !exDate) return fallback;
   var s = 0;
   lots.forEach(function (l) { if (l.date < exDate) s += l.shares; });
   (_soldLotsMap[String(code)] || []).forEach(function (l) {
@@ -322,6 +324,12 @@ async function startDividendEst(force) {
   var shareMap = (typeof _sharesMap !== 'undefined' && _sharesMap) ? _sharesMap : {};
   var codes = Object.keys(shareMap).filter(isEtfCode);
   if (!codes.length) { wrap.innerHTML = '<div class="modal-loading">無持有 ETF</div>'; return; }
+  // 已賣出批次先載入（當日快取，通常瞬間完成）：需要它才知道哪些檔今年持有過、現在已出清
+  await _divLoadSoldLots(force);
+  var soldOut = Object.keys(_soldLotsMap).filter(function (c) {
+    return isEtfCode(c) && !(shareMap[c] > 0) && _soldLotsMap[c].some(function (l) { return l.sell >= _divTwDate().y + '-01-01'; });
+  });
+  var allCodes = codes.concat(soldOut);
 
   var rows;
   try { rows = await fetchEtfDividendList(force); }
@@ -334,7 +342,7 @@ async function startDividendEst(force) {
 
   // e添富 沒有的持股（上櫃/債券 ETF）用 Yahoo 後備補
   var recMap = {}, missing = [];
-  codes.forEach(function (code) {
+  allCodes.forEach(function (code) {
     if (byCode[code] && byCode[code].length) recMap[code] = byCode[code];
     else missing.push(code);
   });
@@ -342,7 +350,6 @@ async function startDividendEst(force) {
     try { var yr = await fetchYahooDiv(code, force); if (yr && yr.length) recMap[code] = yr; } catch (e) {}
   }).concat([
     divMetaLoad(codes).catch(function () {}),        // 官方 ETF 規格＋手動輸入（配息頻率估算要用，須在 computeEtfYear 前就緒；見 div-meta.js）
-    _divLoadSoldLots(force)                           // 已賣出批次：過去除息日的實際持股
   ]));
   // 官方除權息歷史（補 e添富／Yahoo 漏掉的除息）：GAS 慢時 8 段要抓到一分鐘，不擋畫面——
   // 今日快取就緒 → 同步併入；否則先用現有資料顯示，背景抓完（完整）再重算一次，第二次即命中快取。
@@ -363,15 +370,23 @@ async function startDividendEst(force) {
 
   var tw = _divTwDate();
   var stocks = [];
-  codes.forEach(function (code) {
+  allCodes.forEach(function (code) {
     var recs = recMap[code];
     if (!recs || !recs.length) return; // 不配息／未開始配息 → 不列
-    var res = computeEtfYear(recs, shareMap[code], tw.iso, tw.y, code);
+    var out = soldOut.indexOf(code) >= 0;
+    var res = computeEtfYear(recs, shareMap[code] || 0, tw.iso, tw.y, code);
     if (!res || (!res.months.length)) return;
+    if (out) {
+      // 已出清：只留已有持股的那幾次（未來月份股數 0），今年一毛都沒領到就不列
+      res.months = res.months.filter(function (m) { return m.shares > 0; });
+      if (!res.months.length) return;
+    }
     var name = (recs[0].name) || (_contracts[code] && _contracts[code].name) || '';
     var resNext = null;
-    try { resNext = computeEtfNextYear(recs, res, shareMap[code], tw.iso, tw.y, code); } catch (e) { console.warn('[明年預估] ' + code, e); }
-    stocks.push({ code: code, name: name, res: res, resNext: resNext, src: (byCode[code] && byCode[code].length) ? 'e添富' : 'Yahoo' });
+    if (!out) {
+      try { resNext = computeEtfNextYear(recs, res, shareMap[code], tw.iso, tw.y, code); } catch (e) { console.warn('[明年預估] ' + code, e); }
+    }
+    stocks.push({ code: code, name: name, res: res, resNext: resNext, soldOut: out, src: (byCode[code] && byCode[code].length) ? 'e添富' : 'Yahoo' });
   });
   if (!stocks.length) { wrap.innerHTML = '<div class="modal-loading">持有 ETF 皆無配息紀錄</div>'; return; }
   stocks.sort(function (a, b) { return String(a.code).localeCompare(String(b.code), undefined, { numeric: true }); });
@@ -481,6 +496,7 @@ function renderDividendEst() {
     html += '<div class="divest-stock">' +
       '<div class="divest-shead" onclick="toggleDivStock(\'' + s.code + '\')">' +
         '<div><span class="divest-scode">' + s.code + '</span> <span class="divest-sname">' + s.name + '</span>' +
+          (s.soldOut ? ' <span class="dexm-lent">(已出清)</span>' : '') +
           '<span class="divest-yield">現價 <b>' + (price != null ? price.toFixed(2) : '—') + '</b>　' +
           '預估年殖利率 <b>' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</b>' + exHtml + '</span></div>' +
         '<div class="divest-smeta">已領 <span style="color:var(--down)">' + money(s.res.actualTotal) + '</span>　估算 <span style="color:var(--accent2)">' + money(s.res.estTotal) + '</span>　' +
@@ -799,7 +815,7 @@ function divStatSort(key) {
 function _divStatRows(stocks) {
   var rows = [];
   stocks.forEach(function (s) {
-    var r = { code: s.code, m: {}, act: {}, tot: 0 };
+    var r = { code: s.code, out: !!s.soldOut, m: {}, act: {}, tot: 0 };
     (s.res.months || []).forEach(function (m) {
       r.m[m.month] = (r.m[m.month] || 0) + m.total;
       if (m.status === 'actual') r.act[m.month] = true;
@@ -832,7 +848,8 @@ function _divStatTableHtml(stocks, money, title) {
 
   var colT = {}, grand = 0;
   rows.forEach(function (r) {
-    h += '<tr><td class="dstat-code">' + r.code + '</td>';
+    h += '<tr><td class="dstat-code"' + (r.out ? ' title="已全數賣出；只計持有期間已領的配息"' : '') + '>' + r.code +
+      (r.out ? '<span class="dexm-lent"> (已出清)</span>' : '') + '</td>';
     for (var mo = 1; mo <= 12; mo++) {
       var v = r.m[mo];
       if (v) { colT[mo] = (colT[mo] || 0) + v; grand += v; }
