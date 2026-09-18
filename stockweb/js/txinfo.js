@@ -151,10 +151,10 @@ async function loadOrderBox() {
     }
     var buyAmt = 0, sellAmt = 0;
     var html = '<div class="tx-otable-wrap"><table class="tx-otable"><thead><tr>' +
-      '<th>商品</th><th>買賣</th><th class="num">委託</th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量 @ 成交均價，後面小字＝現價－成交均價">成交</th>' +
-      '<th class="num" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：賣出淨額（扣手續費＋交易稅）－現價×股數，正＝賣掉比留著划算">損益</th>' +
-      '<th>狀態</th><th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
-      '<th>書號</th><th class="num">委託時間</th></tr></thead><tbody>';
+      '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量、成交均價，後面小字＝現價－成交均價">成交</th>' +
+      '<th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：賣出淨額（扣手續費＋交易稅）－現價×股數，正＝賣掉比留著划算">損益<span class="sort-ind">↕</span></th>' +
+      '<th class="sort-th" data-key="status" onclick="txSortCol(\'status\')">狀態<span class="sort-ind">↕</span></th>' + '<th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
+      '<th>書號</th>' + '<th class="sort-th num" data-key="time" onclick="txSortCol(\'time\')">委託時間<span class="sort-ind">↕</span></th>' + '</tr></thead><tbody>';
     var aheads = await Promise.all(trades.map(function (t) { return _txAhead(t, trades).catch(function () { return null; }); }));
     trades.forEach(function (t, ti) {
       var o = t.order || {}, s = t.status || {}, code = (t.contract || {}).code || '';
@@ -169,15 +169,15 @@ async function loadOrderBox() {
       var avg = dq ? (dsum / dq) : null;
       if (buy) buyAmt += dsum * mult; else sellAmt += dsum * mult;
       var dealTitle = deals.length > 1 ? deals.map(function (d) {
-        return d.quantity + unit + ' @' + d.price.toFixed(2) + ' ' + _hms(d.ts);
+        return d.quantity + unit + ' ' + d.price.toFixed(2) + ' ' + _hms(d.ts);
       }).join('　') : '';
-      html += '<tr>' +
+      html += '<tr data-code="' + code + '" data-side="' + (buy ? 0 : 1) + '" data-st="' + _txStRank(t) + '" data-ts="' + (s.order_ts || 0) + '">' +
         '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + ((c && c.name) || '') + '</span></td>' +
         '<td class="' + (buy ? 'up' : 'down') + '">' + (buy ? '買進' : '賣出') + '</td>' +
-        '<td class="num">' + o.quantity + unit + ' @' + (o.price || 0).toFixed(2) + tif + '</td>' +
+        '<td class="num">' + o.quantity + unit + '<span class="tx-gap"></span>' + (o.price || 0).toFixed(2) + tif + '</td>' +
         '<td class="num tx-px" data-code="' + code + '">' + _txPxHtml(code) + '</td>' +
         '<td class="num"' + (dealTitle ? ' title="' + dealTitle + '"' : '') + '>' +
-          (dq ? dq + unit + ' @' + avg.toFixed(2) + (deals.length > 1 ? ' ×' + deals.length : '') +
+          (dq ? dq + unit + '<span class="tx-gap"></span>' + avg.toFixed(2) + (deals.length > 1 ? ' ×' + deals.length : '') +
             '<span class="tx-dd" data-code="' + code + '" data-avg="' + avg + '">' + _txDiffHtml(code, avg) + '</span>' : '—') + '</td>' +
         '<td class="num tx-pnl"' + (dq ? ' data-code="' + code + '" data-avg="' + avg + '" data-sh="' + (dq * mult) + '" data-side="' + (buy ? 'B' : 'S') + '"' : '') + '>' +
           (dq ? _txPnlHtml(code, avg, dq * mult, buy) : '<span class="swap-dim">—</span>') + '</td>' +
@@ -188,6 +188,7 @@ async function loadOrderBox() {
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
+    _txApplySort();
     _txPxStart();
     // 標題右側：今日買進/賣出/合計成交金額（合計＝賣出−買進；正紅負綠，與交割應收付一致）
     var sumEl = document.getElementById('tx-order-sum');
@@ -305,4 +306,61 @@ function _txPxStart() {
   _txPxN = 0;
   _txPxTick();
   if (!_txPxTimer) _txPxTimer = setInterval(_txPxTick, 2000);
+}
+
+// ── 委託列表排序：商品／買賣／損益／狀態／委託時間，預設委託時間新→舊 ──
+// 直接在 DOM 重排列（損益隨現價變動，排序只在點選或重新查詢時套用，避免列一直跳動）
+// 排序狀態存 localStorage（本機、每個瀏覽器各自記住），重新整理後維持；讀不到或值不合法時回預設
+var TX_SORT_LS = 'tx_sort_v1';
+var _txSort = (function () {
+  try { var v = localStorage.getItem(TX_SORT_LS); if (/^(code|side|pnl|status|time)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  return 'timeDesc';
+})();
+// 數字越大越前面（第一次點＝降冪）：委託中 → 部分成交 → 全部成交 → 已取消 → 失敗，還在排隊的最先看到
+function _txStRank(t) {
+  var st = (t.status || {}).status || '';
+  if (st === 'PartFilled' || st === 'Filling') return 3;
+  if (st === 'Filled') return 2;
+  if (st === 'Cancelled') return 1;
+  if (st === 'Failed') return 0;
+  return 4;
+}
+function txSortCol(key) {
+  _txSort = (_txSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
+  try { localStorage.setItem(TX_SORT_LS, _txSort); } catch (e) {}
+  _txApplySort();
+}
+function _txRowPnl(tr) {
+  var td = tr.querySelector('.tx-pnl[data-code]');
+  if (!td) return null;
+  return _txPnlVal(td.getAttribute('data-code'), +td.getAttribute('data-avg'), +td.getAttribute('data-sh'), td.getAttribute('data-side') === 'B');
+}
+function _txApplySort() {
+  var tb = document.querySelector('#tx-order-body .tx-otable tbody');
+  if (!tb) return;
+  var key = _txSort.replace(/(Asc|Desc)$/, ''), asc = /Asc$/.test(_txSort);
+  var rows = [].slice.call(tb.rows);
+  var val = function (tr) {
+    if (key === 'code') return tr.getAttribute('data-code');
+    if (key === 'side') return +tr.getAttribute('data-side');
+    if (key === 'status') return +tr.getAttribute('data-st');
+    if (key === 'pnl') return _txRowPnl(tr);
+    return +tr.getAttribute('data-ts');
+  };
+  rows.sort(function (a, b) {
+    var va = val(a), vb = val(b);
+    if (va == null && vb == null) return (+b.getAttribute('data-ts')) - (+a.getAttribute('data-ts'));
+    if (va == null) return 1;                     // 沒有損益（未成交）一律墊底
+    if (vb == null) return -1;
+    var c = key === 'code' ? String(va).localeCompare(String(vb), undefined, { numeric: true }) : va - vb;
+    if (!c) return (+b.getAttribute('data-ts')) - (+a.getAttribute('data-ts'));   // 同值：新→舊
+    return asc ? c : -c;
+  });
+  rows.forEach(function (tr) { tb.appendChild(tr); });
+  document.querySelectorAll('#tx-order-body .tx-otable th.sort-th').forEach(function (th) {
+    var k = th.getAttribute('data-key'), on = _txSort.indexOf(k) === 0 && _txSort.replace(/(Asc|Desc)$/, '') === k;
+    th.classList.toggle('sorted', on);
+    var ind = th.querySelector('.sort-ind');
+    if (ind) ind.textContent = on ? (asc ? '▲' : '▼') : '↕';
+  });
 }

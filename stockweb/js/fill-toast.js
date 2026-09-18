@@ -39,7 +39,7 @@ async function fillToastCheck() {
       }
       ord[id] = { cq: cq, st: st };
 
-      // 成交：同一筆委託在同一次檢查內的多筆明細合併成一則（例：1 張＋19 張 → 20 張 @均價）
+      // 成交：同一筆委託在同一次檢查內的多筆明細合併成一則（例：1 張＋19 張 → 20 張、均價）
       (s.deals || []).forEach(function (d) {
         var k = _ftKey(t, d);
         if (seen[k]) return;
@@ -153,7 +153,7 @@ function _ftShow(ev) {
   el.className = 'fill-toast ft-' + ev.kind + ' ' + (buy ? 'ft-buy' : 'ft-sell');
   el.innerHTML = '<span class="ft-tag">' + tag + '</span>' +
     '<span class="ft-code">' + (c.code || '') + '</span><span class="ft-name">' + name + '</span>' +
-    '<span class="ft-qty">' + ev.qty + unit + ' @ ' + px + '</span>' +
+    '<span class="ft-qty">' + ev.qty + unit + '<span class="tx-gap"></span>' + px + '</span>' +   // 同委託列表：不用 @，固定間距
     (ev.kind === 'fail' && ev.msg ? '<span class="ft-name">' + String(ev.msg).replace(/</g, '&lt;') + '</span>' : '') +
     (ts ? '<span class="ft-time">' + ts + '</span>' : '');
   el.title = '點一下關閉';

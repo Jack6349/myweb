@@ -900,3 +900,4 @@ td.cost-even::after  { background: var(--text3); }
 .tx-dd .tx-flat { color: var(--accent2); }
 .tx-pnl .tx-flat { color: var(--accent2); }
 #tx-pnl-sum .tx-flat { color: var(--accent2); }
+.tx-gap { display: inline-block; width: 10px; }   /* 委託／成交欄：數量與價格之間的間距（取代 @） */
