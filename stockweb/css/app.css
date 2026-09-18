@@ -901,3 +901,4 @@ td.cost-even::after  { background: var(--text3); }
 .tx-pnl .tx-flat { color: var(--accent2); }
 #tx-pnl-sum .tx-flat { color: var(--accent2); }
 .tx-gap { display: inline-block; width: 10px; }   /* 委託／成交欄：數量與價格之間的間距（取代 @） */
+.dexm .dexm-diff { color: #8ab4d4; }   /* 本月除息：目前持有 ≠ 除息張數（除息後有買賣） */

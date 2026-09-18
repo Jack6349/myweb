@@ -721,6 +721,7 @@ function _divExMonthHtml(stocks, money, md) {
       list.push({ code: s.code, price: price, exDate: mo.exDate, payDate: mo.payDate,
         cost: costPx, yld: yld, cyld: cyld, yldGuess: !(mo.perShare > 0),
         shares: mo.shares, lent: _divLentShares(s.code),
+        held: (typeof _sharesMap !== 'undefined' && _sharesMap && _sharesMap[s.code]) || 0,   // 目前實際持有（股）
         after: !!(mo.partial && !mo.shares),   // 除息日當天（含）之後才買進 → 領不到這次配息
         perShare: mo.perShare, total: mo.total, status: mo.status });
     });
@@ -736,7 +737,8 @@ function _divExMonthHtml(stocks, money, md) {
     '<th class="num" title="每股成本均價（同持股庫存）">持股成本</th>' +
     '<th class="num" title="每股配息 × 年配息次數 ÷ 現價：現在買進的預估年報酬">預估年殖利率</th>' +
     '<th class="num" title="每股配息 × 年配息次數 ÷ 持股成本：手上這批持股的配息報酬">成本殖利率</th>' +
-    '<th class="num">持有張數</th>' +
+    '<th class="num" title="該次除息可領的張數：除息日前一天（含）已持有者；除息日當天之後才買進的不計">除息張數</th>' +
+    '<th class="num" title="目前實際持有張數（含出借中）">持有張數</th>' +
     '<th class="num">除息金額</th><th class="num dstat-tot">總金額</th></tr></thead><tbody>';
   var sum = 0;
   list.forEach(function (it) {
@@ -757,13 +759,15 @@ function _divExMonthHtml(stocks, money, md) {
       })() + '"' + (it.yldGuess && it.cyld != null ? ' title="本次金額待公告，以最近一次已知配息估算"' : '') + '>' +
         (it.cyld != null ? it.cyld.toFixed(2) + '%' + (it.yldGuess ? '<span class="dexm-lent">*</span>' : '') : '<span style="color:var(--text3)">—</span>') + '</td>' +
       '<td class="num">' + (it.shares / 1000).toLocaleString('zh-TW') +
-        (it.lent ? ' <span class="dexm-lent">(借出 ' + (it.lent / 1000).toLocaleString('zh-TW') + ' 張)</span>' : '') +
         (it.after ? ' <span class="dexm-lent">(除息後買進)</span>' : '') + '</td>' +
+      // 持有張數：目前庫存；與除息張數不同時（除息後有買賣）變色提示；出借註記跟著目前持有走
+      '<td class="num' + (it.held !== it.shares ? ' dexm-diff' : '') + '">' + (it.held / 1000).toLocaleString('zh-TW') +
+        (it.lent ? ' <span class="dexm-lent">(借出 ' + (it.lent / 1000).toLocaleString('zh-TW') + ' 張)</span>' : '') + '</td>' +
       '<td class="num">' + (it.perShare ? it.perShare.toFixed(4) : '<span style="color:var(--text3)">待公告</span>') + '</td>' +
       '<td class="num dstat-tot">' + (it.perShare ? money(it.total) : '<span style="color:var(--text3)">—</span>') + '</td></tr>';
   });
   h += '</tbody><tfoot><tr><td class="dstat-code">合計</td><td class="num"></td><td class="num"></td>' +
-    '<td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td>' +
+    '<td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td>' +
     '<td class="num dstat-tot">' + money(sum) + '</td></tr></tfoot></table></div>';
 
   // 對帳：本表以「除息日在本月」歸類，月份總覽以「發放月」歸類 → 列出兩邊不一致的除息（金額為 0 的略過）
