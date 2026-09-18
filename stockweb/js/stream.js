@@ -233,8 +233,9 @@ async function loadBrokerPositionsFull(say) {
       });
       _totalCost = Math.round(_totalCost);
       _positions = pf.map(function (s, i) {
-        return { id: null, code: String(s.code), quantity: parseFloat(s.shares) || 0,
-                 price: (parseFloat(s.cost) || 0) / ((parseFloat(s.shares) || 1) * 1000), pnl: null };
+        var sh = (parseFloat(s.shares) || 0) * 1000;     // Firestore 存「張」→ 與券商來源一致改存「股」
+        return { id: null, code: String(s.code), quantity: sh,
+                 price: (parseFloat(s.cost) || 0) / (sh || 1), pnl: null };
       });
     }
     if (!_positions.length) throw new Error('讀不到持股資料（券商與雲端皆空）');
