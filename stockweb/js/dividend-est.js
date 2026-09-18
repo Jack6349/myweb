@@ -396,6 +396,33 @@ async function startDividendEst(force) {
   renderDividendEst();
 }
 
+// ── 本月起 12 個月：把今年（res）與明年（resNext）的月份依「發放年月」接起來 ──
+// 回傳的 month 改為欄位序號 1–12（第 1 欄＝本月），供 _divStatTableHtml 共用；labels 為各欄標題。
+function _divRoll12(stocks) {
+  var tw = _divTwDate(), y = tw.y, m0 = +tw.iso.slice(5, 7);
+  var base = y * 12 + (m0 - 1);
+  var labels = [];
+  for (var i = 0; i < 12; i++) {
+    var t = base + i, yy = Math.floor(t / 12), mm = t % 12 + 1;
+    labels.push((i === 0 || mm === 1) ? (yy % 100) + '/' + mm + '月' : mm + '月');   // 第一欄與跨年處標年份
+  }
+  var out = [];
+  stocks.forEach(function (s) {
+    var months = [];
+    var add = function (res, yr) {
+      (res && res.months || []).forEach(function (mo) {
+        var idx = yr * 12 + (mo.month - 1) - base;
+        if (idx < 0 || idx > 11) return;
+        months.push(Object.assign({}, mo, { month: idx + 1 }));
+      });
+    };
+    add(s.res, y);
+    add(s.resNext, y + 1);
+    if (months.length) out.push({ code: s.code, soldOut: s.soldOut, res: { months: months } });
+  });
+  return { stocks: out, labels: labels };
+}
+
 // ── 明年預估（依發放月）──
 // 估算方式與今年相同（computeEtfYear）：
 //   把今年各次配息（已發放＋預估，預估的金額＝最近一次已知金額）當作紀錄，年份改成明年再算一次 →
@@ -508,13 +535,13 @@ function renderDividendEst() {
     '</div>';
   });
   html += '</div>';
-  // ── 月份總覽（依發放月）：縱向個股、橫向 1–12 月＋總計 ──
-  html += _divStatTableHtml(stocks, money);
-  // ── 明年預估（依發放月）：同樣算法往後推一年，全部為預估（黃）──
-  html += _divStatTableHtml(stocks.filter(function (s) { return s.resNext && s.resNext.months.length; })
-    .map(function (s) { return { code: s.code, res: s.resNext }; }), money, (year + 1) + ' 明年預估（依發放月）');
+  // ── 月份總覽：本月起 12 個月（依發放月）──
+  // 原本分「今年 1–12 月」與「明年預估」兩張：今年已過的月份受買賣、出清影響不易核對，實用性低
+  // → 合併成一張：第一欄＝本月發放（多為上月除息），往後共 12 個月，跨年接明年預估。
+  var roll = _divRoll12(stocks);
+  html += _divStatTableHtml(roll.stocks, money, '月份總覽（本月起 12 個月，依發放月）', roll.labels);
 
-  html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。<b>各次配息依建倉明細判定可領張數：除息日當天（含）之後才買進的批次不計</b>（含近 12 個月內已賣出、但除息日當時仍持有的批次，依券商已實現損益明細計入）。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。<br>明年預估：沿用同一套估算，以今年各次配息（含預估）投影一年；每股金額用最近一次已知金額、張數用目前持股。</div>';
+  html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。<b>各次配息依建倉明細判定可領張數：除息日當天（含）之後才買進的批次不計</b>（含近 12 個月內已賣出、但除息日當時仍持有的批次，依券商已實現損益明細計入）。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。<br>月份總覽從本月（上月除息、本月發放）起列 12 個月；跨到明年的月份沿用同一套估算，以今年各次配息（含預估）投影，每股金額用最近一次已知金額、張數用目前持股。</div>';
   wrap.innerHTML = html;
   _divHistDrawAll();   // 圖要量容器實際寬度，必須在插入 DOM 之後畫
 }
@@ -833,7 +860,7 @@ function _divStatRows(stocks) {
   });
   return rows;
 }
-function _divStatTableHtml(stocks, money, title) {
+function _divStatTableHtml(stocks, money, title, labels) {
   var rows = _divStatRows(stocks);
   if (!rows.length) return '';
   var arrow = function (key) {
@@ -843,7 +870,7 @@ function _divStatTableHtml(stocks, money, title) {
   var h = '<div class="divest-divider"></div><div class="divest-sec-title">' + (title || '月份總覽（依發放月）') + '</div>' +
     '<div class="dstat-wrap"><table class="dstat">' +
     '<thead><tr><th class="dstat-code sort-th' + sorted('code') + '" onclick="divStatSort(\'code\')" title="點擊排序">代號<span class="sort-ind">' + arrow('code') + '</span></th>';
-  for (var mo = 1; mo <= 12; mo++) h += '<th class="num">' + mo + '月</th>';
+  for (var mo = 1; mo <= 12; mo++) h += '<th class="num">' + (labels ? labels[mo - 1] : mo + '月') + '</th>';
   h += '<th class="num dstat-tot sort-th' + sorted('tot') + '" onclick="divStatSort(\'tot\')" title="點擊排序">總計<span class="sort-ind">' + arrow('tot') + '</span></th></tr></thead><tbody>';
 
   var colT = {}, grand = 0;
