@@ -390,27 +390,19 @@ function closeDetailModal() {
   if (typeof _chartStopLiveTimer === 'function') _chartStopLiveTimer();
 }
 
-// ── 持股庫存最上方：待交割（券商 settlements：T／T+1／T+2 應收付）──
+// ── 合計待交割（券商 settlements：T／T+1／T+2 應收付合計）→ 顯示在頂欄「獲利率」後面，全站可見 ──
 // 與交易資訊「台幣交割」同源；正＝應收、負＝應付（銀行扣款）。
-// 更新時機：進入持股庫存、成交後庫存重抓（refreshPositions 呼叫）。
-var _invSettleBusy = false;
+// 更新時機：行情引擎啟動（ensureFeed）、進入持股庫存、成交後庫存重抓（refreshPositions）。
+var _settleTot = null, _invSettleBusy = false;
 async function loadInvSettle() {
-  var el = document.getElementById('inv-settle');
-  if (!el || _invSettleBusy || typeof fetchSettlements !== 'function') return;
+  if (_invSettleBusy || typeof fetchSettlements !== 'function') return;
   _invSettleBusy = true;
   try {
     var rows = await fetchSettlements();
-    if (!rows || !rows.length) { el.style.display = 'none'; return; }
-    var money = function (v) { return (v > 0 ? '+' : '') + Math.round(v).toLocaleString('zh-TW'); };
-    var col = function (v) { return v > 0 ? 'var(--up)' : (v < 0 ? 'var(--down)' : 'var(--text3)'); };
-    // 只顯示合計（T／T+1／T+2 各日明細在交易資訊「台幣交割」）
     var tot = 0;
-    rows.forEach(function (r) { tot += r.amount || 0; });
-    el.innerHTML = '<div class="sum-line">' +
-      '<span class="sum-pair" title="T／T+1／T+2 應收付合計；各日明細見交易資訊「台幣交割」"><span class="sum-plabel inv-settle-h">合計待交割</span>' +
-      '<span class="sum-pval" style="color:' + col(tot) + '">' + money(tot) + '</span></span>' +
-      '<span class="inv-settle-note">正＝應收、負＝應付</span></div>';
-    el.style.display = '';
+    (rows || []).forEach(function (r) { tot += r.amount || 0; });
+    _settleTot = (rows && rows.length) ? Math.round(tot) : null;
+    if (typeof renderTopbarTotals === 'function') renderTopbarTotals();
   } catch (e) {
     console.warn('[待交割]', e);
   } finally { _invSettleBusy = false; }

@@ -274,6 +274,7 @@ function ensureFeed(statusCb) {
     await subscribeTradeEvents();   // 必須先訂閱，order_event 才會推送（見下方說明）
     _tickWatchStart();              // tick 漏推的檔改用快照補價（見下方說明）
     if (typeof fillToastStart === 'function') fillToastStart();   // 成交提示（fill-toast.js）
+    if (typeof loadInvSettle === 'function') loadInvSettle();     // 頂欄「合計待交割」
     openOrderEvents(); // 盤中成交自動更新庫存
     _posPollStart();   // 保險：定期比對券商庫存，事件漏接時仍會更新
 
@@ -547,7 +548,12 @@ function renderTopbarTotals() {
     tt('總現值(含借出)', curVal.toLocaleString('zh-TW'), 'var(--accent2)') +
     tt('總付出成本(含借出)', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', '#f5d87a') +
     tt('損益試算', profit == null ? '—' : (profit >= 0 ? '+' : '') + profit.toLocaleString('zh-TW'), cvar[pcls]) +
-    tt('獲利率', prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%', cvar[pcls]);
+    tt('獲利率', prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%', cvar[pcls]) +
+    // 合計待交割（T／T+1／T+2 應收付合計；正＝應收紅、負＝應付綠）
+    (typeof _settleTot !== 'undefined' && _settleTot != null
+      ? '<span title="T／T+1／T+2 應收付合計（正＝應收、負＝應付）；各日明細見交易資訊「台幣交割」">' +
+        tt('合計待交割', (_settleTot > 0 ? '+' : '') + _settleTot.toLocaleString('zh-TW'), cvar[colorClass(_settleTot)]) + '</span>'
+      : '');
 }
 function renderSummaries() {
   renderSummary('stream-summary');
