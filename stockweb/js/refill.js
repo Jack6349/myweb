@@ -319,6 +319,9 @@ function renderRefill() {
   // 本月發放（介於除息日曆與逐檔填息之間）
   html += _rfMonthPayHtml();
 
+  // 未填息個股（本月發放與逐檔填息之間）：所有仍在貼息的除息，一次除息一列
+  html += _rfPendingHtml(rows);
+
   // 逐檔
   html += '<div class="divest-sec-title">逐檔填息（近 ' + RF_YEARS + ' 年，點列展開歷次）</div><div class="rf-list">';
   rows.forEach(function (r) {
@@ -355,6 +358,45 @@ function renderRefill() {
 }
 
 function _rfMd(iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; }
+
+// 未填息個股：逐檔填息中 pending 的每一次除息（同一檔可有多列：月配多次未填，各自基準價不同）
+// 現價：盤中有即時報價用即時價，否則用 Yahoo 最近收盤（與明細同源）；距填息％＝(基準價－現價)÷基準價
+// 今天剛除息、尚無收盤資料（waiting）者不列。排序：距填息％由小到大（最接近填息的在上）。
+function _rfPendingHtml(rows) {
+  var list = [];
+  rows.forEach(function (r) {
+    r.events.forEach(function (e) {
+      if (!e.pending || e.waiting) return;
+      var live = (typeof _rows !== 'undefined') && _rows[r.code] && _rows[r.code].close;
+      var px = live != null && live > 0 ? live : e.lastPx;
+      var gap = (e.base - px) / e.base * 100;
+      if (gap <= 0) return;                                   // 即時價已站回基準價（收盤確認前先不列）
+      list.push({ code: r.code, name: r.name, ex: e.exDate, amt: e.amount, base: e.base, px: px, diff: px - e.base, days: e.days, gap: gap });
+    });
+  });
+  list.sort(function (a, b) { return a.gap - b.gap || (a.ex < b.ex ? -1 : 1); });
+
+  var h = '<div class="divest-sec-title">未填息個股' + (list.length ? '<span class="rf-cmnote">' + list.length + ' 筆</span>' : '') + '</div>';
+  if (!list.length) return h + '<div class="rf-cal-empty">目前無未填息個股。</div>';
+  h += '<div class="inv-table-wrap"><table class="inv-table swap-table rf-pend"><thead><tr>' +
+    '<th>代號</th><th>名稱</th><th>除息日</th><th class="num">配息</th><th class="num">基準價</th>' +
+    '<th class="num" title="盤中為即時價，否則為最近收盤">現價</th><th class="num" title="現價－基準價">價差</th>' +
+    '<th class="num" title="除息後經過的交易日數">貼息</th><th class="num" title="(基準價－現價)÷基準價">距填息</th></tr></thead><tbody>';
+  list.forEach(function (x) {
+    h += '<tr>' +
+      '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + x.code + '\')">' + x.code + '</span></td>' +
+      '<td class="inv-name">' + (x.name || '') + '</td>' +
+      '<td>' + _rfMd(x.ex) + '</td>' +
+      '<td class="num">' + x.amt.toFixed(3) + '</td>' +
+      '<td class="num">' + x.base.toFixed(2) + '</td>' +
+      '<td class="num">' + x.px.toFixed(2) + '</td>' +
+      '<td class="num down">' + x.diff.toFixed(2) + '</td>' +
+      '<td class="num">' + x.days + ' 天</td>' +
+      '<td class="num up">' + x.gap.toFixed(2) + '%</td>' +
+    '</tr>';
+  });
+  return h + '</tbody></table></div>';
+}
 
 // 本月發放：_divRecMap 中「發放月＝當月」的配息（含已入帳與待發放）
 // 發放日缺漏時沿用估算慣例以「除息月＋1」推導，並標示為推導值
