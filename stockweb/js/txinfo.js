@@ -151,7 +151,8 @@ async function loadOrderBox() {
     }
     var buyAmt = 0, sellAmt = 0;
     var html = '<div class="tx-otable-wrap"><table class="tx-otable"><thead><tr>' +
-      '<th>商品</th><th>買賣</th><th class="num">委託</th><th class="num">成交</th>' +
+      '<th>商品</th><th>買賣</th><th class="num">委託</th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量 @ 成交均價，後面小字＝現價－成交均價">成交</th>' +
+      '<th class="num" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：賣出淨額（扣手續費＋交易稅）－現價×股數，正＝賣掉比留著划算">損益</th>' +
       '<th>狀態</th><th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
       '<th>書號</th><th class="num">委託時間</th></tr></thead><tbody>';
     var aheads = await Promise.all(trades.map(function (t) { return _txAhead(t, trades).catch(function () { return null; }); }));
@@ -174,8 +175,12 @@ async function loadOrderBox() {
         '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + ((c && c.name) || '') + '</span></td>' +
         '<td class="' + (buy ? 'up' : 'down') + '">' + (buy ? '買進' : '賣出') + '</td>' +
         '<td class="num">' + o.quantity + unit + ' @' + (o.price || 0).toFixed(2) + tif + '</td>' +
+        '<td class="num tx-px" data-code="' + code + '">' + _txPxHtml(code) + '</td>' +
         '<td class="num"' + (dealTitle ? ' title="' + dealTitle + '"' : '') + '>' +
-          (dq ? dq + unit + ' @' + avg.toFixed(2) + (deals.length > 1 ? ' ×' + deals.length : '') : '—') + '</td>' +
+          (dq ? dq + unit + ' @' + avg.toFixed(2) + (deals.length > 1 ? ' ×' + deals.length : '') +
+            '<span class="tx-dd" data-code="' + code + '" data-avg="' + avg + '">' + _txDiffHtml(code, avg) + '</span>' : '—') + '</td>' +
+        '<td class="num tx-pnl"' + (dq ? ' data-code="' + code + '" data-avg="' + avg + '" data-sh="' + (dq * mult) + '" data-side="' + (buy ? 'B' : 'S') + '"' : '') + '>' +
+          (dq ? _txPnlHtml(code, avg, dq * mult, buy) : '<span class="swap-dim">—</span>') + '</td>' +
         '<td>' + _stPill(t) + '</td>' +
         '<td class="num">' + _txAheadHtml(aheads[ti]) + '</td>' +
         '<td class="tx-dseq">' + ((o.ordno || '').trim() || '—') + '</td>' +
@@ -183,6 +188,7 @@ async function loadOrderBox() {
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
+    _txPxStart();
     // 標題右側：今日買進/賣出/合計成交金額（合計＝賣出−買進；正紅負綠，與交割應收付一致）
     var sumEl = document.getElementById('tx-order-sum');
     if (sumEl) {
@@ -190,7 +196,113 @@ async function loadOrderBox() {
       var ncls = net > 0 ? 'up' : (net < 0 ? 'down' : '');
       sumEl.innerHTML = '買進 <span class="up">' + Math.round(buyAmt).toLocaleString('zh-TW') + '</span>' +
         '｜賣出 <span class="down">' + Math.round(sellAmt).toLocaleString('zh-TW') + '</span>' +
-        '｜合計 <span class="' + ncls + '">' + (net > 0 ? '+' : '') + Math.round(net).toLocaleString('zh-TW') + '</span>';
+        '｜合計 <span class="' + ncls + '">' + (net > 0 ? '+' : '') + Math.round(net).toLocaleString('zh-TW') + '</span>' +
+        '｜損益 <span id="tx-pnl-sum" title="下方各筆「損益」加總（買賣皆已扣手續費與交易稅），隨現價更新">' + _txPnlSumHtml() + '</span>';
     }
   } catch (e) { el.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>'; }
+}
+
+// ── 委託列表「現價」：盤中隨報價更新 ──
+// 來源：持股中的代號已有行情推送（_rows，tick SSE／補價 watchdog 會持續更新）→ 直接讀；
+// 非持股（例：新買進前的委託、已全數賣出的標的）沒有推送 → 每 5 秒以快照補（一次查多檔，成本低）。
+// 只在委託列表顯示中、且為交易時段才動作；每 2 秒重繪一次儲存格，價格變動時閃一下。
+var _txSnapPx = {}, _txPxTimer = null, _txPxN = 0;
+function _txPxOf(code) {
+  var r = (typeof _rows !== 'undefined') && _rows[code];
+  if (r && r.close != null) return r.close;
+  return _txSnapPx[code] != null ? _txSnapPx[code] : null;
+}
+function _txPxHtml(code) {
+  var px = _txPxOf(code);
+  if (px == null) return '<span class="swap-dim">—</span>';
+  var ref = (typeof _contracts !== 'undefined' && _contracts[code] && _contracts[code].reference) || null;
+  var cls = ref == null ? '' : (px > ref ? 'up' : (px < ref ? 'down' : 'tx-flat'));
+  // 漲跌幅（與昨收比）；小字接在價格後，同色
+  var pct = ref ? (px - ref) / ref * 100 : null;
+  var pctTxt = pct == null ? '' : '<span class="tx-pct">' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%</span>';
+  return '<span class="' + cls + '">' + (+px).toFixed(2) + pctTxt + '</span>';
+}
+// 成交欄的價差＝現價－成交均價：正紅（現價高於成交價）、負綠、0 黃
+function _txDiffHtml(code, avg) {
+  var px = _txPxOf(code);
+  if (px == null || !(avg > 0)) return '';
+  var d = Math.round((px - avg) * 100) / 100;
+  var cls = d > 0 ? 'up' : (d < 0 ? 'down' : 'tx-flat');
+  return '<span class="' + cls + '">' + (d > 0 ? '+' : '') + d.toFixed(2) + '</span>';
+}
+// 成交後損益（元）：費率與換股試算／總現值同基準
+//   買進：現價×股數×(1−賣出手續費與交易稅) − 成交均價×股數×(1＋買進手續費)  ← 等同持股庫存明細的未實現損益
+//   賣出：成交均價×股數×(1−賣出手續費與交易稅) − 現價×股數  ← 賣出實拿淨額 vs 沒賣、留到現在的市值
+var TX_SELL_COST = 0.002265, TX_BUY_FEE = 0.001425;
+function _txPnlVal(code, avg, sh, buy) {
+  var px = _txPxOf(code);
+  if (px == null || !(avg > 0) || !(sh > 0)) return null;
+  return Math.round(buy ? px * sh * (1 - TX_SELL_COST) - avg * sh * (1 + TX_BUY_FEE)
+                        : avg * sh * (1 - TX_SELL_COST) - px * sh);
+}
+function _txPnlHtml(code, avg, sh, buy) {
+  var v = _txPnlVal(code, avg, sh, buy);
+  if (v == null) return '<span class="swap-dim">—</span>';
+  var cls = v > 0 ? 'up' : (v < 0 ? 'down' : 'tx-flat');
+  return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toLocaleString('zh-TW') + '</span>';
+}
+// 今日損益合計：下方各筆損益儲存格的加總（任一筆尚無現價時，以已有價格者加總）
+function _txPnlSumHtml() {
+  var tot = 0, n = 0;
+  document.querySelectorAll('#tx-order-body .tx-pnl[data-code]').forEach(function (td) {
+    var v = _txPnlVal(td.getAttribute('data-code'), +td.getAttribute('data-avg'), +td.getAttribute('data-sh'), td.getAttribute('data-side') === 'B');
+    if (v != null) { tot += v; n++; }
+  });
+  if (!n) return '<span class="swap-dim">—</span>';
+  var cls = tot > 0 ? 'up' : (tot < 0 ? 'down' : 'tx-flat');
+  return '<span class="' + cls + '">' + (tot > 0 ? '+' : '') + tot.toLocaleString('zh-TW') + '</span>';
+}
+function _txPxOpen() {
+  var d = new Date(Date.now() + 8 * 3600000), wd = d.getUTCDay(), m = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return wd >= 1 && wd <= 5 && m >= 9 * 60 && m <= 13 * 60 + 35;
+}
+async function _txPxTick() {
+  var cells = document.querySelectorAll('#tx-order-body .tx-px[data-code]');
+  if (!cells.length) { clearInterval(_txPxTimer); _txPxTimer = null; return; }   // 列表已關閉
+  if (document.hidden) return;
+  _txPxN++;
+  var codes = {};
+  cells.forEach(function (td) { codes[td.getAttribute('data-code')] = true; });
+  // 每 5 秒（第 1、3、5… 次以外略過）補查沒有即時推送的代號
+  var need = Object.keys(codes).filter(function (c) {
+    var r = (typeof _rows !== 'undefined') && _rows[c];
+    return !(r && r.close != null);
+  });
+  if (need.length && _txPxOpen() && (_txPxN % 3 === 1) && typeof fetchSnapshots === 'function') {
+    try {
+      var sn = await fetchSnapshots(need.map(function (c) {
+        return (_contracts[c]) || { exchange: 'TSE', code: c };
+      }));
+      (sn || []).forEach(function (x) { if (x && x.code && x.close > 0) _txSnapPx[x.code] = +x.close; });
+    } catch (e) {}
+  }
+  cells.forEach(function (td) {
+    var html = _txPxHtml(td.getAttribute('data-code'));
+    if (td.innerHTML !== html) {
+      var first = !td.hasAttribute('data-shown');
+      td.innerHTML = html;
+      if (!first) { td.classList.remove('tx-px-flash'); void td.offsetWidth; td.classList.add('tx-px-flash'); }
+    }
+    td.setAttribute('data-shown', '1');
+  });
+  document.querySelectorAll('#tx-order-body .tx-pnl[data-code]').forEach(function (td) {
+    var html = _txPnlHtml(td.getAttribute('data-code'), +td.getAttribute('data-avg'), +td.getAttribute('data-sh'), td.getAttribute('data-side') === 'B');
+    if (td.innerHTML !== html) td.innerHTML = html;
+  });
+  var sumEl = document.getElementById('tx-pnl-sum');
+  if (sumEl) { var sh2 = _txPnlSumHtml(); if (sumEl.innerHTML !== sh2) sumEl.innerHTML = sh2; }
+  document.querySelectorAll('#tx-order-body .tx-dd[data-code]').forEach(function (sp) {
+    var html = _txDiffHtml(sp.getAttribute('data-code'), +sp.getAttribute('data-avg'));
+    if (sp.innerHTML !== html) sp.innerHTML = html;
+  });
+}
+function _txPxStart() {
+  _txPxN = 0;
+  _txPxTick();
+  if (!_txPxTimer) _txPxTimer = setInterval(_txPxTick, 2000);
 }

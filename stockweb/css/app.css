@@ -890,3 +890,13 @@ td.cost-even::after  { background: var(--text3); }
 .fill-toast.ft-fail   { border-left-color: #ff8a3d; }
 .fill-toast.ft-fail .ft-tag { color: #ff8a3d; }
 @keyframes ft-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+
+/* 委託列表「現價」：平盤黃；價格變動時底色閃一下 */
+.tx-px .tx-flat { color: var(--accent2); }
+.tx-px-flash { animation: tx-px-flash .8s ease-out; }
+@keyframes tx-px-flash { from { background: rgba(245,216,122,.28); } to { background: transparent; } }
+.tx-pct { display: inline-block; min-width: 4.6em; margin-left: 6px; font-size: .82em; text-align: right; }   /* 固定寬度，各列價格才對齊 */
+.tx-dd { display: inline-block; min-width: 3.6em; margin-left: 6px; font-size: .82em; text-align: right; }   /* 成交欄價差，固定寬度對齊 */
+.tx-dd .tx-flat { color: var(--accent2); }
+.tx-pnl .tx-flat { color: var(--accent2); }
+#tx-pnl-sum .tx-flat { color: var(--accent2); }
