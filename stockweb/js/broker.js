@@ -1,11 +1,37 @@
 // 股利總管 Web — 券商帳務（Shioaji /api/v1/portfolio，同源）
 // 持股庫存 / 持倉明細 / 已實現損益 / 損益明細 + 回寫 Firestore 供手機版共用
 
+// ── 帳務／委託查詢限流 ──
+// 永豐 API 帳務查詢有流量上限（約 5 秒 25 次）。開頁時會一次打出幾十支：
+// position_detail × 持股檔數、profit_loss_detail × 近 12 個月每筆賣出……同時送出遠超上限，
+// 2026-09-18 盤中連續出現 SessionNotEstablished（12:54、12:56、13:09、13:15、13:17），時間都對得上整頁重新載入。
+// → 所有帳務／委託查詢排隊：任 5 秒內最多 BROKER_MAX 次（留空間給同時開著的第二個分頁），同時最多 4 支在途。
+var BROKER_MAX = 12, BROKER_WIN = 5000, BROKER_CONC = 4;
+var _brkStamps = [], _brkQueue = [], _brkActive = 0, _brkTimer = null;
+function _brkPump() {
+  _brkTimer = null;
+  var now = Date.now();
+  while (_brkStamps.length && now - _brkStamps[0] >= BROKER_WIN) _brkStamps.shift();
+  while (_brkQueue.length && _brkActive < BROKER_CONC && _brkStamps.length < BROKER_MAX) {
+    var job = _brkQueue.shift();
+    _brkStamps.push(Date.now());
+    _brkActive++;
+    job.fn().then(job.ok, job.ng).finally(function () { _brkActive--; _brkPump(); });
+  }
+  if (_brkQueue.length && !_brkTimer) {
+    var wait = _brkStamps.length >= BROKER_MAX ? Math.max(50, BROKER_WIN - (Date.now() - _brkStamps[0]) + 20) : 50;
+    _brkTimer = setTimeout(_brkPump, wait);
+  }
+}
+function brokerThrottle(fn) {
+  return new Promise(function (ok, ng) { _brkQueue.push({ fn: fn, ok: ok, ng: ng }); _brkPump(); });
+}
+
 async function brokerPost(path, body) {
-  var r = await fetch('/api/v1/portfolio/' + path, {
+  var r = await brokerThrottle(function () { return fetch('/api/v1/portfolio/' + path, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body || {})
-  });
+  }); });
   if (!r.ok) throw new Error(path + ' HTTP ' + r.status);
   return r.json();
 }
@@ -25,9 +51,9 @@ async function fetchSettlements() {
 }
 // 今日委託含成交回報：[{contract, order, status:{status, deals:[{price,quantity,ts}], ...}}]
 async function fetchOrderTrades() {
-  var r = await fetch('/api/v1/order/trades', {
+  var r = await brokerThrottle(function () { return fetch('/api/v1/order/trades', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
-  });
+  }); });
   if (!r.ok) throw new Error('order/trades HTTP ' + r.status);
   return r.json();
 }

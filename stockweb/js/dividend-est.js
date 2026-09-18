@@ -194,6 +194,13 @@ var _soldLotsMap = {}, _soldLotsDay = null;
 async function _divLoadSoldLots(force) {
   var today = _divTwDate().iso;
   if (!force && _soldLotsDay === today) return;
+  // 當日快取（localStorage）：每筆賣出都要查一次明細（近 12 個月可達數十支），每次重新整理都重打會撞到券商流量上限
+  if (!force) {
+    try {
+      var c0 = JSON.parse(localStorage.getItem('divest_soldlots_v1') || 'null');
+      if (c0 && c0.day === today && c0.map) { _soldLotsMap = c0.map; _soldLotsDay = today; return; }
+    } catch (e) {}
+  }
   var begin = new Date(Date.parse(today) - 364 * 86400000).toISOString().slice(0, 10);
   try {
     var pl = await brokerPost('profit_loss', { begin_date: begin, end_date: today, unit: 'Share' });
@@ -212,6 +219,7 @@ async function _divLoadSoldLots(force) {
     }));
     _soldLotsMap = map;
     _soldLotsDay = today;
+    try { localStorage.setItem('divest_soldlots_v1', JSON.stringify({ day: today, map: map })); } catch (e) {}
   } catch (e) { console.warn('[已實現損益] 讀取失敗，過去月份僅以現存批次計算', e); }
 }
 
