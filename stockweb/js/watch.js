@@ -228,11 +228,24 @@ function renderWatch() {
   h += '<div class="inv-table-wrap"><table class="inv-table wt-table"><thead><tr>' +
     '<th></th><th></th>' + _wtTh('code', '代號') + '<th>名稱</th>' + _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num') +
     '<th class="num">成份股漲跌</th>' + (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
-  _wtSorted(list).forEach(function (code) { h += '<tr id="wt-tr-' + code + '">' + _wtRowHtml(code) + '</tr>'; });
+  var ncol = 8 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);
+  _wtSorted(list).forEach(function (code) {
+    h += '<tr id="wt-tr-' + code + '" class="es-row' + (_wtOpen === code ? ' es-row-open' : '') + '" onclick="wtRowClick(event,\'' + code + '\')">' + _wtRowHtml(code) + '</tr>';
+    if (_wtOpen === code) h += '<tr class="es-drow"><td colspan="' + ncol + '" class="es-dslot" data-code="' + code + '"></td></tr>';
+  });
   h += '</tbody></table></div>' +
-    '<div class="detail-note">現價與漲跌盤中即時（進頁訂閱、離開退訂）。〔成份股〕僅 ETF 提供；ETF 指標欄與「ETF 評比」同源（每日更新，算法見該頁說明），個股不適用；' +
+    '<div class="detail-note">點列或〔明細〕展開歷年配息、近 12 個月填息與一年走勢（一次一列）。現價與漲跌盤中即時（進頁訂閱、離開退訂）。〔成份股〕僅 ETF 提供；ETF 指標欄與「ETF 評比」同源（每日更新，算法見該頁說明），個股不適用；' +
     '〔除息紀錄〕取近 ' + WT_YEARS + ' 年（上市 ETF 走 e添富、其餘走 Yahoo，個股可能查無）。清單存於本機瀏覽器。</div>';
+  var keep = _wtOpen ? wrap.querySelector('.es-detail[data-code="' + _wtOpen + '"]') : null;
+  if (keep) keep.remove();
   wrap.innerHTML = h;
+  if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
+}
+var _wtOpen = null;   // 目前展開明細的代號（一次一列）
+function wtToggleDetail(code) { _wtOpen = (_wtOpen === code) ? null : code; renderWatch(); }
+function wtRowClick(ev, code) {
+  if (ev && ev.target && ev.target.closest('button, a, input, .code-link')) return;
+  wtToggleDetail(code);
 }
 
 function _wtRowHtml(code) {
@@ -250,7 +263,7 @@ function _wtRowHtml(code) {
     var f = (_wtIdx || []).filter(function (x) { return x.c === code; })[0]; return f ? f.n : '';
   })();
   return '<td>' + (isEtf ? '<button class="btn-detail" onclick="openConstituents(\'' + code + '\')">成份股</button>' : '') + '</td>' +
-    '<td><button class="btn-detail" onclick="wtOpenDiv(\'' + code + '\')">除息紀錄</button></td>' +
+    '<td><button class="btn-detail' + (_wtOpen === code ? ' active' : '') + '" onclick="wtToggleDetail(\'' + code + '\')">明細 ' + (_wtOpen === code ? '▼' : '▶') + '</button></td>' +
     '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     '<td class="inv-name">' + name + '</td>' +
     '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
@@ -298,7 +311,7 @@ async function wtOpenDiv(code) {
     : ((_rows[code] && _rows[code].close != null) ? _rows[code].close : (c && c.reference) || null);
 
   var h = '<div class="detail-note" style="margin:0 0 8px">現價 <b>' + (px != null ? px.toFixed(2) : '—') +
-    '</b>｜配息頻率：' + (step === 1 ? '月配' : step === 3 ? '季配' : step === 6 ? '半年配' : '年配') +
+    '</b>｜配息頻率：' + ((typeof DIV_FREQ_NAME !== 'undefined' && DIV_FREQ_NAME[step]) || '年配') +
     '（年 ' + freq + ' 次）' + (f.guessed ? '<span class="wt-guess"> *推定：僅 ' + f.n + ' 筆紀錄，依債券 ETF 慣例假設月配</span>' : '') +
     '｜共 ' + list.length + ' 筆</div>' +
     '<div class="detail-scroll"><table class="detail-table"><thead><tr>' +

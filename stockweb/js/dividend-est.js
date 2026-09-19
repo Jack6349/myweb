@@ -122,7 +122,8 @@ function _divInferStep(recs) {
   var n = gaps.length;
   var med = n % 2 ? gaps[(n - 1) / 2] : (gaps[n / 2 - 1] + gaps[n / 2]) / 2;
   // 放寬分界：季配 gap≈3(2–4)、半年配≈6(5–9)、避免把半年配誤判成年配
-  return med <= 1.4 ? 1 : (med <= 4.5 ? 3 : (med <= 9 ? 6 : 12));
+  // 雙月配（間隔 2 個月）原本被歸成季配 → 年配息次數少算（6 次算成 4 次）
+  return med <= 1.4 ? 1 : (med <= 2.4 ? 2 : (med <= 4.5 ? 3 : (med <= 9 ? 6 : 12)));
 }
 
 // 缺發放日時的推算值：除息日 ＋ 28 天。

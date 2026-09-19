@@ -913,3 +913,16 @@ td.cost-even::after  { background: var(--text3); }
 .es-wbtn { white-space: nowrap; min-width: 64px; }
 .es-wbtn.on { color: #5aa9ff; border-color: rgba(90,169,255,.5); }
 .wt-table .es-wm { font-size: 12.5px; white-space: nowrap; }
+/* ETF 評比／關注股票：點列展開明細 */
+.es-row { cursor: pointer; }
+.es-row-open > td { background: rgba(245,216,122,.07); }
+.es-drow > td { padding: 0 !important; background: var(--bg); }
+.es-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 12px 14px; white-space: normal; cursor: default;
+  position: sticky; left: 0; box-sizing: border-box; }   /* 寬度由 JS 設為可視寬度，左右捲動時留在畫面內 */
+.es-dtitle { font-size: 12px; font-weight: 600; color: var(--text2); margin: 2px 0 6px; }
+.es-dl .divest-hist { min-height: 220px; }
+.es-evt-t { font-size: 12.5px; }
+.es-psvg { display: block; }
+@media (max-width: 900px) { .es-detail { grid-template-columns: 1fr; } }
+.es-evt-t .es-fut td { color: var(--accent2); }
+.es-dr .es-evt { max-height: 300px; overflow-y: auto; }

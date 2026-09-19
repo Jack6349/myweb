@@ -11,7 +11,7 @@
 var DIV_FREQ_OVERRIDE = {
   // 'XXXXX': 3,   // 程式層級的固定登錄（一般不需要，改用配息資料頁手動輸入）
 };
-var DIV_FREQ_NAME = { 1: '月配', 3: '季配', 6: '半年配', 12: '年配' };
+var DIV_FREQ_NAME = { 1: '月配', 2: '雙月配', 3: '季配', 6: '半年配', 12: '年配' };   // 雙月配：00907、00930（年 6 次）
 
 // ── 官方規格快取 ──
 var DIV_META_LS = 'divest_etfmeta_v1';
@@ -92,12 +92,23 @@ function _divFreqOverride(code) {
 function _divParseDist(txt) {
   txt = String(txt || '');
   if (!txt || /不配|不分配/.test(txt)) return null;
-  if (/半年配|每半年/.test(txt)) return 6;      // 先判半年，否則會被「年配」吃掉
-  if (/季配|每季/.test(txt)) return 3;
-  if (/月配|每月/.test(txt)) return 1;
-  if (/年度?配/.test(txt)) return 12;
-  var n = _divDistMonths(txt).length;
-  return ({ 1: 12, 2: 6, 4: 3, 12: 1 })[n] || null;
+  // 官方寫法有「季配」也有「季分配」（00878：季分配…每年2、5、8及11月…分配）；只認「季配」時會落到下面的月份計數，
+  // 而舊的月份計數只抓得到緊貼「月」字的數字（10月、11月）→ 誤判成半年配。
+  if (/雙月(配|分配)|每兩個?月|每二個?月/.test(txt)) return 2;   // 先判雙月，否則會被「月配」吃掉
+  if (/半年度?(配|分配)|每半年/.test(txt)) return 6;      // 先判半年，否則會被「年配」吃掉
+  if (/季(配|分配)|每季/.test(txt)) return 3;
+  if (/月(配|分配)|每月/.test(txt)) return 1;
+  if (/年度?(配|分配)/.test(txt)) return 12;
+  // 沒有關鍵字：看列出幾個月份（取同一串列表裡最多的那一組，例：「2、5、8及11月」＝4 個月＝季配）
+  // 一組列表：數字之間可夾「月」「月底」與頓號／逗號／及（「3月、10月」「2月底、5月底…」「1，4，7，10月」都算同一組）
+  var n = 0;
+  (txt.match(/\d{1,2}\s*月?底?(?:\s*[，、,及和]\s*\d{1,2}\s*月?底?)*/g) || []).forEach(function (g) {
+    if (g.indexOf('月') < 0) return;                      // 沒有「月」字的數字（60日、45個營業日）不算
+    var k = (g.match(/\d{1,2}/g) || []).length;
+    if (k > n) n = k;
+  });
+  if (!n) n = _divDistMonths(txt).length;                  // 國字月份（二、五、八、十一月）
+  return ({ 1: 12, 2: 6, 4: 3, 6: 2, 12: 1 })[n] || null;   // 列出 6 個月份＝雙月配
 }
 function _divDistNone(txt) { return /不配|不分配/.test(String(txt || '')); }
 // 文字中列出的月份（收益評價月／分配月），回傳排序後的月份數字
@@ -261,7 +272,7 @@ function renderDivMeta() {
     if (!man.step) autoLbl += r.step ? '（' + DIV_FREQ_NAME[r.step] + '）' : (r.src === 'none' ? '（不配息）' : '（未知）');
     var sel = '<select class="dm-sel" onchange="divMetaSet(\'' + r.code + '\',\'step\',this.value)">' +
       '<option value="">' + autoLbl + '</option>' +
-      [1, 3, 6, 12].map(function (s) { return '<option value="' + s + '"' + (man.step === s ? ' selected' : '') + '>' + DIV_FREQ_NAME[s] + '</option>'; }).join('') +
+      [1, 2, 3, 6, 12].map(function (s) { return '<option value="' + s + '"' + (man.step === s ? ' selected' : '') + '>' + DIV_FREQ_NAME[s] + '</option>'; }).join('') +
       '</select>';
     var srcTag = '<span class="dm-src dm-src-' + (r.src === 'TWSE' || r.src === 'TPEx' ? 'off' : r.src) + '" title="' +
       esc(o.dist ? '官方原文：' + o.dist : '') + '">' + srcName[r.src] + '</span>';

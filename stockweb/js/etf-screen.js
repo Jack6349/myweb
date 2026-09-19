@@ -179,20 +179,32 @@ function _esMetrics(base) {
     var step = null;
     if (divs.length) { try { step = _divInferStep(divs.map(function (r) { return { code: code, exDate: r.ex, amount: r.amt }; })); } catch (e) { step = null; } }
     var r = {
-      code: code, name: name, grp: g.key, cat: g.cat, mkt: (c0 && c0.mkt) || ((c12 && c12.mkt) || 'TSE'), px: px,
-      size: (L.units && L.nav) ? L.units * L.nav / 1e8 : null, prem: L.prem,
-      y1: last ? last.amt / px * 100 : null,
-      yEst: (last && step) ? last.amt * (12 / step) / px * 100 : null,
-      y12: d12s.length ? sum(d12s) / px * 100 : 0,
-      g6: c6 ? (px / c6.c - 1) * 100 : null,
-      g12: c12 ? (px / c12.c - 1) * 100 : null,
-      tr6: c6 ? ((px + sum(d6s)) / c6.c - 1) * 100 : null,
-      tr12: c12 ? ((px + sum(d12s)) / c12.c - 1) * 100 : null,
+      code: code, name: name, grp: g.key, cat: g.cat, mkt: (c0 && c0.mkt) || ((c12 && c12.mkt) || 'TSE'),
+      size: (L.units && L.nav) ? L.units * L.nav / 1e8 : null, nav: L.nav, prem0: L.prem,
+      lastAmt: last ? last.amt : null, step: step, sum6: sum(d6s), sum12: sum(d12s), n12: d12s.length,
+      c6: c6 ? c6.c : null, c12: c12 ? c12.c : null,
       young: !c12, events: d12s
     };
+    _esDerive(r, px, true);
     rows.push(r);
   });
   return rows;
+}
+
+// 與價格有關的指標（現價變動時重算；排名用開頁時的價格，避免盤中每 30 秒名次跳動）
+function _esDerive(r, px, init) {
+  r.px = px;
+  r.y1 = r.lastAmt ? r.lastAmt / px * 100 : null;
+  r.yEst = (r.lastAmt && r.step) ? r.lastAmt * (12 / r.step) / px * 100 : null;
+  r.y12 = r.n12 ? r.sum12 / px * 100 : 0;
+  r.g6 = r.c6 ? (px / r.c6 - 1) * 100 : null;
+  r.g12 = r.c12 ? (px / r.c12 - 1) * 100 : null;
+  r.tr6 = r.c6 ? ((px + r.sum6) / r.c6 - 1) * 100 : null;
+  r.tr12 = r.c12 ? ((px + r.sum12) / r.c12 - 1) * 100 : null;
+  // 折溢價：開頁時用 MIS 給的值；即時價則以前一營業日淨值（MIS 預估淨值）換算
+  r.prem = init ? r.prem0 : (r.nav ? (px / r.nav - 1) * 100 : r.prem0);
+  r.live = !init;
+  return r;
 }
 
 // 同組內百分位（0–100）：dir=1 越大越好、-1 越小越好；缺值者不計分（權重自動重新分配）
@@ -216,8 +228,10 @@ function _esScore(rows, W) {
 }
 
 // 填息：Yahoo 一年日線；除息後（不含除息日前）首次收盤 ≥ 基準價即填息，天數以交易日計
-async function _esFillOne(r) {
-  var syms = r.mkt === 'OTC' ? [r.code + '.TWO', r.code + '.TW'] : [r.code + '.TW', r.code + '.TWO'];
+var _esBars = {};   // code → [[iso, close]]（一年日線，記憶體快取；填息計算與明細走勢圖共用）
+async function _esBarsOf(code, mkt) {
+  if (_esBars[code]) return _esBars[code];
+  var syms = mkt === 'OTC' ? [code + '.TWO', code + '.TW'] : [code + '.TW', code + '.TWO'];
   var bars = [];
   for (var i = 0; i < syms.length && !bars.length; i++) {
     try {
@@ -227,6 +241,11 @@ async function _esFillOne(r) {
       for (var k = 0; k < ts.length; k++) if (cl[k] != null) bars.push([new Date(ts[k] * 1000 + 8 * 3600000).toISOString().slice(0, 10), cl[k]]);
     } catch (e) {}
   }
+  if (bars.length) _esBars[code] = bars;
+  return bars;
+}
+async function _esFillOne(r) {
+  var bars = await _esBarsOf(r.code, r.mkt);
   if (!bars.length) return null;
   var n = 0, filled = 0, days = [];
   r.events.forEach(function (e) {
@@ -286,7 +305,27 @@ function _esRank() {
   _esScore(short, ES_W2);
   short.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
   short.forEach(function (r, i) { r.rank = i + 1; });
-  return { top: short.slice(0, ES_TOP), short: short, total: all.length, young: all.length - rank.length };
+  var top = short.slice(0, ES_TOP);
+  top.forEach(function (r) { if (_esLive[r.code] > 0) _esDerive(r, _esLive[r.code]); });
+  _esShown = top.map(function (r) { return { code: r.code, mkt: r.mkt }; });
+  return { top: top, short: short, total: all.length, young: all.length - rank.length };
+}
+
+var _esLive = {}, _esShown = [], _esLiveTimer = null, _esLiveAt = null;
+async function _esLiveTick(always) {
+  var wrap = document.getElementById('wt-screen-wrap');
+  if (!wrap || wrap.style.display === 'none' || document.hidden || !_esShown.length || typeof fetchSnapshots !== 'function') return;
+  if (!always && typeof _twOpen === 'function' && !_twOpen()) return;       // 盤後只在進頁時抓一次最後價
+  try {
+    var sn = await fetchSnapshots(_esShown.map(function (x) { return { exchange: x.mkt === 'OTC' ? 'OTC' : 'TSE', code: x.code }; }));
+    (sn || []).forEach(function (x) { if (x && x.code && x.close > 0) _esLive[x.code] = +x.close; });
+    _esLiveAt = new Date(Date.now() + 8 * 3600000).toISOString().slice(11, 19);
+    renderEtfScreen();
+  } catch (e) { /* 券商連線中斷 → 維持開頁價格 */ }
+}
+function _esLiveStart() {
+  _esLiveTick(true);
+  if (!_esLiveTimer) _esLiveTimer = setInterval(function () { _esLiveTick(false); }, 30000);
 }
 
 var _esBasePromise = null;
@@ -304,6 +343,7 @@ async function startEtfScreen(force) {
     await _esGetBase(force);
     _esMsg = '';
     renderEtfScreen();
+    _esLiveStart();
     await _esLoadExtra();
   } catch (e) {
     _esMsg = '讀取失敗：' + e.message + '（GAS 忙碌時請稍後按「重新整理」）';
@@ -336,7 +376,7 @@ var ES_COLS = [
   ['code', '代號', 'code', ''],
   ['name', '名稱', 'txt', ''],
   ['score', '綜合', 'f1', '各指標同類百分位加權：一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5'],
-  ['px', '現價', 'f2', ''],
+  ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）；殖利率、成長率、折溢價跟著現價重算，排名維持開頁時的計算'],
   ['y1', '單次殖利率', 'pct', '最近一次配息 ÷ 現價'],
   ['yEst', '預估年殖利率', 'pct', '最近一次配息 × 年配息次數 ÷ 現價'],
   ['y12', '近12月殖利率', 'pct', '近 12 個月實際配息合計 ÷ 現價'],
@@ -382,7 +422,8 @@ function renderEtfScreen() {
     return '<button class="tx-subtab' + (g.key === _esGroup ? ' active' : '') + '" onclick="esSetGroup(\'' + g.key + '\')">' + g.label + '</button>';
   }).join('') +
     '<button class="btn-query" onclick="startEtfScreen(true)">↻ 重新整理</button>' +
-    '<span class="es-info">' + (_esMsg || (_esBase ? '資料日 ' + (_esBase.d0 || '—') + '（半年前 ' + (_esBase.d6 || '—') + '、一年前 ' + (_esBase.d12 || '—') + '）' : '')) + '</span></div>';
+    '<span class="es-info">' + (_esMsg || (_esBase ? '資料日 ' + (_esBase.d0 || '—') + '（半年前 ' + (_esBase.d6 || '—') + '、一年前 ' + (_esBase.d12 || '—') + '）' +
+      (_esLiveAt ? '｜現價更新 ' + _esLiveAt : '') + '｜點列展開配息與走勢' : '')) + '</span></div>';
   if (!_esBase) { wrap.innerHTML = h + '<div class="modal-loading">' + (_esMsg || '讀取中…') + '</div>'; return; }
 
   var rk = _esRank();
@@ -431,15 +472,27 @@ function renderEtfScreen() {
       (sortable ? '<span class="sort-ind">' + (on ? (asc ? '▲' : '▼') : '↕') + '</span>' : '') + '</th>';
   }).join('') + '</tr></thead><tbody>';
   rows.forEach(function (r) {
-    h += '<tr>' + ES_COLS.map(function (c) {
+    var open = _esOpen === r.code;
+    h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="esRowClick(event,\'' + r.code + '\')">' + ES_COLS.map(function (c) {
       return '<td class="' + (c[0] === 'code' ? 'inv-code' : (c[0] === 'name' ? 'inv-name' : (c[0] === 'watch' ? 'es-wcell' : 'num'))) + '">' + fmt(r, c) + '</td>';
     }).join('') + '</tr>';
+    if (open) h += '<tr class="es-drow"><td colspan="' + ES_COLS.length + '" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
     '<div class="divest-note">本類共 ' + rk.total + ' 檔（上市未滿一年 ' + rk.young + ' 檔不列入排名），依綜合分數取前 ' + ES_TOP + ' 名；已排除槓桿／反向與期貨商品型。' +
     '綜合＝各指標在同類中的百分位加權（一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5），填息率與費用只對前 ' + ES_TOP1 + ' 名計算。' +
     '含息報酬未計再投入；價格成長為負代表淨值被配息侵蝕。資料來源：TWSE／TPEx 官方行情與除權息結果表、Yahoo 日線（填息）。<b>歷史統計，非投資建議。</b></div>';
+  // 重繪時保留已展開的明細（圖已畫好、資料已載入），不重建 → 即時價格每 30 秒刷新也不會閃
+  var keep = _esOpen ? wrap.querySelector('.es-detail[data-code="' + _esOpen + '"]') : null;
+  if (keep) keep.remove();
   wrap.innerHTML = h;
+  esMountDetail(wrap.querySelector('.es-dslot'), keep);
+}
+var _esOpen = null;
+function esRowClick(ev, code) {
+  if (ev && ev.target && ev.target.closest('button, a, input, .code-link')) return;   // 按鈕／代號連結各有用途
+  _esOpen = (_esOpen === code) ? null : code;
+  renderEtfScreen();
 }
 
 // ══════════ 關注清單共用：ETF 評比指標欄位 ══════════
@@ -526,4 +579,108 @@ function esWatchCells(code) {
     prem: sg(r.prem)
   };
   return ES_WCOLS.map(function (k) { return '<td class="num es-wm">' + cell[k] + '</td>'; }).join('');
+}
+
+// ══════════ 展開明細（ETF 評比與關注股票共用）══════════
+// 左：配息走勢圖（沿用股利估算的歷年配息圖，近 2 年：長條＝每股配息、折線＝年化殖利率）
+// 右：近 2 年配息紀錄（除息日、發放日、每股配息、當次／年化殖利率、填息狀態）
+// 填息狀態：官方除權息結果表的「除息前收盤」為基準，除息後首次收盤 ≥ 基準即填息（日線只有一年，更早的顯示「—」）
+// 表格很寬（可左右捲動）：明細寬度固定為「看得到的寬度」並黏在左側，圖才不會被推到畫面外、也不會被壓扁
+function _esFitDetail(slot, det, tries) {
+  var box = slot.closest('.inv-table-wrap');
+  var vis = box ? box.clientWidth : 0;
+  if (!(vis > 0)) {                                   // 版面還沒排好（剛插入、分頁剛顯示）→ 下一個畫格再量
+    if ((tries || 0) < 30) setTimeout(function () { if (det.isConnected) _esFitDetail(slot, det, (tries || 0) + 1); }, 100);   // 不用 rAF：分頁在背景時 rAF 不會執行
+    return;
+  }
+  var w = (vis - 2) + 'px';
+  if (det.style.width === w) return;
+  det.style.width = w;
+  // 寬度變了 → 配息圖依新寬度重畫（紀錄已載入才畫，否則等 _esLoadDetail 畫）
+  var he = det.querySelector('.divest-hist'), code = det.getAttribute('data-code');
+  if (he && he.querySelector('svg') && typeof _divHistDraw === 'function') _divHistDraw(he, code);
+}
+window.addEventListener('resize', function () {
+  document.querySelectorAll('.es-detail').forEach(function (d) { var sl = d.closest('.es-dslot'); if (sl) _esFitDetail(sl, d); });
+});
+function esMountDetail(slot, keep) {
+  if (!slot) return;
+  var code = slot.getAttribute('data-code');
+  if (keep && keep.getAttribute('data-code') === code) { slot.appendChild(keep); _esFitDetail(slot, keep); return; }
+  slot.innerHTML = '<div class="es-detail" data-code="' + code + '">' +
+    '<div class="es-dl"><div class="es-dtitle">配息走勢（近 2 年）</div><div class="divest-hist" data-code="' + code + '"><div class="modal-loading">讀取配息紀錄…</div></div></div>' +
+    '<div class="es-dr"><div class="es-dtitle">配息紀錄（近 2 年，新→舊）</div><div class="es-evt"><div class="modal-loading">讀取配息紀錄…</div></div></div>' +
+  '</div>';
+  _esFitDetail(slot, slot.firstChild);
+  _esLoadDetail(slot.firstChild, code);
+}
+async function _esLoadDetail(el, code) {
+  try { if (typeof _divGetRecs === 'function') await _divGetRecs(code); } catch (e) {}
+  try { await _esGetBase(false); } catch (e) {}
+  if (!el.isConnected) return;
+  var recs = ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).filter(function (r) { return r.exDate; })
+    .slice().sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
+
+  // 左：配息走勢圖（折線要 2 年收盤，抓完再重畫一次）
+  var he = el.querySelector('.divest-hist');
+  if (typeof _divHistDraw === 'function') _divHistDraw(he, code);
+
+  // 右：配息紀錄（先出表，填息狀態等日線抓到再補）
+  var te = el.querySelector('.es-evt');
+  var mkt = (_esBase && _esBase.c0[code] && _esBase.c0[code].mkt) ||
+    ((typeof _contracts !== 'undefined' && _contracts[code] && _contracts[code].exchange === 'OTC') ? 'OTC' : 'TSE');
+  var base = {};
+  ((_esBase && _esBase.divs[code]) || []).forEach(function (e) { base[e.ex] = e; });
+  te.innerHTML = _esRecTable(code, recs, base, null);
+  var bars = await _esBarsOf(code, mkt);
+  if (el.isConnected && bars.length) te.innerHTML = _esRecTable(code, recs, base, bars);
+
+  for (var i = 0; i < 40 && el.isConnected; i++) {
+    if (typeof _divPx !== 'undefined' && _divPx[code]) { if (typeof _divHistDraw === 'function') _divHistDraw(he, code); break; }
+    await new Promise(function (r) { setTimeout(r, 1000); });
+  }
+}
+// 單次除息的填息結果（除息後首次收盤 ≥ 除息前收盤）
+function _esFillOf(bars, ex, basePx) {
+  if (!bars || !bars.length || !(basePx > 0)) return null;
+  var i0 = -1;
+  for (var k = 0; k < bars.length; k++) if (bars[k][0] >= ex) { i0 = k; break; }
+  if (i0 < 0) return bars[bars.length - 1][0] < ex ? { wait: true } : null;
+  if (bars[0][0] > ex) return null;                                  // 除息早於日線範圍（一年前）
+  for (var q = i0; q < bars.length; q++) if (bars[q][1] >= basePx - 1e-9) return { date: bars[q][0], days: q - i0 + 1 };
+  return { pending: true, days: bars.length - i0, gap: (basePx - bars[bars.length - 1][1]) / basePx * 100 };
+}
+function _esRecTable(code, recs, base, bars) {
+  var today = _divTwDate().iso;
+  var d24 = _esIso(Date.parse(today) - 730 * 86400000);
+  var list = recs.filter(function (r) { return r.exDate >= d24; });
+  if (!list.length) return '<div class="divest-hist-note">近 2 年無配息紀錄</div>';
+  var step = null;
+  try { step = _divInferStep(recs.map(function (r) { return Object.assign({ code: code }, r); })); } catch (e) {}
+  var perYear = step ? 12 / step : null;
+  var md = function (iso) { return iso ? iso.slice(2).replace(/-/g, '/') : '—'; };
+  var dim = function (t) { return '<span class="dm-dim">' + t + '</span>'; };
+  var h = '<table class="detail-table es-evt-t"><thead><tr><th>除息日</th><th>發放日</th><th class="num">每股配息</th>' +
+    '<th class="num" title="每股配息 ÷ 除息前收盤">當次殖利率</th>' +
+    '<th class="num" title="每股配息 × 年配息次數 ÷ 除息前收盤">年化殖利率</th><th>填息</th></tr></thead><tbody>';
+  list.slice().reverse().forEach(function (r) {
+    var b = base[r.exDate], bp = b && b.base;
+    var amt = r.amount;
+    var y1 = (amt > 0 && bp > 0) ? amt / bp * 100 : null;
+    var yA = (y1 != null && perYear) ? y1 * perYear : null;
+    var fut = r.exDate > today;
+    var f = fut ? null : _esFillOf(bars, r.exDate, bp);
+    var st = fut ? dim('未除息')
+      : (!bars ? (bp ? '<span class="const-spin"></span>' : dim('—'))
+      : (!f ? dim('—')
+      : (f.wait ? dim('待收盤資料')
+      : (f.pending ? '<span class="up">貼息中 ' + f.days + ' 天　距 ' + f.gap.toFixed(2) + '%</span>'
+      : '<span class="down">已填息（' + f.days + ' 天）</span>'))));
+    h += '<tr' + (fut ? ' class="es-fut"' : '') + '><td>' + md(r.exDate) + '</td><td>' + (r.payDate ? md(r.payDate) : dim('—')) + '</td>' +
+      '<td class="num">' + (amt != null ? amt.toFixed(3) : dim('待公告')) + '</td>' +
+      '<td class="num">' + (y1 != null ? y1.toFixed(2) + '%' : dim('—')) + '</td>' +
+      '<td class="num">' + (yA != null ? yA.toFixed(2) + '%' : dim('—')) + '</td><td>' + st + '</td></tr>';
+  });
+  return h + '</tbody></table>' +
+    '<div class="divest-hist-note">年配息 ' + (perYear ? perYear + ' 次' : '—') + '；殖利率以除息前收盤計（官方除權息結果表，近 12 個月內才有）；填息以一年日線判定。</div>';
 }
