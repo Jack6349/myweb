@@ -1,7 +1,9 @@
 // 股利總管 Web — 配息資料（股利估算第四頁籤）＋ ETF 規格／配息頻率登錄表
 //
 // 配息頻率優先序（_divFreqOverride，經 dividend-est.js 的 _divInferStep 供全站使用）：
-//   手動輸入（Firestore stock_div_meta/{uid}）＞ 程式常數 DIV_FREQ_OVERRIDE ＞ 官方規格「收益分配」＞ 由除息紀錄推算
+//   手動輸入（Firestore stock_div_meta/{uid}）＞ 程式常數 DIV_FREQ_OVERRIDE ＞ MoneyDJ（data/etf-freq.json）＞ 官方規格「收益分配」＞ 由除息紀錄推算
+// MoneyDJ：全市場 ETF 的「配息頻率」欄，由本機排程 shioaji-server\etf-freq.py 每月抓一次、存成 data/etf-freq.json 上傳到本機服務。
+//   網頁無法直接抓（GAS 代理只收 JSON、瀏覽器跨站限制），所以走本機排程。新上市只配過 1 次的 ETF 也能拿到正確頻率。
 // 官方規格來源：上市 ETF＝TWSE ETF 商品資訊；上櫃 ETF＝TPEx ETF 商品資訊（兩者 JSON 結構相同），經 GAS 抓取、快取 30 天。
 //
 // 手動輸入存放：Firestore stock_div_meta/{uid}（獨立文件）。不寫進 stock_portfolio/{uid}：
@@ -70,12 +72,26 @@ async function _divManSave(code, rec) {
   _divManStore = 'local';
 }
 
+// ── MoneyDJ 配息頻率（同源靜態檔，開頁讀一次）──
+var _divMdj = {}, _divMdjDay = null;
+(function () {
+  fetch('data/etf-freq.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    if (!j || !j.map) return;
+    Object.keys(j.map).forEach(function (c) { var s = j.map[c] && j.map[c].s; if (s) _divMdj[c] = s; });
+    _divMdjDay = j.updated || null;
+    // 比頁面其他資料晚到時：已算好的 ETF 評比指標重算一次（股利估算下次載入即採用）
+    if (typeof _esAllMapBase !== 'undefined') _esAllMapBase = null;
+    if (typeof renderEtfScreen === 'function') renderEtfScreen();
+  }).catch(function () {});
+})();
+
 // ── 配息頻率（全站共用入口）──
 function _divFreqSource(code) {
   code = String(code || '');
   var m = _divMan[code];
   if (m && m.step) return { step: m.step, src: 'manual' };
   if (DIV_FREQ_OVERRIDE[code]) return { step: DIV_FREQ_OVERRIDE[code], src: 'code' };
+  if (_divMdj[code]) return { step: _divMdj[code], src: 'mdj' };
   var o = _divMeta[code], st = o ? _divParseDist(o.dist) : null;
   if (st) return { step: st, src: o.src };
   return null;
@@ -242,8 +258,8 @@ function renderDivMeta() {
   var md = function (iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); };
   var dim = function (s) { return '<span class="dm-dim">' + s + '</span>'; };
-  var srcName = { manual: '手動', code: '程式登錄', TWSE: 'TWSE', TPEx: 'TPEx', infer: '紀錄推算', guess: '推定', none: '官方' };
-  var lvTip = { red: '頻率靠推定（紀錄 ≤1 筆、無官方或手動資料），或除息紀錄與券商實領金額不符，請確認', yellow: '頻率由除息紀錄推算', green: '頻率來自官方或手動輸入', gray: '官方標示不配息' };
+  var srcName = { manual: '手動', code: '程式登錄', mdj: 'MoneyDJ', TWSE: 'TWSE', TPEx: 'TPEx', infer: '紀錄推算', guess: '推定', none: '官方' };
+  var lvTip = { red: '頻率靠推定（紀錄 ≤1 筆、無官方或手動資料），或除息紀錄與券商實領金額不符，請確認', yellow: '頻率由除息紀錄推算', green: '頻率來自 MoneyDJ、官方或手動輸入', gray: '官方標示不配息' };
   var rfMan = (typeof _rfManLoad === 'function') ? _rfManLoad() : {};
 
   var store = _divManStore === 'firestore'
@@ -274,7 +290,7 @@ function renderDivMeta() {
       '<option value="">' + autoLbl + '</option>' +
       [1, 2, 3, 6, 12].map(function (s) { return '<option value="' + s + '"' + (man.step === s ? ' selected' : '') + '>' + DIV_FREQ_NAME[s] + '</option>'; }).join('') +
       '</select>';
-    var srcTag = '<span class="dm-src dm-src-' + (r.src === 'TWSE' || r.src === 'TPEx' ? 'off' : r.src) + '" title="' +
+    var srcTag = '<span class="dm-src dm-src-' + (r.src === 'TWSE' || r.src === 'TPEx' || r.src === 'mdj' ? 'off' : r.src) + '" title="' +
       esc(o.dist ? '官方原文：' + o.dist : '') + '">' + srcName[r.src] + '</span>';
 
     // 除息月份：取實際除息紀錄（近 13 個月＋已公告未除息），不用官方原文的月份——

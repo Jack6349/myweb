@@ -151,6 +151,12 @@ async function _esLoadBase(force) {
   var m12 = await _esClosesNear(_esIso(t - 365 * DAY));
   _esMsg = '讀取近 12 個月除息紀錄…'; renderEtfScreen();
   var dv = await _esDivs(today);
+  // 除息紀錄有任一段抓失敗（常見：TPEx 經 GAS 逾時）→ 缺的代號沿用最後一次完整資料，
+  // 否則上櫃 ETF（00984D 等）整批沒有配息，殖利率、含息報酬全部失真
+  if (!dv.ok) {
+    var lg = _esLastGood();
+    if (lg && lg.divs) Object.keys(lg.divs).forEach(function (c) { if (!dv.map[c]) dv.map[c] = lg.divs[c]; });
+  }
   var base = { day: today, d0: now.day, d6: m6.day, d12: m12.day, list: list, c0: now.map, c6: m6.map, c12: m12.map, divs: dv.map };
   if (dv.ok && now.otcOk && m6.otcOk && m12.otcOk) {
     try { localStorage.setItem(ES_LS, JSON.stringify({ day: today, base: base })); } catch (e) {}
@@ -320,9 +326,10 @@ function _esRank() {
   short.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
   short.forEach(function (r, i) { r.rank = i + 1; });
   var top = short.slice(0, ES_TOP);
-  top.forEach(function (r) { if (_esLive[r.code] > 0) _esDerive(r, _esLive[r.code]); });
-  _esShown = top.map(function (r) { return { code: r.code, mkt: r.mkt }; });
-  return { top: top, short: short, total: all.length, young: all.length - rank.length };
+  var fresh = all.filter(function (r) { return r.young; });          // 上市未滿一年：另列「新上市 ETF」表，不排名
+  top.concat(fresh).forEach(function (r) { if (_esLive[r.code] > 0) _esDerive(r, _esLive[r.code]); });
+  _esShown = top.concat(fresh).map(function (r) { return { code: r.code, mkt: r.mkt }; });
+  return { top: top, short: short, fresh: fresh, total: all.length, young: fresh.length };
 }
 
 var _esLive = {}, _esShown = [], _esLiveTimer = null, _esLiveAt = null;
@@ -485,6 +492,7 @@ function renderEtfScreen() {
       case 'pct': return v == null ? dim('—') : v.toFixed(2) + '%';
       case 'fill': return v == null ? (_esFillBusy[r.code] || (_esMsg && /填息/.test(_esMsg)) ? '<span class="const-spin"></span>' : dim('—')) : _esFillTxt(r);
       case 'days': return v == null ? dim('—') : v.toFixed(1) + ' 天';
+      case 'cnt': return v == null ? dim('—') : v + ' 次';
       case 'sgn': return sg(v);
       case 'size': return v == null ? dim('—') : Math.round(v).toLocaleString('zh-TW');
       case 'fee': return v == null ? dim('—') : v.toFixed(2) + '%';
@@ -513,12 +521,65 @@ function renderEtfScreen() {
     '<div class="divest-note">本類共 ' + rk.total + ' 檔（上市未滿一年 ' + rk.young + ' 檔不列入排名），依綜合分數取前 ' + ES_TOP + ' 名；已排除槓桿／反向與期貨商品型。' +
     '綜合＝各指標在同類中的百分位加權（一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5），填息率與費用只對前 ' + ES_TOP1 + ' 名計算。' +
     '含息報酬未計再投入；價格成長為負代表淨值被配息侵蝕。資料來源：TWSE／TPEx 官方行情與除權息結果表、Yahoo 日線（填息）。<b>歷史統計，非投資建議。</b></div>';
+
+  // ── 新上市 ETF（上市未滿一年，不排名）──
+  if (rk.fresh.length) {
+    var nk = _esNewSort.replace(/(Asc|Desc)$/, ''), nasc = /Asc$/.test(_esNewSort);
+    var fresh = rk.fresh.slice().sort(function (a, b) {
+      var va = a[nk], vb = b[nk];
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      var c = typeof va === 'string' ? va.localeCompare(vb, undefined, { numeric: true }) : va - vb;
+      return nasc ? c : -c;
+    });
+    h += '<div class="divest-sec-title es-new-title">新上市 ETF（上市未滿一年，不列入排名）<span class="rf-cmnote">' + fresh.length + ' 檔</span></div>' +
+      '<div class="inv-table-wrap"><table class="inv-table es-table es-new"><thead><tr>' + ES_NCOLS.map(function (c) {
+        var sortable = c[0] !== 'watch';
+        var on = sortable && _esNewSort.replace(/(Asc|Desc)$/, '') === c[0];
+        return '<th class="' + (c[0] === 'code' ? '' : 'num ') + (sortable ? 'sort-th' + (on ? ' sorted' : '') : '') + '"' +
+          (sortable ? ' onclick="esNewSortCol(\'' + c[0] + '\')"' : '') + (c[3] ? ' title="' + c[3] + '"' : '') + '>' + c[1] +
+          (sortable ? '<span class="sort-ind">' + (on ? (nasc ? '▲' : '▼') : '↕') + '</span>' : '') + '</th>';
+      }).join('') + '</tr></thead><tbody>';
+    fresh.forEach(function (r) {
+      var open = _esOpen === r.code;
+      h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="esRowClick(event,\'' + r.code + '\')">' + ES_NCOLS.map(function (c) {
+        return '<td class="' + (c[0] === 'code' ? 'inv-code' : (c[0] === 'watch' ? 'es-wcell' : 'num')) + '">' + fmt(r, c) + '</td>';
+      }).join('') + '</tr>';
+      if (open) h += '<tr class="es-drow"><td colspan="' + ES_NCOLS.length + '" class="es-dslot" data-code="' + r.code + '"></td></tr>';
+    });
+    h += '</tbody></table></div>' +
+      '<div class="divest-note">上市未滿一年，缺一年期報酬與填息紀錄，不與上方老牌 ETF 混排；殖利率請看「預估年配」（近 12 月配會因配息次數不足而偏低）。點列展開配息明細。</div>';
+  }
   // 重繪時保留已展開的明細（圖已畫好、資料已載入），不重建 → 即時價格每 30 秒刷新也不會閃
   var keep = _esOpen ? wrap.querySelector('.es-detail[data-code="' + _esOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
   esMountDetail(wrap.querySelector('.es-dslot'), keep);
 }
+// 新上市 ETF 表排序（存本機，預設依預估年配由高到低）
+var ES_NSORT_LS = 'etf_screen_new_sort_v1';
+var _esNewSort = (function () {
+  try { var v = localStorage.getItem(ES_NSORT_LS); if (/^(code|px|y1|yEst|n12|g6|tr6|size|prem)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  return 'yEstDesc';
+})();
+function esNewSortCol(k) {
+  _esNewSort = (_esNewSort === k + 'Desc') ? k + 'Asc' : k + 'Desc';
+  try { localStorage.setItem(ES_NSORT_LS, _esNewSort); } catch (e) {}
+  renderEtfScreen();
+}
+var ES_NCOLS = [
+  ['code', '代號', 'code', ''],
+  ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）'],
+  ['y1', '單次配', 'pct', '單次殖利率：最近一次配息 ÷ 現價'],
+  ['yEst', '預估年配', 'pct', '預估年殖利率：最近一次配息 × 年配息次數 ÷ 現價（新 ETF 看這欄，近 12 月配會因配息次數不足而偏低）'],
+  ['n12', '已配次數', 'cnt', '上市以來（近 12 個月內）已除息次數'],
+  ['g6', '半年價格', 'sgn', '不含配息的價格變化（上市未滿半年顯示 —）'],
+  ['tr6', '半年含息', 'sgn', '（現價＋期間配息）÷ 半年前收盤 − 1（上市未滿半年顯示 —）'],
+  ['size', '規模', 'size', '基金規模（億元）：受益權單位數 × 淨值'],
+  ['prem', '折溢價', 'sgn', '市價相對預估淨值；正＝溢價（買貴了）'],
+  ['watch', '關注', 'watch', '加入／移出關注清單']
+];
 var _esOpen = null;
 function esRowClick(ev, code) {
   if (ev && ev.target && ev.target.closest('button, a, input, .code-link')) return;   // 按鈕／代號連結各有用途
