@@ -7,7 +7,16 @@ var _sblLoaded = false;
 var _sblCache = null; // { date, fee:{code:{w,max,vol}}, bal:{code:{today,prev}}, positions }
 
 // ── 子頁籤切換（交易帳務 / 出借行情）──
+// 子頁籤記在本機：重新整理或從別頁回來時停在上次的頁籤
+var TX_TAB_LS = 'txinfo_tab_v1';
+function txRestoreTab() {
+  var t = null;
+  try { t = localStorage.getItem(TX_TAB_LS); } catch (e) {}
+  if (t === 'sbl') txShowTab('sbl');
+}
 function txShowTab(tab) {
+  if (tab !== 'sbl') tab = 'account';
+  try { localStorage.setItem(TX_TAB_LS, tab); } catch (e) {}
   var acc = tab === 'account';
   document.getElementById('tx-tab-account').style.display = acc ? '' : 'none';
   document.getElementById('tx-tab-sbl').style.display = acc ? 'none' : '';

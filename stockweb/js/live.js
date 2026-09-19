@@ -2,7 +2,12 @@
 // 欄位：代號｜餘額(股)｜成本均價｜現價｜漲跌幅｜現值｜未實現損益｜獲利率（無明細鈕、無名稱）
 // 分配：先左後右平均分配，奇數檔左欄多一（如 13 檔 → 左 7 右 6）
 
-var _liveSort = 'codeAsc'; // 排序狀態
+// 排序狀態：存本機，重新整理後維持；不在可排序欄位內的值回到預設（代號 ▲）
+var LIVE_SORT_LS = 'live_sort_v1';
+var _liveSort = (function () {
+  try { var v = localStorage.getItem(LIVE_SORT_LS); if (/^(code|chg|pnl|prate)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  return 'codeAsc';
+})();
 
 // ── 注意股標記（圓形圖標）──
 // 每檔固定識別色：全部持股依代號排序後平均分布於紅→紫色階；點選 On(亮)/再點 Off(暗)，狀態存 localStorage。
@@ -123,6 +128,7 @@ function renderLiveRow(code) {
 
 function liveSortCol(key) {
   _liveSort = (_liveSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
+  try { localStorage.setItem(LIVE_SORT_LS, _liveSort); } catch (e) {}
   renderLiveTables();
 }
 

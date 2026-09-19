@@ -35,8 +35,16 @@ function _swapSave() { try { localStorage.setItem(SWAP_LS, JSON.stringify(_swapS
 
 // ── 子頁籤切換（股利估算 / 換股試算 / 填息追蹤）──
 var DIV_TABS = ['est', 'swap', 'refill', 'meta'];
+// 子頁籤（股利估算／換股試算／填息追蹤／配息資料）記在本機：重新整理或從別頁回來時停在上次的頁籤
+var DIV_TAB_LS = 'divest_tab_v1';
+function divRestoreTab() {
+  var t = null;
+  try { t = localStorage.getItem(DIV_TAB_LS); } catch (e) {}
+  if (t && t !== 'est' && DIV_TABS.indexOf(t) >= 0) divShowTab(t);
+}
 function divShowTab(tab) {
   if (DIV_TABS.indexOf(tab) < 0) tab = 'est';
+  try { localStorage.setItem(DIV_TAB_LS, tab); } catch (e) {}
   DIV_TABS.forEach(function (t) {
     var pane = document.getElementById('divest-tab-' + t);
     var btn = document.getElementById('divest-subtab-' + t);

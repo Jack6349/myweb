@@ -5,11 +5,16 @@
 
 var _chartCode = null;
 var _chartTab = 'd5';
+var CHART_TAB_LS = 'chart_tab_v1';
+function _chartSavedTab() {
+  try { var t = localStorage.getItem(CHART_TAB_LS); if (/^(intra|bid|d5|day)$/.test(t || '')) return t; } catch (e) {}
+  return 'intra';
+}
 var _chartCache = {};   // code → { day, dts, close, vol, ref }
 
 function openChartPop(code) {
   _chartCode = String(code);
-  _chartTab = 'intra';
+  _chartTab = _chartSavedTab();
   var c = _contracts[_chartCode];
   document.getElementById('detail-title').textContent =
     _chartCode + ' ' + ((c && c.name) || '') + ' — 線圖';
@@ -19,7 +24,7 @@ function openChartPop(code) {
   var box = modal.querySelector('.modal-box');
   if (box) box.classList.add('chart-wide');
   _chartRenderShell();
-  chartShowTab('intra');
+  chartShowTab(_chartTab);   // 上次看的頁籤（五檔頁籤會照常訂閱，關窗即退訂）
 }
 
 function _chartRenderShell() {
@@ -34,6 +39,7 @@ function _chartRenderShell() {
 
 function chartShowTab(tab) {
   _chartTab = tab;
+  try { localStorage.setItem(CHART_TAB_LS, tab); } catch (e) {}
   ['intra', 'bid', 'd5', 'day'].forEach(function (t) {
     document.getElementById('chart-tab-' + t).classList.toggle('active', t === tab);
   });

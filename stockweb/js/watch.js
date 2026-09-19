@@ -19,11 +19,50 @@ var _wtIdx = null;       // [{c,n,e}] 合約索引
 var _wtSubbed = [];      // 本頁新訂閱的代號（離開退訂）
 var _wtSug = [];         // 目前下拉候選
 var _wtNote = '';
-var _wtTab = 'list';     // list | bond | act
+var _wtTab = 'list';     // list | bond | act | screen
 var _wtBond = null;      // 債券篩選結果
 var _wtAct = null;       // 主動式報酬結果
 var _wtBusy = false;
 var _wtPick = {};        // 待加入勾選：code -> true
+// 關注清單排序（存本機，重新整理後維持）；'' ＝加入順序
+var WT_SORT_LS = 'watch_sort_v1';
+var _wtSort = (function () { try { return localStorage.getItem(WT_SORT_LS) || ''; } catch (e) { return ''; } })();
+function wtSortCol(key) {
+  // 同欄：降冪 → 升冪 → 取消（回到加入順序）
+  if (_wtSort === key + 'Desc') _wtSort = key + 'Asc';
+  else if (_wtSort === key + 'Asc') _wtSort = '';
+  else _wtSort = key + 'Desc';
+  try { localStorage.setItem(WT_SORT_LS, _wtSort); } catch (e) {}
+  renderWatch();
+}
+function _wtSortVal(code, key) {
+  if (key === 'code') return code;
+  if (key === 'px' || key === 'chg') {
+    var r = _rows[code], c = _contracts[code];
+    var px = (r && r.close != null) ? r.close : null;
+    if (key === 'px') return px;
+    return (px != null && c && c.reference) ? (px - c.reference) / c.reference * 100 : null;
+  }
+  return (typeof esWatchSortVal === 'function') ? esWatchSortVal(code, key) : null;
+}
+function _wtSorted(list) {
+  if (!_wtSort) return list;
+  var key = _wtSort.replace(/(Asc|Desc)$/, ''), asc = /Asc$/.test(_wtSort);
+  var idx = {}; list.forEach(function (c, i) { idx[c] = i; });
+  return list.slice().sort(function (a, b) {
+    var va = _wtSortVal(a, key), vb = _wtSortVal(b, key);
+    if (va == null && vb == null) return idx[a] - idx[b];
+    if (va == null) return 1;                       // 沒資料（個股、未滿一年）一律墊底
+    if (vb == null) return -1;
+    var c = typeof va === 'string' ? va.localeCompare(vb, undefined, { numeric: true }) : va - vb;
+    return (asc ? c : -c) || idx[a] - idx[b];
+  });
+}
+function _wtTh(key, label, cls) {
+  var on = _wtSort.replace(/(Asc|Desc)$/, '') === key, asc = on && /Asc$/.test(_wtSort);
+  return '<th class="' + (cls ? cls + ' ' : '') + 'sort-th' + (on ? ' sorted' : '') + '" onclick="wtSortCol(\'' + key + '\')">' + label +
+    '<span class="sort-ind">' + (on ? (asc ? '▲' : '▼') : '↕') + '</span></th>';
+}
 
 function _wtLoad() {
   if (_wtList) return _wtList;
@@ -171,6 +210,7 @@ async function startWatch() {
   }
   info.textContent = (_wtIdx || []).length.toLocaleString('zh-TW') + ' 檔可搜尋｜關注 ' + list.length + '/' + WT_MAX + '｜已連線';
   renderWatch();
+  if (typeof esWatchPrep === 'function') esWatchPrep(list);   // 背景補 ETF 評比指標（當日快取，第一次約 1 分鐘）
 }
 
 // ── 渲染 ──
@@ -186,11 +226,11 @@ function renderWatch() {
     return;
   }
   h += '<div class="inv-table-wrap"><table class="inv-table wt-table"><thead><tr>' +
-    '<th></th><th></th><th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">漲跌</th>' +
-    '<th class="num">成份股漲跌</th><th></th></tr></thead><tbody>';
-  list.forEach(function (code) { h += '<tr id="wt-tr-' + code + '">' + _wtRowHtml(code) + '</tr>'; });
+    '<th></th><th></th>' + _wtTh('code', '代號') + '<th>名稱</th>' + _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num') +
+    '<th class="num">成份股漲跌</th>' + (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
+  _wtSorted(list).forEach(function (code) { h += '<tr id="wt-tr-' + code + '">' + _wtRowHtml(code) + '</tr>'; });
   h += '</tbody></table></div>' +
-    '<div class="detail-note">現價與漲跌盤中即時（進頁訂閱、離開退訂）。〔成份股〕僅 ETF 提供；' +
+    '<div class="detail-note">現價與漲跌盤中即時（進頁訂閱、離開退訂）。〔成份股〕僅 ETF 提供；ETF 指標欄與「ETF 評比」同源（每日更新，算法見該頁說明），個股不適用；' +
     '〔除息紀錄〕取近 ' + WT_YEARS + ' 年（上市 ETF 走 e添富、其餘走 Yahoo，個股可能查無）。清單存於本機瀏覽器。</div>';
   wrap.innerHTML = h;
 }
@@ -217,6 +257,7 @@ function _wtRowHtml(code) {
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt) + '　' + fmtPct(chgPct)) + '</td>' +
     '<td class="num inv-cchg ' + estCls + '"' + (cm ? ' title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
       (cm && cm.est != null ? fmtPct(cm.est) : '—') + '</td>' +
+    (typeof esWatchCells === 'function' ? esWatchCells(code) : '') +      // ETF 評比指標（etf-screen.js）
     '<td><button class="swap-mini" onclick="wtRemove(\'' + code + '\')">移除</button></td>';
 }
 
@@ -287,9 +328,17 @@ async function wtOpenDiv(code) {
 }
 
 // ══════════ 頁籤：關注清單 / 債券 ETF / 主動式 ETF ══════════
+// 子頁籤（關注股票／債券 ETF／主動式 ETF／ETF 評比）記在本機：重新整理或從別頁回來時停在上次的頁籤
+var WT_TAB_LS = 'watch_tab_v1';
+function wtRestoreTab() {
+  var t = null;
+  try { t = localStorage.getItem(WT_TAB_LS); } catch (e) {}
+  if (/^(list|bond|act|screen)$/.test(t || '') && t !== 'list') wtShowTab(t);
+}
 function wtShowTab(tab) {
   _wtTab = tab;
-  ['list', 'bond', 'act'].forEach(function (t) {
+  try { localStorage.setItem(WT_TAB_LS, tab); } catch (e) {}
+  ['list', 'bond', 'act', 'screen'].forEach(function (t) {
     var b = document.getElementById('wt-subtab-' + t);
     if (b) b.classList.toggle('active', t === tab);
   });
@@ -297,7 +346,9 @@ function wtShowTab(tab) {
   document.getElementById('watch-wrap').style.display = (tab === 'list') ? '' : 'none';
   document.getElementById('wt-bond-wrap').style.display = (tab === 'bond') ? '' : 'none';
   document.getElementById('wt-act-wrap').style.display = (tab === 'act') ? '' : 'none';
-  if (tab === 'bond') { _wtBondLoad(); renderWatchBond(); }
+  document.getElementById('wt-screen-wrap').style.display = (tab === 'screen') ? '' : 'none';
+  if (tab === 'screen') { if (typeof startEtfScreen === 'function') { renderEtfScreen(); startEtfScreen(false); } }
+  else if (tab === 'bond') { _wtBondLoad(); renderWatchBond(); }
   else if (tab === 'act') { _wtActLoadCache(); renderWatchAct(); }
   else renderWatch();
 }
@@ -472,6 +523,36 @@ async function wtAddPicked() {
   await startWatch();
 }
 
+// ── 債券 ETF／主動式 ETF 排序（狀態存本機，重新整理後維持）──
+var WT_BSORT_LS = 'watch_bond_sort_v1', WT_ASORT_LS = 'watch_act_sort_v1';
+function _wtLoadSort(ls, def, re) {
+  try { var v = localStorage.getItem(ls); if (re.test(v || '')) return v; } catch (e) {}
+  return def;
+}
+var _wtBondSort = _wtLoadSort(WT_BSORT_LS, 'yYDesc', /^(code|px|amount|mY|yY|exDate|payDate)(Asc|Desc)$/);
+function _wtNextSort(cur, k) { return cur === k + 'Desc' ? k + 'Asc' : k + 'Desc'; }
+function _wtSortRows(rows, state) {
+  var k = state.replace(/(Asc|Desc)$/, ''), asc = /Asc$/.test(state);
+  return rows.slice().sort(function (a, b) {
+    var x = a[k], y = b[k];
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;                                  // 缺值一律墊底
+    if (y == null) return -1;
+    var c = typeof x === 'string' ? x.localeCompare(y, undefined, { numeric: true }) : x - y;
+    return asc ? c : -c;
+  });
+}
+function _wtSortTh(state, fn, k, label, cls, tip) {
+  var on = state.replace(/(Asc|Desc)$/, '') === k, asc = on && /Asc$/.test(state);
+  return '<th class="' + (cls ? cls + ' ' : '') + 'sort-th' + (on ? ' sorted' : '') + '" onclick="' + fn + '(\'' + k + '\')"' +
+    (tip ? ' title="' + tip + '"' : '') + '>' + label + '<span class="sort-ind">' + (on ? (asc ? '▲' : '▼') : '↕') + '</span></th>';
+}
+function wtBondSort(k) {
+  _wtBondSort = _wtNextSort(_wtBondSort, k);
+  try { localStorage.setItem(WT_BSORT_LS, _wtBondSort); } catch (e) {}
+  renderWatchBond();
+}
+
 // ── 渲染：債券 ETF ──
 function renderWatchBond() {
   var wrap = document.getElementById('wt-bond-wrap');
@@ -492,9 +573,12 @@ function renderWatchBond() {
     wrap.innerHTML = h; return;
   }
   h += '<div class="inv-table-wrap"><table class="inv-table wt-table"><thead><tr>' +
-    '<th></th><th>代號</th><th>名稱</th><th class="num">現價</th><th class="num">每股金額</th>' +
-    '<th class="num">月殖利率</th><th class="num">預估年殖利率</th><th>除息日</th><th>發放日</th></tr></thead><tbody>';
-  d.rows.forEach(function (r) {
+    '<th></th>' + _wtSortTh(_wtBondSort, 'wtBondSort', 'code', '代號') + '<th>名稱</th>' +
+    _wtSortTh(_wtBondSort, 'wtBondSort', 'px', '現價', 'num') + _wtSortTh(_wtBondSort, 'wtBondSort', 'amount', '每股金額', 'num') +
+    _wtSortTh(_wtBondSort, 'wtBondSort', 'mY', '月殖利率', 'num') + _wtSortTh(_wtBondSort, 'wtBondSort', 'yY', '預估年殖利率', 'num') +
+    _wtSortTh(_wtBondSort, 'wtBondSort', 'exDate', '除息日') + _wtSortTh(_wtBondSort, 'wtBondSort', 'payDate', '發放日') +
+    '</tr></thead><tbody>';
+  _wtSortRows(d.rows, _wtBondSort).forEach(function (r) {
     h += '<tr>' +
       '<td>' + (have[r.code] ? '<span class="wt-dim">已關注</span>'
         : '<input type="checkbox"' + (_wtPick[r.code] ? ' checked' : '') + ' onchange="wtPick(\'' + r.code + '\',this)">') + '</td>' +
@@ -512,7 +596,7 @@ function renderWatchBond() {
   });
   h += '</tbody></table></div>' +
     '<div class="detail-note">掃描範圍：代號末碼 B 且名稱含「非投等／非投債／高收益／高息／優先／新興」者（' + _wtBondPool().length +
-    ' 檔）；投等債與公債殖利率普遍低於門檻，不掃以節省配額。預估年殖利率＝最近一次配息 × 配息期數 ÷ 現價，依此由高至低排序。' +
+    ' 檔）；投等債與公債殖利率普遍低於門檻，不掃以節省配額。預估年殖利率＝最近一次配息 × 配息期數 ÷ 現價，預設依此由高至低排序（點欄位可改，排序會記住）。' +
     '配息期數由歷次除息間隔推得；<b>標「*推定」者只有 1 筆配息紀錄</b>（新上市），依債券 ETF 慣例推定為月配，待累積第 2 筆後自動改用實際間隔。' +
     '結果與「當月已公告除息」永久存檔，進頁不重抓，按「重新篩選」才更新。</div>';
   wrap.innerHTML = h;
@@ -520,15 +604,10 @@ function renderWatchBond() {
 }
 
 // ── 渲染：主動式 ETF ──
-var _wtActSort = 'rAll';
+var _wtActSort = _wtLoadSort(WT_ASORT_LS, 'rAllDesc', /^(code|px|r1|r3|rAll|days)(Asc|Desc)$/);
 function wtActSort(k) {
-  _wtActSort = k;
-  if (_wtAct && _wtAct.rows) {
-    _wtAct.rows.sort(function (a, b) {
-      var x = a[k], y = b[k];
-      return (y == null ? -1e9 : y) - (x == null ? -1e9 : x);
-    });
-  }
+  _wtActSort = _wtNextSort(_wtActSort, k);
+  try { localStorage.setItem(WT_ASORT_LS, _wtActSort); } catch (e) {}
   renderWatchAct();
 }
 function renderWatchAct() {
@@ -544,16 +623,13 @@ function renderWatchAct() {
     '<button class="btn-query" onclick="wtAddPicked()">＋ 加入關注</button></div>';
   if (!d || !d.rows.length) { h += '<div class="modal-loading">尚未載入報酬資料。</div>'; wrap.innerHTML = h; return; }
 
-  var sh = function (k, label) {
-    return '<th class="num sort-th" onclick="wtActSort(\'' + k + '\')">' + label +
-      '<span class="sort-ind">' + (_wtActSort === k ? '▼' : '↕') + '</span></th>';
-  };
+  var sh = function (k, label, cls, tip) { return _wtSortTh(_wtActSort, 'wtActSort', k, label, cls == null ? 'num' : cls, tip); };
   var pct = function (v) { return v == null ? '<span class="flat">—</span>' : '<span class="' + colorClass(v) + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%</span>'; };
   h += '<div class="inv-table-wrap"><table class="inv-table wt-table"><thead><tr>' +
-    '<th></th><th>代號</th><th>名稱</th><th class="num">現價</th>' +
+    '<th></th>' + sh('code', '代號', '') + '<th>名稱</th>' + sh('px', '現價') +
     sh('r1', '近1月') + sh('r3', '近3月') + sh('rAll', '成立以來') +
-    '<th class="num" title="Yahoo 可取得的交易日數，越短代表上市越新">資料天數</th></tr></thead><tbody>';
-  d.rows.forEach(function (r) {
+    sh('days', '資料天數', 'num', 'Yahoo 可取得的交易日數，越短代表上市越新') + '</tr></thead><tbody>';
+  _wtSortRows(d.rows, _wtActSort).forEach(function (r) {
     h += '<tr>' +
       '<td>' + (have[r.code] ? '<span class="wt-dim">已關注</span>'
         : '<input type="checkbox"' + (_wtPick[r.code] ? ' checked' : '') + ' onchange="wtPick(\'' + r.code + '\',this)">') + '</td>' +
@@ -569,7 +645,7 @@ function renderWatchAct() {
   h += '</tbody></table></div>' +
     '<div class="detail-note">報酬以 Yahoo 日收盤價計（主動式 ETF 目前多未配息或配息少，價格報酬≈總報酬）。' +
     '<b>務必同時看「資料天數」</b>：主動式 ETF 多為新上市，49 天的報酬與 194 天的報酬不可直接比較；天數不足者近1月/近3月顯示「—」。' +
-    '點欄位可排序，預設依成立以來由高至低。每日快取，按「重新計算」強制更新。</div>';
+    '點欄位可排序（再點一次反向，排序會記住），預設依成立以來由高至低。每日快取，按「重新計算」強制更新。</div>';
   wrap.innerHTML = h;
   _wtPickInfo();
 }

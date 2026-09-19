@@ -2,7 +2,17 @@
 // 每列前置〔明細〕按鈕 → 彈出該檔「交易紀錄」（建倉明細 position_detail）
 
 var _invStarted = false;
-var _invSort = 'exDesc';   // 預設：最近除息由近至遠（配息紀錄載入前全為空，排序維持原順序，載入後自動重排）
+// 預設：最近除息由近至遠（配息紀錄載入前全為空，排序維持原順序，載入後自動重排）
+// 使用者選的排序存本機，重新整理後維持；表頭沒有這個欄位（欄位改版）時回到預設
+var INV_SORT_LS = 'inv_sort_v1';
+var _invSort = (function () {
+  try {
+    var v = localStorage.getItem(INV_SORT_LS) || '';
+    var m = v.match(/^([A-Za-z]+)(Asc|Desc)$/);
+    if (m && document.querySelector('#inv-view th.sort-th[data-key="' + m[1] + '"]')) return v;
+  } catch (e) {}
+  return 'exDesc';
+})();
 
 // 排序用衍生值
 function invMetrics(p) {
@@ -19,6 +29,7 @@ function invMetrics(p) {
 // 整欄表頭可點：第一次點降冪（▼ 高→低），再點升冪（▲），再點又降冪…（兩態切換，恆有排序）
 function invSortCol(key) {
   _invSort = (_invSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
+  try { localStorage.setItem(INV_SORT_LS, _invSort); } catch (e) {}
   renderInvTable();
   _updateInvSortArrows();
 }

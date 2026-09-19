@@ -902,3 +902,14 @@ td.cost-even::after  { background: var(--text3); }
 #tx-pnl-sum .tx-flat { color: var(--accent2); }
 .tx-gap { display: inline-block; width: 10px; }   /* 委託／成交欄：數量與價格之間的間距（取代 @） */
 .dexm .dexm-diff { color: #8ab4d4; }   /* 本月除息：目前持有 ≠ 除息張數（除息後有買賣） */
+/* 關注股票 → ETF 評比 */
+.es-bar { flex-wrap: wrap; gap: 6px; }
+.es-info { font-size: 12px; color: var(--text2); margin-left: 6px; }
+.es-table td, .es-table th { padding-left: 6px; padding-right: 6px; font-size: 13px; white-space: nowrap; }
+.es-tag { display: inline-block; margin-left: 4px; font-size: 10px; padding: 0 4px; border-radius: 3px; vertical-align: 1px; }
+.es-held { background: rgba(255,82,82,.18); color: var(--up); }
+.es-watch { background: rgba(90,169,255,.18); color: #5aa9ff; }
+.es-wcell { text-align: center; }
+.es-wbtn { white-space: nowrap; min-width: 64px; }
+.es-wbtn.on { color: #5aa9ff; border-color: rgba(90,169,255,.5); }
+.wt-table .es-wm { font-size: 12.5px; white-space: nowrap; }

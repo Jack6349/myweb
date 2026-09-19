@@ -50,8 +50,16 @@ function showView(name) {
 function goHome() { showView('home'); }
 function openStream() { showView('stream'); startStream(); }
 function openInventory() { showView('inv'); if (typeof startInventory === 'function') startInventory(); }
-function openTxinfo() { showView('txinfo'); if (typeof startTxinfo === 'function') startTxinfo(); }
-function openDividendEst() { showView('divest'); if (typeof startDividendEst === 'function') startDividendEst(); }
+function openTxinfo() {
+  showView('txinfo');
+  if (typeof startTxinfo === 'function') startTxinfo();
+  if (typeof txRestoreTab === 'function') txRestoreTab();          // 回到上次的子頁籤
+}
+function openDividendEst() {
+  showView('divest');
+  if (typeof startDividendEst === 'function') startDividendEst();   // 股利估算照常載入（其他子頁籤共用它的配息資料）
+  if (typeof divRestoreTab === 'function') divRestoreTab();          // 回到上次的子頁籤
+}
 function openRiskReport() { showView('risk'); if (typeof startRiskReport === 'function') startRiskReport(); }
 function openLive() { showView('live'); if (typeof startLive === 'function') startLive(); }
 function openNews() { showView('news'); if (typeof startNews === 'function') startNews(); }
@@ -60,7 +68,11 @@ function openSignals() { showView('signals'); if (typeof startSignals === 'funct
 function openAlerts() { showView('alerts'); if (typeof startAlerts === 'function') startAlerts(); }
 function openParams() { showView('params'); if (typeof startParams === 'function') startParams(); }
 function openTopConst() { showView('topconst'); if (typeof startTopConst === 'function') startTopConst(); }
-function openWatch() { showView('watch'); if (typeof startWatch === 'function') startWatch(); }
+function openWatch() {
+  showView('watch');
+  if (typeof startWatch === 'function') startWatch();          // 關注清單照常載入（報價訂閱、指標）
+  if (typeof wtRestoreTab === 'function') wtRestoreTab();      // 回到上次的子頁籤
+}
 function closeStream() { goHome(); } // 相容頂欄返回鈕/標題連結
 
 // ── 服務健康檢查 ──
@@ -434,9 +446,12 @@ function fmtMoney(v) { return '$' + Math.round(v).toLocaleString('zh-TW'); }
 
 // ── 總覽合計（即時行情 / 持股庫存共用；每筆 tick 即時重算） ──
 // 欄位：[含稅費/不含稅費 切換]（＋即時行情頁的 明細）| 總庫存 | 總現值 | 總付出成本 | 損益試算 | 獲利率 | 漲跌幅%
-var _taxMode = true; // true=含稅費（淨額）, false=不含稅費（毛額）
+// true=含稅費（淨額）, false=不含稅費（毛額）；切換結果存本機，重新整理後維持
+var TAX_MODE_LS = 'tax_mode_v1';
+var _taxMode = (function () { try { return localStorage.getItem(TAX_MODE_LS) !== '0'; } catch (e) { return true; } })();
 function toggleTaxMode() {
   _taxMode = !_taxMode;
+  try { localStorage.setItem(TAX_MODE_LS, _taxMode ? '1' : '0'); } catch (e) {}
   renderSummaries();
   if (typeof renderInvTable === 'function' && document.getElementById('inv-tbody') && document.getElementById('inv-tbody').children.length) renderInvTable();
   if (typeof renderLiveTables === 'function' && document.getElementById('live-cols') && document.getElementById('live-cols').children.length) renderLiveTables();

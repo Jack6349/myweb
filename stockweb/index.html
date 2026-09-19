@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=175">
+<link rel="stylesheet" href="css/app.css?v=178">
 </head>
 <body>
 
@@ -223,6 +223,7 @@
       <button id="wt-subtab-list" class="tx-subtab active" onclick="wtShowTab('list')">關注股票</button>
       <button id="wt-subtab-bond" class="tx-subtab" onclick="wtShowTab('bond')">債券 ETF</button>
       <button id="wt-subtab-act" class="tx-subtab" onclick="wtShowTab('act')">主動式 ETF</button>
+      <button id="wt-subtab-screen" class="tx-subtab" onclick="wtShowTab('screen')">ETF 評比</button>
     </div>
     <div id="wt-search-bar" class="tr-toolbar wt-toolbar">
       <div class="wt-search">
@@ -236,6 +237,7 @@
     <div id="watch-wrap"></div>
     <div id="wt-bond-wrap"></div>
     <div id="wt-act-wrap"></div>
+    <div id="wt-screen-wrap" style="display:none"></div>
   </div>
 
   <!-- 加減碼報告：系統性風險評分 -->
@@ -366,23 +368,24 @@
 <script src="js/auth.js?v=10"></script>
 <script src="js/broker.js?v=18"></script>
 <script src="js/fill-toast.js?v=6"></script>
-<script src="js/stream.js?v=71"></script>
-<script src="js/nav-usage.js?v=1"></script>
+<script src="js/stream.js?v=74"></script>
+<script src="js/nav-usage.js?v=2"></script>
 <script src="js/daily-refresh.js?v=1"></script>
 <script src="js/category.js?v=1"></script>
-<script src="js/inventory.js?v=77"></script>
+<script src="js/inventory.js?v=78"></script>
 <script src="js/constituents.js?v=12"></script>
-<script src="js/live.js?v=48"></script>
+<script src="js/live.js?v=49"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=16"></script>
-<script src="js/sbl.js?v=11"></script>
+<script src="js/sbl.js?v=12"></script>
 <script src="js/params.js?v=2"></script>
 <script src="js/topconst.js?v=7"></script>
-<script src="js/watch.js?v=8"></script>
-<script src="js/chart.js?v=19"></script>
+<script src="js/watch.js?v=13"></script>
+<script src="js/etf-screen.js?v=7"></script>
+<script src="js/chart.js?v=20"></script>
 <script src="js/div-meta.js?v=6"></script>
-<script src="js/dividend-est.js?v=52"></script>
-<script src="js/swap.js?v=30"></script>
+<script src="js/dividend-est.js?v=53"></script>
+<script src="js/swap.js?v=31"></script>
 <script src="js/refill.js?v=18"></script>
 <script src="js/risk-score.js?v=12"></script>
 <script src="js/news.js?v=39"></script>

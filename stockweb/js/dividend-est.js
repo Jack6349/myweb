@@ -834,9 +834,15 @@ function _divExMonthHtml(stocks, money, md) {
 // ── 月份總覽（依發放月）──
 // 縱向＝個股（依總計高→低，可點代號改排序）、橫向＝1–12 月＋總計。
 // 綠＝已發放、黃＝預估；空月留白不填 0；全年為 0 的個股不列入。
-var _divStatSort = 'totDesc';
+// 排序狀態存本機，重新整理後維持（代號／總計兩種；不合法的值回預設「總計 ▼」）
+var DIV_STAT_SORT_LS = 'divest_stat_sort_v1';
+var _divStatSort = (function () {
+  try { var v = localStorage.getItem(DIV_STAT_SORT_LS); if (/^(code|tot)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  return 'totDesc';
+})();
 function divStatSort(key) {
   _divStatSort = (_divStatSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
+  try { localStorage.setItem(DIV_STAT_SORT_LS, _divStatSort); } catch (e) {}
   renderDividendEst();
 }
 function _divStatRows(stocks) {

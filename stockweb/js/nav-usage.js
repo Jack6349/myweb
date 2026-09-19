@@ -97,7 +97,9 @@ function _navInit() {
   // 記錄點：包住 showView（各 openXxx 皆經由它切頁）
   var orig = showView;
   showView = function (name) {
-    if (name && name !== 'home' && name !== _curView && _navDefault.indexOf(name) >= 0) navUsageHit(name);
+    // 開頁自動回到上次頁面（_navRestoring）不算一次使用，避免重新整理灌高次數
+    if (!_navRestoring && name && name !== 'home' && name !== _curView && _navDefault.indexOf(name) >= 0) navUsageHit(name);
+    try { localStorage.setItem(LAST_VIEW_LS, name || 'home'); } catch (e) {}   // 記住目前所在頁面
     return orig.apply(this, arguments);
   };
 
@@ -122,6 +124,26 @@ async function _navLoadCloud() {
   }
 }
 window.addEventListener('owner-ready', _navLoadCloud);   // 登入晚於頁面載入完成時
+
+// ── 開頁回到上次所在的頁面 ──
+// 登入完成（owner-ready）後，若使用者還停在首頁，就呼叫該頁的 openXxx()（與點功能列相同，會照常載入資料）。
+// 上次停在首頁、或頁面已不存在時維持首頁。子頁籤／排序由各頁自己的記錄還原。
+var LAST_VIEW_LS = 'last_view_v1';
+var _navRestoring = false, _navRestored = false;
+function _navRestoreLastView() {
+  if (_navRestored) return;
+  _navRestored = true;
+  var v = null;
+  try { v = localStorage.getItem(LAST_VIEW_LS); } catch (e) {}
+  if (!v || v === 'home' || _curView !== 'home') return;
+  var fn = null;
+  Object.keys(_navFnToView).forEach(function (f) { if (_navFnToView[f] === v) fn = f; });
+  if (!fn || typeof window[fn] !== 'function') return;
+  _navRestoring = true;
+  try { window[fn](); } catch (e) { console.warn('[回到上次頁面]', e); }
+  finally { _navRestoring = false; }
+}
+window.addEventListener('owner-ready', function () { setTimeout(_navRestoreLastView, 0); });
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _navInit);
 else _navInit();
