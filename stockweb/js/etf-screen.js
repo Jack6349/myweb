@@ -701,8 +701,8 @@ function _esRecTable(code, recs, base, bars) {
   var md = function (iso) { return iso ? iso.slice(2).replace(/-/g, '/') : '—'; };
   var dim = function (t) { return '<span class="dm-dim">' + t + '</span>'; };
   var h = '<table class="detail-table es-evt-t"><thead><tr><th>除息日</th><th>發放日</th><th class="num">每股配息</th>' +
-    '<th class="num" title="每股配息 ÷ 除息前收盤">當次殖利率</th>' +
-    '<th class="num" title="每股配息 × 年配息次數 ÷ 除息前收盤">年化殖利率</th><th>填息</th></tr></thead><tbody>';
+    '<th class="num" title="當次殖利率：每股配息 ÷ 除息前收盤">當次配</th>' +
+    '<th class="num" title="年化殖利率：每股配息 × 年配息次數 ÷ 除息前收盤">年化配</th><th>填息</th></tr></thead><tbody>';
   list.slice().reverse().forEach(function (r) {
     var b = base[r.exDate], bp = b && b.base;
     var amt = r.amount;

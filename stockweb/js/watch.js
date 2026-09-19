@@ -588,7 +588,7 @@ function renderWatchBond() {
   h += '<div class="inv-table-wrap"><table class="inv-table wt-table"><thead><tr>' +
     '<th></th>' + _wtSortTh(_wtBondSort, 'wtBondSort', 'code', '代號') + '<th>名稱</th>' +
     _wtSortTh(_wtBondSort, 'wtBondSort', 'px', '現價', 'num') + _wtSortTh(_wtBondSort, 'wtBondSort', 'amount', '每股金額', 'num') +
-    _wtSortTh(_wtBondSort, 'wtBondSort', 'mY', '月殖利率', 'num') + _wtSortTh(_wtBondSort, 'wtBondSort', 'yY', '預估年殖利率', 'num') +
+    _wtSortTh(_wtBondSort, 'wtBondSort', 'mY', '月配', 'num', '月殖利率：每股金額 ÷ 現價') + _wtSortTh(_wtBondSort, 'wtBondSort', 'yY', '預估年配', 'num', '預估年殖利率：最近一次配息 × 配息期數 ÷ 現價') +
     _wtSortTh(_wtBondSort, 'wtBondSort', 'exDate', '除息日') + _wtSortTh(_wtBondSort, 'wtBondSort', 'payDate', '發放日') +
     '</tr></thead><tbody>';
   _wtSortRows(d.rows, _wtBondSort).forEach(function (r) {
