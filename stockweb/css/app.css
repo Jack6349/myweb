@@ -926,3 +926,6 @@ td.cost-even::after  { background: var(--text3); }
 @media (max-width: 900px) { .es-detail { grid-template-columns: 1fr; } }
 .es-evt-t .es-fut td { color: var(--accent2); }
 .es-dr .es-evt { max-height: 300px; overflow-y: auto; }
+.es-dhead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.es-dcode { font-size: 17px; font-weight: 700; color: var(--accent2); }
+.es-dname { font-size: 15px; font-weight: 600; color: var(--text); }

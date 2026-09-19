@@ -592,7 +592,8 @@ function renderWatchBond() {
     _wtSortTh(_wtBondSort, 'wtBondSort', 'exDate', '除息日') + _wtSortTh(_wtBondSort, 'wtBondSort', 'payDate', '發放日') +
     '</tr></thead><tbody>';
   _wtSortRows(d.rows, _wtBondSort).forEach(function (r) {
-    h += '<tr>' +
+    var open = _wtBondOpen === r.code;
+    h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="wtBondRowClick(event,\'' + r.code + '\')">' +
       '<td>' + (have[r.code] ? '<span class="wt-dim">已關注</span>'
         : '<input type="checkbox"' + (_wtPick[r.code] ? ' checked' : '') + ' onchange="wtPick(\'' + r.code + '\',this)">') + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
@@ -606,14 +607,24 @@ function renderWatchBond() {
       '<td>' + r.exDate + '</td>' +
       '<td>' + (r.payDate || '—') + '</td>' +
     '</tr>';
+    if (open) h += '<tr class="es-drow"><td colspan="9" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="detail-note">掃描範圍：代號末碼 B 且名稱含「非投等／非投債／高收益／高息／優先／新興」者（' + _wtBondPool().length +
+    '<div class="detail-note">點列展開配息走勢與近 2 年配息紀錄（一次一列）。掃描範圍：代號末碼 B 且名稱含「非投等／非投債／高收益／高息／優先／新興」者（' + _wtBondPool().length +
     ' 檔）；投等債與公債殖利率普遍低於門檻，不掃以節省配額。預估年殖利率＝最近一次配息 × 配息期數 ÷ 現價，預設依此由高至低排序（點欄位可改，排序會記住）。' +
     '配息期數由歷次除息間隔推得；<b>標「*推定」者只有 1 筆配息紀錄</b>（新上市），依債券 ETF 慣例推定為月配，待累積第 2 筆後自動改用實際間隔。' +
     '結果與「當月已公告除息」永久存檔，進頁不重抓，按「重新篩選」才更新。</div>';
+  var keep = _wtBondOpen ? wrap.querySelector('.es-detail[data-code="' + _wtBondOpen + '"]') : null;
+  if (keep) keep.remove();
   wrap.innerHTML = h;
+  if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
   _wtPickInfo();
+}
+var _wtBondOpen = null;   // 債券 ETF 頁籤：目前展開明細的代號（一次一列）
+function wtBondRowClick(ev, code) {
+  if (ev && ev.target && ev.target.closest('button, a, input, .code-link')) return;   // 勾選框、代號連結各有用途
+  _wtBondOpen = (_wtBondOpen === code) ? null : code;
+  renderWatchBond();
 }
 
 // ── 渲染：主動式 ETF ──

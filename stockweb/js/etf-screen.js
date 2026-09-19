@@ -28,13 +28,19 @@ var ES_GROUP_LS = 'etf_screen_group_v1';   // 分類頁籤（高股息／市值�
 var _esBase = null, _esFill = {}, _esBusy = false, _esMsg = '', _esFillBusy = {};
 var _esGroup = (function () { try { var g = localStorage.getItem(ES_GROUP_LS); return /^(hy|mkt|bond)$/.test(g || '') ? g : 'hy'; } catch (e) { return 'hy'; } })();
 var _esSort = (function () {
-  try { var v = localStorage.getItem(ES_SORT_LS); if (/^(score|code|name|px|y1|yEst|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  try { var v = localStorage.getItem(ES_SORT_LS); if (/^(score|code|px|y1|yEst|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
   return 'scoreDesc';
 })();
 
 function _esVia(u, ms) {
-  return _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(u), ms || 40000).then(function (r) { return r.json(); })
-    .then(function (j) { if (j && j.error) throw new Error(j.error); return j; });
+  return _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(u), ms || 40000).then(function (r) { return r.text(); })
+    .then(function (t) {
+      var j;
+      try { j = JSON.parse(t); }
+      catch (e) { throw new Error('代理服務暫時無回應（回傳錯誤網頁）'); }   // GAS 忙碌／配額用完時回 HTML
+      if (j && j.error) throw new Error(j.error);
+      return j;
+    });
 }
 function _esNum(x) { var v = parseFloat(String(x == null ? '' : x).replace(/,/g, '')); return isNaN(v) ? null : v; }
 function _esIso(t) { return new Date(t).toISOString().slice(0, 10); }
@@ -121,9 +127,15 @@ async function _esLoadBase(force) {
   _esMsg = '讀取全市場 ETF 規模與淨值…'; renderEtfScreen();
   // GAS 偶發「無法開啟網址」→ 重試 3 次（間隔 2 秒）
   var mis = null, misErr = null;
-  for (var a = 0; a < 3 && !mis; a++) {
+  var WAITS = [2000, 4000, 8000, 8000];              // 共 5 次、最多多等約 22 秒；最後一次失敗不再等
+  for (var a = 0; a <= WAITS.length && !mis; a++) {
     try { mis = await _esVia('https://mis.twse.com.tw/stock/data/all_etf.txt'); }
-    catch (e) { misErr = e; await new Promise(function (r) { setTimeout(r, 2000); }); }
+    catch (e) {
+      misErr = e;
+      if (a === WAITS.length) break;
+      _esMsg = '讀取全市場 ETF 規模與淨值…（代理服務忙碌，' + (WAITS[a] / 1000) + ' 秒後第 ' + (a + 2) + ' 次嘗試）'; renderEtfScreen();
+      await new Promise(function (r) { setTimeout(r, WAITS[a]); });
+    }
   }
   if (!mis) throw misErr || new Error('MIS 讀取失敗');
   var list = {};
@@ -140,7 +152,9 @@ async function _esLoadBase(force) {
   _esMsg = '讀取近 12 個月除息紀錄…'; renderEtfScreen();
   var dv = await _esDivs(today);
   var base = { day: today, d0: now.day, d6: m6.day, d12: m12.day, list: list, c0: now.map, c6: m6.map, c12: m12.map, divs: dv.map };
-  if (dv.ok && now.otcOk && m6.otcOk && m12.otcOk) { try { localStorage.setItem(ES_LS, JSON.stringify({ day: today, base: base })); } catch (e) {} }
+  if (dv.ok && now.otcOk && m6.otcOk && m12.otcOk) {
+    try { localStorage.setItem(ES_LS, JSON.stringify({ day: today, base: base })); } catch (e) {}
+  }
   return base;
 }
 
@@ -328,11 +342,24 @@ function _esLiveStart() {
   if (!_esLiveTimer) _esLiveTimer = setInterval(function () { _esLiveTick(false); }, 30000);
 }
 
-var _esBasePromise = null;
+var _esBasePromise = null, _esStale = null, _esRetryTimer = null;
+// 最後一次完整成功的資料（不限日期）：今天讀取失敗時先沿用，畫面標示資料日期
+function _esLastGood() {
+  try { var c = JSON.parse(localStorage.getItem(ES_LS) || 'null'); return c && c.base ? c.base : null; } catch (e) { return null; }
+}
 function _esGetBase(force) {
   if (!force && _esBase && _esBase.day === _divTwDate().iso) return Promise.resolve(_esBase);
   if (_esBasePromise) return _esBasePromise;
-  _esBasePromise = _esLoadBase(force).then(function (b) { _esBase = b; return b; })
+  _esBasePromise = _esLoadBase(force).then(function (b) { _esBase = b; _esStale = null; return b; })
+    .catch(function (e) {
+      var old = _esLastGood();
+      if (!old) throw e;
+      _esBase = old; _esStale = old.day;
+      // 2 分鐘後自動再試一次（使用者不用自己按重新整理）
+      clearTimeout(_esRetryTimer);
+      _esRetryTimer = setTimeout(function () { _esStale && startEtfScreen(false); }, 120000);
+      return old;
+    })
     .finally(function () { _esBasePromise = null; });
   return _esBasePromise;
 }
@@ -346,7 +373,7 @@ async function startEtfScreen(force) {
     _esLiveStart();
     await _esLoadExtra();
   } catch (e) {
-    _esMsg = '讀取失敗：' + e.message + '（GAS 忙碌時請稍後按「重新整理」）';
+    _esMsg = '讀取失敗：' + e.message + '（稍後按「↻ 重新整理」再試）';
   } finally { _esBusy = false; renderEtfScreen(); }
 }
 // 前 30 名的填息與費用（切換分類時也會呼叫）
@@ -374,7 +401,6 @@ var ES_COLS = [
   // key, 標題, 格式, 說明
   ['rank', '#', 'int', '綜合排名'],
   ['code', '代號', 'code', ''],
-  ['name', '名稱', 'txt', ''],
   ['score', '綜合', 'f1', '各指標同類百分位加權：一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5'],
   ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）；殖利率、成長率、折溢價跟著現價重算，排名維持開頁時的計算'],
   ['y1', '單次殖利率', 'pct', '最近一次配息 ÷ 現價'],
@@ -422,6 +448,7 @@ function renderEtfScreen() {
     return '<button class="tx-subtab' + (g.key === _esGroup ? ' active' : '') + '" onclick="esSetGroup(\'' + g.key + '\')">' + g.label + '</button>';
   }).join('') +
     '<button class="btn-query" onclick="startEtfScreen(true)">↻ 重新整理</button>' +
+    (_esStale ? '<span class="es-info swap-warn">今日資料讀取失敗（代理服務忙碌），暫用 ' + _esStale.slice(5).replace('-', '/') + ' 的資料，2 分鐘後自動重試</span>' : '') +
     '<span class="es-info">' + (_esMsg || (_esBase ? '資料日 ' + (_esBase.d0 || '—') + '（半年前 ' + (_esBase.d6 || '—') + '、一年前 ' + (_esBase.d12 || '—') + '）' +
       (_esLiveAt ? '｜現價更新 ' + _esLiveAt : '') + '｜點列展開配息與走勢' : '')) + '</span></div>';
   if (!_esBase) { wrap.innerHTML = h + '<div class="modal-loading">' + (_esMsg || '讀取中…') + '</div>'; return; }
@@ -446,7 +473,7 @@ function renderEtfScreen() {
     var v = r[c[0]];
     switch (c[2]) {
       case 'int': return v;
-      case 'code': return '<span class="code-link" title="看線圖" onclick="openChartPop(\'' + v + '\')">' + v + '</span>' +
+      case 'code': return '<span class="code-link" title="' + (r.name || '').replace(/"/g, '&quot;') + '（點代號看線圖，點列展開配息明細）" onclick="openChartPop(\'' + v + '\')">' + v + '</span>' +
         (held[v] > 0 ? '<span class="es-tag es-held" title="目前持有">持</span>' : '') + (watched[v] ? '<span class="es-tag es-watch" title="已在關注清單">關</span>' : '');
       case 'txt': return v || '';
       case 'f1': return v == null ? dim('—') : '<b>' + v.toFixed(1) + '</b>';
@@ -603,11 +630,20 @@ function _esFitDetail(slot, det, tries) {
 window.addEventListener('resize', function () {
   document.querySelectorAll('.es-detail').forEach(function (d) { var sl = d.closest('.es-dslot'); if (sl) _esFitDetail(sl, d); });
 });
+// 名稱來源：評比資料（官方短名）→ 合約 → 關注清單的合約索引
+function _esNameOf(code) {
+  var c0 = _esBase && _esBase.c0[code];
+  if (c0 && c0.n) return c0.n;
+  if (typeof _contracts !== 'undefined' && _contracts[code] && _contracts[code].name) return _contracts[code].name;
+  var f = (typeof _wtIdx !== 'undefined' && _wtIdx || []).filter(function (x) { return x.c === code; })[0];
+  return f ? f.n : '';
+}
 function esMountDetail(slot, keep) {
   if (!slot) return;
   var code = slot.getAttribute('data-code');
   if (keep && keep.getAttribute('data-code') === code) { slot.appendChild(keep); _esFitDetail(slot, keep); return; }
   slot.innerHTML = '<div class="es-detail" data-code="' + code + '">' +
+    '<div class="es-dhead"><span class="es-dcode">' + code + '</span><span class="es-dname">' + _esNameOf(code) + '</span></div>' +
     '<div class="es-dl"><div class="es-dtitle">配息走勢（近 2 年）</div><div class="divest-hist" data-code="' + code + '"><div class="modal-loading">讀取配息紀錄…</div></div></div>' +
     '<div class="es-dr"><div class="es-dtitle">配息紀錄（近 2 年，新→舊）</div><div class="es-evt"><div class="modal-loading">讀取配息紀錄…</div></div></div>' +
   '</div>';
