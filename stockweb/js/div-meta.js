@@ -73,17 +73,30 @@ async function _divManSave(code, rec) {
 }
 
 // ── MoneyDJ 配息頻率（同源靜態檔，開頁讀一次）──
-var _divMdj = {}, _divMdjDay = null;
+var _divMdj = {}, _divMdjDay = null, _divMdjLoaded = false;
+var DIV_MDJ_STALE_DAYS = 40;   // 每月 1 號排程更新；超過 40 天＝至少漏了一次（抓取或上傳失敗）
 (function () {
   fetch('data/etf-freq.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    _divMdjLoaded = true;
+    if (typeof renderDivMeta === 'function' && document.getElementById('divmeta-info')) renderDivMeta();
     if (!j || !j.map) return;
     Object.keys(j.map).forEach(function (c) { var s = j.map[c] && j.map[c].s; if (s) _divMdj[c] = s; });
     _divMdjDay = j.updated || null;
     // 比頁面其他資料晚到時：已算好的 ETF 評比指標重算一次（股利估算下次載入即採用）
     if (typeof _esAllMapBase !== 'undefined') _esAllMapBase = null;
     if (typeof renderEtfScreen === 'function') renderEtfScreen();
-  }).catch(function () {});
+  }).catch(function () { _divMdjLoaded = true; });
 })();
+// 配息資料頁頂端的資料日提示：正常＝綠、超過 40 天或讀不到＝黃字提醒手動執行
+function _divMdjPill() {
+  if (!_divMdjLoaded) return '';
+  var fix = '請在電腦上執行 shioaji-server\\etf-freq.cmd（約 4 分鐘，完成後重新整理本頁）；執行紀錄見 etf-freq.log';
+  if (!_divMdjDay) return '<span class="st-pill st-part" title="' + fix + '">讀不到 MoneyDJ 配息頻率資料（data/etf-freq.json），請執行 etf-freq.cmd</span>';
+  var age = Math.floor((Date.parse(_divTwDate().iso) - Date.parse(_divMdjDay)) / 86400000);
+  var d = _divMdjDay.slice(5).replace('-', '/');
+  if (age > DIV_MDJ_STALE_DAYS) return '<span class="st-pill st-part" title="' + fix + '">MoneyDJ 頻率資料 ' + d + '（已 ' + age + ' 天未更新），請執行 etf-freq.cmd</span>';
+  return '<span class="st-pill st-ok" title="每月 1 號 08:00 自動更新（Windows 排程）">MoneyDJ 頻率資料 ' + d + '</span>';
+}
 
 // ── 配息頻率（全站共用入口）──
 function _divFreqSource(code) {
@@ -266,7 +279,7 @@ function renderDivMeta() {
     ? '<span class="st-pill st-ok">手動輸入存於雲端（Firestore）</span>'
     : '<span class="st-pill st-part" title="' + esc(_divManErr) + '">手動輸入暫存本機（' + esc(_divManErr || 'Firestore 未連線') + '）</span>';
   var info = document.getElementById('divmeta-info');
-  if (info) info.innerHTML = store;
+  if (info) info.innerHTML = store + ' ' + _divMdjPill();
 
   var h = '<div class="inv-table-wrap"><table class="inv-table dm-table"><thead><tr>' +
     '<th>狀態</th><th>代號</th><th>名稱</th><th>分類</th>' +
@@ -364,7 +377,7 @@ function renderDivMeta() {
     '<div class="divest-note">' +
     '<span class="dm-lv dm-lv-red"></span> 頻率靠推定，需確認　<span class="dm-lv dm-lv-yellow"></span> 由除息紀錄推算　' +
     '<span class="dm-lv dm-lv-green"></span> 官方或手動　<span class="dm-lv dm-lv-gray"></span> 不配息。' +
-    '官方規格：上市＝TWSE、上櫃＝TPEx「ETF 商品資訊」，每 30 天更新一次。' +
+    '配息頻率優先採 MoneyDJ（每月 1 號自動更新，資料日見上方）；官方規格：上市＝TWSE、上櫃＝TPEx「ETF 商品資訊」，每 30 天更新一次。' +
     '配息頻率、管理費、保管費可手動輸入，會覆蓋官方值；清空即回到自動。「下次除息」欄可手動補登投信已公告、官方尚未收錄的除息日（金額與發放日可省略）。</div>';
   wrap.innerHTML = h;
 }
