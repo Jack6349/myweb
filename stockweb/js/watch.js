@@ -367,9 +367,12 @@ function wtShowTab(tab) {
 }
 
 // ── 候選池（依代號末碼分類；債券再以名稱鎖定高息類，避免掃描投等債/公債浪費配額）──
-var WT_HY_RE = /非投等|非投債|高收益|高息|優先|新興/;
+// 債券 ETF：末碼 B＝被動、D＝主動（00984D 主動聯博全球非投等）。
+// 合約名稱最長 8 字會被截斷（「主動聯博全球非投」後面的「等債」被切掉）→ 關鍵字用短前綴「非投」「高收」。
+var WT_HY_RE = /非投|高收|高息|優先|新興/;
+// 主動式（D）檔數少，全部掃描（投等、收益型也列入，由年殖利率門檻決定去留）；被動式（B）上百檔，仍只掃高收益類以節省配額
 function _wtBondPool() {
-  return (_wtIdx || []).filter(function (x) { return /^00\d+B$/.test(x.c) && WT_HY_RE.test(x.n); });
+  return (_wtIdx || []).filter(function (x) { return /^00\d+D$/.test(x.c) || (/^00\d+B$/.test(x.c) && WT_HY_RE.test(x.n)); });
 }
 function _wtActPool() {
   return (_wtIdx || []).filter(function (x) { return /^00\d+A$/.test(x.c); });
@@ -610,8 +613,8 @@ function renderWatchBond() {
     if (open) h += '<tr class="es-drow"><td colspan="9" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="detail-note">點列展開配息走勢與近 2 年配息紀錄（一次一列）。掃描範圍：代號末碼 B 且名稱含「非投等／非投債／高收益／高息／優先／新興」者（' + _wtBondPool().length +
-    ' 檔）；投等債與公債殖利率普遍低於門檻，不掃以節省配額。預估年殖利率＝最近一次配息 × 配息期數 ÷ 現價，預設依此由高至低排序（點欄位可改，排序會記住）。' +
+    '<div class="detail-note">點列展開配息走勢與近 2 年配息紀錄（一次一列）。掃描範圍：代號末碼 D（主動式債券）全部，加上末碼 B（被動式）且名稱含「非投／高收／高息／優先／新興」者（' + _wtBondPool().length +
+    ' 檔）；被動式投等債與公債檔數多、殖利率普遍低於門檻，不掃以節省配額。預估年殖利率＝最近一次配息 × 配息期數 ÷ 現價，預設依此由高至低排序（點欄位可改，排序會記住）。' +
     '配息期數由歷次除息間隔推得；<b>標「*推定」者只有 1 筆配息紀錄</b>（新上市），依債券 ETF 慣例推定為月配，待累積第 2 筆後自動改用實際間隔。' +
     '結果與「當月已公告除息」永久存檔，進頁不重抓，按「重新篩選」才更新。</div>';
   var keep = _wtBondOpen ? wrap.querySelector('.es-detail[data-code="' + _wtBondOpen + '"]') : null;
