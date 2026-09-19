@@ -397,15 +397,19 @@ function esSortCol(key) {
   renderEtfScreen();
 }
 
+// 填息率顯示：「(4/4) 100%」次數在前、比例固定寬度靠右，各列的 % 才會上下對齊
+function _esFillTxt(r) {
+  return '<span class="dm-dim">(' + r.fillN + ')</span><span class="es-fpct">' + r.fill.toFixed(0) + '%</span>';
+}
 var ES_COLS = [
   // key, 標題, 格式, 說明
   ['rank', '#', 'int', '綜合排名'],
   ['code', '代號', 'code', ''],
   ['score', '綜合', 'f1', '各指標同類百分位加權：一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5'],
   ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）；殖利率、成長率、折溢價跟著現價重算，排名維持開頁時的計算'],
-  ['y1', '單次殖利率', 'pct', '最近一次配息 ÷ 現價'],
-  ['yEst', '預估年殖利率', 'pct', '最近一次配息 × 年配息次數 ÷ 現價'],
-  ['y12', '近12月殖利率', 'pct', '近 12 個月實際配息合計 ÷ 現價'],
+  ['y1', '單次配', 'pct', '單次殖利率：最近一次配息 ÷ 現價'],
+  ['yEst', '預估年配', 'pct', '預估年殖利率：最近一次配息 × 年配息次數 ÷ 現價'],
+  ['y12', '近12月配', 'pct', '近 12 個月殖利率：近 12 個月實際配息合計 ÷ 現價'],
   ['fill', '填息率', 'fill', '近 12 個月：已填息次數 ÷ 除息次數（除息後收盤回到除息前收盤即算填息）'],
   ['fillDays', '平均填息', 'days', '已填息者平均花幾個交易日'],
   ['g6', '半年價格', 'sgn', '不含配息的價格變化：負值代表本金被侵蝕'],
@@ -479,7 +483,7 @@ function renderEtfScreen() {
       case 'f1': return v == null ? dim('—') : '<b>' + v.toFixed(1) + '</b>';
       case 'f2': return v == null ? dim('—') : v.toFixed(2);
       case 'pct': return v == null ? dim('—') : v.toFixed(2) + '%';
-      case 'fill': return v == null ? (_esFillBusy[r.code] || (_esMsg && /填息/.test(_esMsg)) ? '<span class="const-spin"></span>' : dim('—')) : v.toFixed(0) + '%' + dim('（' + r.fillN + '）');
+      case 'fill': return v == null ? (_esFillBusy[r.code] || (_esMsg && /填息/.test(_esMsg)) ? '<span class="const-spin"></span>' : dim('—')) : _esFillTxt(r);
       case 'days': return v == null ? dim('—') : v.toFixed(1) + ' 天';
       case 'sgn': return sg(v);
       case 'size': return v == null ? dim('—') : Math.round(v).toLocaleString('zh-TW');
@@ -598,7 +602,7 @@ function esWatchCells(code) {
   var cell = {
     score: r.grpRank ? r.grpLabel + ' <b>' + r.grpRank + '</b>' + dim('/' + r.grpN) : dim(r.grpLabel + '（未滿一年）'),
     y1: pct(r.y1), yEst: pct(r.yEst), y12: pct(r.y12),
-    fill: r.fill == null ? (_esFillBusy[r.code] ? '<span class="const-spin"></span>' : dim('—')) : r.fill.toFixed(0) + '%' + dim('（' + r.fillN + '）'),
+    fill: r.fill == null ? (_esFillBusy[r.code] ? '<span class="const-spin"></span>' : dim('—')) : _esFillTxt(r),
     fillDays: r.fillDays == null ? dim('—') : r.fillDays.toFixed(1) + ' 天',
     g6: sg(r.g6), g12: sg(r.g12), tr6: sg(r.tr6), tr12: sg(r.tr12),
     size: r.size == null ? dim('—') : Math.round(r.size).toLocaleString('zh-TW'),

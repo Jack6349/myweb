@@ -654,7 +654,8 @@ function renderWatchAct() {
     sh('r1', '近1月') + sh('r3', '近3月') + sh('rAll', '成立以來') +
     sh('days', '資料天數', 'num', 'Yahoo 可取得的交易日數，越短代表上市越新') + '</tr></thead><tbody>';
   _wtSortRows(d.rows, _wtActSort).forEach(function (r) {
-    h += '<tr>' +
+    var open = _wtActOpen === r.code;
+    h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="wtActRowClick(event,\'' + r.code + '\')">' +
       '<td>' + (have[r.code] ? '<span class="wt-dim">已關注</span>'
         : '<input type="checkbox"' + (_wtPick[r.code] ? ' checked' : '') + ' onchange="wtPick(\'' + r.code + '\',this)">') + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
@@ -665,11 +666,21 @@ function renderWatchAct() {
       '<td class="num"><b>' + pct(r.rAll) + '</b></td>' +
       '<td class="num' + (r.days < 60 ? ' swap-warn' : '') + '">' + r.days + '</td>' +
     '</tr>';
+    if (open) h += '<tr class="es-drow"><td colspan="8" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="detail-note">報酬以 Yahoo 日收盤價計（主動式 ETF 目前多未配息或配息少，價格報酬≈總報酬）。' +
+    '<div class="detail-note">點列展開配息走勢與近 2 年配息紀錄（一次一列）。報酬以 Yahoo 日收盤價計（主動式 ETF 目前多未配息或配息少，價格報酬≈總報酬）。' +
     '<b>務必同時看「資料天數」</b>：主動式 ETF 多為新上市，49 天的報酬與 194 天的報酬不可直接比較；天數不足者近1月/近3月顯示「—」。' +
     '點欄位可排序（再點一次反向，排序會記住），預設依成立以來由高至低。每日快取，按「重新計算」強制更新。</div>';
+  var keep = _wtActOpen ? wrap.querySelector('.es-detail[data-code="' + _wtActOpen + '"]') : null;
+  if (keep) keep.remove();
   wrap.innerHTML = h;
+  if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
   _wtPickInfo();
+}
+var _wtActOpen = null;   // 主動式 ETF 頁籤：目前展開明細的代號（一次一列）
+function wtActRowClick(ev, code) {
+  if (ev && ev.target && ev.target.closest('button, a, input, .code-link')) return;
+  _wtActOpen = (_wtActOpen === code) ? null : code;
+  renderWatchAct();
 }
