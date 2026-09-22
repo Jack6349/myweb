@@ -359,11 +359,11 @@ async function openTradeDetail(code, detailId) {
     var html = '<div class="detail-scroll"><table class="detail-table"><thead><tr>' +
       '<th>買進日</th><th>張</th><th class="num">買價</th><th class="num">單筆成本</th><th class="num">現值</th>' +
       '<th class="num">未實現損益</th><th class="num">已配息</th><th class="num">手續費</th></tr></thead><tbody>';
-    var ov = (typeof COST_OVERRIDES !== 'undefined' && COST_OVERRIDES[String(code)]) || null;
     rows.forEach(function (d) {
       var lp = d.last_price != null ? d.last_price : 0;
-      // 銀行認購成本補正：券商端 price=0 的筆改用實際付出成本顯示，損益同步扣回
-      var adj = (d.price === 0 && ov && ov[d.date] != null) ? ov[d.date] : 0;
+      // 認購成本補正（參數設定頁維護）：券商端 price=0 的筆用「每股認購價 × 股數」還原成本，損益同步扣回
+      var cpx = (d.price === 0 && typeof coGet === 'function') ? coGet(code, d.date) : null;
+      var adj = cpx != null ? cpx * d.quantity * 1000 : 0;
       var dCost = d.price + adj, dPnl = (d.pnl || 0) - adj;
       var buyPx = d.quantity ? dCost / (d.quantity * 1000) : null; // 每股買價 = 單筆成本 / 股數
       totQ += d.quantity; totCost += dCost; totPnl += dPnl; totDiv += (d.ex_dividends || 0);

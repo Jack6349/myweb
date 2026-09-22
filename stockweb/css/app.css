@@ -447,6 +447,12 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .params-src { font-size: 12px; color: var(--text2); margin-left: 8px; }
 .params-import-btn:disabled { opacity: .4; cursor: not-allowed; }
 
+/* 認購成本補正（參數設定） */
+.params-co-head { display: flex; align-items: center; margin: 4px 2px 10px; }
+.params-co-sub { font-size: 12px; color: var(--text3); margin: 14px 2px 6px; }
+.params-co-px { width: 84px; padding: 4px 6px; text-align: right; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 13px; }
+
 /* ── 股利估算 ── */
 .divest-topbar { display: flex; align-items: center; gap: 10px 22px; flex-wrap: wrap; background: var(--bg2); border-bottom: 1px solid var(--border); margin: -14px calc(50% - 50vw) 12px; padding: 8px calc(50vw - 50%); overflow-x: auto; }
 .divest-sumline { display: inline-flex; align-items: center; gap: 22px; }
@@ -561,6 +567,13 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-bond-item { margin-bottom: 12px; max-width: 640px; }
 .rs-bond-code { font-size: 14px; font-weight: 700; color: var(--accent2); margin-bottom: 4px; }
 .rs-bond-name { font-size: 12px; font-weight: 400; color: var(--text2); }
+
+/* 表二：非投等債（每月基本收入） */
+.rs-b-table th { white-space: nowrap; }
+.rs-b-name { font-size: 11px; font-weight: 400; color: var(--text2); }
+.rs-b-swap { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--accent2); color: #000; font-weight: 700; }
+.rs-b-pend { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--text3); margin-left: 4px; }
+.dm-dim { color: var(--text3); font-size: 11px; }
 .rs-bond-list { margin: 0; padding-left: 22px; font-size: 13px; color: var(--text); line-height: 1.9; }
 .rs-bond-list li { padding-left: 2px; }
 

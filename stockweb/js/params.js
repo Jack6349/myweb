@@ -3,6 +3,7 @@
 // 匯入格式後續實作；之後其他需手動匯入的資料也集中放在本頁新增區塊。
 
 async function startParams(force) {
+  if (typeof renderCostOverride === 'function') renderCostOverride(force);   // 認購成本補正區塊（獨立載入，不擋成份股清單）
   var el = document.getElementById('params-const-body');
   el.innerHTML = '<div class="modal-loading">整理需匯入清單…</div>';
   try {

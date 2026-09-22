@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=184">
+<link rel="stylesheet" href="css/app.css?v=186">
 </head>
 <body>
 
@@ -304,6 +304,16 @@
       <div class="tx-box-head"><span class="tx-box-title">成份股匯入</span>
         <button class="btn-query tx-refresh" onclick="startParams(true)">↻ 重新整理</button></div>
       <div id="params-const-body"></div>
+    </div>
+    <div class="tx-box">
+      <div class="tx-box-head"><span class="tx-box-title">認購成本補正</span>
+        <button class="btn-query tx-refresh" onclick="renderCostOverride(true)">↻ 重新掃描</button></div>
+      <div id="params-cost-body"></div>
+      <div class="tx-note">銀行或發行商<b>認購後匯撥</b>進來的股票不是在本券商成交，券商端建倉明細的成本會是 0，
+        那筆的現值會被整筆當成獲利，持股總成本、均價、損益率與頂欄獲利率都會失真。
+        在此填入<b>每股認購價</b>（例 10.00）即可還原。存每股價而非總成本，是因為同一天可能拆成多筆入帳
+        （例 00407A 分 4 張＋6 張），存總成本會對每筆各加一次。
+        設定只在建倉明細仍有「同日、券商端成本 0」的批次時生效；該批次賣出或券商補登成本後自動失效，狀態會顯示「未對應」。</div>
       <div class="tx-note">僅列出自動來源（MoneyDJ/CMoney）抓不到、需手動維護清單的 ETF（境外/主動式）。匯入格式規劃中；目前更新方式：從 CMoney「持股明細」頁複製後由開發端更新 HOLDINGS_OVERRIDES。「今日尚未嘗試自動抓取」的 ETF 不列出，進過持股庫存後狀態才會更新。</div>
     </div>
   </div>
@@ -368,26 +378,28 @@
 <script src="js/auth.js?v=10"></script>
 <script src="js/broker.js?v=18"></script>
 <script src="js/fill-toast.js?v=6"></script>
-<script src="js/stream.js?v=74"></script>
+<script src="js/stream.js?v=76"></script>
 <script src="js/nav-usage.js?v=2"></script>
 <script src="js/daily-refresh.js?v=1"></script>
 <script src="js/category.js?v=1"></script>
-<script src="js/inventory.js?v=78"></script>
+<script src="js/inventory.js?v=80"></script>
 <script src="js/constituents.js?v=12"></script>
 <script src="js/live.js?v=49"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=16"></script>
 <script src="js/sbl.js?v=12"></script>
-<script src="js/params.js?v=2"></script>
+<script src="js/cost-override.js?v=1"></script>
+<script src="js/params.js?v=3"></script>
 <script src="js/topconst.js?v=7"></script>
 <script src="js/watch.js?v=21"></script>
 <script src="js/etf-screen.js?v=20"></script>
 <script src="js/chart.js?v=20"></script>
+<script src="js/div-mix.js?v=1"></script>
 <script src="js/div-meta.js?v=11"></script>
 <script src="js/dividend-est.js?v=54"></script>
 <script src="js/swap.js?v=31"></script>
 <script src="js/refill.js?v=18"></script>
-<script src="js/risk-score.js?v=12"></script>
+<script src="js/risk-score.js?v=16"></script>
 <script src="js/news.js?v=39"></script>
 <script src="js/trend.js?v=32"></script>
 <script src="js/signals.js?v=27"></script>

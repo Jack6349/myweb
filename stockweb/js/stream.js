@@ -13,9 +13,8 @@ var _totalCost = 0;    // 總付出成本（元）
 var _feedReady = null; // ensureFeed 的 Promise（避免重複初始化）
 var STREAM_OTHER_N = 15; // 即時行情下段「其他主要成分股」檔數（依曝險）
 
-// 券商端成本=0的入帳（如銀行認購後匯入，非本券商成交）：code → { 入帳日: 實際付出成本(元) }
-// 只在建倉明細確實存在「同日、price=0」的筆時才套用；該筆賣出或券商補登成本後自動失效
-var COST_OVERRIDES = { '00407A': { '2026-06-23': 100000 } }; // 往來銀行認購10張，0手續費
+// 券商端成本=0的入帳（銀行／發行商認購後匯撥，非本券商成交）由「參數設定 → 認購成本補正」維護，
+// 查詢走 cost-override.js 的 coGet(code, 入帳日)，回每股認購價。
 
 // ── 檢視切換 ──
 var VIEW_TITLES = { stream: '即時行情', inv: '持股庫存', divest: '股利估算', txinfo: '交易資訊', live: '即時持股', news: '新聞情勢', trend: '趨勢評估', signals: '籌碼淨值', alerts: '停損停利', risk: '加減碼報告', params: '參數設定', topconst: '成分股曝險', watch: '關注股票' };
@@ -208,15 +207,15 @@ async function loadBrokerPositionsFull(say) {
     // 銀行認購成本補正：券商端該筆 price=0（成本沒登錄），把實際付出成本加回總成本並修正均價/損益
     for (var y = 0; y < _positions.length; y++) {
       var py = _positions[y];
-      var ov = COST_OVERRIDES[String(py.code)];
-      if (!ov || py.id == null) continue;
+      if (py.id == null || typeof coGet !== 'function') continue;
       try {
         var dets = await fetchPositionDetail(py.id);
         var add = 0, sumCost = 0;
         (dets || []).forEach(function (d) {
           if (d.quantity > 0) {
             sumCost += (d.price || 0);
-            if (d.price === 0 && ov[d.date] != null) add += ov[d.date];
+            var cpx = d.price === 0 ? coGet(py.code, d.date) : null;
+            if (cpx != null) add += cpx * d.quantity * 1000;
           }
         });
         if (add > 0) {

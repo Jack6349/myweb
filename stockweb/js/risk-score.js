@@ -5,12 +5,12 @@
 
 // ── 門檻常數（回測校準後改這裡即可） ──
 var RS_TH = {
-  vix:    [20, 25],    // 絕對值：<20→0, 20~25→1, >25→2
-  vixChg: [10, 20],    // 單日漲幅%（只計上升）
-  yield:  [1, 2],      // 美10年債殖利率單日變化%（絕對值）
-  dxy:    [0.5, 1],    // 美元指數單日變化%（絕對值）
-  equity: [2, 4],      // 費半/Nasdaq 單日跌幅%（取較大者）
-  night:  [1, 3]       // 台指期夜盤跌幅%
+  vix:    [20, 25],     // VIX 水準（絕對值）
+  vix5:   [20, 50],     // VIX 近 5 日累計漲幅%（只計上升）
+  oas:    [3.5, 5.0],   // 非投等債信用利差 OAS 水準%
+  oas20:  [0.3, 0.8],   // OAS 近 20 日變化（百分點，只計走闊）
+  dd:     [8, 15],      // 台股距近一年高點回檔%
+  night:  [1, 3]        // 台指期夜盤跌幅%
 };
 // 股債同向重挫旗標：股市跌幅≥且美10年債殖利率同步漲幅≥（兩者皆達極端 → 傳統對沖失效）
 var RS_FLAG = { equityDrop: 4, yieldUp: 2 };
@@ -114,7 +114,7 @@ async function _rsBondNav(code) {
   } catch (e) {}
   return null;
 }
-// 成交量：Shioaji 日 kbars → 當日量 vs 近90日中位數（需 broker session）
+// 成交量比：當日量 vs 近 90 日中位數（换股試算的「換手品質」仍在用，見 swap.js _swapQualEnsure）
 async function _rsBondVol(code) {
   try {
     if (typeof _chartFetchDay !== 'function') return null;
@@ -129,6 +129,23 @@ async function _rsBondVol(code) {
   } catch (e) { return null; }
 }
 
+// 近 20 個交易日的日均成交金額（中位數，元）：流動性用金額而非張數，不同價位的 ETF 才能相比。
+// 不含當日：盤中查看時當日量是累計中，會嚴重低估。需要 broker session（Shioaji 日 kbars）。
+async function _rsBondLiq(code) {
+  try {
+    if (typeof _chartFetchDay !== 'function') return null;
+    var bars = await _chartFetchDay(code);
+    if (!bars || bars.length < 5) return null;
+    var recent = bars.slice(-21, -1);
+    if (!recent.length) recent = bars.slice(-20);
+    var a = recent.map(function (b) { return b.v * b.c * 1000; }).filter(function (v) { return v > 0; });
+    if (!a.length) return null;
+    a.sort(function (x, y) { return x - y; });
+    var n = a.length;
+    return { med: n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2, days: n };
+  } catch (e) { return null; }
+}
+
 async function startRiskReport(force) {
   var wrap = document.getElementById('risk-wrap');
   var info = document.getElementById('risk-info');
@@ -140,63 +157,68 @@ async function startRiskReport(force) {
   }
 
   var res = await Promise.all([
-    _rsYahoo('^VIX'), _rsYahoo('^TNX'), _rsYahoo('DX-Y.NYB'),
-    _rsYahoo('^SOX'), _rsYahoo('^IXIC'), _rsNight()
+    _rsYahoo('^VIX'), _rsYahoo('^TNX'), _rsYahoo('^SOX'), _rsYahoo('^IXIC'),
+    _rsNight(), _rsOAS(), _rsBars1y('^TWII')
   ]);
-  var vix = res[0], tnx = res[1], dxy = res[2], sox = res[3], ndx = res[4], night = res[5];
+  var vix = res[0], tnx = res[1], sox = res[2], ndx = res[3], night = res[4], oas = res[5];
+  var twRange = _rsRange(res[6]);
 
   // 帶正負號顯示（漲跌都可能，非只跌）
   var sp = function (v, d) { return v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d) + '%'; };
-  // 費半/Nasdaq 取「較弱者」（最負）當代表值；跌幅用於評分
+  // 費半/Nasdaq 取「較弱者」（最負）當代表值；僅供股債同向重挫旗標判定
   var soxC = sox ? sox.chg : null, ndxC = ndx ? ndx.chg : null;
   var equityWorst = (soxC != null && ndxC != null) ? Math.min(soxC, ndxC) : (soxC != null ? soxC : ndxC);
   var equityDrop = equityWorst != null ? Math.max(0, -equityWorst) : null;
   var nightChg = night && night.chg != null ? night.chg : null;
   var nightDrop = nightChg != null ? Math.max(0, -nightChg) : null;
-  var vixUp = vix && vix.chg != null ? Math.max(0, vix.chg) : null;
+  var vix5 = vix && vix.pct5 != null ? Math.max(0, vix.pct5) : null;
+  var twDrop = twRange && twRange.dd != null ? Math.max(0, -twRange.dd) : null;
 
+  // 六項「狀態型」指標。舊版六項全是單日變化，抓到的是雜訊級事件；
+  // 系統性風險是持續數日到數週的狀態，用單日變化當觸發會讓核心部位被雜訊反覆打斷。
   var rows = [
-    { k: 'VIX 絕對值', desc: _rsDesc('市場避險情緒', RS_TH.vix, '', ['平穩', '升溫', '濃厚']), val: vix ? vix.value.toFixed(2) : '—', score: vix ? _rsScore(vix.value, RS_TH.vix) : null },
-    { k: 'VIX 單日變化', desc: _rsDesc('恐慌情緒單日升幅', RS_TH.vixChg, '%', ['平穩', '升溫', '急升']), val: vix ? sp(vix.chg, 1) : '—', score: _rsScore(vixUp, RS_TH.vixChg) },
-    { k: '美10年債殖利率變化', desc: _rsDesc('利率環境單日變動', RS_TH.yield, '%', ['平穩', '波動', '劇烈']), val: tnx ? sp(tnx.chg, 2) : '—', score: tnx && tnx.chg != null ? _rsScore(Math.abs(tnx.chg), RS_TH.yield) : null },
-    { k: '美元指數變化', desc: _rsDesc('資金避險流向單日變動', RS_TH.dxy, '%', ['平穩', '波動', '劇烈']), val: dxy ? sp(dxy.chg, 2) : '—', score: dxy && dxy.chg != null ? _rsScore(Math.abs(dxy.chg), RS_TH.dxy) : null },
-    { k: '費半/Nasdaq 變化（取較弱）', desc: _rsDesc('科技股單日跌幅', RS_TH.equity, '%', ['平穩', '下挫', '重挫']), val: equityWorst != null ? sp(equityWorst, 2) : '—', score: _rsScore(equityDrop, RS_TH.equity) },
-    { k: '台指期夜盤變化', desc: _rsDesc('台股隔夜跌幅', RS_TH.night, '%', ['平穩', '下挫', '重挫']), val: nightChg != null ? sp(nightChg, 2) : '—', score: _rsScore(nightDrop, RS_TH.night) }
+    { k: 'VIX 水準', desc: _rsDesc('市場避險情緒', RS_TH.vix, '', ['平穩', '升溫', '濃厚']),
+      val: vix ? vix.value.toFixed(2) : '—', score: vix ? _rsScore(vix.value, RS_TH.vix) : null },
+    { k: 'VIX 近 5 日變化', desc: _rsDesc('恐慌情緒五日累計升幅', RS_TH.vix5, '%', ['平穩', '升溫', '急升']),
+      val: vix && vix.pct5 != null ? sp(vix.pct5, 1) : '—', score: _rsScore(vix5, RS_TH.vix5) },
+    { k: '信用利差 OAS 水準', desc: _rsDesc('非投等債要求的風險補償', RS_TH.oas, '%', ['寬鬆', '轉緊', '緊縮']),
+      val: oas ? oas.value.toFixed(2) + '%' : '—', score: oas ? _rsScore(oas.value, RS_TH.oas) : null },
+    { k: 'OAS 近 20 日變化', desc: _rsDesc('信用環境近月走向', RS_TH.oas20, 'pp', ['持平', '走闊', '急擴']),
+      val: oas && oas.d20 != null ? (oas.d20 > 0 ? '+' : '') + oas.d20.toFixed(2) + 'pp' : '—',
+      score: oas && oas.d20 != null ? _rsScore(Math.max(0, oas.d20), RS_TH.oas20) : null },
+    { k: '台股距一年高點', desc: _rsDesc('大盤回檔幅度', RS_TH.dd, '%', ['高檔', '回檔', '深跌']),
+      val: twRange && twRange.dd != null ? sp(twRange.dd, 1) : '—', score: _rsScore(twDrop, RS_TH.dd) },
+    { k: '台指期夜盤變化', desc: _rsDesc('台股隔夜跌幅', RS_TH.night, '%', ['平穩', '下挫', '重挫']),
+      val: nightChg != null ? sp(nightChg, 2) : '—', score: _rsScore(nightDrop, RS_TH.night) }
   ];
 
   var total = 0, avail = 0;
   rows.forEach(function (r) { if (r.score != null) { total += r.score; avail++; } });
 
-  // 債券型信用風險子模組資料（美股端 HYG/JNK/OAS ＋ 各檔折溢價/量）；與股票區塊獨立、不影響總分
-  var bCodes = _rsBondHoldings();                     // 持股中的非投等債 ETF（檔數隨持股變動）
-  var bd = await Promise.all(
-    [_rsYahoo('HYG'), _rsYahoo('JNK'), _rsOAS()]
-      .concat(bCodes.map(_rsBondNav))
-      .concat(bCodes.map(_rsBondVol))
-  );
-  var bn = bCodes.length;
-  var bond = { hyg: bd[0], jnk: bd[1], oas: bd[2], tnx: tnx, codes: bCodes,
-    nav: bd.slice(3, 3 + bn), vol: bd.slice(3 + bn, 3 + 2 * bn) };
-
-  // 股債同向重挫旗標
+  // 股債同向重挫旗標：股跌且殖利率同步大漲＝傳統對沖失效，直接跳紅燈
   var flag = (equityDrop != null && tnx && tnx.chg != null && equityDrop >= RS_FLAG.equityDrop && tnx.chg >= RS_FLAG.yieldUp);
 
-  // 動作對照
-  var verdict, vColor;
-  if (flag) { verdict = '🔴 股債齊跌，暫停加碼'; vColor = 'var(--up)'; }
-  else if (total >= 7) { verdict = '🔴 暫停加碼，等分數回落'; vColor = 'var(--up)'; }
-  else if (total >= 4) { verdict = '🟡 加碼額度減半，或延後一日確認止穩'; vColor = 'var(--accent2)'; }
-  else { verdict = '🟢 正常，可執行加碼計畫'; vColor = 'var(--down)'; }
+  // 三色燈。紅燈才進入「核心減倉評估」，符合核心只在系統性風險時減倉的原則。
+  var light, verdict, vColor;
+  if (flag || total >= 8) {
+    light = 2; vColor = 'var(--up)';
+    verdict = flag ? '🔴 股債同向重挫，系統性風險，啟動核心減倉評估' : '🔴 系統性風險，啟動核心減倉評估';
+  } else if (total >= 4) {
+    light = 1; vColor = 'var(--accent2)'; verdict = '🟡 暫停加碼，觀察是否止穩';
+  } else {
+    light = 0; vColor = 'var(--down)'; verdict = '🟢 正常，可執行加碼計畫';
+  }
 
   var tw = new Date(Date.now() + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 16);
-  info.textContent = '更新：' + tw + '（台北）';
+  info.innerHTML = '更新：' + tw + '（台北）' + (typeof dmPill === 'function' ? ' ' + dmPill() : '');
 
   var html = '';
   // 判定卡
   html += '<div class="rs-verdict" style="border-color:' + vColor + '">' +
     '<div class="rs-score-big" style="color:' + vColor + '">' + total + '<span style="font-size:16px;color:var(--text3)"> / 12</span></div>' +
     '<div class="rs-verdict-txt"><div class="rs-vlabel">建議動作</div><div style="color:' + vColor + ';font-weight:700">' + verdict + '</div>' +
-    (avail < 6 ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">（' + avail + '/6 項有資料，' + (6 - avail) + ' 項暫缺）</div>' : '') +
+    '<div style="font-size:11px;color:var(--text3);margin-top:2px">六項狀態型指標各 0–2 分' +
+    (avail < 6 ? '；' + avail + '/6 項有資料，' + (6 - avail) + ' 項暫缺' : '') + '</div>' +
     '</div></div>';
   // 旗標（正向表列：顯示實際值與門檻比較，不用「需…≥」的反向敘述）
   var eqTxt = equityWorst != null ? sp(equityWorst, 2) : '—';
@@ -216,17 +238,26 @@ async function startRiskReport(force) {
   html += '</tbody></table>';
   // 對照與免責（股票區塊）
   html += '<div class="rs-note">' +
-    '<b>動作對照</b>：0–3 正常加碼｜4–6 減半或延後｜7 分以上暫停加碼｜股債同向重挫發生時直接暫停加碼。<br>' +
+    '<b>動作對照</b>：🟢 0–3 正常加碼｜🟡 4–7 暫停加碼、觀察｜🔴 8 分以上啟動核心減倉評估；股債同向重挫發生時直接跳紅燈。<br>' +
+    '<b>為什麼看「狀態」不看「單日」</b>：系統性風險是持續數日到數週的狀態。舊版六項全是單日變化，' +
+    '會讓核心部位被單日雜訊反覆打斷，與「核心只在系統性風險時減倉」的原則衝突。<br>' +
     '<b>得分色</b>：<span style="color:var(--down)">0 低</span>／<span style="color:var(--accent2)">1 中</span>／<span style="color:var(--up)">2 高</span>。<br>' +
-    '資料源：Yahoo（VIX/美10年債/美元指數/費半/Nasdaq）＋ Shioaji 台指期夜盤(TXFR1)。' +
+    '資料源：Yahoo（VIX／美10年債／費半／Nasdaq／台股大盤）＋ FRED（信用利差 OAS, BAMLH0A0HYM2，延遲約 1 個交易日' +
+    (oas && oas.date ? '，資料日 ' + oas.date : '') + '）＋ Shioaji 台指期夜盤(TXFR1)。' +
     '門檻為初始值、待 6 個月歷史回測校準。<b>本面板為依你設定規則自動算分的參考，非投資建議。</b>' +
     '</div>';
+
+  // ── 表一：核心持股（只在系統性風險時減倉）──
+  html += await _rsCoreTableHtml(light);
 
   // ── 區塊：持股配置結構（依分類）──
   html += _rsCatBlockHtml();
 
-  // ── 區塊 B：債券型（非投等債）信用風險（獨立兩層 override，不影響上方股票總分）──
-  html += _rsBondBlockHtml(bond, sp);
+  // ── 表二：非投等債（每月基本收入）──
+  html += await _rsBondTableHtml();
+
+  // ── 表三：衛星配置（增加資產與月收入）──
+  html += await _rsSatTableHtml();
 
   wrap.innerHTML = html;
 }
@@ -270,127 +301,431 @@ function _rsCatBlockHtml() {
   return h;
 }
 
-// 債券型信用風險區塊：每檔逐條紅綠燈直述（美股信用債跌幅／折價／成交量），綜合判定用操作語言
-// 利率與信用的多日趨勢：單日變化容易被雜訊主導，近 5 日／20 日才看得出方向。
-// 只呈現數值與方向，不做自動判定：換股決策屬相對面（見換股試算的「換手品質」），
-// 此處回答的是「非投等債的持有環境近期往哪走」。
-// 殖利率與 OAS 本身即為百分比，變化以百分點（pp）表示；HYG／JNK 為價格，用 % 變化。
-function _rsTrendHtml(bond) {
-  var t = bond.tnx, hyg = bond.hyg, jnk = bond.jnk, oas = bond.oas;
-  if (!t && !hyg && !jnk && !oas) return '';
-  // 對「持有非投等債」有利＝紅、不利＝綠（與全站漲跌配色一致）
-  var cell = function (v, dp, suf, goodIsUp) {
-    if (v == null) return '<td class="num"><span class="rs-dim">—</span></td>';
-    var cls = Math.abs(v) < 1e-9 ? 'flat' : ((v > 0) === !!goodIsUp ? 'up' : 'down');
-    return '<td class="num ' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(dp) + suf + '</td>';
-  };
-  var val = function (v, dp, suf) { return v == null ? '—' : v.toFixed(dp) + suf; };
+// ══════════ 表一：核心持股（只在系統性風險時減倉）══════════
+// 依使用者原則：00918／00922／00923 是核心，平常一律持有，只有系統性風險發生時才考慮
+// 減倉停利、保留現金或轉往債券避險。所以這張表只回答兩件事：
+//   1. 現在是不是系統性風險（上方的系統風險燈）
+//   2. 真要減倉時，先減哪一檔（用單因子 beta 排序）
+//
+// beta 只對台股大盤（^TWII）跑單因子迴歸，不做多因子拆解。多因子（費半／金融／匯率／信用）
+// 對「先減哪一檔」沒有額外幫助，而單因子可以直接翻成一句話：大盤跌 5% 時這檔預估跌多少。
 
-  var h = '<div class="rs-trend-title">利率與信用趨勢</div>' +
-    '<div class="inv-table-wrap"><table class="inv-table rs-trend"><thead><tr>' +
-    '<th>指標</th><th class="num">最新</th><th class="num">近1日</th><th class="num">近5日</th><th class="num">近20日</th>' +
-    '</tr></thead><tbody>';
+// 1 年日線快取（記憶體，開頁一次）。指數（^TWII）不能走 _esBarsOf，它只會試 .TW／.TWO。
+var _rsBars = {};
+async function _rsBars1y(sym) {
+  if (_rsBars[sym]) return _rsBars[sym];
+  var bars = [];
+  try {
+    var j = await _esVia('https://query1.finance.yahoo.com/v8/finance/chart/' +
+      encodeURIComponent(sym) + '?interval=1d&range=1y', 30000);
+    var res = j.chart && j.chart.result && j.chart.result[0];
+    var ts = (res && res.timestamp) || [], cl = (res && res.indicators.quote[0].close) || [];
+    for (var k = 0; k < ts.length; k++) {
+      if (cl[k] != null) bars.push([new Date(ts[k] * 1000 + 8 * 3600000).toISOString().slice(0, 10), cl[k]]);
+    }
+  } catch (e) {}
+  if (bars.length) _rsBars[sym] = bars;
+  return bars;
+}
 
-  // 殖利率上升 → 債券價格下跌 → 對持有人不利（goodIsUp=false）
-  h += '<tr><td title="美國10年期公債殖利率；上升不利於債券價格">美10年債殖利率</td>' +
-    '<td class="num">' + val(t && t.value, 3, '%') + '</td>' +
-    cell(t && t.abs1, 3, 'pp', false) + cell(t && t.abs5, 3, 'pp', false) + cell(t && t.abs20, 3, 'pp', false) + '</tr>';
+// 近一年高低點與位階：dd＝距高點回檔%（負值），pos＝在高低區間中的位置%（100＝在高點）
+function _rsRange(bars) {
+  if (!bars || bars.length < 20) return null;
+  var v = bars.map(function (x) { return x[1]; });
+  var hi = Math.max.apply(null, v), lo = Math.min.apply(null, v), last = v[v.length - 1];
+  return { last: last, hi: hi, lo: lo, dd: hi > 0 ? (last - hi) / hi * 100 : null,
+           pos: hi > lo ? (last - lo) / (hi - lo) * 100 : null };
+}
 
-  [['HYG', hyg, '美國非投等債 ETF（iShares）'], ['JNK', jnk, '美國非投等債 ETF（SPDR）']].forEach(function (p) {
-    var d = p[1];
-    h += '<tr><td title="' + p[2] + '；下跌代表信用債走弱">' + p[0] + '</td>' +
-      '<td class="num">' + val(d && d.value, 2, '') + '</td>' +
-      cell(d && d.chg, 2, '%', true) + cell(d && d.pct5, 2, '%', true) + cell(d && d.pct20, 2, '%', true) + '</tr>';
+// 單因子 beta：以最近 n 個共同交易日的日報酬對大盤迴歸（beta = cov/var）
+function _rsBeta(bars, mkt, n) {
+  if (!bars || !mkt || bars.length < 30 || mkt.length < 30) return null;
+  var m = {};
+  mkt.forEach(function (x) { m[x[0]] = x[1]; });
+  var ds = [], px = [], mx = [];
+  bars.forEach(function (x) { if (m[x[0]] != null) { ds.push(x[0]); px.push(x[1]); mx.push(m[x[0]]); } });
+  var ra = [], rb = [];
+  for (var i = 1; i < ds.length; i++) {
+    if (px[i - 1] > 0 && mx[i - 1] > 0) { ra.push(px[i] / px[i - 1] - 1); rb.push(mx[i] / mx[i - 1] - 1); }
+  }
+  if (ra.length < 30) return null;
+  ra = ra.slice(-(n || 120)); rb = rb.slice(-(n || 120));
+  var k = ra.length, ma = 0, mb = 0;
+  for (var t = 0; t < k; t++) { ma += ra[t]; mb += rb[t]; }
+  ma /= k; mb /= k;
+  var cov = 0, vb = 0;
+  for (var t2 = 0; t2 < k; t2++) { cov += (ra[t2] - ma) * (rb[t2] - mb); vb += (rb[t2] - mb) * (rb[t2] - mb); }
+  return vb > 0 ? { beta: cov / vb, n: k } : null;
+}
+
+// light: 0 綠 / 1 黃 / 2 紅（由系統風險燈傳入，決定「建議」欄的語氣）
+async function _rsCoreTableHtml(light) {
+  var held = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  var codes = RS_CORE.filter(function (c) { return held[c] > 0; });
+  var head = '<div class="rs-sec-title">表一 · 核心持股（只在系統性風險時減倉）</div>';
+  if (!codes.length) {
+    return head + '<div class="rs-bond-verdict" style="border-color:var(--text3);color:var(--text3)">目前未持有核心標的（' + RS_CORE.join('／') + '）</div>';
+  }
+  var mkt = await _rsBars1y('^TWII');
+  var barsArr = await Promise.all(codes.map(function (c) {
+    return (typeof _esBarsOf === 'function') ? _esBarsOf(c).catch(function () { return []; }) : Promise.resolve([]);
+  }));
+
+  var rows = codes.map(function (code, i) {
+    var bars = barsArr[i];
+    var rg = _rsRange(bars), bt = _rsBeta(bars, mkt, 120);
+    var r = (typeof _rows !== 'undefined') && _rows[code];
+    return {
+      code: code,
+      name: (typeof _contracts !== 'undefined' && _contracts[code] && _contracts[code].name) || '',
+      px: (r && r.close > 0) ? r.close : (rg ? rg.last : null),
+      rg: rg, beta: bt ? bt.beta : null, bn: bt ? bt.n : 0
+    };
   });
+  // 減倉順序：beta 大者先減（同樣減一張，對總市值的保護效果較大）
+  var ranked = rows.filter(function (x) { return x.beta != null; })
+    .slice().sort(function (a, b) { return b.beta - a.beta; });
+  ranked.forEach(function (x, i) { x.cut = i + 1; });
 
-  // OAS 走闊＝市場要求更高風險補償＝信用惡化（goodIsUp=false）；FRED 僅取最後兩點，無多日
-  h += '<tr><td title="ICE BofA 美國非投等債選擇權調整利差（FRED BAMLH0A0HYM2）；走闊代表信用風險升高">' +
-    '信用利差 OAS</td>' +
-    '<td class="num">' + val(oas && oas.value, 2, '%') + '</td>' +
-    cell(oas && oas.chg, 2, 'pp', false) +
-    '<td class="num"><span class="rs-dim">—</span></td><td class="num"><span class="rs-dim">—</span></td></tr>';
+  var mrg = _rsRange(mkt);
+  var num = function (v, dp) { return v == null ? '—' : v.toFixed(dp == null ? 2 : dp); };
+  var sgn = function (v, dp) {
+    if (v == null) return '<span class="dm-dim">—</span>';
+    var cls = v > 0 ? 'up' : (v < 0 ? 'down' : 'flat');
+    return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(dp == null ? 1 : dp) + '%</span>';
+  };
 
-  h += '</tbody></table></div>' +
-    '<div class="rs-trend-note">紅＝對持有非投等債有利、綠＝不利。' +
-    'OAS 取自 FRED，約有 1 個交易日延遲' + (oas && oas.date ? '（資料日 ' + oas.date + '）' : '') +
-    '，僅提供單日變化。此表只陳述環境走向，不產生買賣判定。</div>';
+  var h = head + '<div class="inv-table-wrap"><table class="inv-table rs-b-table"><thead><tr>' +
+    '<th>代號</th>' +
+    '<th class="num" title="最新成交價；盤後為收盤價">現價</th>' +
+    '<th class="num" title="相對近一年最高收盤價的回檔幅度">距一年高</th>' +
+    '<th class="num" title="現價在近一年高低區間中的位置；100% 代表就在最高點、0% 在最低點">一年位階</th>' +
+    '<th class="num" title="近 120 個交易日的日報酬對台股大盤迴歸；1.0 代表跟大盤同步">大盤敏感度</th>' +
+    '<th class="num" title="大盤單日跌 5% 時，依敏感度推算的預估跌幅">跌5%預估</th>' +
+    '<th>建議</th></tr></thead><tbody>';
+
+  rows.forEach(function (x) {
+    var adv, cls = '';
+    if (light >= 2) {
+      adv = x.cut ? '減倉順序 ' + x.cut : '評估減倉';
+      cls = 'rs-b-swap';
+    } else if (light === 1) {
+      adv = '持有，暫停加碼';
+    } else {
+      adv = '持有' + (x.rg && x.rg.dd != null && x.rg.dd <= -8 ? '，已回檔可考慮加碼' : '');
+    }
+    h += '<tr><td>' + x.code + (x.name ? '<div class="rs-b-name">' + x.name + '</div>' : '') + '</td>' +
+      '<td class="num">' + num(x.px) + '</td>' +
+      '<td class="num">' + sgn(x.rg && x.rg.dd) + '</td>' +
+      '<td class="num">' + (x.rg && x.rg.pos != null ? Math.round(x.rg.pos) + '%' : '—') + '</td>' +
+      '<td class="num">' + (x.beta == null ? '—' : x.beta.toFixed(2)) + '</td>' +
+      '<td class="num">' + (x.beta == null ? '—' : '<span class="down">−' + (x.beta * 5).toFixed(1) + '%</span>') + '</td>' +
+      '<td>' + (cls ? '<span class="' + cls + '">' + adv + '</span>' : adv) + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+
+  h += '<div class="rs-note">' +
+    '<b>怎麼看</b>：燈號綠色時這張表的答案就是「持有」，這符合你的原則——核心部位不因短期波動調整。' +
+    '只有燈號轉紅時「減倉順序」才有意義。<br>' +
+    '<b>大盤敏感度</b>：近 120 個交易日的日報酬對台股大盤迴歸出來的倍數。1.0 代表跟大盤同步，' +
+    '0.6 代表大盤跌 10% 時這檔大約跌 6%。要減倉避險時，先減敏感度高的那檔，同樣張數的保護效果比較大。<br>' +
+    '<b>回檔加碼提示</b>：距近一年高點回檔 8% 以上才會出現，避免在高檔附近一直提示加碼。<br>' +
+    (mrg ? '參考｜台股大盤近一年高點 ' + Math.round(mrg.hi).toLocaleString('zh-TW') +
+      '，目前 ' + Math.round(mrg.last).toLocaleString('zh-TW') + '（距高點 ' + num(mrg.dd, 1) + '%、位階 ' +
+      (mrg.pos != null ? Math.round(mrg.pos) + '%' : '—') + '）。<br>' : '') +
+    '資料來源：Yahoo 日線（近一年）。<b>本表為依你設定規則自動算分的參考，非投資建議。</b>' +
+    '</div>';
   return h;
 }
 
-function _rsBondBlockHtml(bond, sp) {
-  var Y = RS_BOND_TH.discount, Z = RS_BOND_TH.volShrink, X = RS_BOND_TH.drop;
-  var hygDrop = bond.hyg && bond.hyg.chg != null ? Math.max(0, -bond.hyg.chg) : null;
-  var jnkDrop = bond.jnk && bond.jnk.chg != null ? Math.max(0, -bond.jnk.chg) : null;
-  var usHit = (hygDrop != null && hygDrop >= X) || (jnkDrop != null && jnkDrop >= X);
-  var usKnown = hygDrop != null || jnkDrop != null;
-  var usVals = 'HYG ' + (bond.hyg ? sp(bond.hyg.chg, 2) : '—') + '／JNK ' + (bond.jnk ? sp(bond.jnk.chg, 2) : '—');
-  var oas = bond.oas;
+// ══════════ 表二：非投等債（每月基本收入）══════════
+// 決策權重依使用者設定：殖利率 75%、流動性 25%。違約風險交給發行商經理人，此處不判定
+// （分析端能取得的信用指標與經理人之間資訊量差太大，做出來的判定沒有決策價值）。
+//
+// 殖利率一律用「真實配息率」＝年化配息率 ×（股利＋利息占比），理由：
+//   收益平準金＝把新申購者的本金撥出來當配息發，等於本金退回，還會稀釋淨值；
+//   已實現資本利得＝賣債賺的價差，行情反轉就沒有。
+// 兩者都不是債息收入，卻會讓帳面配息率看起來很高。占比取近 12 個月線性遞減加權（見 div-mix.js），
+// 最新一期權重最高，避免單純平均把趨勢抹掉。
+var RS_B_W = { yield: 0.75, liq: 0.25 };     // 綜合分權重（使用者設定）
+var RS_B_LIQ = { amt: 0.7, prem: 0.3 };      // 流動性內部權重：日均成交金額 70%、折溢價貼近度 30%
+var RS_B_GAP = 15;                           // 最低分與最高分差距達此值才標「換股候選」，避免四檔差不多時亂標
 
-  // 逐檔判定：美股跌幅達標 且（折價達標 或 量縮達標）→ 暫停；美股達標但本地未確認 → 注意
-  var results = (bond.codes || []).map(function (code, i) {
-    var nav = bond.nav[i], vol = bond.vol[i];
-    var prem = nav && nav.premium != null ? nav.premium : null;   // 正=溢價、負=折價
-    var ratio = vol && vol.ratio != null ? vol.ratio : null;
-    var discHit = prem != null && prem <= -Y;
-    var volHit = ratio != null && ratio < Z;
-    var localKnown = prem != null || ratio != null;
-    var level;                                                     // 0 綠 / 1 黃 / 2 紅 / -1 資料缺
-    if (!usKnown || !localKnown) level = -1;
-    else if (usHit && (discHit || volHit)) level = 2;
-    else if (usHit) level = 1;
-    else level = 0;
-    return { code: code, prem: prem, ratio: ratio, discHit: discHit, volHit: volHit, level: level };
-  });
-  var worst = Math.max.apply(null, results.map(function (r) { return r.level; }));
-  var dot = function (hit) { return hit ? '🔴' : '🟢'; };
+// 年化配息率：近 12 個月各期配發金額的平均 × 每年期數。
+// 用「平均 × 期數」而非「12 個月加總」，新上市未滿一年的 ETF（如 00989B）才不會被低估。
+// 金額取自 MOPS 公告（與占比同一來源），期數由配息頻率（div-meta.js）決定。
+function _rsBondYield(code, px) {
+  if (!px || typeof dmRecs !== 'function') return null;
+  var a = dmRecs(code, 12).map(function (x) { return x.amt; }).filter(function (v) { return v > 0; });
+  if (!a.length) return null;
+  var step = (typeof _divFreqOverride === 'function' && _divFreqOverride(code)) || 1;
+  var avg = a.reduce(function (x, y) { return x + y; }, 0) / a.length;
+  return avg * (12 / step) / px * 100;
+}
 
-  if (!results.length) {
-    return '<div class="rs-sec-title">債券型信用風險 · 非投等債</div>' +
-      '<div class="rs-bond-verdict" style="border-color:var(--text3);color:var(--text3)">目前未持有非投等債 ETF</div>';
+// 組內 min-max 正規化（0–1）。只有一檔或全部相同時回 1，避免除以零把分數打成 0。
+function _rsNorm(vals, v) {
+  var ok = vals.filter(function (x) { return x != null; });
+  if (!ok.length || v == null) return null;
+  var mn = Math.min.apply(null, ok), mx = Math.max.apply(null, ok);
+  return mx > mn ? (v - mn) / (mx - mn) : 1;
+}
+
+async function _rsBondTableHtml() {
+  var codes = _rsBondHoldings();
+  var head = '<div class="rs-sec-title">表二 · 非投等債（每月基本收入）</div>';
+  if (!codes.length) {
+    return head + '<div class="rs-bond-verdict" style="border-color:var(--text3);color:var(--text3)">目前未持有非投等債 ETF</div>';
   }
-  var h = '<div class="rs-sec-title">債券型信用風險 · 非投等債（' + bond.codes.join('／') + '）</div>';
+  var navs = await Promise.all(codes.map(_rsBondNav));
+  var liqs = await Promise.all(codes.map(_rsBondLiq));
 
-  // 綜合判定（操作語言）
-  var vTxt, vColor;
-  if (worst === 2) { vTxt = '🔴 暫停換股／加碼'; vColor = 'var(--up)'; }
-  else if (worst === 1) { vTxt = '🟡 注意，美股信用債走弱，暫緩新進場'; vColor = 'var(--accent2)'; }
-  else if (worst === 0) { vTxt = '🟢 正常，可執行換股／加碼計畫'; vColor = 'var(--down)'; }
-  else { vTxt = '⚪ 資料暫缺，無法判定'; vColor = 'var(--text3)'; }
-  h += '<div class="rs-bond-verdict" style="border-color:' + vColor + ';color:' + vColor + '">綜合判定：' + vTxt + '</div>';
-  h += _rsTrendHtml(bond);
-
-  // 各檔三條件逐條列示
-  results.forEach(function (r) {
-    var name = (_contracts[r.code] && _contracts[r.code].name) || '';
-    h += '<div class="rs-bond-item"><div class="rs-bond-code">' + r.code +
-      (name ? ' <span class="rs-bond-name">' + name + '</span>' : '') + '</div><ol class="rs-bond-list">';
-    // 1. 美股非投等債跌幅：實際值 比較符 門檻（純數字比較，不加補充敘述）
-    h += '<li>' + (usKnown ? dot(usHit) : '⚪') + ' ' +
-      (usKnown ? usVals + ' ' + (usHit ? '≥' : '<') + ' 跌幅 ' + X + '%' : '美國非投等債跌幅 資料暫缺') + '</li>';
-    // 2. 折溢價：溢價時條件不成立、只列數值；折價時才做門檻比較
-    var premLi;
-    if (r.prem == null) premLi = '⚪ 折價 資料暫缺';
-    else if (r.prem > 0) premLi = '🟢 溢價 ' + r.prem.toFixed(2) + '%';
-    else premLi = dot(r.discHit) + ' 折價 ' + Math.abs(r.prem).toFixed(2) + '% ' + (r.discHit ? '≥' : '<') + ' ' + Y + '%';
-    h += '<li>' + premLi + '</li>';
-    // 3. 成交量：當日量佔 90 日中位數比例 比較 門檻
-    h += '<li>' + (r.ratio == null ? '⚪ 成交量 資料暫缺' :
-      dot(r.volHit) + ' 成交量 ' + Math.round(r.ratio) + '% ' + (r.volHit ? '<' : '≥') + ' 90日中位數 ' + Z + '%') + '</li>';
-    h += '</ol></div>';
+  var rows = codes.map(function (code, i) {
+    var nav = navs[i], liq = liqs[i];
+    var r = (typeof _rows !== 'undefined') && _rows[code];
+    var px = (r && r.close > 0) ? r.close : (nav && nav.price > 0 ? nav.price : null);
+    var mix = typeof dmMix === 'function' ? dmMix(code, 12) : null;
+    var yld = _rsBondYield(code, px);
+    var core = mix ? mix.core / 100 : null;
+    return {
+      code: code,
+      name: (typeof _contracts !== 'undefined' && _contracts[code] && _contracts[code].name) || '',
+      px: px, yld: yld, mix: mix,
+      real: (yld != null && core != null) ? yld * core : null,
+      trend: typeof dmTrend === 'function' ? dmTrend(code, dmPickE) : null,
+      pend: typeof dmPending === 'function' ? dmPending(code) : null,
+      prem: nav && nav.premium != null ? nav.premium : null,
+      liq: liq ? liq.med : null
+    };
   });
 
-  // 參考資訊：OAS（延遲一日，作為佐證而非即時判定）
-  var oasSign = oas ? (oas.chg > 0 ? '+' : (oas.chg < 0 ? '−' : '')) + Math.abs(oas.chg).toFixed(2) : '';
-  h += '<div class="rs-bond-oas">參考｜美國非投等債信用利差（OAS）' +
-    (oas ? '　今日 ' + oas.value.toFixed(2) + '%　前一日 ' + (oas.value - oas.chg).toFixed(2) + '%　變化 ' + oasSign +
-      '　資料截至 ' + oas.date + '（延遲約 1 個交易日）' : '　資料暫缺') +
-    (oas && usHit && oas.chg > 0 ? '　<b class="up">利差變化 ' + oasSign + ' > 0，走弱訊號成立</b>' : '') + '</div>';
+  // 綜合分：真實配息率 75% + 流動性 25%（流動性＝日均成交金額 70% + 折溢價貼近度 30%）
+  var vReal = rows.map(function (x) { return x.real; });
+  var vLiq = rows.map(function (x) { return x.liq == null ? null : Math.log(x.liq); });   // 金額量級差距大，取對數
+  var vPrem = rows.map(function (x) { return x.prem == null ? null : -Math.abs(x.prem); });
+  rows.forEach(function (x) {
+    var ys = _rsNorm(vReal, x.real);
+    var ls1 = _rsNorm(vLiq, x.liq == null ? null : Math.log(x.liq));
+    var ls2 = _rsNorm(vPrem, x.prem == null ? null : -Math.abs(x.prem));
+    var ls = (ls1 == null && ls2 == null) ? null
+      : (ls1 == null ? ls2 : (ls2 == null ? ls1 : ls1 * RS_B_LIQ.amt + ls2 * RS_B_LIQ.prem));
+    x.sYield = ys; x.sLiq = ls;
+    x.score = (ys == null) ? null : 100 * (ys * RS_B_W.yield + (ls == null ? ys : ls) * RS_B_W.liq);
+  });
+  var scored = rows.filter(function (x) { return x.score != null; });
+  var worst = null;
+  if (scored.length >= 2) {
+    var mn = Math.min.apply(null, scored.map(function (x) { return x.score; }));
+    var mx = Math.max.apply(null, scored.map(function (x) { return x.score; }));
+    if (mx - mn >= RS_B_GAP) worst = scored.filter(function (x) { return x.score === mn; })[0];
+  }
 
+  var pct = function (v, dp) { return v == null ? '—' : v.toFixed(dp == null ? 2 : dp) + '%'; };
+  var money = function (v) {
+    return v == null ? '—' : (v >= 1e8 ? (v / 1e8).toFixed(2) + ' 億' : Math.round(v / 1e4).toLocaleString('zh-TW') + ' 萬');
+  };
+
+  var h = head + '<div class="inv-table-wrap"><table class="inv-table rs-b-table"><thead><tr>' +
+    '<th>代號</th>' +
+    '<th class="num" title="近 12 個月各期配發金額平均 × 每年期數 ÷ 現價；這是公告上看得到的帳面數字">年化配</th>' +
+    '<th class="num" title="年化配息率 ×（股利＋利息占比）。扣掉收益平準金與資本利得後，真正來自債息的部分">真實配</th>' +
+    '<th class="num" title="收益平準金占比（近 12 個月加權）。把新申購者的本金撥出來當配息發，會稀釋淨值">平準金</th>' +
+    '<th title="近半年平均 vs 前半年平均，差距超過 5 個百分點才標箭頭">趨勢</th>' +
+    '<th class="num" title="近 20 個交易日成交金額中位數（不含當日）">日均成交</th>' +
+    '<th class="num" title="市價相對淨值；正為溢價、負為折價，越接近 0 越好">折溢價</th>' +
+    '<th class="num" title="真實配息率 75% + 流動性 25%，組內相對評分">綜合分</th>' +
+    '<th>建議</th></tr></thead><tbody>';
+
+  rows.forEach(function (x) {
+    var tip = '';
+    if (x.mix) {
+      tip = dmRecs(x.code, 12).map(function (r) { return r.ex + ' ' + (r.pct.e || 0).toFixed(1) + '%'; }).join('&#10;');
+    }
+    h += '<tr><td>' + x.code + (x.name ? '<div class="rs-b-name">' + x.name + '</div>' : '') + '</td>' +
+      '<td class="num">' + pct(x.yld) + '</td>' +
+      '<td class="num"><b>' + pct(x.real) + '</b></td>' +
+      '<td class="num"' + (tip ? ' title="每期平準金占比：&#10;' + tip + '"' : '') + '>' +
+      (x.mix ? pct(x.mix.e, 1) : '—') + '</td>' +
+      '<td>' + (typeof dmTrendHtml === 'function' ? dmTrendHtml(x.trend, false) : '—') + '</td>' +
+      '<td class="num">' + money(x.liq) + '</td>' +
+      '<td class="num">' + (x.prem == null ? '—' : (x.prem > 0 ? '+' : '') + x.prem.toFixed(2) + '%') + '</td>' +
+      '<td class="num"><b>' + (x.score == null ? '—' : Math.round(x.score)) + '</b></td>' +
+      '<td>' + (worst && worst.code === x.code ? '<span class="rs-b-swap">換股候選</span>' : '') +
+      (x.pend ? '<span class="rs-b-pend" title="除息日 ' + x.pend.ex + ' 的組成占比公告尚未發布（發行商通常在除息後約 10 天才發）">下期待公告</span>' : '') +
+      '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+
+  var noLiq = rows.some(function (x) { return x.liq == null; });
   h += '<div class="rs-note">' +
-    '<b>怎麼判定</b>：先看美國非投等債（HYG/JNK）單日跌幅是否達 ' + X + '%；若已達，再看該檔在台灣市場是否同步惡化——折價達 ' + Y + '% <b>或</b> 當日成交量不到 90 日中位數的 ' + Z + '%，兩者任一成立就顯示暫停。' +
-    '美股走弱但台灣端還沒惡化時顯示注意，代表衝擊尚未傳導過來。此判定<b>只適用於這兩檔非投等債</b>，不影響上方股票型的評分與加碼建議。<br>' +
-    '<b>指標說明</b>：HYG/JNK＝美國非投等債 ETF 價格，信用風險反應最快，美股收盤早於台股開盤，等於隔夜領先訊號；OAS＝非投等債比公債多要求的利差，已剔除利率因素、最能反映純信用風險，但公布延遲約一日，只當佐證；折價＝市價低於淨值，擴大代表台灣端流動性轉差；成交量為當日累計，盤中查看時偏低屬正常。<br>' +
-    '資料源：Yahoo（HYG/JNK）＋ FRED（OAS, BAMLH0A0HYM2）＋ TWSE 官方淨值（折溢價）＋ Shioaji 日K（成交量）。判定標準 ' + X + '% 取自近一年 HYG/JNK 單日跌幅的後 10% 分位，' + Y + '%／' + Z + '% 為初始值，待回測校準。<b>非投資建議。</b>' +
+    '<b>怎麼看</b>：只比較「同樣一筆錢放哪一檔比較划算」，不預測漲跌。綜合分是組內相對分數，' +
+    '最低分且與最高分差距達 ' + RS_B_GAP + ' 分才標為換股候選；換去哪一檔要另外看你的現金與配息月份安排。<br>' +
+    '<b>真實配息率</b>：帳面年化配息率扣掉收益平準金與資本利得後的部分。平準金是把新申購者的本金當配息發回，' +
+    '資本利得靠賣債價差、行情反轉就沒有，兩者都不是可持續的債息收入。占比取近 12 個月線性遞減加權，最新一期權重最高。<br>' +
+    '<b>違約風險</b>不在此表判定，交給發行商經理人。<br>' +
+    (noLiq ? '<b class="up">日均成交金額需要券商連線</b>（Shioaji 日 K），目前有部分檔取不到；' +
+      '該檔的流動性改以折溢價單項計算，兩項都缺時則只看殖利率。<br>' : '') +
+    '資料來源：配息金額與組成占比＝公開資訊觀測站（資料日見頁面上方）；折溢價＝TWSE 官方淨值；成交金額＝Shioaji 日 K。' +
+    '<b>本表為依你設定規則自動算分的參考，非投資建議。</b>' +
+    '</div>';
+  return h;
+}
+
+// ══════════ 表三：衛星配置（增加資產與月收入）══════════
+// 衛星＝股票型持股扣掉核心三檔與個股。核心只在系統性風險時減倉（見表一），不參與汰弱留強；
+// 個股的總經解釋力太低（實測 R² 0.06），用同一套指標排序沒有意義，故排除。
+//
+// 兩個維度對應使用者對衛星的期待「增加資產」與「提高每月平均收入」：
+//   資產成長＝價格報酬（不含息）
+//   月收入  ＝真實配息率（年化配息率 × 本業占比）
+// 刻意用價格報酬而非總報酬：總報酬已內含配息，與右邊的配息欄重複計分會讓高配息標的被算兩次。
+// 兩者相加約等於總報酬，分開看才知道報酬是靠價差還是靠配息來的。
+var RS_CORE = ['00918', '00922', '00923'];            // 核心持股，不列入衛星汰弱
+var RS_S_CATS = /^(市值型|高息型|主動市值|主動高息)$/;
+var RS_S_W = { ret: 0.5, inc: 0.5 };                  // 綜合分權重：資產成長 50%、月收入 50%
+
+function _rsSatHoldings() {
+  var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  return Object.keys(m).filter(function (c) {
+    if (!(m[c] > 0) || RS_CORE.indexOf(c) >= 0) return false;
+    return typeof catOf === 'function' && RS_S_CATS.test(catOf(c));
+  }).sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
+}
+
+// 區間價格報酬%：Yahoo 1 年日線（沿用 ETF 評比的 _esBarsOf，同一份記憶體快取，不重複打 GAS）
+function _rsSatRet(bars, months) {
+  if (!bars || bars.length < 5) return null;
+  var d = new Date(Date.now() + 8 * 3600000);
+  d.setUTCMonth(d.getUTCMonth() - months);
+  var from = d.toISOString().slice(0, 10), i0 = -1;
+  for (var k = 0; k < bars.length; k++) { if (bars[k][0] >= from) { i0 = k; break; } }
+  if (i0 < 0 || i0 >= bars.length - 1) return null;         // 上市未滿該區間 → 不強行計算
+  var a = bars[i0][1], b = bars[bars.length - 1][1];
+  return a > 0 ? (b - a) / a * 100 : null;
+}
+
+// 依欄位排名並換成 0–1 分數（第一名 1、最後一名 0；同分同名次）。
+// key 寫回 x[out]（分數）與 x['rk' + 後綴]（名次），名次供表格顯示與「兩項都吊車尾」判定。
+function _rsRank(rows, field, out, descIsBetter) {
+  var tag = 'rk' + out.slice(1);
+  var vals = rows.map(function (x) { return x[field]; }).filter(function (v) { return v != null; });
+  if (!vals.length) { rows.forEach(function (x) { x[out] = null; x[tag] = null; }); return; }
+  var sorted = vals.slice().sort(function (a, b) { return descIsBetter ? b - a : a - b; });
+  var n = rows.length;
+  rows.forEach(function (x) {
+    if (x[field] == null) { x[out] = null; x[tag] = null; return; }
+    var r = sorted.indexOf(x[field]) + 1;                 // 同值取較前名次
+    x[tag] = r;
+    x[out] = n > 1 ? (n - r) / (n - 1) : 1;
+  });
+}
+
+// 年化配息率：與表二同式（近 12 個月各期金額平均 × 每年期數 ÷ 現價）
+function _rsSatYield(code, px) { return _rsBondYield(code, px); }
+
+async function _rsSatTableHtml() {
+  var codes = _rsSatHoldings();
+  var head = '<div class="rs-sec-title">表三 · 衛星配置（增加資產與月收入）</div>';
+  if (!codes.length) {
+    return head + '<div class="rs-bond-verdict" style="border-color:var(--text3);color:var(--text3)">目前未持有衛星部位</div>';
+  }
+  var barsArr = await Promise.all(codes.map(function (c) {
+    return (typeof _esBarsOf === 'function') ? _esBarsOf(c).catch(function () { return []; }) : Promise.resolve([]);
+  }));
+  var navs = await Promise.all(codes.map(_rsBondNav));
+
+  var rows = codes.map(function (code, i) {
+    var bars = barsArr[i], nav = navs[i];
+    var r = (typeof _rows !== 'undefined') && _rows[code];
+    // 現價三層後備：即時快照 → TWSE 淨值檔（盤前偶爾缺檔）→ 日線最後一筆收盤
+    var px = (r && r.close > 0) ? r.close
+      : (nav && nav.price > 0 ? nav.price : (bars && bars.length ? bars[bars.length - 1][1] : null));
+    var mix = typeof dmMix === 'function' ? dmMix(code, 12) : null;
+    var yld = _rsSatYield(code, px);
+    var core = mix ? mix.core / 100 : null;
+    return {
+      code: code,
+      name: (typeof _contracts !== 'undefined' && _contracts[code] && _contracts[code].name) || '',
+      cat: typeof catOf === 'function' ? catOf(code) : '',
+      r3: _rsSatRet(bars, 3), r6: _rsSatRet(bars, 6),
+      yld: yld, mix: mix, n: mix ? mix.n : 0,
+      real: (yld != null && core != null) ? yld * core : null,
+      trend: typeof dmTrend === 'function' ? dmTrend(code, dmPickCore) : null,
+      pend: typeof dmPending === 'function' ? dmPending(code) : null
+    };
+  });
+
+  // 評分用排名而非 min-max 正規化：衛星只有兩三檔時，min-max 會讓兩個極端值決定整個尺度，
+  // 兩項都排中間的標的反而拿到最低分（實測 00878 成長第一/收入最後 50 分、00999A 兩項都第二卻只有 36 分）。
+  // 排名制不受極端值影響，名次相同就同分。
+  _rsRank(rows, 'r6', 'kR', true);
+  _rsRank(rows, 'real', 'kI', true);
+  rows.forEach(function (x) {
+    var a = x.kR, b = x.kI;
+    x.score = (a == null && b == null) ? null
+      : (a == null ? b : (b == null ? a : a * RS_S_W.ret + b * RS_S_W.inc)) * 100;
+  });
+  // 換股候選：兩項都吊車尾才標（單項墊底可能只是風格差異，不構成汰換理由）
+  var n = rows.length, worst = null;
+  if (n >= 3) {
+    worst = rows.filter(function (x) { return x.rkR === n && x.rkI === n; })[0] || null;
+  }
+
+  var pct = function (v, dp) { return v == null ? '—' : v.toFixed(dp == null ? 2 : dp) + '%'; };
+  var ret = function (v) {
+    if (v == null) return '<span class="dm-dim">—</span>';
+    var cls = v > 0 ? 'up' : (v < 0 ? 'down' : 'flat');
+    return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(1) + '%</span>';
+  };
+
+  var h = head + '<div class="inv-table-wrap"><table class="inv-table rs-b-table"><thead><tr>' +
+    '<th>代號</th>' +
+    '<th class="num" title="近 3 個月價格報酬（不含配息）">近3月</th>' +
+    '<th class="num" title="近 6 個月價格報酬（不含配息）；綜合分的資產成長項用這個">近6月</th>' +
+    '<th class="num" title="近 12 個月各期配發金額平均 × 每年期數 ÷ 現價">年化配</th>' +
+    '<th class="num" title="年化配息率 ×（股利＋利息占比）；扣掉平準金與資本利得後真正來自成分股配息的部分">真實配</th>' +
+    '<th class="num" title="收益平準金占比（近 12 個月加權）">平準金</th>' +
+    '<th class="num" title="資本利得占比（近 12 個月加權）。括號內為賣出選擇權權利金，屬掩護性買權策略收入，會持續產生；其餘為賣股價差，行情反轉就沒有">資本利得</th>' +
+    '<th title="本業占比（股利＋利息）近半年 vs 前半年，差距超過 5 個百分點才標箭頭">本業趨勢</th>' +
+    '<th class="num" title="資產成長 50% + 月收入 50%，依組內名次計分（第一名 100、最後一名 0）">綜合分</th>' +
+    '<th>建議</th></tr></thead><tbody>';
+
+  rows.forEach(function (x) {
+    var capTxt = '—';
+    if (x.mix) {
+      capTxt = pct(x.mix.cap, 1);
+      if (x.mix.cc >= 0.5) capTxt += '<div class="rs-b-name">權利金 ' + x.mix.cc.toFixed(1) + '%</div>';
+    }
+    h += '<tr><td>' + x.code + (x.name ? '<div class="rs-b-name">' + x.name +
+      (x.cat ? '・' + x.cat : '') + '</div>' : '') + '</td>' +
+      '<td class="num">' + ret(x.r3) + '</td>' +
+      '<td class="num">' + ret(x.r6) + (x.rkR ? '<div class="rs-b-name">成長 ' + x.rkR + '/' + rows.length + '</div>' : '') + '</td>' +
+      '<td class="num"' + (x.n ? ' title="近 12 個月取到 ' + x.n + ' 期"' : '') + '>' + pct(x.yld) + '</td>' +
+      '<td class="num"><b>' + pct(x.real) + '</b>' + (x.rkI ? '<div class="rs-b-name">收入 ' + x.rkI + '/' + rows.length + '</div>' : '') + '</td>' +
+      '<td class="num">' + (x.mix ? pct(x.mix.e, 1) : '—') + '</td>' +
+      '<td class="num">' + capTxt + '</td>' +
+      '<td>' + (typeof dmTrendHtml === 'function' ? dmTrendHtml(x.trend, true) : '—') + '</td>' +
+      '<td class="num"><b>' + (x.score == null ? '—' : Math.round(x.score)) + '</b></td>' +
+      '<td>' + (worst && worst.code === x.code ? '<span class="rs-b-swap">換股候選</span>' : '') +
+      (x.pend ? '<span class="rs-b-pend" title="除息日 ' + x.pend.ex + ' 的組成占比公告尚未發布">下期待公告</span>' : '') +
+      '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+
+  var thin = rows.filter(function (x) { return x.mix && x.n < 3; }).map(function (x) { return x.code; });
+  h += '<div class="rs-note">' +
+    '<b>怎麼看</b>：衛星部位負責增加資產與提高月收入，所以兩個維度各占一半。綜合分依組內<b>名次</b>計分' +
+    '（第一名 100、最後一名 0，名次相同就同分），不受單一極端值影響。' +
+    '<b>兩項都吊車尾</b>才標為換股候選——只有一項墊底可能只是風格差異，不構成汰換理由；' +
+    '要換去哪一檔請看「關注股票 → ETF 評比」的前 20 名。<br>' +
+    '<b>報酬用價格報酬（不含配息）</b>：總報酬已經內含配息，若直接拿來當成長項，會與右邊的配息欄重複計分、' +
+    '讓高配息標的被算兩次。價格報酬 ＋ 配息率 ≈ 總報酬，分開看才知道報酬是靠價差還是靠配息。<br>' +
+    '<b>資本利得</b>：靠基金賣股賺的價差發配息，行情好時撐得住、轉弱時配息會縮水。括號內的權利金是掩護性買權' +
+    '策略收入（主動式 ETF 才有），性質上比賣股價差可重複。<br>' +
+    '核心持股（' + RS_CORE.join('／') + '）依你的原則只在系統性風險時減倉，不列入此表的汰弱比較；個股也不列入。<br>' +
+    (thin.length ? '<b class="up">' + thin.join('／') + ' 近 12 個月只有 1–2 期配息紀錄</b>（上市未滿一年），年化與占比的代表性有限。<br>' : '') +
+    '資料來源：價格＝Yahoo 日線；配息金額與組成占比＝公開資訊觀測站（資料日見頁面上方）。' +
+    '<b>本表為依你設定規則自動算分的參考，非投資建議。</b>' +
     '</div>';
   return h;
 }
