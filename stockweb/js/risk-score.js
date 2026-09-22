@@ -280,7 +280,7 @@ function _rsCatBlockHtml() {
       '<td class="num" style="color:' + c + '">' + (base ? (v / base * 100 >= 0 ? '+' : '') + (v / base * 100).toFixed(1) + '%' : '\u2014') + '</td>';
   };
   var h = '<div class="rs-sec-title">\u6301\u80a1\u914d\u7f6e\u7d50\u69cb\uff08\u4f9d\u5206\u985e\uff09</div>' +
-    '<table class="rs-table"><thead><tr><th>\u5206\u985e</th><th class="num">\u6a94\u6578</th>' +
+    '<div class="rs-cat-wrap"><table class="rs-table rs-cat-table"><thead><tr><th>\u5206\u985e</th><th class="num">\u6a94\u6578</th>' +
     '<th class="num">\u4ed8\u51fa\u6210\u672c</th><th class="num">\u6210\u672c\u5360\u6bd4</th>' +
     '<th class="num">\u73fe\u503c</th><th class="num">\u73fe\u503c\u5360\u6bd4</th>' +
     '<th class="num">\u640d\u76ca</th><th class="num">\u640d\u76ca\u7387</th></tr></thead><tbody>';
@@ -294,7 +294,7 @@ function _rsCatBlockHtml() {
     groups.reduce(function (a, g) { return a + g.n; }, 0) + '</td>' +
     '<td class="num">' + money(tc) + '</td><td class="num">100.0%</td>' +
     '<td class="num">' + money(tv) + '</td><td class="num">100.0%</td>' +
-    pnlTd(tv - tc, tc) + '</tr></tfoot></table>';
+    pnlTd(tv - tc, tc) + '</tr></tfoot></table></div>';
   h += '<div class="rs-note">\u5206\u985e\u4f9d\u4ee3\u78bc\u5c3e\u78bc\uff08A\uff1d\u4e3b\u52d5\u80a1\u7968\u3001B\uff1d\u88ab\u52d5\u50b5\u5238\u3001D\uff1d\u4e3b\u52d5\u50b5\u5238\u3001L/R\uff1d\u69d3\u687f\u53cd\u5411\uff09' +
     '\u52a0\u4e0a\u5408\u7d04\u540d\u7a31\u95dc\u9375\u5b57\u5224\u5b9a\uff1b\u540d\u7a31\u6703\u88ab\u622a\u65b7\u81f3 8 \u5b57\uff0c\u65b0\u8cb7\u9032\u7684 ETF \u82e5\u6b78\u985e\u4e0d\u5c0d\u8acb\u544a\u8a34\u6211\u3002' +
     '\u91d1\u984d\u672a\u6263\u7a05\u8cbb\u3002</div>';

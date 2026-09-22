@@ -509,6 +509,10 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-table th { text-align: left; color: var(--text3); font-weight: 400; font-size: 12px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
 .rs-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .rs-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+/* 持股配置結構：8 欄，不套 .rs-table 的 520px 上限，標題與內容一律不折行 */
+.rs-cat-wrap { overflow-x: auto; }
+.rs-cat-table { max-width: none; width: auto; min-width: 100%; }
+.rs-cat-table th, .rs-cat-table td { white-space: nowrap; }
 .rs-note { font-size: 13px; color: #b39a5b; line-height: 1.7; margin-top: 14px; max-width: 640px; }
 
 /* ── 換股試算（股利估算子頁籤） ── */
