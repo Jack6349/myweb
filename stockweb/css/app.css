@@ -18,7 +18,10 @@
      標題靠「尺寸＋字重」取得層級，不與內文比亮度（內文是主要內容，全頁最亮） */
   --th: #c9955a;      /* 表格欄位名：橘色壓暗，對比度 6.96:1（對帶狀底色 5.70:1） */
   --sub: #e07fae;     /* 子標題：粉紅壓暗 6.77:1，飽和度低於 --up 紅以免誤讀成數值 */
-  --note: #7fc8db;    /* 說明文字：淺青壓暗 9.68:1，退在表格內文之下 */
+  --note: #7fc8db;    /* T5 說明文字：淺青壓暗 9.68:1（13px/1.8），退在表格內文之下 */
+  /* T5s 總結類（結論、合計、評估結果）：與 T5 同色相、亮一階並加粗，形成「說明家族」。
+     刻意不用綠色：綠在本站是「跌／虧損」的固定語意（--down），總結行用綠會被誤讀成數值方向。 */
+  --sum: #a5e9f7;
   --thbg: #1b2736;    /* 表頭帶狀底色 */
   --font: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 }
@@ -210,7 +213,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .detail-table td, .subdetail-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .detail-table .num, .subdetail-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .detail-table tfoot td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none; }
-.detail-note { font-size: 12px; color: var(--note); margin-top: 10px; line-height: 1.8; }
+.detail-note { font-size: 13px; color: var(--note); margin-top: 10px; line-height: 1.8; }
 .subdetail-table { background: var(--bg); margin: 4px 0; }
 .subdetail-table th { font-size: 11px; color: var(--th); }
 .tr-detail td { padding: 0 !important; background: var(--bg2); }
@@ -259,7 +262,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .sig-tdcur { font-weight: 700; flex: 0 0 78px; white-space: nowrap; }
 .sig-tdrow > span:last-child { margin-left: auto; font-size: 11px; white-space: nowrap; }
 .sig-warn { color: #f5d87a; }
-.sig-note { font-size: 11px; color: var(--text3); line-height: 1.7; margin-top: 6px; }
+.sig-note { font-size: 13px; color: var(--note); line-height: 1.8; margin-top: 8px; }
 
 /* ── 趨勢評估 ── */
 .trend-table td, .trend-table th { padding: 7px 9px; }
@@ -312,7 +315,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-sd { color: var(--text2); }
 .tx-st { color: var(--text3); font-size: 11px; margin-left: 8px; }
 .tx-settle-total td { border-bottom: none; font-weight: 700; padding-top: 8px; }
-.tx-note { font-size: 12px; color: var(--note); margin-top: 8px; line-height: 1.8; }
+.tx-note { font-size: 13px; color: var(--note); margin-top: 8px; line-height: 1.8; }
 .tx-order-sum { font-size: 12px; color: var(--text2); font-variant-numeric: tabular-nums; }
 .tx-otable-wrap { overflow-x: auto; }
 .tx-otable { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
@@ -460,7 +463,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 
 /* 認購成本補正（參數設定） */
 .params-co-head { display: flex; align-items: center; margin: 4px 2px 10px; }
-.params-co-sub { font-size: 12px; color: var(--text3); margin: 14px 2px 6px; }
+.params-co-sub { font-size: 14px; font-weight: 700; color: var(--sub); letter-spacing: .3px; margin: 20px 2px 7px; }
 .params-co-px { width: 84px; padding: 4px 6px; text-align: right; border-radius: 6px;
   border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 13px; }
 
@@ -491,7 +494,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-dps { width: 56px; text-align: right; }
 .divest-dtot { width: 84px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
 .divest-dst { flex: none; white-space: nowrap; padding-left: 4px; }   /* 不設固定寬：「已領（計 12 張）」「除息後才買進，未持有」要一行顯示 */
-.divest-note { font-size: 12px; color: var(--note); margin-top: 12px; line-height: 1.8; }
+.divest-note { font-size: 13px; color: var(--note); margin-top: 12px; line-height: 1.8; }
 /* 已發放=綠、預估=黃：除發放月外整列上色（靠繼承），金額加亮（亮色＋粗體） */
 .divest-drow.dv-act { color: #1a9e49; }
 .divest-drow.dv-est { color: #c9a85a; }
@@ -524,7 +527,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-cat-wrap { overflow-x: auto; }
 .rs-cat-table { max-width: none; width: auto; min-width: 100%; }
 .rs-cat-table th, .rs-cat-table td { white-space: nowrap; }
-.rs-note { font-size: 12px; color: var(--note); line-height: 1.8; margin-top: 14px; max-width: 760px; }
+.rs-note { font-size: 13px; color: var(--note); line-height: 1.8; margin-top: 14px; max-width: 760px; }
 
 /* ── 換股試算（股利估算子頁籤） ── */
 #divest-tab-est .divest-topbar { margin-top: 0; }
@@ -532,7 +535,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 #divest-view .tx-subtabs { position: sticky; top: 104px; z-index: 8; background: var(--bg);
   margin: -14px calc(50% - 50vw) 12px; padding: 14px calc(50vw - 50%) 8px; }
 .swap-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-.swap-hint { font-size: 11px; color: var(--text3); }
+.swap-hint { font-size: 13px; color: var(--note); line-height: 1.8; }
 .swap-tw { max-height: none; }
 .swap-table { font-size: 13px; }
 .swap-table td { padding: 5px 10px; }
@@ -542,7 +545,9 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-mini:hover { border-color: rgba(240,204,122,.5); color: var(--accent2); }
 .swap-warn { color: var(--accent2); font-size: 12px; }
 .swap-dim { color: var(--text3); font-size: 12px; font-weight: 400; }
-.swap-foot { margin-top: 10px; font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* T5s 總結類：結論、合計、評估結果。比說明文字亮一階並加粗，收尾時一眼看到。 */
+.sum-note { font-size: 14px; font-weight: 600; color: var(--sum); line-height: 1.8; }
+.swap-foot { margin-top: 12px; font-size: 14px; font-weight: 600; color: var(--sum); line-height: 1.8; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .swap-foot b { color: var(--accent2); font-size: 15px; font-variant-numeric: tabular-nums; }
 .swap-opts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text2); margin-bottom: 10px; }
 .swap-radio { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
@@ -574,7 +579,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-idesc { font-size: 11.5px; color: var(--text2); margin-top: 3px; font-weight: 400; line-height: 1.5; white-space: normal; }
 .rs-bond-us { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--text3); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text2); margin-bottom: 8px; }
 .rs-bond-us.on { border-left-color: var(--up); background: rgba(255,82,82,.06); color: var(--text); }
-.rs-bond-oas { font-size: 13px; color: #b39a5b; margin-bottom: 10px; padding: 0 2px; line-height: 1.6; }
+.rs-bond-oas { font-size: 13px; color: var(--note); margin-bottom: 10px; padding: 0 2px; line-height: 1.8; }
 .rs-bond-table { max-width: 640px; }
 .rs-bond-table td { vertical-align: top; }
 .rs-bond-hit td { background: rgba(255,82,82,.08); }
@@ -614,14 +619,14 @@ input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
 .rf-last { color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rf-detail { padding: 4px 4px 12px; }
 .rf-detail .swap-table { max-width: 720px; }
-.rf-nodiv { font-size: 12px; color: var(--text3); margin-top: 10px; padding: 0 2px; }
+.rf-nodiv { font-size: 13px; color: var(--note); line-height: 1.8; margin-top: 10px; padding: 0 2px; }
 
 /* 填息追蹤：除息日曆 */
 .rf-cal { max-width: 1000px; }
 .rf-cal-date { color: var(--accent2); font-weight: 700; font-variant-numeric: tabular-nums; }
 .rf-src { color: var(--text3); font-size: 11px; }
-.rf-cal-note { font-size: 11px; color: var(--text3); margin: 8px 2px 16px; line-height: 1.6; }
-.rf-cal-empty { font-size: 13px; color: var(--text3); padding: 8px 2px 16px; }
+.rf-cal-note { font-size: 13px; color: var(--note); margin: 10px 2px 16px; line-height: 1.8; }
+.rf-cal-empty { font-size: 13px; color: var(--note); line-height: 1.8; padding: 8px 2px 16px; }
 .rf-cmnote { font-size: 11px; color: var(--accent2); margin-left: 10px; }
 .swap-mini[disabled] { opacity: .5; cursor: default; }
 
@@ -671,7 +676,7 @@ td.cost-even::after  { background: var(--text3); }
 .wt-bar input[type=checkbox], .wt-table input[type=checkbox] { accent-color: var(--accent2); cursor: pointer; }
 .wt-guess { font-size: 10px; color: var(--text3); font-weight: 400; }
 /* 換股試算：買入區小節標題（現有持股／加入其他標的） */
-.swap-sec-lb { font-size: 12px; color: var(--text3); margin: 8px 2px 4px; }
+.swap-sec-lb { font-size: 14px; font-weight: 700; color: var(--sub); letter-spacing: .3px; margin: 18px 2px 6px; }
 /* 股利估算：個股標題的本月已公告除息 */
 .divest-exnow { color: var(--accent2); }
 
@@ -715,7 +720,7 @@ td.cost-even::after  { background: var(--text3); }
 /* 換股試算：換手品質比較表（賣出 vs 買入的相對條件） */
 .swap-qual td:first-child { color: var(--text2); }
 .swap-qual th.num, .swap-qual td.num { text-align: right; }
-.swap-qual-note { font-size: 11px; color: #9a8028; line-height: 1.6; margin: 6px 2px 0; }
+.swap-qual-note { font-size: 13px; color: var(--note); line-height: 1.8; margin: 8px 2px 0; }
 
 /* 加減碼報告：利率與信用趨勢表 */
 .rs-trend-title { font-size: 14px; font-weight: 700; color: var(--sub); margin: 20px 0 7px; letter-spacing: .3px; }
@@ -723,7 +728,7 @@ td.cost-even::after  { background: var(--text3); }
 .rs-trend td:first-child { color: var(--text2); white-space: nowrap; }
 .rs-trend th.num, .rs-trend td.num { text-align: right; }
 .rs-dim { color: var(--text3); }
-.rs-trend-note { font-size: 11px; color: #9a8028; line-height: 1.6; margin: 6px 2px 0; }
+.rs-trend-note { font-size: 13px; color: var(--note); line-height: 1.8; margin: 8px 2px 0; }
 
 /* 換股試算：年配息標籤後的期間標示（與股利估算的曆年基準區別） */
 .swap-span { display: inline-block; margin-left: 5px; font-size: 10px; color: var(--text3); font-weight: 400; }
@@ -750,7 +755,7 @@ td.cost-even::after  { background: var(--text3); }
 .cs-dot { flex: 0 0 auto; }
 .cs-title { flex: 0 0 150px; color: var(--text2); }
 .cs-detail { flex: 1; min-width: 0; color: var(--text); font-variant-numeric: tabular-nums; }
-.cs-note { font-size: 11px; color: #9a8028; line-height: 1.6; margin-top: 6px; }
+.cs-note { font-size: 13px; color: var(--note); line-height: 1.8; margin-top: 8px; }
 
 /* 新聞情勢：銀行牌告匯率卡片（買入／賣出雙價） */
 .macro-fx .macro-fx-pair { display: inline-flex; align-items: baseline; gap: 5px; margin-left: auto; }
@@ -824,7 +829,7 @@ td.cost-even::after  { background: var(--text3); }
 .divest-hist-svg .dh-ax { font-size: 10px; fill: var(--text3); }
 .divest-hist-svg .dh-val { font-size: 11px; font-weight: 700; }
 .divest-hist-svg .dh-lg { font-size: 11px; fill: var(--text2); }
-.divest-hist-note { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.divest-hist-note { font-size: 13px; color: var(--note); line-height: 1.8; margin-top: 4px; }
 
 /* ── 股利估算：配息資料頁籤 ── */
 .dm-table td { vertical-align: middle; }
