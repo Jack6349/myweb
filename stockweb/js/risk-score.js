@@ -494,11 +494,13 @@ async function _rsBondTableHtml() {
     var mix = typeof dmMix === 'function' ? dmMix(code, 12) : null;
     var yld = _rsBondYield(code, px);
     var core = mix ? mix.core / 100 : null;
+    var last = typeof dmLatest === 'function' ? dmLatest(code) : null;
     return {
       code: code,
       name: (typeof _contracts !== 'undefined' && _contracts[code] && _contracts[code].name) || '',
-      px: px, yld: yld, mix: mix,
+      px: px, yld: yld, mix: mix, last: last,
       real: (yld != null && core != null) ? yld * core : null,
+      realLast: (yld != null && last) ? yld * last.core / 100 : null,
       trend: typeof dmTrend === 'function' ? dmTrend(code, dmPickE) : null,
       pend: typeof dmPending === 'function' ? dmPending(code) : null,
       prem: nav && nav.premium != null ? nav.premium : null,
@@ -536,9 +538,11 @@ async function _rsBondTableHtml() {
   var h = head + '<div class="inv-table-wrap"><table class="inv-table rs-b-table"><thead><tr>' +
     '<th>代號</th>' +
     '<th class="num" title="近 12 個月各期配發金額平均 × 每年期數 ÷ 現價；這是公告上看得到的帳面數字">年化配</th>' +
-    '<th class="num" title="年化配息率 ×（股利＋利息占比）。扣掉收益平準金與資本利得後，真正來自債息的部分">真實配</th>' +
-    '<th class="num" title="收益平準金占比（近 12 個月加權）。把新申購者的本金撥出來當配息發，會稀釋淨值">平準金</th>' +
-    '<th title="近半年平均 vs 前半年平均，差距超過 5 個百分點才標箭頭">趨勢</th>' +
+    '<th class="num" title="年化配息率 ×（股利＋利息占比）＝真正來自債息的部分。&#10;' +
+    '上排為近 12 個月線性遞減加權：最新一期權重 n、次新 n−1，依序遞減到最舊 1，再除以總和。&#10;' +
+    '下排為最新一期未平滑的值。兩者差距大＝這段期間基金的收益結構改變了，平均不具代表性">真實配<div class="rs-b-sub">加權／最新</div></th>' +
+    '<th class="num" title="收益平準金占比，同上為近 12 個月線性遞減加權。&#10;它本身不是負項（來自新申購者已含的應計收益），要對照右邊的上限看">平準金</th>' +
+    '<th title="近半年平均減前半年平均，單位為百分點，不做門檻判定。&#10;新上市的檔前半年沒有期數可比，改列逐期原始序列">趨勢</th>' +
     '<th class="num" title="近 20 個交易日成交金額中位數（不含當日）">日均成交</th>' +
     '<th class="num" title="市價相對淨值；正為溢價、負為折價。括號為近一年水位百分位，0＝最便宜、100＝最貴">折溢價</th>' +
     '<th class="num" title="平準金占比的機制上限 u/(1+u)，u＝單位數成長率（月均規模成長扣除月均淨值漲跌）。&#10;新申購價內含應計未分配收益，這部分才是平準金的來源，所以新單位占比就是上限">上限</th>' +
@@ -553,10 +557,16 @@ async function _rsBondTableHtml() {
     }
     h += '<tr><td>' + x.code + (x.name ? '<div class="rs-b-name">' + x.name + '</div>' : '') + '</td>' +
       '<td class="num">' + pct(x.yld) + '</td>' +
-      '<td class="num"><b>' + pct(x.real) + '</b></td>' +
+      '<td class="num"><b>' + pct(x.real) + '</b>' +
+      (x.realLast == null ? '' : '<div class="rs-b-sub' +
+        (x.real != null && Math.abs(x.realLast - x.real) >= 1 ? ' rs-b-gapbig' : '') +
+        '" title="最新一期 ' + x.last.ex + '：本業占比 ' + x.last.core.toFixed(1) + '%' +
+        (x.real == null ? '' : '&#10;與加權值相差 ' + (x.realLast - x.real >= 0 ? '+' : '') +
+          (x.realLast - x.real).toFixed(2) + ' pp') + '">' + pct(x.realLast) + '</div>') + '</td>' +
       '<td class="num"' + (tip ? ' title="每期平準金占比：&#10;' + tip + '"' : '') + '>' +
       (x.mix ? pct(x.mix.e, 1) : '—') + '</td>' +
-      '<td>' + (typeof dmTrendHtml === 'function' ? dmTrendHtml(x.trend, false) : '—') + '</td>' +
+      '<td>' + (typeof dmTrendHtml === 'function'
+        ? dmTrendHtml(x.trend, false, x.code, dmPickE) : '—') + '</td>' +
       '<td class="num">' + money(x.liq) + '</td>' +
       '<td class="num">' + (x.prem == null ? '—' : (x.prem > 0 ? '+' : '') + x.prem.toFixed(2) + '%' +
         (x.rank ? '<span class="np-h-n" title="近 ' + x.rank.n + ' 個交易日中的百分位">' +
@@ -575,7 +585,13 @@ async function _rsBondTableHtml() {
     '<b>怎麼看</b>：只比較「同樣一筆錢放哪一檔比較划算」，不預測漲跌。綜合分是組內相對分數，' +
     '最低分且與最高分差距達 ' + RS_B_GAP + ' 分才標為換股候選；換去哪一檔要另外看你的現金與配息月份安排。<br>' +
     '<b>真實配息率</b>：帳面年化配息率扣掉收益平準金與資本利得後的部分。平準金是把新申購者的本金當配息發回，' +
-    '資本利得靠賣債價差、行情反轉就沒有，兩者都不是可持續的債息收入。占比取近 12 個月線性遞減加權，最新一期權重最高。<br>' +
+    '資本利得靠賣債價差、行情反轉就沒有，兩者都不是可持續的債息收入。<br>' +
+    '<b>為什麼列兩個值</b>：上排是近 12 個月的「線性遞減加權」平均——最新一期權重 n、次新 n−1，' +
+    '依序遞減到最舊 1，再除以總和；用遞減而非等權，是不讓舊資料把趨勢抹平。' +
+    '但對只有 3~5 期的新檔，這段期間基金的性質可能已經改變，平均就不具代表性：' +
+    '00984D 各期平準金 11.8→40→35.3→50.6→57.6，加權後 45.9%，最新一期已經 57.6%。' +
+    '所以下排並列最新一期未平滑的值，<b>兩者差距本身就是「平均可不可信」的答案</b>，' +
+    '不需要另訂一個「幾期以上才算夠」的門檻——那種門檻我訂不出依據。<br>' +
     '<b>折溢價水位</b>：括號是近一年百分位。這幾檔的淨值都以美國前一夜收盤計算、台股收盤是當日，' +
     '所以美股大幅變動的隔天，全類別的折溢價會一起衝高或一起壓低——' +
     '若四檔的百分位同時很高，那是計價時點落差不是哪一檔變貴，此時單看水位無法分辨。' +
@@ -740,7 +756,8 @@ async function _rsSatTableHtml() {
       '<td class="num"><b>' + pct(x.real) + '</b>' + (x.rkI ? '<div class="rs-b-name">收入 ' + x.rkI + '/' + rows.length + '</div>' : '') + '</td>' +
       '<td class="num">' + (x.mix ? pct(x.mix.e, 1) : '—') + '</td>' +
       '<td class="num">' + capTxt + '</td>' +
-      '<td>' + (typeof dmTrendHtml === 'function' ? dmTrendHtml(x.trend, true) : '—') + '</td>' +
+      '<td>' + (typeof dmTrendHtml === 'function'
+        ? dmTrendHtml(x.trend, true, x.code, dmPickCore) : '—') + '</td>' +
       '<td class="num"><b>' + (x.score == null ? '—' : Math.round(x.score)) + '</b></td>' +
       '<td>' + (worst && worst.code === x.code ? '<span class="rs-b-swap">換股候選</span>' : '') +
       (x.pend ? '<span class="rs-b-pend" title="除息日 ' + x.pend.ex + ' 的組成占比公告尚未發布">下期待公告</span>' : '') +

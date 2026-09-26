@@ -14,7 +14,9 @@
 
 var DM_STALE_DAYS = 40;      // 每月 1 號更新；超過 40 天＝至少漏了一次（抓取或上傳失敗）
 var DM_MONTHS = 12;          // 統計窗口。用「近 12 個月」而非固定期數，月配與季配的時間長度才一致
-var DM_TREND_PP = 5;         // 趨勢箭頭門檻（百分點）：近半年 vs 前半年差距超過才標，避免小幅波動一直跳
+// 原本有 DM_TREND_PP = 5，差距超過 5 個百分點才標箭頭，註解寫「避免小幅波動一直跳」。
+// 那個 5 是憑感覺訂的，沒有依據，而且它把連續量硬切成改善／持平／惡化三格，
+// 4.9pp 和 5.1pp 會落在不同格子。改成直接顯示差值，由看的人自己判斷大小。
 
 var _dmMap = null, _dmDay = null, _dmLoaded = false;
 
@@ -110,20 +112,55 @@ function dmTrend(code, pick) {
   if (!recent.length || !older.length) return null;
   var avg = function (a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; };
   var now = avg(recent), prev = avg(older), diff = now - prev;
-  return { now: now, prev: prev, diff: diff, dir: diff >= DM_TREND_PP ? 1 : (diff <= -DM_TREND_PP ? -1 : 0) };
+  return { now: now, prev: prev, diff: diff, nNow: recent.length, nPrev: older.length };
+}
+
+// 逐期原始序列（舊→新）。半年對半年算不出來時（新上市的檔前半年沒有期數）
+// 用它取代空白：五個數字比一個箭頭清楚，而且沒有任何門檻。
+function dmSeq(code, pick, months) {
+  return dmRecs(code, months).map(function (r) {
+    return { ex: r.ex, v: pick(r.pct) };
+  }).reverse();
+}
+
+// 最新一期的占比（未經加權平滑）。加權平均對只有 3~5 期的新檔會抹掉性質變化：
+// 00984D 各期平準金 11.8→40→35.3→50.6→57.6，加權後 45.9%，最新一期已是 57.6%。
+function dmLatest(code) {
+  var rs = dmRecs(code, DM_MONTHS);
+  if (!rs.length) return null;
+  var p = rs[0].pct;
+  return {
+    ex: rs[0].ex, amt: rs[0].amt,
+    d: p.d || 0, i: p.i || 0, e: p.e || 0, c: p.c || 0, cc: p.cc || 0, o: p.o || 0,
+    core: (p.d || 0) + (p.i || 0), cap: (p.c || 0) + (p.cc || 0)
+  };
 }
 function dmPickE(p) { return p.e || 0; }                                  // 平準金
 function dmPickCore(p) { return (p.d || 0) + (p.i || 0); }                // 本業
 function dmPickCap(p) { return (p.c || 0) + (p.cc || 0); }                // 資本利得合計
 
 // 趨勢顯示：箭頭看數值方向，文字看「對持有人好不好」（goodIsUp 決定）
-function dmTrendHtml(t, goodIsUp) {
-  if (!t) return '<span class="dm-dim">—</span>';
-  if (!t.dir) return '<span class="dm-dim">→ 持平</span>';
-  var up = t.dir > 0, good = up === !!goodIsUp;
-  return '<span class="' + (good ? 'down' : 'up') + '">' + (up ? '↑' : '↓') + ' ' +
-    (good ? '改善' : '惡化') + '</span>' +
-    '<span class="dm-dim"> ' + t.prev.toFixed(0) + '→' + t.now.toFixed(0) + '%</span>';
+// 有半年對半年可比就顯示差值（不做門檻判定），否則顯示逐期原始序列。
+// code/pick 是序列 fallback 需要的；舊呼叫只傳 (t, goodIsUp) 時退回顯示「—」。
+function dmTrendHtml(t, goodIsUp, code, pick) {
+  if (t) {
+    var d = t.diff, good = (d > 0) === !!goodIsUp;
+    var cls = Math.abs(d) < 0.05 ? 'dm-dim' : (good ? 'down' : 'up');
+    return '<span class="' + cls + '" title="近半年 ' + t.nNow + ' 期平均 ' + t.now.toFixed(1) +
+      '%　前半年 ' + t.nPrev + ' 期平均 ' + t.prev.toFixed(1) + '%">' +
+      (d > 0 ? '+' : '') + d.toFixed(1) + ' pp</span>' +
+      '<span class="dm-dim"> ' + t.prev.toFixed(0) + '→' + t.now.toFixed(0) + '%</span>';
+  }
+  if (code && pick) {
+    var s = dmSeq(code, pick, DM_MONTHS);
+    if (s.length) {
+      return '<span class="dm-seq" title="逐期原始值（舊→新）：&#10;' +
+        s.map(function (x) { return x.ex + '　' + x.v.toFixed(1) + '%'; }).join('&#10;') +
+        '&#10;&#10;期數不足半年對半年，不做平均，直接列出原始序列">' +
+        s.map(function (x) { return x.v.toFixed(0); }).join('→') + '%</span>';
+    }
+  }
+  return '<span class="dm-dim">—</span>';
 }
 
 // 資料日期提示：正常＝綠、超過 40 天或讀不到＝黃字提醒手動執行（比照 div-meta.js 的 _divMdjPill）
