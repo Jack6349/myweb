@@ -6,6 +6,7 @@
 //   dates: ['20250929', …]                     全域交易日，舊→新
 //   map:   { '00981B': { i: 起點索引, n: [淨值…], p: [市價…] } }   n/p 自 dates[i] 起對齊
 //   aum:   { '00981B': { '2026-09': 141.54 } }  月均規模（億元），資料源只給近 12 個月滾動
+//   units: { '00981B': { '20260925': 1574613000 } }  受益權單位數日快照，只有排程開始後的日期
 //
 // 兩個必須知道的資料特性
 //   1. n[t] === n[t-1] 時不可計折溢價。成因有二：美國休市日持債未重新定價（淨值不動是正確的，
@@ -17,7 +18,7 @@
 var NP_STALE_DAYS = 5;       // 每日更新；超過 5 天＝排程連續數日未成功
 var NP_WIN = 250;            // 折溢價水位的比較窗口（約一年交易日）
 
-var _npDates = null, _npMap = null, _npAum = null, _npDay = null, _npLoaded = false;
+var _npDates = null, _npMap = null, _npAum = null, _npUnits = null, _npDay = null, _npLoaded = false;
 
 (function () {
   fetch('data/etf-nav.json', { cache: 'no-cache' })
@@ -27,6 +28,17 @@ var _npDates = null, _npMap = null, _npAum = null, _npDay = null, _npLoaded = fa
       if (j && j.map) {
         _npMap = j.map;
         _npAum = j.aum || {};
+        // 單位數的日期鍵在檔案裡是 'YYYYMMDD'，除息日是 'YYYY-MM-DD'，
+        // 直接字串比較會錯（'-' 的碼位小於數字），載入時統一轉成 ISO
+        _npUnits = {};
+        var raw = j.units || {};
+        for (var c in raw) {
+          var o = {};
+          for (var d in raw[c]) {
+            o[d.length === 8 ? d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6) : d] = raw[c][d];
+          }
+          _npUnits[c] = o;
+        }
         _npDay = j.updated || null;
         // 'YYYYMMDD' → 'YYYY-MM-DD'，與 div-mix.js 的除息日同格式才能直接比對
         _npDates = (j.dates || []).map(function (s) {
@@ -120,6 +132,20 @@ function _npAumAt(code, iso) {
   return null;
 }
 
+// 受益權單位數：指定日或之前最近一筆快照。
+// 這是上限公式真正要的量，拿得到就不必再用 規模 ÷ 淨值 去推，內插誤差一併消失。
+// 來源 all_etf.txt 的 c 欄，上市上櫃一致（00984D 是上市，TPEx 的月均規模供不供它看運氣）。
+// 代價是只有排程開始後的日期，往回補不了。
+function _npUnitsAt(code, iso, notBefore) {
+  var u = _npUnits && _npUnits[String(code)];
+  if (!u) return null;
+  var best = null;
+  for (var d in u) {
+    if (d <= iso && (best == null || d > best) && (!notBefore || d > notBefore)) best = d;
+  }
+  return best == null ? null : { d: best, v: u[best] };
+}
+
 // 指定日（或之前最近一個交易日）的淨值
 function _npNavAt(code, iso) {
   var s = npSeries(code);
@@ -154,6 +180,20 @@ function npCeiling(code, ex) {
   if (typeof dmPrevEx !== 'function') return null;
   var p = dmPrevEx(code, ex);
   if (!p) return null;                      // 首次配息沒有前一期，窗口無法界定
+
+  // 優先用實際單位數快照。兩個端點各取「該日或之前最近一筆」，
+  // 並要求 ex 端的快照日晚於 p（否則兩端取到同一筆，u 恆為 0）。
+  var q1 = _npUnitsAt(code, ex, p), q0 = _npUnitsAt(code, p);
+  if (q1 && q0 && q1.d > q0.d) {
+    var uu = q1.v / q0.v - 1;
+    return {
+      win: p + ' → ' + ex, src: 'units',
+      days: Math.round((_npT(ex) - _npT(p)) / 86400000),
+      u: uu * 100, ceil: Math.max(uu / (1 + uu) * 100, 0),
+      u0: q0.v, u1: q1.v, d0: q0.d, d1: q1.d
+    };
+  }
+
   var a1 = _npAumAt(code, ex), a0 = _npAumAt(code, p);
   if (!a1 || !a0) return null;
   var n1 = _npNavAt(code, ex), n0 = _npNavAt(code, p);
@@ -161,7 +201,7 @@ function npCeiling(code, ex) {
   var u1 = a1.v / n1, u0 = a0.v / n0;
   var u = u1 / u0 - 1;
   return {
-    win: p + ' → ' + ex,
+    win: p + ' → ' + ex, src: 'aum',
     days: Math.round((_npT(ex) - _npT(p)) / 86400000),
     g: (a1.v / a0.v - 1) * 100, r: (n1 / n0 - 1) * 100, u: u * 100,
     ceil: Math.max(u / (1 + u) * 100, 0),
@@ -231,11 +271,15 @@ function npCeilHtml(code) {
   if (!rs.length) return '—';
   var c = rs[0].c;
   var sgn = function (v, dp) { return (v >= 0 ? '+' : '') + v.toFixed(dp); };
-  return '<span title="計息窗口 ' + c.win + '（' + c.days + ' 天）&#10;' +
-    '規模 ' + c.aum.toFixed(2) + ' 億，窗口兩端 ' + sgn(c.g, 1) + '%（由 ' + c.aumFrom + ' 月均內插）&#10;' +
-    '淨值 ' + sgn(c.r, 2) + '%&#10;' +
-    '單位數 u = 規模成長 ÷ 淨值漲跌 = ' + sgn(c.u, 1) + '%&#10;' +
-    '上限 = u/(1+u) = ' + c.ceil.toFixed(1) + '%' +
-    (c.approx ? '&#10;※ 窗口端點在首／末月中點之外，該端改取整月均值' : '') +
-    '">' + c.ceil.toFixed(1) + '%' + (c.approx ? '<span class="np-h-n">約</span>' : '') + '</span>';
+  var n = function (v) { return v.toLocaleString('zh-TW'); };
+  var body = (c.src === 'units')
+    ? ('單位數 ' + n(c.u0) + '（' + c.d0 + '）→ ' + n(c.u1) + '（' + c.d1 + '）&#10;' +
+       'u = ' + sgn(c.u, 2) + '%　實際受益權單位數，未經推算')
+    : ('規模 ' + c.aum.toFixed(2) + ' 億，窗口兩端 ' + sgn(c.g, 1) + '%（由 ' + c.aumFrom + ' 月均內插）&#10;' +
+       '淨值 ' + sgn(c.r, 2) + '%&#10;' +
+       'u = 規模成長 ÷ 淨值漲跌 = ' + sgn(c.u, 1) + '%　由月均規模推算' +
+       (c.approx ? '&#10;※ 窗口端點在首／末月中點之外，該端改取整月均值' : ''));
+  return '<span title="計息窗口 ' + c.win + '（' + c.days + ' 天）&#10;' + body + '&#10;' +
+    '上限 = u/(1+u) = ' + c.ceil.toFixed(1) + '%">' + c.ceil.toFixed(1) + '%' +
+    (c.src === 'units' ? '' : '<span class="np-h-n">' + (c.approx ? '約' : '推算') + '</span>') + '</span>';
 }
