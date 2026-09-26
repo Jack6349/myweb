@@ -454,9 +454,17 @@ async function _rsCoreTableHtml(light) {
 //   已實現資本利得＝賣債賺的價差，行情反轉就沒有。
 // 兩者都不是債息收入，卻會讓帳面配息率看起來很高。占比取近 12 個月線性遞減加權（見 div-mix.js），
 // 最新一期權重最高，避免單純平均把趨勢抹掉。
-var RS_B_W = { yield: 0.75, liq: 0.25 };     // 綜合分權重（使用者設定）
-var RS_B_LIQ = { amt: 0.7, prem: 0.3 };      // 流動性內部權重：日均成交金額 70%、折溢價貼近度 30%
+var RS_B_W = { yield: 0.75, liq: 0.25 };     // 綜合分權重（使用者設定，不自行更動）
 var RS_B_GAP = 15;                           // 最低分與最高分差距達此值才標「換股候選」，避免四檔差不多時亂標
+
+// 流動性那 25% 只用日均成交金額，不再拆內部權重。
+// 原本是「成交金額 70% + 折溢價貼近度 30%」，那個 70/30 是我自己訂的，沒有依據；
+// 而且成交金額取不到時程式會讓折溢價頂替整個 25%，實測四檔折溢價全距只有 0.13pp、
+// 小於各檔自己的日標準差 0.31~0.38%，等於拿雜訊排序（00988B 因此多 11 分、00989B 少 15 分）。
+// 折溢價改列獨立欄位並附組內排名，不進分數。
+//
+// 成交金額只要有任一檔取不到，就對「全部」檔都不計入流動性，分數退回純真實配息率。
+// 不能只對缺的那檔跳過：有的檔算了兩項、有的只算一項，分數之間就不可比了。
 
 // 年化配息率：近 12 個月各期配發金額的平均 × 每年期數。
 // 用「平均 × 期數」而非「12 個月加總」，新上市未滿一年的 ETF（如 00989B）才不會被低估。
@@ -509,19 +517,22 @@ async function _rsBondTableHtml() {
     };
   });
 
-  // 綜合分：真實配息率 75% + 流動性 25%（流動性＝日均成交金額 70% + 折溢價貼近度 30%）
+  // 綜合分：真實配息率 75% + 流動性 25%（流動性＝日均成交金額，見上方說明）
   var vReal = rows.map(function (x) { return x.real; });
   var vLiq = rows.map(function (x) { return x.liq == null ? null : Math.log(x.liq); });   // 金額量級差距大，取對數
-  var vPrem = rows.map(function (x) { return x.prem == null ? null : -Math.abs(x.prem); });
+  var liqUsable = rows.length > 1 && rows.every(function (x) { return x.liq != null; });
   rows.forEach(function (x) {
     var ys = _rsNorm(vReal, x.real);
-    var ls1 = _rsNorm(vLiq, x.liq == null ? null : Math.log(x.liq));
-    var ls2 = _rsNorm(vPrem, x.prem == null ? null : -Math.abs(x.prem));
-    var ls = (ls1 == null && ls2 == null) ? null
-      : (ls1 == null ? ls2 : (ls2 == null ? ls1 : ls1 * RS_B_LIQ.amt + ls2 * RS_B_LIQ.prem));
+    var ls = liqUsable ? _rsNorm(vLiq, Math.log(x.liq)) : null;
     x.sYield = ys; x.sLiq = ls;
-    x.score = (ys == null) ? null : 100 * (ys * RS_B_W.yield + (ls == null ? ys : ls) * RS_B_W.liq);
+    // 流動性不可用時只用真實配息率，不拿別的指標頂替那 25%
+    x.score = (ys == null) ? null
+      : 100 * (ls == null ? ys : ys * RS_B_W.yield + ls * RS_B_W.liq);
   });
+  // 折溢價不進分數，只給組內排名（絕對值小者排前，越貼近淨值越好）
+  var pr = rows.filter(function (x) { return x.prem != null; })
+    .sort(function (a, b) { return Math.abs(a.prem) - Math.abs(b.prem); });
+  pr.forEach(function (x, i) { x.premRank = (i + 1) + '/' + pr.length; });
   var scored = rows.filter(function (x) { return x.score != null; });
   var worst = null;
   if (scored.length >= 2) {
@@ -543,8 +554,11 @@ async function _rsBondTableHtml() {
     '下排為最新一期未平滑的值。兩者差距大＝這段期間基金的收益結構改變了，平均不具代表性">真實配<div class="rs-b-sub">加權／最新</div></th>' +
     '<th class="num" title="收益平準金占比，同上為近 12 個月線性遞減加權。&#10;它本身不是負項（來自新申購者已含的應計收益），要對照右邊的上限看">平準金</th>' +
     '<th title="近半年平均減前半年平均，單位為百分點，不做門檻判定。&#10;新上市的檔前半年沒有期數可比，改列逐期原始序列">趨勢</th>' +
-    '<th class="num" title="近 20 個交易日成交金額中位數（不含當日）">日均成交</th>' +
-    '<th class="num" title="市價相對淨值；正為溢價、負為折價。括號為近一年水位百分位，0＝最便宜、100＝最貴">折溢價</th>' +
+    '<th class="num" title="近 20 個交易日成交金額中位數（不含當日）。這是流動性那 25% 的唯一來源；&#10;' +
+    '需要券商連線，只要有任一檔取不到就對全部檔都不計入，分數退回純真實配息率">日均成交</th>' +
+    '<th class="num" title="市價相對淨值，正為溢價、負為折價。&#10;' +
+    '「水位」＝近一年百分位，0 最便宜、100 最貴。「貼近」＝組內排名，絕對值小者在前。&#10;' +
+    '不進綜合分：四檔全距僅 0.13pp，小於各檔自己的日標準差 0.31~0.38%，拿它排序等於在排雜訊">折溢價<div class="rs-b-sub">不計分</div></th>' +
     '<th class="num" title="平準金占比的機制上限 u/(1+u)，u＝單位數成長率（月均規模成長扣除月均淨值漲跌）。&#10;新申購價內含應計未分配收益，這部分才是平準金的來源，所以新單位占比就是上限">上限</th>' +
     '<th title="平準金占比 vs 機制上限。超出＝該期有一部分平準金不是新單位帶進來的，動到本金；&#10;未超出不等於證明健康，只是不能證明有問題">健康度</th>' +
     '<th class="num" title="真實配息率 75% + 流動性 25%，組內相對評分">綜合分</th>' +
@@ -569,8 +583,9 @@ async function _rsBondTableHtml() {
         ? dmTrendHtml(x.trend, false, x.code, dmPickE) : '—') + '</td>' +
       '<td class="num">' + money(x.liq) + '</td>' +
       '<td class="num">' + (x.prem == null ? '—' : (x.prem > 0 ? '+' : '') + x.prem.toFixed(2) + '%' +
-        (x.rank ? '<span class="np-h-n" title="近 ' + x.rank.n + ' 個交易日中的百分位">' +
-          Math.round(x.rank.pct) + '</span>' : '')) + '</td>' +
+        (x.rank ? '<span class="np-h-n" title="近 ' + x.rank.n + ' 個交易日中的百分位">水位 ' +
+          Math.round(x.rank.pct) + '</span>' : '') +
+        (x.premRank ? '<div class="rs-b-sub">貼近 ' + x.premRank + '</div>' : '')) + '</td>' +
       '<td class="num">' + (typeof npCeilHtml === 'function' ? npCeilHtml(x.code) : '—') + '</td>' +
       '<td>' + (typeof npHealthHtml === 'function' ? npHealthHtml(x.code) : '—') + '</td>' +
       '<td class="num"><b>' + (x.score == null ? '—' : Math.round(x.score)) + '</b></td>' +
@@ -613,8 +628,14 @@ async function _rsBondTableHtml() {
     '<b>三個已知限制</b>：規模只有月平均，窗口端點靠相鄰兩個月中點線性內插，' +
     '仍會沾到除息日之後幾天的申購，無法完全消除；端點落在首月或末月中點之外時改取整月均值，' +
     '該欄標「約」；月均規模資料源只給近 12 個月滾動，更早的期數與每檔首次配息算不出上限。<br>' +
-    (noLiq ? '<b class="up">日均成交金額需要券商連線</b>（Shioaji 日 K），目前有部分檔取不到；' +
-      '該檔的流動性改以折溢價單項計算，兩項都缺時則只看殖利率。<br>' : '') +
+    '<b>綜合分只吃兩項</b>：真實配息率 75%、流動性 25%（＝日均成交金額）。' +
+    '流動性原本還拆了「成交金額 70% + 折溢價 30%」，那個 70/30 是我自己訂的、沒有依據，已拿掉。' +
+    '折溢價也移出評分，理由是四檔全距僅 0.13pp，小於各檔自己的日標準差 0.31~0.38%，' +
+    '用它排序等於在排雜訊；它改列獨立欄位並附組內排名，供你自己判斷。<br>' +
+    (noLiq ? '<b class="up">目前流動性未計入，綜合分＝純真實配息率。</b>' +
+      '日均成交金額需要券商連線（Shioaji 日 K），現在有檔取不到。' +
+      '只要有任一檔缺就對全部檔都不計入，不是只跳過缺的那檔——' +
+      '否則有的檔算了兩項、有的只算一項，分數之間不可比。<br>' : '') +
     '資料來源：配息金額與組成占比＝公開資訊觀測站；淨值與折溢價＝MoneyDJ（每日排程，落後約一個交易日，' +
     '美國休市日淨值未重新定價者不計折溢價）；月均規模＝TPEx；成交金額＝Shioaji 日 K。' +
     (typeof npStale === 'function' && npStale() ? '<b class="up">淨值資料已 ' + npStale() + ' 天未更新。</b>' : '') +
