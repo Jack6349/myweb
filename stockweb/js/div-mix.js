@@ -47,6 +47,20 @@ function dmRecs(code, months) {
   return list.filter(function (x) { return x.pct && x.ex >= from; });
 }
 
+// 上一次除息日（含 pending，因為計息窗口是以除息日界定，跟占比公告了沒無關）。
+// 用 dmRecs 反推會出錯：00988B 的 2026-07-16 那期還在待公告，被濾掉後
+// 2026-08-18 的上一次會變成 2026-06-15，窗口從 33 天膨脹成 64 天。
+function dmPrevEx(code, ex) {
+  var list = _dmMap && _dmMap[String(code)];
+  if (!list || !list.length) return null;
+  var best = null;
+  for (var i = 0; i < list.length; i++) {
+    var e = list[i].ex;
+    if (e && e < ex && (best == null || e > best)) best = e;
+  }
+  return best;
+}
+
 // 尚未公告占比的最近一次除息（表二標「下期待公告」用）
 function dmPending(code) {
   var list = _dmMap && _dmMap[String(code)];

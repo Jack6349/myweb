@@ -86,24 +86,47 @@ function npPremRank(code) {
   return { pct: below / win.length * 100, cur: cur, n: win.length };
 }
 
-// 指定月份的月均淨值。要與 TPEx 的月均規模同為「月平均」，兩個窗口才對齊——
-// 先前用月底單點收盤對月均規模，窗口差了半個月，且收盤價含折溢價雜訊。
-function npMonthAvgNav(code, ym) {
-  var s = npSeries(code).filter(function (x) { return x.date.slice(0, 7) === ym; });
-  if (!s.length) return null;
-  var sum = s.reduce(function (a, x) { return a + x.nav; }, 0);
-  return { avg: sum / s.length, days: s.length };
-}
-
 function npAumOf(code, ym) {
   var a = _npAum && _npAum[String(code)];
   return (a && a[ym] > 0) ? a[ym] : null;
 }
 
-function _npPrevYm(ym) {
-  var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1;
-  if (m < 1) { m = 12; y -= 1; }
-  return y + '-' + (m < 10 ? '0' : '') + m;
+var _npT = function (iso) { return new Date(iso + 'T00:00:00+08:00').getTime(); };
+
+// 月均規模視為「該月中點的瞬時值」，在相鄰兩個中點之間線性內插出任一天的規模。
+// 這是為了讓規模能對齊計息窗口的端點——資料源只給月平均，除息日卻可能落在月初。
+// 端點落在第一個或最後一個中點之外時回 null，不外插：外插誤差沒有上界。
+function _npAumAt(code, iso) {
+  var a = _npAum && _npAum[String(code)];
+  if (!a) return null;
+  var ms = Object.keys(a).sort().map(function (ym) {
+    var y = +ym.slice(0, 4), m = +ym.slice(5, 7);
+    var dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return { t: _npT(ym + '-' + (dim >> 1 < 10 ? '0' : '') + (dim >> 1) + ''), v: a[ym], ym: ym };
+  });
+  if (ms.length < 2) return null;
+  var t = _npT(iso), lo = ms[0], hi = ms[ms.length - 1];
+  // 端點落在首尾中點之外時不外插（誤差沒有上界），但只要仍在該月之內就取該月均值。
+  // 月底除息的檔（00981B 9/21）會落在最後一個月中點之後，不給這個退路的話
+  // 最新一期永遠要等下個月的規模才算得出來。
+  if (t < lo.t) return iso.slice(0, 7) === lo.ym ? { v: lo.v, from: lo.ym, to: lo.ym, approx: 1 } : null;
+  if (t > hi.t) return iso.slice(0, 7) === hi.ym ? { v: hi.v, from: hi.ym, to: hi.ym, approx: 1 } : null;
+  for (var i = 1; i < ms.length; i++) {
+    if (t <= ms[i].t) {
+      var w = (t - ms[i - 1].t) / (ms[i].t - ms[i - 1].t);
+      return { v: ms[i - 1].v + (ms[i].v - ms[i - 1].v) * w, from: ms[i - 1].ym, to: ms[i].ym };
+    }
+  }
+  return null;
+}
+
+// 指定日（或之前最近一個交易日）的淨值
+function _npNavAt(code, iso) {
+  var s = npSeries(code);
+  for (var i = s.length - 1; i >= 0; i--) {
+    if (s[i].date <= iso) return s[i].nav;
+  }
+  return null;
 }
 
 // 收益平準金占比的機制上限 u/(1+u)
@@ -116,19 +139,34 @@ function _npPrevYm(ym) {
 //
 // u 必須用單位數成長，不能直接用規模成長：規模＝單位數 × 淨值，債券價格漲也會讓規模變大，
 // 但那不代表有新錢進來，也就不會產生平準金。(1+g)=(1+u)(1+r) → u=(1+g)/(1+r)-1。
-function npCeiling(code, ym) {
-  var pv = _npPrevYm(ym);
-  var a1 = npAumOf(code, ym), a0 = npAumOf(code, pv);
+// 窗口＝(上一次除息日, 本次除息日]。平準金是這段期間新申購者帶進來的，
+// 所以 u 要量的是這兩個端點之間單位數成長了多少：
+//   單位數(d) = 規模(d) / 淨值(d)，兩端相除即得 u，不必再走 (1+g)/(1+r)。
+//
+// 為什麼不能用「除息日所屬月份」挑規模（我原本的寫法）：
+//   00984D 9/1 除息，窗口是 7/31 → 9/1，幾乎整段落在八月，用九月規模會差一整個月；
+//   更嚴重的是九月規模含 9/1 之後的申購，那些錢不可能參與 9/1 就已決定的配息，是未來資訊。
+//   實測近幾期「窗口中點不在除息月」的比例：00984D 3/4、00989B 2/2、00988B 1/3、00981B 0/4。
+//
+// 殘留誤差：規模只有月平均，端點靠相鄰兩個月中點線性內插，仍會沾到除息日之後幾天的申購。
+// 月初除息的檔沾得最少（權重落在前一個月），無法完全消除。
+function npCeiling(code, ex) {
+  if (typeof dmPrevEx !== 'function') return null;
+  var p = dmPrevEx(code, ex);
+  if (!p) return null;                      // 首次配息沒有前一期，窗口無法界定
+  var a1 = _npAumAt(code, ex), a0 = _npAumAt(code, p);
   if (!a1 || !a0) return null;
-  var n1 = npMonthAvgNav(code, ym), n0 = npMonthAvgNav(code, pv);
+  var n1 = _npNavAt(code, ex), n0 = _npNavAt(code, p);
   if (!n1 || !n0) return null;
-  var g = a1 / a0 - 1, r = n1.avg / n0.avg - 1, u = (1 + g) / (1 + r) - 1;
-  var thisYm = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 7);
+  var u1 = a1.v / n1, u0 = a0.v / n0;
+  var u = u1 / u0 - 1;
   return {
-    ym: ym, g: g * 100, r: r * 100, u: u * 100,
+    win: p + ' → ' + ex,
+    days: Math.round((_npT(ex) - _npT(p)) / 86400000),
+    g: (a1.v / a0.v - 1) * 100, r: (n1 / n0 - 1) * 100, u: u * 100,
     ceil: Math.max(u / (1 + u) * 100, 0),
-    aum: a1, days: n1.days,
-    partial: ym === thisYm          // 當月未結束，月均值會隨後續交易日變動
+    aum: a1.v, aumFrom: a0.from + '~' + a1.to,
+    approx: !!(a1.approx || a0.approx)      // 端點落在首尾月中點之外，改取該月均值
   };
 }
 
@@ -136,7 +174,7 @@ function npCeiling(code, ym) {
 // state: ok（無平準金）／safe（在上限內）／warn（超出上限）／nodata
 function npHealth(code, exDate, ePct) {
   if (ePct == null) return { state: 'nodata', why: '占比未公告', c: null };
-  var c = npCeiling(code, String(exDate).slice(0, 7));
+  var c = npCeiling(code, String(exDate));
   if (ePct === 0) return { state: 'ok', ceil: c ? c.ceil : null, gap: null, c: c };
   if (!c) return { state: 'nodata', why: '規模或淨值資料不足', c: null };
   var gap = c.ceil - ePct;
@@ -193,10 +231,11 @@ function npCeilHtml(code) {
   if (!rs.length) return '—';
   var c = rs[0].c;
   var sgn = function (v, dp) { return (v >= 0 ? '+' : '') + v.toFixed(dp); };
-  return '<span title="' + rs[0].ex + ' 所屬月份 ' + c.ym + '&#10;' +
-    '月均規模 ' + c.aum.toFixed(2) + ' 億（' + sgn(c.g, 1) + '%）&#10;' +
-    '月均淨值 ' + sgn(c.r, 2) + '%（' + c.days + ' 個交易日）&#10;' +
-    '單位數 u = (1' + sgn(c.g / 100, 4) + ')/(1' + sgn(c.r / 100, 4) + ')-1 = ' + sgn(c.u, 1) + '%&#10;' +
-    '上限 = u/(1+u) = ' + c.ceil.toFixed(1) + '%">' +
-    c.ceil.toFixed(1) + '%' + (c.partial ? '<span class="np-h-n">進行中</span>' : '') + '</span>';
+  return '<span title="計息窗口 ' + c.win + '（' + c.days + ' 天）&#10;' +
+    '規模 ' + c.aum.toFixed(2) + ' 億，窗口兩端 ' + sgn(c.g, 1) + '%（由 ' + c.aumFrom + ' 月均內插）&#10;' +
+    '淨值 ' + sgn(c.r, 2) + '%&#10;' +
+    '單位數 u = 規模成長 ÷ 淨值漲跌 = ' + sgn(c.u, 1) + '%&#10;' +
+    '上限 = u/(1+u) = ' + c.ceil.toFixed(1) + '%' +
+    (c.approx ? '&#10;※ 窗口端點在首／末月中點之外，該端改取整月均值' : '') +
+    '">' + c.ceil.toFixed(1) + '%' + (c.approx ? '<span class="np-h-n">約</span>' : '') + '</span>';
 }
