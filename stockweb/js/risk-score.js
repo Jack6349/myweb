@@ -106,8 +106,15 @@ async function _rsOAS() {
     return data;
   } catch (e) { return null; }
 }
-// 折溢價：沿用 signals.js 的 TWSE 官方淨值（盤後才準）
+// 折溢價：優先用 nav-premium.js（MoneyDJ 淨值，有一年歷史，可判水位並排除淨值沿用前值的日子），
+// 取不到時退回 signals.js 的 TWSE 淨值（只有當日）。
 async function _rsBondNav(code) {
+  try {
+    if (typeof npPremium === 'function') {
+      var p = npPremium(code);
+      if (p) return { nav: p.nav, premium: p.prem, price: p.px, date: p.date, src: 'np' };
+    }
+  } catch (e) {}
   try {
     if (typeof sigEnsureNavMap === 'function') await sigEnsureNavMap();
     if (typeof sigGetNav === 'function') return sigGetNav(code); // {nav, premium(%), price, date}
@@ -495,6 +502,7 @@ async function _rsBondTableHtml() {
       trend: typeof dmTrend === 'function' ? dmTrend(code, dmPickE) : null,
       pend: typeof dmPending === 'function' ? dmPending(code) : null,
       prem: nav && nav.premium != null ? nav.premium : null,
+      rank: typeof npPremRank === 'function' ? npPremRank(code) : null,
       liq: liq ? liq.med : null
     };
   });
@@ -532,7 +540,9 @@ async function _rsBondTableHtml() {
     '<th class="num" title="收益平準金占比（近 12 個月加權）。把新申購者的本金撥出來當配息發，會稀釋淨值">平準金</th>' +
     '<th title="近半年平均 vs 前半年平均，差距超過 5 個百分點才標箭頭">趨勢</th>' +
     '<th class="num" title="近 20 個交易日成交金額中位數（不含當日）">日均成交</th>' +
-    '<th class="num" title="市價相對淨值；正為溢價、負為折價，越接近 0 越好">折溢價</th>' +
+    '<th class="num" title="市價相對淨值；正為溢價、負為折價。括號為近一年水位百分位，0＝最便宜、100＝最貴">折溢價</th>' +
+    '<th class="num" title="平準金占比的機制上限 u/(1+u)，u＝單位數成長率（月均規模成長扣除月均淨值漲跌）。&#10;新申購價內含應計未分配收益，這部分才是平準金的來源，所以新單位占比就是上限">上限</th>' +
+    '<th title="平準金占比 vs 機制上限。超出＝該期有一部分平準金不是新單位帶進來的，動到本金；&#10;未超出不等於證明健康，只是不能證明有問題">健康度</th>' +
     '<th class="num" title="真實配息率 75% + 流動性 25%，組內相對評分">綜合分</th>' +
     '<th>建議</th></tr></thead><tbody>';
 
@@ -548,7 +558,11 @@ async function _rsBondTableHtml() {
       (x.mix ? pct(x.mix.e, 1) : '—') + '</td>' +
       '<td>' + (typeof dmTrendHtml === 'function' ? dmTrendHtml(x.trend, false) : '—') + '</td>' +
       '<td class="num">' + money(x.liq) + '</td>' +
-      '<td class="num">' + (x.prem == null ? '—' : (x.prem > 0 ? '+' : '') + x.prem.toFixed(2) + '%') + '</td>' +
+      '<td class="num">' + (x.prem == null ? '—' : (x.prem > 0 ? '+' : '') + x.prem.toFixed(2) + '%' +
+        (x.rank ? '<span class="np-h-n" title="近 ' + x.rank.n + ' 個交易日中的百分位">' +
+          Math.round(x.rank.pct) + '</span>' : '')) + '</td>' +
+      '<td class="num">' + (typeof npCeilHtml === 'function' ? npCeilHtml(x.code) : '—') + '</td>' +
+      '<td>' + (typeof npHealthHtml === 'function' ? npHealthHtml(x.code) : '—') + '</td>' +
       '<td class="num"><b>' + (x.score == null ? '—' : Math.round(x.score)) + '</b></td>' +
       '<td>' + (worst && worst.code === x.code ? '<span class="rs-b-swap">換股候選</span>' : '') +
       (x.pend ? '<span class="rs-b-pend" title="除息日 ' + x.pend.ex + ' 的組成占比公告尚未發布（發行商通常在除息後約 10 天才發）">下期待公告</span>' : '') +
@@ -562,10 +576,27 @@ async function _rsBondTableHtml() {
     '最低分且與最高分差距達 ' + RS_B_GAP + ' 分才標為換股候選；換去哪一檔要另外看你的現金與配息月份安排。<br>' +
     '<b>真實配息率</b>：帳面年化配息率扣掉收益平準金與資本利得後的部分。平準金是把新申購者的本金當配息發回，' +
     '資本利得靠賣債價差、行情反轉就沒有，兩者都不是可持續的債息收入。占比取近 12 個月線性遞減加權，最新一期權重最高。<br>' +
+    '<b>折溢價水位</b>：括號是近一年百分位。這幾檔的淨值都以美國前一夜收盤計算、台股收盤是當日，' +
+    '所以美股大幅變動的隔天，全類別的折溢價會一起衝高或一起壓低——' +
+    '若四檔的百分位同時很高，那是計價時點落差不是哪一檔變貴，此時單看水位無法分辨。' +
+    '換股要看的是兩檔的<b>價差</b>（賣出腿溢價 − 買進腿溢價），共同的部分會在相減時抵消。<br>' +
+    '<b>上限與健康度</b>：平準金來自新申購者在申購價中已含的應計未分配收益，不是老股東的本金，' +
+    '所以它本身不是負項。要看的是占比有沒有超過「新單位占比」撐得起的量：' +
+    '期末單位比期初多 u 成，新單位占比就是 u/(1+u)，這就是平準金能占配息的上限。' +
+    'u 用月均規模成長扣掉月均淨值漲跌算，因為債券價格漲也會讓規模變大，那沒有新錢進來。' +
+    '這是上界不是估計值（假設每個新單位都帶滿整期應計收益），所以' +
+    '<b>超出＝確定動到本金；未超出只代表不能證明有問題，不等於證明健康</b>。' +
+    '徽章看<b>最新一期</b>（要回答的是現在該不該續抱），近 12 期其他期數的超出次數標在旁邊，' +
+    '逐期明細見欄位提示。<br>' +
     '<b>違約風險</b>不在此表判定，交給發行商經理人。<br>' +
+    '<b>三個已知限制</b>：月均規模資料源只給近 12 個月滾動，更早的期數算不出上限；' +
+    '除息期不等於日曆月，規模只有月頻資料無法對齊，短月配的檔會有半個月的錯位；' +
+    '當月未結束時月均值仍會變動，該欄標「進行中」。<br>' +
     (noLiq ? '<b class="up">日均成交金額需要券商連線</b>（Shioaji 日 K），目前有部分檔取不到；' +
       '該檔的流動性改以折溢價單項計算，兩項都缺時則只看殖利率。<br>' : '') +
-    '資料來源：配息金額與組成占比＝公開資訊觀測站（資料日見頁面上方）；折溢價＝TWSE 官方淨值；成交金額＝Shioaji 日 K。' +
+    '資料來源：配息金額與組成占比＝公開資訊觀測站；淨值與折溢價＝MoneyDJ（每日排程，落後約一個交易日，' +
+    '美國休市日淨值未重新定價者不計折溢價）；月均規模＝TPEx；成交金額＝Shioaji 日 K。' +
+    (typeof npStale === 'function' && npStale() ? '<b class="up">淨值資料已 ' + npStale() + ' 天未更新。</b>' : '') +
     '<b>本表為依你設定規則自動算分的參考，非投資建議。</b>' +
     '</div>';
   return h;

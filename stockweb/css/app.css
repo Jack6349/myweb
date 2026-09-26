@@ -593,6 +593,12 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-b-name { font-size: 11px; font-weight: 400; color: var(--text2); }
 .rs-b-swap { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--accent2); color: #000; font-weight: 700; }
 .rs-b-pend { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--text3); margin-left: 4px; }
+/* 配息健康度徽章：平準金占比 vs 機制上限。警示用紅、穩定用綠，與股市漲跌色系一致 */
+.np-h { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.np-h-warn { background: var(--up); color: #fff; font-weight: 700; }
+.np-h-ok, .np-h-safe { border: 1px solid var(--dn); color: var(--dn); }
+.np-h-na { color: var(--text3); }
+.np-h-n { font-size: 10px; color: var(--text3); margin-left: 4px; }
 .dm-dim { color: var(--text3); font-size: 11px; }
 .rs-bond-list { margin: 0; padding-left: 22px; font-size: 13px; color: var(--text); line-height: 1.9; }
 .rs-bond-list li { padding-left: 2px; }
