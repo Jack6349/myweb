@@ -263,6 +263,11 @@ async function startRiskReport(force) {
   // ── 表二：非投等債（每月基本收入）──
   html += await _rsBondTableHtml();
 
+  // ── 換股評估 B／C／D（swap-scan.js）──
+  // 接在表二後面：A（持股現況）就是表二本身，B 由它往外延伸到互換、C 到全市場、D 到指定標的。
+  // 用容器包住是因為 D 區加減標的後要能單獨重繪，不必重跑整份報告。
+  html += '<div id="swap-scan">' + (typeof swAllHtml === 'function' ? swAllHtml() : '') + '</div>';
+
   // ── 表三：衛星配置（增加資產與月收入）──
   html += await _rsSatTableHtml();
 

@@ -594,6 +594,22 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-b-swap { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--accent2); color: #000; font-weight: 700; }
 .rs-b-next { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--accent2); color: var(--accent2); margin-left: 4px; white-space: nowrap; }
 .rs-b-pend { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--text3); margin-left: 4px; }
+/* 換股評估 B／C／D */
+.sw-table th, .sw-table td { white-space: nowrap; }
+.sw-none { font-size: 13px; color: var(--note); line-height: 1.8; padding: 6px 2px 14px; }
+.sw-sub { font-size: 13px; color: var(--note); line-height: 1.8; padding: 4px 2px 14px; }
+.sw-spark { font-family: monospace; font-size: 13px; color: var(--sum); letter-spacing: 1px; }
+.sw-d { font-size: 11px; margin-left: 6px; }
+.sw-input { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 2px 14px; }
+.sw-input input { width: 190px; padding: 6px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--thbg); color: var(--text); font-size: 13px; }
+.sw-input button { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent2);
+  background: transparent; color: var(--accent2); font-size: 13px; cursor: pointer; }
+.sw-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.sw-chip { font-size: 12px; padding: 3px 8px; border-radius: 99px;
+  border: 1px solid var(--border); color: var(--text2); white-space: nowrap; }
+.sw-chip a { color: var(--text3); margin-left: 6px; cursor: pointer; font-weight: 700; }
+.sw-chip a:hover { color: var(--up); }
 /* 配息健康度徽章：平準金占比 vs 機制上限。警示用紅、穩定用綠，與股市漲跌色系一致 */
 /* 表二：真實配息率並列「加權／最新」，以及期數不足時的逐期序列 */
 .rs-b-sub { font-size: 11px; font-weight: 400; color: var(--text2); line-height: 1.5; }
