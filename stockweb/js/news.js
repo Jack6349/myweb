@@ -11,7 +11,7 @@ var NEWS_FEEDS = [
 ];
 var NEWS_HOURS = 24; // 只彙整最近 N 小時
 
-// 總經市場數據（補足新聞標題缺少的系統性風險判斷依據）
+// 總經市場資料（補足新聞標題缺少的系統性風險判斷依據）
 var MACRO_TICKERS = [
   { name: 'S&P 500',      sym: '^GSPC',     fmt: 0 },
   { name: 'Nasdaq',       sym: '^IXIC',     fmt: 0 },
@@ -109,7 +109,7 @@ async function loadEsunFx(force) {
   return _esun;
 }
 
-// ── 美國總經數據（FRED 官方 CSV，經 GAS ?urltext= 代理；與加減碼報告的 OAS 同一條管道）──
+// ── 美國總經資料（FRED 官方 CSV，經 GAS ?urltext= 代理；與加減碼報告的 OAS 同一條管道）──
 // 每項標自己的資料月份：非農／失業率由 BLS 月初發布，CPI 約月中發布，兩者常差一個月，
 // 不可混為一談。FRED 轉載 BLS，通常在官方發布當天或隔天更新，不適合搶即時數字。
 // 月頻資料一天最多變一次 → 每日快取，避免重複消耗 GAS 配額。
@@ -175,7 +175,7 @@ function renderFredBar() {
     var isDelta = m.name === '非農就業';
     var val = (isDelta ? sign(m.value, m.dp) : m.value.toFixed(m.dp)) + m.unit;
     var pv = (isDelta ? sign(m.prev, m.dp) : m.prev.toFixed(m.dp)) + m.unit;
-    // 相對前值的方向（與市場數據列同一套）：上升▲紅、下降▼綠、持平白且不加箭頭。
+    // 相對前值的方向（與市場資料列同一套）：上升▲紅、下降▼綠、持平白且不加箭頭。
     // 純粹標示數值走向，不含好壞判斷（失業率上升同樣顯示紅）。
     var d = m.value - m.prev;
     var cls = d > 0 ? 'up' : (d < 0 ? 'down' : 'flat');
@@ -190,8 +190,8 @@ function renderFredBar() {
 }
 
 // ── 訊號一致性檢查 ──
-// 只做「方向比對」：陳述哪兩項數據彼此同向或相反，不推論股債會漲會跌。
-// 為何不給趨勢結論：同一組數據在軟著陸與衰退情境下市場解讀相反，程式無從分辨，
+// 只做「方向比對」：陳述哪兩項資料彼此同向或相反，不推論股債會漲會跌。
+// 為何不給趨勢結論：同一組資料在軟著陸與衰退情境下市場解讀相反，程式無從分辨，
 // 壓成單一紅黃綠燈會把不確定性藏起來，且背離本身才是最有資訊量的部分。
 // 資料全部取自既有來源（FRED 月頻 ＋ _rsYahoo 多日 ＋ OAS），不新增 API。
 var _consist = [];   // {level:'ok'|'diverge'|'na', title, detail}
@@ -286,7 +286,7 @@ function renderConsistency() {
       '<span class="cs-title">' + r.title + '</span>' +
       '<span class="cs-detail">' + r.detail + '</span></div>';
   });
-  h += '<div class="cs-note">僅比對各項數據的方向是否一致，不推論股債後續走勢。' +
+  h += '<div class="cs-note">僅比對各項資料的方向是否一致，不推論股債後續走勢。' +
     '方向不一致代表訊號互相牴觸，通常是需要進一步查證的地方，本身不是買賣訊號。</div>';
   el.innerHTML = h;
 }
@@ -389,7 +389,7 @@ async function loadNews() {
   var infoEl = document.getElementById('news-info');
   listEl.innerHTML = '<div class="modal-loading">抓取 RSS 中…</div>';
 
-  loadMacro(); // 市場數據平行抓取，不阻塞新聞
+  loadMacro(); // 市場資料平行抓取，不阻塞新聞
   loadFred().then(loadConsistency);  // 總經（每日快取）→ 完成後做訊號一致性比對，皆不阻塞新聞
 
   var results = await Promise.allSettled(NEWS_FEEDS.map(fetchFeed));
@@ -446,7 +446,7 @@ async function buildNewsPrompt() {
   var now = new Date();
   var holdings = await newsHoldingsList();
 
-  // 市場數據快照（若尚未載入則現抓）
+  // 市場資料快照（若尚未載入則現抓）
   if (!_macroSnap.length) { try { await loadMacro(); } catch (e) {} }
   if (!_esun) { try { await loadEsunFx(); } catch (e) {} }
   if (!_fredSnap.length) { try { await loadFred(); } catch (e) {} }
@@ -504,8 +504,8 @@ async function buildNewsPrompt() {
   return '你是一位協助退休投資人的財經分析助手。我的投資策略：以台股 ETF 領息為主、長期持有，' +
     '股息再投入時偏好低接，最需要避開的是「系統性風險下的錯誤加碼」。\n\n' +
     '今天是 ' + now.getFullYear() + '/' + (now.getMonth() + 1) + '/' + now.getDate() +
-    '。以下提供三類資訊：(A) 即時市場數據快照、(B) 我的持股清單、(C) 最近 ' + NEWS_HOURS + ' 小時財經新聞標題。' +
-    '請優先依據 (A) 的量化數據判斷系統性風險（美股走勢、VIX 恐慌指數、美債殖利率、美元指數、台指夜盤、匯率），' +
+    '。以下提供三類資訊：(A) 即時市場資料快照、(B) 我的持股清單、(C) 最近 ' + NEWS_HOURS + ' 小時財經新聞標題。' +
+    '請優先依據 (A) 的量化資料判斷系統性風險（美股走勢、VIX 恐慌指數、美債殖利率、美元指數、台指夜盤、匯率），' +
     '新聞標題作為輔助佐證。\n\n' +
     '【評估規則】\n' +
     '1. 拒絕假精確：所有評分不要只給單一分類（高/中/低）。改以「點估計＋合理區間」表達，區間寬度反映你的不確定性；' +
@@ -529,12 +529,12 @@ async function buildNewsPrompt() {
     '  "veto": false,               // true=偵測到系統性風險，今日應凍結所有加碼\n' +
     '  "reasons": []                // 主要判斷依據，2~4 條，每條一句話\n' +
     '}\n```\n\n' +
-    '## (A) 即時市場數據快照\n' + (macroTxt || '（暫無）') + '\n\n' +
-    (consistTxt ? '## (A3) 訊號一致性（各項數據的方向比對）\n' +
+    '## (A) 即時市場資料快照\n' + (macroTxt || '（暫無）') + '\n\n' +
+    (consistTxt ? '## (A3) 訊號一致性（各項資料的方向比對）\n' +
       '※ 這是機械式方向比對，非趨勢預測。標示「方向不一致」處代表訊號互相牴觸，請在分析中說明可能原因，不要直接當作買賣訊號。\n' +
       consistTxt + '\n\n' : '') +
-    (fredTxt ? '## (A2) 美國總經數據（月頻，FRED 轉載 BLS）\n' +
-      '※ 各項資料月份不同：非農／失業率由 BLS 月初發布，CPI 約月中發布，常差一個月，請勿當作同期數據比較。\n' +
+    (fredTxt ? '## (A2) 美國總經資料（月頻，FRED 轉載 BLS）\n' +
+      '※ 各項資料月份不同：非農／失業率由 BLS 月初發布，CPI 約月中發布，常差一個月，請勿當作同期資料比較。\n' +
       fredTxt + '\n\n' : '') +
     (function () {
       var sec = 'C'.charCodeAt(0);
