@@ -811,7 +811,7 @@ async function _rsSatTableHtml() {
       '<td class="num">' + capTxt + '</td>' +
       '<td>' + (typeof dmTrendHtml === 'function'
         ? dmTrendHtml(x.trend, true, x.code, dmPickCore) : '—') + '</td>' +
-      (liqUsable ? '<td class="num"><b>' + (x.score == null ? '—' : Math.round(x.score)) + '</b></td>' : '') +
+      '<td class="num"><b>' + (x.score == null ? '—' : Math.round(x.score)) + '</b></td>' +
       '<td>' + (worst && worst.code === x.code ? '<span class="rs-b-swap">換股候選</span>' : '') +
       (x.pend ? '<span class="rs-b-pend" title="除息日 ' + x.pend.ex + ' 的組成占比公告尚未發布">下期待公告</span>' : '') +
       '</td></tr>';
