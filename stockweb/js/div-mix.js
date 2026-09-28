@@ -1,6 +1,12 @@
 // 股利總管 Web — ETF 收益分配組成占比（公開資訊觀測站 MOPS）
-// 資料檔 data/etf-div-mix.json 由 shioaji-server/etf-divmix.py 每月 1 號 08:20 排程產生並上傳。
+// 資料檔 data/etf-div-mix.json 由 shioaji-server/etf-divmix.py 每日 19:00 排程產生並上傳。
 // 網頁只讀不抓：MOPS 明細需逐筆 POST 且回 HTML，GAS 代理只收 JSON，瀏覽器端抓不到。
+//
+// 另讀 data/etf-div-next.json（etf-divnext.py 每日，來源 Yahoo 台股）補「下一期已公告金額」。
+// 為什麼要補：投信公告金額的時間比 MOPS 申報早很多。實測 00984D 的 10/05 除息，
+// 券商 9/20 公告、當天有新聞，MOPS 到 9/28 仍是未公告，TWSE 預告表金額欄空白。
+// 可靠度已驗：三檔已除息者與 MOPS 逐筆相符，不是沿用前期的推估。
+// 分工：占比與歷史一律以 MOPS 為準，本檔只在 MOPS 該筆尚未有金額時填補。
 //
 // 五項占比（MOPS 原始欄位）：
 //   d  股利所得      ┐ 本業：成分股配息與債息，可重複發生
@@ -12,23 +18,28 @@
 // c／cc 分開存的理由：00918 的 100% 是賣股價差（一次性），00404A 的 68% 是 covered call
 // 權利金（策略性、可重複），兩者品質不同，不能併成一個「資本利得」看。
 
-var DM_STALE_DAYS = 40;      // 每月 1 號更新；超過 40 天＝至少漏了一次（抓取或上傳失敗）
+var DM_STALE_DAYS = 5;       // 每日 19:00 更新；超過 5 天＝排程連續數日未成功
 var DM_MONTHS = 12;          // 統計區間。用「近 12 個月」而非固定期數，月配與季配的時間長度才一致
 // 原本有 DM_TREND_PP = 5，差距超過 5 個百分點才標箭頭，註解寫「避免小幅波動一直跳」。
 // 那個 5 是憑感覺訂的，沒有依據，而且它把連續量硬切成改善／持平／惡化三格，
 // 4.9pp 和 5.1pp 會落在不同格子。改成直接顯示差值，由看的人自己判斷大小。
 
-var _dmMap = null, _dmDay = null, _dmLoaded = false;
+var _dmMap = null, _dmDay = null, _dmLoaded = false, _dmNext = null, _dmNextDay = null;
 
 (function () {
-  fetch('data/etf-div-mix.json', { cache: 'no-cache' })
+  var a = fetch('data/etf-div-mix.json', { cache: 'no-cache' })
     .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (j) {
-      _dmLoaded = true;
-      if (j && j.map) { _dmMap = j.map; _dmDay = j.updated || null; }
-      if (typeof dmOnLoad === 'function') dmOnLoad();
-    })
-    .catch(function () { _dmLoaded = true; });
+    .then(function (j) { if (j && j.map) { _dmMap = j.map; _dmDay = j.updated || null; } })
+    .catch(function () {});
+  // 下一期已公告金額，失敗不影響主資料
+  var b = fetch('data/etf-div-next.json', { cache: 'no-cache' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (j && j.map) { _dmNext = j.map; _dmNextDay = j.updated || null; } })
+    .catch(function () {});
+  Promise.all([a, b]).then(function () {
+    _dmLoaded = true;
+    if (typeof dmOnLoad === 'function') dmOnLoad();
+  });
 })();
 
 function _dmTodayIso() {
@@ -61,6 +72,18 @@ function dmPrevEx(code, ex) {
     if (e && e < ex && (best == null || e > best)) best = e;
   }
   return best;
+}
+
+// 下一期「已公告但 MOPS 尚未申報」的配息金額（來源 Yahoo，見檔頭）。
+// 只在該除息日於 MOPS 完全沒有金額時回傳；MOPS 一旦有值就以 MOPS 為準，本函式回 null。
+function dmNext(code) {
+  var y = _dmNext && _dmNext[String(code)];
+  if (!y || !(y.amt > 0) || !y.ex) return null;
+  var list = (_dmMap && _dmMap[String(code)]) || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].ex === y.ex && list[i].amt > 0) return null;   // MOPS 已有，不用補
+  }
+  return { ex: y.ex, pay: y.pay || null, amt: y.amt, period: y.period || null, src: 'Yahoo' };
 }
 
 // 尚未公告占比的最近一次除息（表二標「下期待公告」用）

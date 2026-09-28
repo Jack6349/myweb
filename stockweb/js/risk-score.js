@@ -474,9 +474,14 @@ var RS_B_W = { yield: 0.75, liq: 0.25 };     // 綜合分權重（使用者設�
 // 年化配息率：近 12 個月各期配發金額的平均 × 每年期數。
 // 用「平均 × 期數」而非「12 個月加總」，新上市未滿一年的 ETF（如 00989B）才不會被低估。
 // 金額取自 MOPS 公告（與占比同一來源），期數由配息頻率（div-meta.js）決定。
+// 已公告但 MOPS 尚未申報的下一期金額也算進來（見 div-mix.js dmNext）。
+// 不納入的話年化配息率會落後：00988B 9/11 公告砍到 0.1410（前期 0.1530，砍 7.8%），
+// 9/15 才除息，中間四天表上還是舊值；00984D 的 10/05 那期投信 9/20 就公告，早了 15 天。
 function _rsBondYield(code, px) {
   if (!px || typeof dmRecs !== 'function') return null;
   var a = dmRecs(code, 12).map(function (x) { return x.amt; }).filter(function (v) { return v > 0; });
+  var nx = (typeof dmNext === 'function') ? dmNext(code) : null;
+  if (nx) a.unshift(nx.amt);
   if (!a.length) return null;
   var step = (typeof _divFreqOverride === 'function' && _divFreqOverride(code)) || 1;
   var avg = a.reduce(function (x, y) { return x + y; }, 0) / a.length;
@@ -516,6 +521,7 @@ async function _rsBondTableHtml() {
       realLast: (yld != null && last) ? yld * last.core / 100 : null,
       trend: typeof dmTrend === 'function' ? dmTrend(code, dmPickE) : null,
       pend: typeof dmPending === 'function' ? dmPending(code) : null,
+      next: typeof dmNext === 'function' ? dmNext(code) : null,
       prem: nav && nav.premium != null ? nav.premium : null,
       rank: typeof npPremRank === 'function' ? npPremRank(code) : null,
       liq: liq ? liq.med : null
@@ -598,7 +604,10 @@ async function _rsBondTableHtml() {
       '<td>' + (worst && worst.code === x.code
         ? '<span class="rs-b-swap" title="真實配息率（加權）最低者；數字為與最高者的差距">換股候選' +
           (worstGap == null ? '' : ' ' + worstGap.toFixed(2) + 'pp') + '</span>' : '') +
-      (x.pend ? '<span class="rs-b-pend" title="除息日 ' + x.pend.ex + ' 的組成占比公告尚未發布（發行商通常在除息後約 10 天才發）">下期待公告</span>' : '') +
+      (x.next ? '<span class="rs-b-next" title="投信已公告下一期金額，MOPS 尚未申報；金額已計入年化配息率。&#10;' +
+        '除息 ' + x.next.ex + (x.next.pay ? '　發放 ' + x.next.pay : '') + '　來源 Yahoo 台股">下期 ' +
+        x.next.amt.toFixed(4) + '</span>' : '') +
+      (x.pend ? '<span class="rs-b-pend" title="除息日 ' + x.pend.ex + ' 的組成占比公告尚未發布（發行商通常在除息後約 10 天才發）">占比待公告</span>' : '') +
       '</td></tr>';
   });
   h += '</tbody></table></div>';
@@ -654,7 +663,7 @@ async function _rsBondTableHtml() {
       '這樣一來綜合分只剩真實配息率一個維度，min-max 之後就是它的線性縮放，' +
       '排序完全相同、不提供額外資訊，而最高恰為 100、最低恰為 0 是邊界效應不是滿分零分，' +
       '所以直接隱藏，改看左邊的真實配息率。券商連線恢復後會自動出現。<br>' : '') +
-    '資料來源：配息金額與組成占比＝公開資訊觀測站；淨值與折溢價＝MoneyDJ（每日排程，落後約一個交易日，' +
+    '資料來源：配息金額與組成占比＝公開資訊觀測站（每日排程）；下一期已公告金額＝Yahoo 台股（投信公告比 MOPS 申報早，實測可早到 15 天，已計入年化配息率）；淨值與折溢價＝MoneyDJ（每日排程，落後約一個交易日，' +
     '美國休市日淨值未重新定價者不計折溢價）；月均規模＝TPEx；成交金額＝Shioaji 日 K。' +
     (typeof npStale === 'function' && npStale() ? '<b class="up">淨值資料已 ' + npStale() + ' 天未更新。</b>' : '') +
     '<b>本表為依你設定規則自動算分的參考，非投資建議。</b>' +
