@@ -118,6 +118,7 @@ function swEval(code) {
     var u = (typeof _npUnits !== 'undefined' && _npUnits && _npUnits[String(code)]) || null;
     if (u) { var ks = Object.keys(u).sort(); units = u[ks[ks.length - 1]]; size = units * px / 1e8; }
   } catch (e) {}
+  var vol = (typeof _npVol !== 'undefined' && _npVol && _npVol[String(code)]) || null;
   return {
     code: String(code), name: swName(code),
     px: px, cost: cost,
@@ -129,7 +130,7 @@ function swEval(code) {
     core: core == null ? null : core * 100,
     n: aa.n, step: aa.step, hasNext: aa.hasNext,
     e: (typeof dmMix === 'function' && dmMix(code, 12)) ? dmMix(code, 12).e : null,
-    size: size,
+    size: size, vol: vol,
     health: (typeof npHealthRecs === 'function')
       ? npHealthRecs(code, 12).filter(function (x) { return x.state !== 'nodata'; }) : [],
     prem: (typeof npPremium === 'function') ? npPremium(code) : null
@@ -179,6 +180,43 @@ function swSparkHtml(tr, key) {
     .join('&#10;');
   return '<span class="sw-spark" title="' + tip + '">' + bars + '</span>' +
     '<span class="sw-d ' + (d >= 0 ? 'down' : 'up') + '">' + (d >= 0 ? '+' : '') + d.toFixed(2) + '</span>';
+}
+
+// 日均成交金額，並標出「你要換的金額佔掉一天成交的幾成」。
+// 佔比用你最大一筆非投等債持股的市值當委託量——換股是整筆搬，不是零買。
+// 不設「超過幾成就不能買」的門檻：滑價與成交機率跟掛法、時段、對手方都有關，
+// 我訂不出有依據的數字。把佔比放出來，你自己判斷。
+// 每列都會問一次，但答案在一次繪製內不變；不快取的話 10 列 × 4 檔持股 = 40 次 swEval。
+// 快取在 swRender／startRiskReport 進入時由 swResetCache() 清掉。
+var _swOrderAmt;
+function swOrderAmt() {
+  if (_swOrderAmt !== undefined) return _swOrderAmt;
+  var sm = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  var hold = (typeof _rsBondHoldings === 'function') ? _rsBondHoldings() : [];
+  var mx = 0;
+  hold.forEach(function (c) {
+    var e = swEval(c);
+    if (e && sm[c] > 0) mx = Math.max(mx, sm[c] * e.px);
+  });
+  _swOrderAmt = mx || null;
+  return _swOrderAmt;
+}
+function swResetCache() { _swOrderAmt = undefined; }
+
+function swVolHtml(e) {
+  var v = e.vol;
+  if (!v || !(v.med > 0)) {
+    return '<span class="dm-dim" title="Yahoo 取不到近三個月的成交資料">—</span>';
+  }
+  var amt = swOrderAmt();
+  var pct = amt ? amt / v.med * 100 : null;
+  var money = v.med >= 1e8 ? (v.med / 1e8).toFixed(2) + ' 億' : Math.round(v.med / 1e4).toLocaleString('zh-TW') + ' 萬';
+  return '<span title="近 ' + v.days + ' 個交易日中位數；清淡日（p10）' +
+    (v.p10 >= 1e8 ? (v.p10 / 1e8).toFixed(2) + ' 億' : Math.round(v.p10 / 1e4).toLocaleString('zh-TW') + ' 萬') +
+    (pct ? '&#10;你最大一筆非投等債持股市值 ' + Math.round(amt / 1e4).toLocaleString('zh-TW') +
+      ' 萬，佔一天成交 ' + pct.toFixed(0) + '%' : '') + '">' + money + '</span>' +
+    '<div class="rs-b-sub">' + v.lots.toLocaleString('zh-TW') + ' 張' +
+    (pct ? '　佔 ' + pct.toFixed(0) + '%' : '') + '</div>';
 }
 
 function swHealthHtml(code, ev) {
@@ -279,7 +317,10 @@ function swCandTable(list, base, title, empty) {
       base.real.toFixed(2) + '%">vs ' + base.code + '</th>' : '') +
     '<th title="近 13 個月真實市價殖利率走勢；右側數字為期末減期初">殖利率趨勢</th>' +
     '<th class="num" title="近 12 個月線性遞減加權">平準金</th>' +
-    '<th class="num" title="受益權單位數 × 淨值。這是規模不是周轉量">規模</th>' +
+    '<th class="num" title="受益權單位數 × 淨值。這是大小，不是周轉量">規模</th>' +
+    '<th class="num" title="近 20 個交易日成交金額中位數（不含當日，盤中累計量會低估）。&#10;'
+      + '下排為對應張數。要買的量佔掉一天成交的多少，決定掛得進去與否：&#10;'
+      + '實測 00842B 日均只有 267 張，掛 300 張超過它整天的量">日均成交<div class="rs-b-sub">金額／張數</div></th>' +
     '<th class="num">頻率</th>' +
     '<th class="num" title="近 12 個月用到幾期實際配息。年化是「各期平均 × 年期數」，'
       + '期數太少時這個外推很不穩，一期就能把整年推成任意值。不設門檻過濾，自己看">期數</th>' +
@@ -300,6 +341,7 @@ function swCandTable(list, base, title, empty) {
       '<td>' + swSparkHtml(tr, 'real') + '</td>' +
       '<td class="num">' + (e.e == null ? '—' : e.e.toFixed(1) + '%') + '</td>' +
       '<td class="num">' + (e.size == null ? '—' : e.size.toFixed(1) + ' 億') + '</td>' +
+      '<td class="num">' + swVolHtml(e) + '</td>' +
       '<td class="num">' + ((f && f.t) || '—') + '</td>' +
       '<td class="num">' + e.n + '</td>' +
       '<td>' + swHealthHtml(e.code, e) + '</td></tr>';
@@ -379,6 +421,7 @@ function swDel(c) {
 
 // ══════════ 組裝與重繪 ══════════
 function swAllHtml() {
+  swResetCache();
   return swBlockB() + swBlockC() + swBlockD() +
     '<div class="rs-note">' +
     '<b>排序基準</b>：真實市價殖利率＝年化配息金額 ÷ <b>現價</b> ×（股利＋利息占比）。' +
@@ -389,9 +432,12 @@ function swAllHtml() {
     '<b>真實與帳面</b>：真實已扣掉收益平準金與資本利得。並列「加權／最新」，' +
     '加權為近 12 個月線性遞減（最新一期權重 n、遞減到最舊 1），最新為未平滑的最近一期；' +
     '兩者差距達 1 個百分點以上標紅，代表這段期間基金的收益結構改變了、平均不具代表性。<br>' +
-    '<b>沒有成交量這一項</b>：目前的資料源都不給歷史成交金額，無法判斷候選標的吃不吃得下你的量。' +
-    '「規模」是單位數 × 淨值，那是大小不是周轉——規模大但每日成交清淡的檔，掛 300 張一樣買不到。' +
-    '下單前請自行確認成交量。<br>' +
+    '<b>規模與成交量是兩件事</b>：「規模」是單位數 × 淨值，那是基金多大；' +
+    '「日均成交」是近 20 個交易日成交金額的中位數，那才是一天實際換手多少。' +
+    '兩者可以差很遠——00842B 真實殖利率在掃描中排第一，但日均只有 267 張，' +
+    '你要換的量超過它一整天的成交。佔比以你最大一筆非投等債持股市值計算。' +
+    '我不設「超過幾成就不能買」的門檻：滑價與成交機率跟掛法、時段、對手方都有關，' +
+    '訂不出有依據的數字，佔比放出來由你判斷。<br>' +
     '<b>健康度</b>需要月規模，目前只有債券型 93 檔有；股票型要等每日單位數快照累積到' +
     '前後兩次除息日，月配約兩個月、季配約半年。<br>' +
     '<b>資料日</b>：價格與淨值 ' + ((typeof npDataDay === 'function' && npDataDay()) || '—') +

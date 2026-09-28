@@ -8,6 +8,7 @@
 //   aum:   { '00981B': { '2026-09': 141.54 } }  月均規模（億元），資料源只給近 12 個月滾動
 //   units: { '00981B': { '20260925': 1574613000 } }  受益權單位數日快照，只有排程開始後的日期
 //   names: { '00981B': '第一金優選非投債' }            全市場 ETF 簡稱（_contracts 只有持股）
+//   vol:   { '00981B': {med,lots,p10,days} }         近 20 交易日成交金額中位數（元）與張數
 //
 // 兩個必須知道的資料特性
 //   1. n[t] === n[t-1] 時不可計折溢價。成因有二：美國休市日持債未重新定價（淨值不動是正確的，
@@ -20,7 +21,7 @@ var NP_STALE_DAYS = 5;       // 每日更新；超過 5 天＝排程連續數日
 var NP_WIN = 250;            // 折溢價水位的比較區間（約一年交易日）
 
 var _npDates = null, _npMap = null, _npAum = null, _npUnits = null, _npNames = null,
-    _npDay = null, _npLoaded = false;
+    _npVol = null, _npDay = null, _npLoaded = false;
 
 (function () {
   fetch('data/etf-nav.json', { cache: 'no-cache' })
@@ -31,6 +32,7 @@ var _npDates = null, _npMap = null, _npAum = null, _npUnits = null, _npNames = n
         _npMap = j.map;
         _npAum = j.aum || {};
         _npNames = j.names || {};   // 全市場 ETF 簡稱，換股評估列候選標的用
+        _npVol = j.vol || {};       // 近 20 個交易日成交金額中位數，判斷吃不吃得下委託量
         // 單位數的日期鍵在檔案裡是 'YYYYMMDD'，除息日是 'YYYY-MM-DD'，
         // 直接字串比較會錯（'-' 的碼位小於數字），載入時統一轉成 ISO
         _npUnits = {};
