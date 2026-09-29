@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=198">
+<link rel="stylesheet" href="css/app.css?v=199">
 </head>
 <body>
 
@@ -374,6 +374,22 @@
   </div>
 </div>
 
+<!-- 下單確認框（五檔點價後跳出；底色依買賣方向） -->
+<div id="ord-confirm" class="modal-overlay" style="display:none" onclick="if(event.target===this)ordCloseConfirm()"></div>
+
+<!-- 下單單（買賣方向鎖定，不可切換） -->
+<div id="ord-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)ordClose()">
+  <div id="ord-box" class="ord-box">
+    <div class="ord-head"><span id="ord-title" class="ord-title"></span>
+      <button class="modal-close" onclick="ordClose()">×</button></div>
+    <div id="ord-body" class="ord-body"></div>
+    <div class="ord-foot">
+      <button class="ord-b send" onclick="ordSubmit()">下單</button>
+      <button class="ord-b cancel" onclick="ordClose()">取消</button>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="js/firebase-init.js?v=10"></script>
 <script src="js/auth.js?v=10"></script>
 <script src="js/note.js?v=3"></script>
@@ -394,7 +410,8 @@
 <script src="js/topconst.js?v=8"></script>
 <script src="js/watch.js?v=22"></script>
 <script src="js/etf-screen.js?v=21"></script>
-<script src="js/chart.js?v=20"></script>
+<script src="js/chart.js?v=21"></script>
+<script src="js/order.js?v=1"></script>
 <script src="js/div-mix.js?v=6"></script>
 <script src="js/div-meta.js?v=12"></script>
 <script src="js/dividend-est.js?v=58"></script>

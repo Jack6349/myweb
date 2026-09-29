@@ -1023,3 +1023,66 @@ td.cost-even::after  { background: var(--text3); }
 .es-dname { font-size: 15px; font-weight: 600; color: var(--text); }
 .es-fpct { display: inline-block; min-width: 3.3em; text-align: right; }   /* 填息率 % 固定寬度，各列對齊 */
 .es-new-title { margin-top: 18px; }
+
+/* ══════════ 下單（order.js）══════════ */
+/* 底色沿用券商 App：買進暗紅、賣出暗綠，一眼分辨方向 */
+.ord-cf .ord-cf-box { border-radius: 14px; padding: 22px 26px; min-width: 300px; max-width: 92vw;
+  border: 1px solid var(--border); text-align: center; }
+.ord-cf.ord-buy .ord-cf-box { background: #4a1418; border-color: #7a2630; }
+.ord-cf.ord-sell .ord-cf-box { background: #0d3a1c; border-color: #1c6b36; }
+.ord-cf-msg { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: .5px; }
+.ord-cf-msg b { font-size: 26px; }
+.ord-cf-sub { font-size: 13px; color: #cbd5e1; margin-top: 6px; }
+.ord-cf-btns { display: flex; gap: 10px; margin-top: 18px; }
+.ord-b { flex: 1; padding: 10px 6px; border-radius: 8px; font-size: 15px; font-weight: 700;
+  cursor: pointer; border: 1px solid var(--border); background: var(--bg3); color: var(--text); }
+.ord-b.cancel { background: #2a3444; color: #c8d3e2; }
+.ord-b.flip { background: #3d4757; color: #fff; }
+.ord-b.ok { background: #1f7ae0; border-color: #1f7ae0; color: #fff; }
+.ord-b.send { background: #1f7ae0; border-color: #1f7ae0; color: #fff; }
+.ord-b:hover { filter: brightness(1.15); }
+
+.ord-box { width: 100%; max-width: 460px; max-height: 100%; display: flex; flex-direction: column;
+  border-radius: 14px; border: 1px solid var(--border); overflow: hidden; }
+.ord-box.ord-buy { background: #3a1014; }
+.ord-box.ord-sell { background: #0a2e16; }
+.ord-head { display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: rgba(0,0,0,.35); }
+.ord-title { font-size: 15px; font-weight: 700; color: #fff; }
+.ord-body { padding: 10px 16px 14px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.ord-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.ord-lb { width: 44px; flex: none; font-size: 14px; color: #e2e8f0; }
+.ord-code { background: #fff; color: #111; font-weight: 700; border-radius: 6px; padding: 4px 14px; font-size: 16px; }
+.ord-nm { font-size: 14px; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 唯一選項不做成可點的按鈕：看起來能按卻按不動更糟 */
+.ord-seg { background: #e8edf3; color: #1f4e8c; font-weight: 700; border-radius: 6px;
+  padding: 5px 16px; font-size: 14px; }
+.ord-pick { display: flex; gap: 4px; margin-left: auto; }
+.ord-pk { background: #2a3444; color: #c8d3e2; border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 8px; font-size: 12px; cursor: pointer; }
+.ord-pk.on { background: var(--accent2); border-color: var(--accent2); color: #1a1a1a; font-weight: 700; }
+.ord-side { border-radius: 6px; padding: 6px 22px; font-size: 15px; font-weight: 700; color: #fff; }
+.ord-side.buy { background: #d0202e; }
+.ord-side.sell { background: #12a24a; }
+.ord-fix { font-size: 11px; color: #9fb0c6; border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
+.ord-unit { margin-left: auto; font-size: 11px; color: #cbd5e1; text-align: right; line-height: 1.3; }
+.ord-in { width: 96px; background: #101725; border: 1px solid var(--border); border-radius: 6px;
+  color: #fff; font-size: 16px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
+.ord-pm { flex: 1; background: #e8edf3; color: #111; border: none; border-radius: 6px;
+  font-size: 18px; font-weight: 700; padding: 5px 0; cursor: pointer; }
+.ord-pm:hover { filter: brightness(.92); }
+.ord-amt { margin-top: 8px; font-size: 13px; color: #e2e8f0; }
+.ord-amt b { font-size: 17px; color: var(--accent2); }
+.ord-dim { color: #9fb0c6; font-size: 11px; }
+.ord-ticks { margin-top: 10px; background: rgba(0,0,0,.3); border-radius: 8px; padding: 8px 10px; }
+.ord-ticks-t { font-size: 12px; color: #cbd5e1; margin-bottom: 4px; }
+.ord-tick-tb { width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ord-tick-tb td { padding: 2px 4px; color: #e2e8f0; }
+.ord-tick-tb .num { text-align: right; }
+.ord-dry { margin-top: 10px; background: #101725; border: 1px dashed var(--accent2); border-radius: 8px; padding: 8px 10px; }
+.ord-dry-t { font-size: 12px; color: var(--accent2); margin-bottom: 4px; }
+.ord-dry pre { margin: 0; font-size: 11px; color: #cbd5e1; white-space: pre-wrap; word-break: break-all; }
+.ord-foot { display: flex; gap: 10px; padding: 12px 16px; background: rgba(0,0,0,.35); }
+/* 五檔價格可點 */
+.bid-tap { cursor: pointer; }
+.bid-tap:hover { background: rgba(255,255,255,.1); }

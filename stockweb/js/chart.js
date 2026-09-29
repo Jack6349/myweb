@@ -532,7 +532,10 @@ function _bidAskHtml(b, code) {
     var cls = ref == null ? 'bid-flat' : (p > ref + 1e-6 ? 'up' : (p < ref - 1e-6 ? 'down' : 'bid-flat'));
     var mk = same(p, hl.high) ? '<span class="bid-hl up">H</span>' : (same(p, hl.low) ? '<span class="bid-hl down">L</span>' : '<span class="bid-hl"></span>');
     var txt = '<span class="bid-pxv' + (same(p, r.close) ? ' bid-last' : '') + '">' + p.toFixed(2) + '</span>';
-    return '<td class="num bid-px ' + side + ' ' + cls + '">' + (side === 'buy' ? mk + txt : txt + mk) + '</td>';
+    // 點價下單：買方欄預設買進、賣方欄預設賣出，另一邊在確認框一鍵切換
+    var tap = (typeof ordFromLadder === 'function')
+      ? ' bid-tap" onclick="ordFromLadder(\'' + code + '\',' + p + ',\'' + side + '\')" title="點選下單"' : '"';
+    return '<td class="num bid-px ' + side + ' ' + cls + tap + '>' + (side === 'buy' ? mk + txt : txt + mk) + '</td>';
   };
 
   // 內外盤比 Bar（移到最上方、加高，兩側放張數與百分比）
