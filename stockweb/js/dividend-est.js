@@ -479,7 +479,9 @@ function renderDividendEst() {
         '<span class="divest-dm">發放月</span><span class="divest-dex">除息</span>' +
         '<span class="divest-dpay">發放</span><span class="divest-dps">每股</span>' +
         '<span class="divest-dtot">金額</span><span class="divest-dst">狀態</span></div>' +
-      s.res.months.map(function (mo) {
+      // 顯示順序由近到遠（最新發放月在上）；下方 _rep 取「下一次預估／最近一次已領」仍依賴
+      // months 本身的由遠到近順序，所以只在這裡 slice 後反轉，不動原陣列。
+      s.res.months.slice().reverse().map(function (mo) {
       // 除息日後才買進的批次領不到 → 金額會小於「全部持股×每股」，於狀態註明實際計入張數
       var stTxt = mo.status === 'actual' ? '已領' : '預估';
       if (mo.partial) {
