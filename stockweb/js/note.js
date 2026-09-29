@@ -15,6 +15,8 @@ var NOTE_SEL = [
 
 function _noteWrap(el) {
   if (!el || el.getAttribute('data-nbox') || el.closest('.nbox')) return;
+  // nb-keep＝借用說明 class 排版、但內容其實是資料（來源、覆蓋率、累積已配息），收起來就看不到了
+  if (el.classList.contains('nb-keep')) return;
   // 空的或極短的（載入中、單句狀態）不收，收起來反而多一次點擊
   var txt = (el.textContent || '').trim();
   if (!txt) return;

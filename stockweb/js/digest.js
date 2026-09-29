@@ -114,7 +114,10 @@ async function renderDailyDigest() {
     '</div>' +
     '<div class="digest-body" style="display:' + (_digestOpen ? 'block' : 'none') + '">' +
       detail +
-      '<div class="sig-note">融合 L1趨勢＋L2官方折溢價＋L3法人籌碼＋隔夜美股/ADR 的規則式提醒，非精確預測；請以各檔「依據」自行判讀。' +
-      '純美股 ETF 以隔夜美股預估開盤為主，台股 ETF 綜合折溢價與法人籌碼。</div>' +
+      '<div class="sig-note"><dl>' +
+      '<dt>組成</dt><dd><code>L1 趨勢 ＋ L2 官方折溢價 ＋ L3 法人籌碼 ＋ 隔夜美股／ADR</code>的規則式提醒。</dd>' +
+      '<dt>各類適用</dt><dd>純美股 ETF 以隔夜美股預估開盤為主；台股 ETF 綜合折溢價與法人籌碼。</dd>' +
+      '<dt>限制</dt><dd>非精確預測，請以各檔「依據」自行判讀。</dd>' +
+      '</dl></div>' +
     '</div>';
 }

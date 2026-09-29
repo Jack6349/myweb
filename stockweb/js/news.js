@@ -365,8 +365,10 @@ function renderConsistency() {
       '<span class="cs-title">' + r.title + '</span>' +
       '<span class="cs-detail">' + r.detail + '</span></div>';
   });
-  h += '<div class="cs-note">僅比對各項資料的方向是否一致，不推論股債後續走勢。' +
-    '方向不一致代表訊號互相牴觸，通常是需要進一步查證的地方，本身不是買賣訊號。</div>';
+  h += '<div class="cs-note"><dl>' +
+    '<dt>比對內容</dt><dd>只看各項資料的方向是否一致，不推論股債後續走勢。</dd>' +
+    '<dt>方向不一致</dt><dd>訊號互相牴觸，是需要進一步查證的地方，本身不是買賣訊號。</dd>' +
+    '</dl></div>';
   el.innerHTML = h;
 }
 

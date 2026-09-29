@@ -555,7 +555,15 @@ function renderDividendEst() {
   var roll = _divRoll12(stocks);
   html += _divStatTableHtml(roll.stocks, money, '月份總覽（本月起 12 個月，依發放月）', roll.labels);
 
-  html += '<div class="divest-note">依「發放月」歸戶當月收入；<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（依發放日是否已過判定，不受 e添富是否公告發放日影響）。發放日缺漏時以「除息月＋1」推導。除息日供加減碼參考。<b>各次配息依建倉明細判定可領張數：除息日當天（含）之後才買進的批次不計</b>（含近 12 個月內已賣出、但除息日當時仍持有的批次，依券商已實現損益明細計入）。資料來源：上市 ETF＝TWSE e添富；上櫃/債券 ETF＝Yahoo 歷史推估。<br>月份總覽從本月（上月除息、本月發放）起列 12 個月；跨到明年的月份沿用同一套估算，以今年各次配息（含預估）投影，每股金額用最近一次已知金額、張數用目前持股。</div>';
+  html += '<div class="divest-note"><dl>' +
+    '<dt>歸月方式</dt><dd>依<b>發放月</b>歸戶當月收入，缺發放日時以「除息月＋1」推導。' +
+    '<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（看發放日是否已過）。</dd>' +
+    '<dt>可領張數</dt><dd><code>除息日當天（含）之後買進的批次不計</code>，依建倉明細判定。' +
+    '近 12 個月內已賣出、但除息日當時仍持有的批次照算（依券商已實現損益明細）。</dd>' +
+    '<dt>月份總覽</dt><dd>本月（上月除息、本月發放）起 12 個月。跨到明年的月份以今年各次配息投影，' +
+    '每股金額取最近一次已知值、張數用目前持股。</dd>' +
+    '<dt>資料來源</dt><dd>上市 ETF＝TWSE e添富；上櫃／債券 ETF＝Yahoo 歷史推估。</dd>' +
+    '</dl></div>';
   wrap.innerHTML = html;
   _divHistDrawAll();   // 圖要量容器實際寬度，必須在插入 DOM 之後畫
 }

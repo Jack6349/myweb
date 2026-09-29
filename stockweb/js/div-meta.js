@@ -374,11 +374,15 @@ function renderDivMeta() {
       '</tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="divest-note">' +
-    '<span class="dm-lv dm-lv-red"></span> 頻率靠推定，需確認　<span class="dm-lv dm-lv-yellow"></span> 由除息紀錄推算　' +
-    '<span class="dm-lv dm-lv-green"></span> 官方或手動　<span class="dm-lv dm-lv-gray"></span> 不配息。' +
-    '配息頻率優先採 MoneyDJ（每月 1 號自動更新，資料日見上方）；官方規格：上市＝TWSE、上櫃＝TPEx「ETF 商品資訊」，每 30 天更新一次。' +
-    '配息頻率、管理費、保管費可手動輸入，會覆蓋官方值；清空即回到自動。「下次除息」欄可手動補登投信已公告、官方尚未收錄的除息日（金額與發放日可省略）。</div>';
+    '<div class="divest-note"><dl>' +
+    '<dt>燈號</dt><dd><span class="dm-lv dm-lv-red"></span> 頻率靠推定，需確認　' +
+    '<span class="dm-lv dm-lv-yellow"></span> 由除息紀錄推算　' +
+    '<span class="dm-lv dm-lv-green"></span> 官方或手動　<span class="dm-lv dm-lv-gray"></span> 不配息</dd>' +
+    '<dt>資料來源</dt><dd>配息頻率優先採 MoneyDJ（每月 1 號更新，資料日見上方）；' +
+    '官方規格：上市＝TWSE、上櫃＝TPEx「ETF 商品資訊」，每 30 天更新。</dd>' +
+    '<dt>手動輸入</dt><dd>配息頻率、管理費、保管費會覆蓋官方值，清空即回到自動。' +
+    '「下次除息」可補登投信已公告、官方尚未收錄的除息日（金額與發放日可省略）。</dd>' +
+    '</dl></div>';
   wrap.innerHTML = h;
 }
 

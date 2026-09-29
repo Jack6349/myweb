@@ -351,7 +351,7 @@ function renderConstPop() {
     ? _p2(_constPxAt.getMonth() + 1) + '/' + _p2(_constPxAt.getDate()) + ' ' + _p2(_constPxAt.getHours()) + ':' + _p2(_constPxAt.getMinutes()) + ':' + _p2(_constPxAt.getSeconds())
     : '—';
   var estCls = m.est == null ? '' : colorClass(m.est);
-  var html = '<div class="detail-note" style="margin:0 0 8px">來源：' + (m.source || '—') +
+  var html = '<div class="detail-note nb-keep" style="margin:0 0 8px">來源：' + (m.source || '—') +
     '（共 ' + rows.length + ' 檔）｜報價擷取 ' + when +
     '｜報價覆蓋率 <span class="const-cov">' + m.covW.toFixed(1) + '%</span>｜加權漲跌 ' +
     (m.est == null ? '—' : '<span class="' + estCls + '">' + (m.est >= 0 ? '+' : '') + m.est.toFixed(2) + '%</span>') + '</div>' +

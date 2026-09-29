@@ -234,8 +234,13 @@ function renderWatch() {
     if (_wtOpen === code) h += '<tr class="es-drow"><td colspan="' + ncol + '" class="es-dslot" data-code="' + code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="detail-note">點列或〔明細〕展開歷年配息、近 12 個月填息與一年走勢（一次一列）。現價與漲跌盤中即時（進頁訂閱、離開退訂）。〔成份股〕僅 ETF 提供；ETF 指標欄與「ETF 評比」同源（每日更新，算法見該頁說明），個股不適用；' +
-    '〔除息紀錄〕取近 ' + WT_YEARS + ' 年（上市 ETF 走 e添富、其餘走 Yahoo，個股可能查無）。清單存於本機瀏覽器。</div>';
+    '<div class="detail-note"><dl>' +
+    '<dt>展開</dt><dd>點列或〔明細〕看歷年配息、近 12 個月填息與一年走勢，一次一列。</dd>' +
+    '<dt>即時性</dt><dd>現價與漲跌盤中即時（進頁訂閱、離開退訂）。</dd>' +
+    '<dt>各欄</dt><dd>〔成份股〕僅 ETF 提供；ETF 指標欄與「ETF 評比」同源（每日更新，算法見該頁說明），個股不適用；' +
+    '〔除息紀錄〕近 ' + WT_YEARS + ' 年（上市 ETF＝e添富、其餘＝Yahoo，個股可能查無）。</dd>' +
+    '<dt>儲存</dt><dd>清單存於本機瀏覽器。</dd>' +
+    '</dl></div>';
   var keep = _wtOpen ? wrap.querySelector('.es-detail[data-code="' + _wtOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
@@ -310,7 +315,7 @@ async function wtOpenDiv(code) {
   var px = (typeof _swapPrice === 'function') ? _swapPrice(code)
     : ((_rows[code] && _rows[code].close != null) ? _rows[code].close : (c && c.reference) || null);
 
-  var h = '<div class="detail-note" style="margin:0 0 8px">現價 <b>' + (px != null ? px.toFixed(2) : '—') +
+  var h = '<div class="detail-note nb-keep" style="margin:0 0 8px">現價 <b>' + (px != null ? px.toFixed(2) : '—') +
     '</b>｜配息頻率：' + ((typeof DIV_FREQ_NAME !== 'undefined' && DIV_FREQ_NAME[step]) || '年配') +
     '（年 ' + freq + ' 次）' + (f.guessed ? '<span class="wt-guess"> *推定：僅 ' + f.n + ' 筆紀錄，依債券 ETF 慣例假設月配</span>' : '') +
     '｜共 ' + list.length + ' 筆</div>' +
@@ -335,8 +340,12 @@ async function wtOpenDiv(code) {
     '</tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="detail-note">月殖利率＝每股金額 ÷ 現價；預估年殖利率＝每股金額 × 配息期數 ÷ 現價（期數由除息間隔推得）。' +
-    '發放日標「*」為未公告、以「除息月＋1」推導。資料來源：上市 ETF＝TWSE e添富，其餘＝Yahoo。</div>';
+    '<div class="detail-note"><dl>' +
+    '<dt>月殖利率</dt><dd><code>每股金額 ÷ 現價</code></dd>' +
+    '<dt>預估年殖利率</dt><dd><code>每股金額 × 配息期數 ÷ 現價</code>，期數由除息間隔推得。</dd>' +
+    '<dt>發放日標「*」</dt><dd>未公告，以「除息月＋1」推導。</dd>' +
+    '<dt>資料來源</dt><dd>上市 ETF＝TWSE e添富，其餘＝Yahoo。</dd>' +
+    '</dl></div>';
   body.innerHTML = h;
 }
 
@@ -613,10 +622,14 @@ function renderWatchBond() {
     if (open) h += '<tr class="es-drow"><td colspan="9" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="detail-note">點列展開配息走勢與近 2 年配息紀錄（一次一列）。掃描範圍：代號末碼 D（主動式債券）全部，加上末碼 B（被動式）且名稱含「非投／高收／高息／優先／新興」者（' + _wtBondPool().length +
-    ' 檔）；被動式投等債與公債檔數多、殖利率普遍低於門檻，不掃以節省配額。預估年殖利率＝最近一次配息 × 配息期數 ÷ 現價，預設依此由高至低排序（點欄位可改，排序會記住）。' +
-    '配息期數由歷次除息間隔推得；<b>標「*推定」者只有 1 筆配息紀錄</b>（新上市），依債券 ETF 慣例推定為月配，待累積第 2 筆後自動改用實際間隔。' +
-    '結果與「當月已公告除息」永久存檔，進頁不重抓，按「重新篩選」才更新。</div>';
+    '<div class="detail-note"><dl>' +
+    '<dt>預估年殖利率</dt><dd><code>最近一次配息 × 配息期數 ÷ 現價</code>，期數由歷次除息間隔推得。' +
+    '預設依此由高至低排序，點欄位可改，排序會記住。</dd>' +
+    '<dt>掃描範圍</dt><dd>末碼 D（主動式債券）全部，加上末碼 B 且名稱含「非投／高收／高息／優先／新興」者，共 ' +
+    _wtBondPool().length + ' 檔。被動式投等債與公債檔數多、殖利率普遍偏低，不掃以節省配額。</dd>' +
+    '<dt>標「*推定」</dt><dd>只有 1 筆配息紀錄（新上市），依債券 ETF 慣例推定為月配，累積第 2 筆後自動改用實際間隔。</dd>' +
+    '<dt>快取</dt><dd>結果與「當月已公告除息」永久存檔，進頁不重抓，按「重新篩選」才更新。點列展開配息走勢與近 2 年紀錄。</dd>' +
+    '</dl></div>';
   var keep = _wtBondOpen ? wrap.querySelector('.es-detail[data-code="' + _wtBondOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
@@ -672,9 +685,13 @@ function renderWatchAct() {
     if (open) h += '<tr class="es-drow"><td colspan="8" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="detail-note">點列展開配息走勢與近 2 年配息紀錄（一次一列）。報酬以 Yahoo 日收盤價計（主動式 ETF 目前多未配息或配息少，價格報酬≈總報酬）。' +
-    '<b>務必同時看「資料天數」</b>：主動式 ETF 多為新上市，49 天的報酬與 194 天的報酬不可直接比較；天數不足者近1月/近3月顯示「—」。' +
-    '點欄位可排序（再點一次反向，排序會記住），預設依成立以來由高至低。每日快取，按「重新計算」強制更新。</div>';
+    '<div class="detail-note"><dl>' +
+    '<dt>報酬</dt><dd>以 Yahoo 日收盤價計。主動式 ETF 多未配息或配息少，<code>價格報酬 ≈ 總報酬</code>。</dd>' +
+    '<dt>務必同時看「資料天數」</dt><dd>多為新上市，49 天的報酬與 194 天的報酬不可直接比較。' +
+    '天數不足者近1月／近3月顯示「—」。</dd>' +
+    '<dt>排序與快取</dt><dd>預設依成立以來由高至低，點欄位可改、再點反向，排序會記住。' +
+    '每日快取，按「重新計算」強制更新。點列展開配息走勢與近 2 年紀錄。</dd>' +
+    '</dl></div>';
   var keep = _wtActOpen ? wrap.querySelector('.es-detail[data-code="' + _wtActOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;

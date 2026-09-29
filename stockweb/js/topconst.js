@@ -92,7 +92,11 @@ function renderTopConstTable() {
     '<th class="num">漲跌</th><th class="num">漲跌幅</th><th>持有明細（ETF 權重）</th></tr></thead><tbody>';
   _topConstRows.forEach(function (r) { html += '<tr id="tc-tr-' + r.code + '">' + topConstRowHtml(r) + '</tr>'; });
   html += '</tbody></table></div>' +
-    '<div class="detail-note">總權重＝各 ETF 現值×該檔權重 加總 ÷ 總持股現值（你透過 ETF 對該台股的實際曝險佔比，滑鼠可看曝險金額）。僅列台股成分股，現價/漲跌盤中即時；總權重於進入時計算。</div>';
+    '<div class="detail-note"><dl>' +
+    '<dt>總權重</dt><dd><code>Σ(各 ETF 現值 × 該檔權重) ÷ 總持股現值</code>' +
+    '＝你透過 ETF 對該台股的實際曝險佔比，滑鼠可看曝險金額。</dd>' +
+    '<dt>更新</dt><dd>現價與漲跌盤中即時；總權重於進入時計算。僅列台股成分股。</dd>' +
+    '</dl></div>';
   wrap.innerHTML = html;
 }
 

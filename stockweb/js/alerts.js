@@ -93,7 +93,11 @@ async function startAlerts() {
     '</tr>';
   });
   html += '</tbody></table></div>' +
-    '<div class="sig-note">停利價/停利率、停損價/停損率任一達到 → 賣出訊號（即時持股、持股庫存整列反<span style="color:var(--up)">紅</span>底）；' +
-    '買進價達到 → 買進訊號（反<span style="color:var(--down)">綠</span>底）。僅以底色標示，不顯示文字。設定即時儲存於本機。</div>';
+    '<div class="sig-note"><dl>' +
+    '<dt>賣出訊號</dt><dd>停利價／停利率、停損價／停損率<b>任一</b>達到 → 整列反' +
+    '<span style="color:var(--up)">紅</span>底（即時持股、持股庫存）。</dd>' +
+    '<dt>買進訊號</dt><dd>買進價達到 → 反<span style="color:var(--down)">綠</span>底。</dd>' +
+    '<dt>其他</dt><dd>僅以底色標示，不顯示文字。設定即時儲存於本機。</dd>' +
+    '</dl></div>';
   wrap.innerHTML = html;
 }

@@ -182,7 +182,7 @@ async function showConstituentTrend(code, name) {
   }));
 
   rows.sort(function (a, b) { var sa = a.trend ? a.trend.score10 : -1, sb = b.trend ? b.trend.score10 : -1; return sb - sa; });
-  var html = '<div class="detail-note" style="margin:0 0 8px">來源：' + data.source + '（共 ' + data.holdings.length + ' 檔，顯示前 15 大權重，依強弱排序）</div>' +
+  var html = '<div class="detail-note nb-keep" style="margin:0 0 8px">來源：' + data.source + '（共 ' + data.holdings.length + ' 檔，顯示前 15 大權重，依強弱排序）</div>' +
     '<div class="detail-scroll"><table class="detail-table"><thead><tr><th>成分股</th><th class="num">權重</th><th class="num">強弱</th>' +
     '<th>排列</th><th class="num">近1月</th><th class="num">近3月</th><th class="num">52週位置</th></tr></thead><tbody>';
   rows.forEach(function (r) {

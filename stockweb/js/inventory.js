@@ -383,7 +383,7 @@ async function openTradeDetail(code, detailId) {
       '<td class="num">' + Math.round(totCost).toLocaleString('zh-TW') + '</td><td class="num">—</td>' +
       '<td class="num ' + tcls + '">' + (totPnl >= 0 ? '+' : '') + Math.round(totPnl).toLocaleString('zh-TW') + '</td>' +
       '<td class="num">' + Math.round(totDiv).toLocaleString('zh-TW') + '</td><td class="num">—</td></tr></tfoot></table></div>' +
-      '<div class="detail-note">累積已配息 ' + Math.round(totDiv).toLocaleString('zh-TW') + ' 元（未計入上方損益）</div>';
+      '<div class="detail-note nb-keep">累積已配息 ' + Math.round(totDiv).toLocaleString('zh-TW') + ' 元（未計入上方損益）</div>';
     body.innerHTML = html;
   } catch (e) {
     body.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>';

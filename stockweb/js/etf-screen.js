@@ -518,9 +518,15 @@ function renderEtfScreen() {
     if (open) h += '<tr class="es-drow"><td colspan="' + ES_COLS.length + '" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="divest-note">本類共 ' + rk.total + ' 檔（上市未滿一年 ' + rk.young + ' 檔不列入排名），依綜合分數取前 ' + ES_TOP + ' 名；已排除槓桿／反向與期貨商品型。' +
-    '綜合＝各指標在同類中的百分位加權（一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5），填息率與費用只對前 ' + ES_TOP1 + ' 名計算。' +
-    '含息報酬未計再投入；價格成長為負代表淨值被配息侵蝕。資料來源：TWSE／TPEx 官方行情與除權息結果表、Yahoo 日線（填息）。<b>歷史統計，非投資建議。</b></div>';
+    '<div class="divest-note"><dl>' +
+    '<dt>綜合分</dt><dd>各指標在同類中的<b>百分位</b>加權：' +
+    '<code>一年含息 25 ＋ 近12月殖利率 25 ＋ 填息率 20 ＋ 一年價格 15 ＋ 規模 10 ＋ 內扣費用 5</code>。' +
+    '填息率與費用只對前 ' + ES_TOP1 + ' 名計算。</dd>' +
+    '<dt>範圍</dt><dd>本類共 ' + rk.total + ' 檔，上市未滿一年 ' + rk.young + ' 檔不列入排名，取前 ' + ES_TOP + ' 名；' +
+    '已排除槓桿／反向與期貨商品型。</dd>' +
+    '<dt>讀法</dt><dd>含息報酬未計再投入；價格成長為負代表淨值被配息侵蝕。</dd>' +
+    '<dt>資料來源</dt><dd>TWSE／TPEx 官方行情與除權息結果表、Yahoo 日線（填息）。歷史統計，非投資建議。</dd>' +
+    '</dl></div>';
 
   // ── 新上市 ETF（上市未滿一年，不排名）──
   if (rk.fresh.length) {
@@ -549,7 +555,10 @@ function renderEtfScreen() {
       if (open) h += '<tr class="es-drow"><td colspan="' + ES_NCOLS.length + '" class="es-dslot" data-code="' + r.code + '"></td></tr>';
     });
     h += '</tbody></table></div>' +
-      '<div class="divest-note">上市未滿一年，缺一年期報酬與填息紀錄，不與上方老牌 ETF 混排；殖利率請看「預估年配」（近 12 月配會因配息次數不足而偏低）。點列展開配息明細。</div>';
+      '<div class="divest-note"><dl>' +
+      '<dt>為何分開列</dt><dd>上市未滿一年，缺一年期報酬與填息紀錄，與老牌 ETF 混排不可比。</dd>' +
+      '<dt>看哪個欄位</dt><dd>殖利率看「預估年配」；近 12 月配會因配息次數不足而偏低。點列展開配息明細。</dd>' +
+      '</dl></div>';
   }
   // 重繪時保留已展開的明細（圖已畫好、資料已載入），不重建 → 即時價格每 30 秒刷新也不會閃
   var keep = _esOpen ? wrap.querySelector('.es-detail[data-code="' + _esOpen + '"]') : null;
