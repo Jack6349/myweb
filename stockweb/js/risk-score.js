@@ -677,15 +677,41 @@ function _rsSatHoldings() {
 }
 
 // 區間價格報酬%：Yahoo 1 年日線（沿用 ETF 評比的 _esBarsOf，同一份記憶體快取，不重複打 GAS）
-function _rsSatRet(bars, months) {
-  if (!bars || bars.length < 5) return null;
+function _rsMonthsAgo(months) {
   var d = new Date(Date.now() + 8 * 3600000);
   d.setUTCMonth(d.getUTCMonth() - months);
-  var from = d.toISOString().slice(0, 10), i0 = -1;
+  return d.toISOString().slice(0, 10);
+}
+// 從 from（含）之後第一根 K 棒算到最後一根
+function _rsRetFrom(bars, from) {
+  if (!bars || bars.length < 5) return null;
+  var i0 = -1;
   for (var k = 0; k < bars.length; k++) { if (bars[k][0] >= from) { i0 = k; break; } }
-  if (i0 < 0 || i0 >= bars.length - 1) return null;         // 上市未滿該區間 → 不強行計算
+  if (i0 < 0 || i0 >= bars.length - 1) return null;
   var a = bars[i0][1], b = bars[bars.length - 1][1];
   return a > 0 ? (b - a) / a * 100 : null;
+}
+// 近 N 個月報酬。上市未滿 N 個月時仍算得出數字，但那是「上市以來」不是「近 N 月」，
+// 所以一併回傳 full（起點是否真的被資料涵蓋）與 days（實際涵蓋天數），由使用端標示。
+function _rsSatRet(bars, months) {
+  if (!bars || bars.length < 5) return null;
+  var from = _rsMonthsAgo(months);
+  var v = _rsRetFrom(bars, from);
+  if (v == null) return null;
+  var full = bars[0][0] <= from;
+  var days = Math.round((new Date(bars[bars.length - 1][0]) - new Date(bars[0][0])) / 86400000);
+  return { v: v, full: full, days: days };
+}
+// 成長項排名要用同一段期間。近 6 月對上市未滿半年的檔只會給出「上市以來」，
+// 拿 106 天和 183 天比名次，比到的是上市多久而不是表現：實測本組六檔，
+// 00988A 名次 1→6、00999A 2→1，第一名與最後一名對調。
+// 取「所有成員都完整涵蓋的最長區間」＝ 六個月起點與最晚上市日取較晚者，由資料決定，不是自訂門檻。
+function _rsCommonFrom(barsArr, months) {
+  var from = _rsMonthsAgo(months);
+  (barsArr || []).forEach(function (b) {
+    if (b && b.length >= 5 && b[0][0] > from) from = b[0][0];
+  });
+  return from;
 }
 
 // 依欄位排名並換成 0–1 分數（第一名 1、最後一名 0；同分同名次）。
@@ -738,6 +764,12 @@ async function _rsSatTableHtml() {
   }));
   var navs = await Promise.all(codes.map(_rsBondNav));
 
+  // 成長項排名的共同區間：六個月起點與最晚上市日取較晚者
+  var _rsCmnFrom = _rsCommonFrom(barsArr, 6);
+  var _rsCmnFull = _rsCmnFrom <= _rsMonthsAgo(6);      // 全部都滿六個月時，共同區間就等於近6月
+  var _rsCmnDays = Math.round((Date.now() + 8 * 3600000 -
+    new Date(_rsCmnFrom + 'T00:00:00+08:00').getTime()) / 86400000);
+
   var rows = codes.map(function (code, i) {
     var bars = barsArr[i], nav = navs[i];
     var r = (typeof _rows !== 'undefined') && _rows[code];
@@ -752,6 +784,7 @@ async function _rsSatTableHtml() {
       name: (typeof _contracts !== 'undefined' && _contracts[code] && _contracts[code].name) || '',
       cat: typeof catOf === 'function' ? catOf(code) : '',
       r3: _rsSatRet(bars, 3), r6: _rsSatRet(bars, 6),
+      rk: _rsRetFrom(bars, _rsCmnFrom),          // 成長項排名用（共同區間）
       hold: _rsHoldRet(code),
       yld: yld, mix: mix, n: mix ? mix.n : 0,
       real: (yld != null && core != null) ? yld * core : null,
@@ -763,7 +796,7 @@ async function _rsSatTableHtml() {
   // 評分用排名而非 min-max 正規化：衛星只有兩三檔時，min-max 會讓兩個極端值決定整個尺度，
   // 兩項都排中間的標的反而拿到最低分（實測 00878 成長第一/收入最後 50 分、00999A 兩項都第二卻只有 36 分）。
   // 排名制不受極端值影響，名次相同就同分。
-  _rsRank(rows, 'r6', 'kR', true);
+  _rsRank(rows, 'rk', 'kR', true);
   _rsRank(rows, 'real', 'kI', true);
   rows.forEach(function (x) {
     var a = x.kR, b = x.kI;
@@ -785,8 +818,10 @@ async function _rsSatTableHtml() {
 
   var h = head + '<div class="inv-table-wrap"><table class="inv-table rs-b-table"><thead><tr>' +
     '<th>代號</th>' +
-    '<th class="num" title="近 3 個月價格報酬（不含配息）。這是標的本身的走勢，與你的成本無關">近3月<div class="rs-b-sub">市場</div></th>' +
-    '<th class="num" title="近 6 個月價格報酬（不含配息）。這是標的本身的走勢，與你的成本無關；綜合分的資產成長項用這個">近6月<div class="rs-b-sub">市場</div></th>' +
+    '<th class="num" title="近 3 個月價格報酬（不含配息）。這是標的本身的走勢，與你的成本無關。上市未滿 3 個月者標出實際涵蓋天數">近3月<div class="rs-b-sub">市場</div></th>' +
+    '<th class="num" title="近 6 個月價格報酬（不含配息）。上市未滿 6 個月者為「上市以來」，會標出實際涵蓋天數' +
+      (_rsCmnFull ? '' : '。因為有檔未滿半年，成長排名改用共同區間 ' + _rsCmnFrom + ' 起（' + _rsCmnDays + ' 天），另列一行') + '">' +
+      '近6月<div class="rs-b-sub">市場</div></th>' +
     '<th class="num" title="(未實現損益 ＋ 持有期間已領配息) ÷ 付出成本，含息。這是你在這一檔上實際賺多少，不列入綜合分">持有報酬<div class="rs-b-sub">對成本</div></th>' +
     '<th class="num" title="近 12 個月各期配發金額平均 × 每年期數 ÷ 現價">年化配</th>' +
     '<th class="num" title="年化配息率 ×（股利＋利息占比）；扣掉平準金與資本利得後真正來自成分股配息的部分">真實配</th>' +
@@ -804,8 +839,15 @@ async function _rsSatTableHtml() {
     }
     h += '<tr><td>' + x.code + (x.name ? '<div class="rs-b-name">' + x.name +
       (x.cat ? '・' + x.cat : '') + '</div>' : '') + '</td>' +
-      '<td class="num">' + ret(x.r3) + '</td>' +
-      '<td class="num">' + ret(x.r6) + (x.rkR ? '<div class="rs-b-name">成長 ' + x.rkR + '/' + rows.length + '</div>' : '') + '</td>' +
+      // 涵蓋不足時標出實際天數：不標的話「近6月」對上市 106 天的檔就是假的
+      '<td class="num">' + ret(x.r3 && x.r3.v) +
+        (x.r3 && !x.r3.full ? '<div class="rs-b-name">實際 ' + x.r3.days + ' 天</div>' : '') + '</td>' +
+      '<td class="num">' + ret(x.r6 && x.r6.v) +
+        (x.r6 && !x.r6.full ? '<div class="rs-b-name">實際 ' + x.r6.days + ' 天</div>' : '') +
+        // 共同區間與近6月不同時另列一行：排名看的是這個數字，不能只顯示排不到的那個
+        (!_rsCmnFull && x.rk != null
+          ? '<div class="rs-b-name">共同 ' + (x.rk > 0 ? '+' : '') + x.rk.toFixed(1) + '%</div>' : '') +
+        (x.rkR ? '<div class="rs-b-name">成長 ' + x.rkR + '/' + rows.length + '</div>' : '') + '</td>' +
       // 持有天數一定要一起看：49 天與 194 天的報酬不可直接比較
       '<td class="num"' + (x.hold ? ' title="成本 ' + Math.round(x.hold.cost).toLocaleString('zh-TW') +
           '　未實現損益 ' + (x.hold.pnl >= 0 ? '+' : '') + Math.round(x.hold.pnl).toLocaleString('zh-TW') +
@@ -836,7 +878,16 @@ async function _rsSatTableHtml() {
     '高配息標的被算兩次。</dd>' +
     '<dt>近3月／近6月是「市場」</dt><dd>標的本身的走勢，與你的成本無關，兩個人持有同一檔就該得到同一個數字。' +
     '評分用它，不用成本：換股當下賣出拿到的是市價、成本基準隨即重設，成本是沉沒成本。' +
-    '（驗算：322 張 00981B 換 00989B，市價推得 5,446 對得上、成本推得 6,462 高估 19%。）</dd>' +
+    '（驗算：322 張 00981B 換 00989B，市價推得 5,446 對得上、成本推得 6,462 高估 19%。）<br>' +
+    '上市未滿該區間的檔算出來的是「上市以來」，會標出<b>實際涵蓋天數</b>。</dd>' +
+    '<dt>成長排名用共同區間</dt><dd>' +
+    (_rsCmnFull
+      ? '本組每一檔都滿六個月，排名就用近6月。'
+      : '本組有檔上市未滿半年，排名改用 <b>' + _rsCmnFrom + ' 起（' + _rsCmnDays + ' 天）</b>' +
+        '＝六個月起點與最晚上市日取較晚者，由資料決定，不是自訂門檻。' +
+        '各檔的共同區間報酬另列一行「共同」。') +
+    '<br>不這樣做的話會拿 106 天的報酬跟 183 天的報酬比名次，比到的是上市多久而不是表現：' +
+    '實測本組第一名與最後一名會對調。</dd>' +
     '<dt>持有報酬是「對成本」</dt><dd><code>(未實現損益 ＋ 持有期間已領配息) ÷ 付出成本</code>，含息。' +
     '回答「我在這一檔上實際賺多少」，<b>不列入綜合分</b>，否則會變成賺的捨不得賣、賠的不想認賠。' +
     '<b>務必同時看持有天數</b>：49 天與 194 天的報酬不可直接比較。' +
