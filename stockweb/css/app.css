@@ -279,6 +279,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 @media (max-width: 680px) { .macro-row { grid-template-columns: repeat(2, 1fr); } }
 .macro-bar:empty { display: none; }
 .macro-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; display: flex; align-items: baseline; gap: 8px; }
+/* 非投債警示：⚠ 用文字字形（不加 VS16）才吃得到 CSS 顏色，emoji 形態會固定成彩色 */
+.macro-warn { font-size: 13px; line-height: 1; flex: none; }
+.macro-warn.warn { color: var(--accent2); }   /* 黃 */
+.macro-warn.alarm { color: var(--up); }       /* 紅（台股慣例：紅＝不利方向已發生） */
+.macro-cell.macro-hit { border-color: var(--accent2); }
+.macro-cell.macro-hit:has(.macro-warn.alarm) { border-color: var(--up); }
+.macro-alert-note { font-size: 12px; color: var(--text2); margin-top: 8px; line-height: 1.8; }
+.macro-alert-note .macro-dim { display: block; font-size: 11px; margin-top: 2px; }
 .macro-name { font-size: 12px; color: var(--text2); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .macro-price { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .macro-chg { font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }

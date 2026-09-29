@@ -30,6 +30,24 @@ var MACRO_TICKERS = [
   // 日圓改用玉山牌告即期匯率（買入/賣出雙價，見 loadEsunFx），不再取 Yahoo 中間價
 ];
 
+// ── 非投債警示門檻 ────────────────────────────────────────────────
+// 只對 HYG 與美10年殖利率兩格亮燈，因為只有這兩項對非投債持股量得出關係。
+// 門檻不是自訂的整數，是用近 2 年 499 個美股交易日的分布定位再四捨五入：
+//   黃＝第 90 百分位（HYG 跌 0.375%、10Y 升 5.7bp），一年約 24 次
+//   紅＝第 97.5 百分位（HYG 跌 0.635%、10Y 升 10.7bp），一年約 5～6 次
+// 觸發後「下一個台股交易日」四檔（00981B/00984D/00988B/00989B）的實測結果，
+// 對照無條件基準 平均 -0.011%、下跌比率 40.5%（n=640）：
+//   HYG 跌 0.38%  n=48  平均 -0.140%  下跌 54%
+//   HYG 跌 0.64%  n=12  平均 -0.078%  下跌 50%   ← 沒有比黃色更糟，紅色只代表罕見
+//   10Y 升 6bp    n=47  平均 -0.134%  下跌 60%
+//   10Y 升 11bp   n= 9  平均 -0.191%  下跌 88%   ← 最強，但 n 小、區間寬
+var MACRO_ALERT = {
+  'HYG':  { dir: -1, mode: 'pct',  warn: 0.38, alarm: 0.64, unit: '%',  dp: 2, word: '跌' },
+  '^TNX': { dir: +1, mode: 'diff', warn: 6,    alarm: 11,   unit: 'bp', dp: 1, word: '升' }
+};
+var ALERT_FOR = '非投債';
+var _twLastClose = null;   // 台股最後一個「已收盤」的交易日（ISO）
+
 var _newsItems = []; // {source, title, link, time(Date)}
 var _macroSnap = []; // {name, price, changePct, fmt}
 var _nightFut = null; // 台指夜盤 {price, changePct, time}
@@ -40,8 +58,10 @@ var _nightFut = null; // 台指夜盤 {price, changePct, time}
 //   ② 最新價（regularMarketPrice）與日K序列可能不同步：盤前時最新價已跨到新的一天，
 //      但當日 bar 尚未產生，若固定取 closes[n-2] 當基準就會錯抓到「前前一日」。
 // 故以報價時間與最後一根日K的日期比對，決定基準該取哪一根。
+// range 用 1mo 不用 5d：警示要算「台股上次收盤以來的累計」，農曆年台股可連休 9 天，
+// 這段期間美股會開 6～7 盤，5 天的日K 不夠回推基準。多抓的資料不影響原本的前收判定。
 async function fetchYahooQuote(t) {
-  var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(t.sym) + '?interval=1d&range=5d';
+  var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(t.sym) + '?interval=1d&range=1mo';
   var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
   var j = await r.json();
   var res = j.chart && j.chart.result && j.chart.result[0];
@@ -63,7 +83,60 @@ async function fetchYahooQuote(t) {
   if (n >= 2 && day(asOf) === day(bars[n - 1].t * 1000)) prev = bars[n - 2].c;  // 最新價仍屬最後一根日K當天
   else prev = bars[n - 1].c;                                                     // 最新價已跨日（盤前）
   var pct = (price != null && prev) ? (price - prev) / prev * 100 : null;
-  return { name: t.name, price: price, changePct: pct, fmt: t.fmt, asOf: asOf };
+  // bars 供警示計算累計用（日期取美東當地日，與 Yahoo 的日K 標記一致）
+  var days = bars.map(function (b) {
+    return { d: new Date(b.t * 1000).toISOString().slice(0, 10), c: b.c };
+  });
+  return { name: t.name, sym: t.sym, price: price, changePct: pct, fmt: t.fmt, asOf: asOf, bars: days };
+}
+
+// 台股最後一個已收盤的交易日。盤中看這排指標時，基準要用「昨天的收盤」，
+// 因為今天這一盤正在消化那些美股變動，拿今天當基準會把要提醒的東西算掉。
+async function fetchTwLastClose() {
+  try {
+    var url = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=1d&range=1mo';
+    var j = await (await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url))).json();
+    var res = j.chart.result[0], ts = res.timestamp || [];
+    var cl = res.indicators.quote[0].close || [];
+    var ds = [];
+    for (var i = 0; i < ts.length; i++) {
+      if (cl[i] != null) ds.push(new Date(ts[i] * 1000 + 8 * 3600000).toISOString().slice(0, 10));
+    }
+    var now = new Date(Date.now() + 8 * 3600000);
+    var today = now.toISOString().slice(0, 10);
+    var closed = now.getUTCHours() >= 14;           // 13:30 收盤，14:00 後視為已收
+    for (var k = ds.length - 1; k >= 0; k--) {
+      if (ds[k] < today || (ds[k] === today && closed)) return ds[k];
+    }
+  } catch (e) { console.warn('[twii]', e); }
+  return null;
+}
+
+// 台股上次收盤之後、尚未被反映的美股累計變動。
+// 基準是「台股上次收盤日之前」的最後一根美股日K：美股 D 盤收在台北 D+1 凌晨 4 點，
+// 台股 D 日 13:30 就收了，所以台股 D 日的收盤只反映到美股 D-1 盤。
+function _macroCum(bars, twLast, mode) {
+  if (!bars || !bars.length || !twLast) return null;
+  var base = null, last = null, n = 0;
+  for (var i = 0; i < bars.length; i++) {
+    if (bars[i].d < twLast) base = bars[i];
+    else if (bars[i].c != null) { last = bars[i]; n++; }
+  }
+  if (!base || !last || !base.c) return null;
+  return { n: n, from: base.d, to: last.d,
+           v: mode === 'pct' ? (last.c / base.c - 1) * 100 : (last.c - base.c) * 100 };
+}
+
+// 回傳 {level:'warn'|'alarm', cum, cfg} 或 null
+function _macroAlert(m, twLast) {
+  var cfg = MACRO_ALERT[m.sym];
+  if (!cfg) return null;
+  var cum = _macroCum(m.bars, twLast, cfg.mode);
+  if (!cum) return null;
+  var mag = cum.v * cfg.dir;                        // 轉成「往不利方向的幅度」，正值才算數
+  if (mag >= cfg.alarm) return { level: 'alarm', cum: cum, mag: mag, cfg: cfg };
+  if (mag >= cfg.warn) return { level: 'warn', cum: cum, mag: mag, cfg: cfg };
+  return null;
 }
 
 // 台指夜盤（近月期貨快照，含夜盤最新價）— 經本機 Shioaji
@@ -298,10 +371,14 @@ function renderConsistency() {
 }
 
 async function loadMacro() {
-  var results = await Promise.allSettled(MACRO_TICKERS.map(fetchYahooQuote));
+  var results = await Promise.allSettled(MACRO_TICKERS.map(fetchYahooQuote).concat([fetchTwLastClose()]));
+  var twRes = results.pop();
+  _twLastClose = (twRes.status === 'fulfilled') ? twRes.value : null;
   _macroSnap = results.map(function (res, i) {
-    return res.status === 'fulfilled' ? res.value : { name: MACRO_TICKERS[i].name, price: null, changePct: null, fmt: MACRO_TICKERS[i].fmt };
+    return res.status === 'fulfilled' ? res.value
+      : { name: MACRO_TICKERS[i].name, sym: MACRO_TICKERS[i].sym, price: null, changePct: null, fmt: MACRO_TICKERS[i].fmt };
   });
+  _macroSnap.forEach(function (m) { m.alert = _macroAlert(m, _twLastClose); });
   _nightFut = await fetchNightFutures();
   renderMacroBar();
   // 玉山牌告匯率（10 分鐘快取）非阻塞補上，回來後重繪
@@ -337,10 +414,35 @@ function renderMacroBar() {
   var el = document.getElementById('macro-bar');
   if (!el) return;
   var cells = _macroSnap.map(function (m) {
-    return '<div class="macro-cell"' + (m.asOf ? ' title="報價時間 ' + _asOfTxt(m.asOf) + '（台北）　' + _agoTxt(m.asOf) + '"' : '') +
-      '><span class="macro-name">' + m.name + '</span>' +
+    var tip = m.asOf ? '報價時間 ' + _asOfTxt(m.asOf) + '（台北）　' + _agoTxt(m.asOf) : '';
+    var icon = '', tag = '';
+    if (m.alert) {
+      var a = m.alert, c = a.cfg;
+      icon = '<span class="macro-warn ' + a.level + '">⚠</span>';
+      tag = '<span class="macro-dim"> 對' + ALERT_FOR + '</span>';
+      tip = (a.level === 'alarm' ? '紅色警告' : '黃色警示') + '（對' + ALERT_FOR + '）：' +
+        '台股 ' + a.cum.from + ' 收盤後至今，' + c.word + ' ' + a.mag.toFixed(c.dp) + ' ' + c.unit +
+        '，達' + (a.level === 'alarm' ? '紅色' : '黃色') + '門檻 ' + (a.level === 'alarm' ? c.alarm : c.warn) + ' ' + c.unit +
+        '。累計 ' + a.cum.n + ' 個美股交易日（至 ' + a.cum.to + '）。' +
+        '　門檻取近 2 年美股日變動的第 ' + (a.level === 'alarm' ? '97.5' : '90') + ' 百分位。' +
+        (tip ? '\n' + tip : '');
+    }
+    // 台股連假後，欄位上的當日漲跌只是最後一盤，台股要一次吃掉好幾盤。
+    // 兩者不同時把累計也寫出來，否則會看不懂為什麼 -0.41% 會亮燈。
+    var cumTxt = '';
+    if (MACRO_ALERT[m.sym]) {
+      var cc = _macroCum(m.bars, _twLastClose, MACRO_ALERT[m.sym].mode);
+      if (cc && cc.n > 1) {
+        cumTxt = '<span class="macro-dim"> 累計' + (cc.v > 0 ? '▲' : '▼') +
+          Math.abs(cc.v).toFixed(MACRO_ALERT[m.sym].mode === 'pct' ? 2 : 1) +
+          (MACRO_ALERT[m.sym].mode === 'pct' ? '%' : 'bp') + '</span>';
+      }
+    }
+    return '<div class="macro-cell' + (m.alert ? ' macro-hit' : '') + '"' +
+      (tip ? ' title="' + tip.replace(/"/g, '&quot;') + '"' : '') +
+      '>' + icon + '<span class="macro-name">' + m.name + tag + '</span>' +
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
-      '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + '</span></div>';
+      '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + cumTxt + '</span></div>';
   });
   // 玉山日圓即期匯率：換匯實際成交的價格（買入＝銀行跟你買，賣出＝銀行賣你）。
   // Yahoo 的 JPYTWD=X 是國際中間價，換匯時拿不到，故另列一格供實際判斷。
@@ -377,7 +479,25 @@ function renderMacroBar() {
               '</b>、最新 <b>' + _agoTxt(newest) + '</b>') +
       '　<span class="macro-dim">美股收盤後為收盤價；滑鼠移到單項可看該項時間</span></div>';
   }
-  el.innerHTML = head + '<div class="macro-row">' + cells.join('') + '</div>';
+  // 警示說明：亮燈了才寫，平常不佔版面
+  var hits = _macroSnap.filter(function (m) { return m.alert; });
+  var foot = '';
+  if (hits.length) {
+    foot = '<div class="macro-alert-note">' +
+      hits.map(function (m) {
+        var a = m.alert, c = a.cfg;
+        return '<span class="macro-warn ' + a.level + '">⚠</span>' + m.name + ' ' +
+          c.word + ' ' + a.mag.toFixed(c.dp) + ' ' + c.unit +
+          '（' + (a.level === 'alarm' ? '紅色警告' : '黃色警示') + '門檻 ' +
+          (a.level === 'alarm' ? c.alarm : c.warn) + ' ' + c.unit + '）';
+      }).join('　') +
+      '<div class="macro-dim">對象是' + ALERT_FOR + '持股，其他類型持股不適用。' +
+      '幅度為台股 ' + (_twLastClose || '—') + ' 收盤後累計，不是單日。' +
+      '門檻取近 2 年美股日變動的第 90（黃）與 97.5（紅）百分位，黃色一年約 24 次、紅色約 5～6 次。' +
+      '這是「該留意」不是買賣訊號：觸發後隔一個台股交易日，四檔非投債平均 -0.13% ～ -0.19%，' +
+      '無條件基準是 -0.01%。</div></div>';
+  }
+  el.innerHTML = head + '<div class="macro-row">' + cells.join('') + '</div>' + foot;
 }
 
 async function fetchFeed(feed) {
@@ -468,8 +588,20 @@ async function buildNewsPrompt() {
     try { await ensureSignals(); sigTxt = signalsSummaryForPrompt(); } catch (e) {}
   }
   var macroTxt = _macroSnap.map(function (m) {
-    return '- ' + m.name + '：' + _fmtNum(m.price, m.fmt) + '（' + (m.changePct == null ? 'N/A' : (m.changePct >= 0 ? '+' : '') + m.changePct.toFixed(2) + '%') + '）';
+    var s = '- ' + m.name + '：' + _fmtNum(m.price, m.fmt) + '（' + (m.changePct == null ? 'N/A' : (m.changePct >= 0 ? '+' : '') + m.changePct.toFixed(2) + '%') + '）';
+    if (m.alert) {
+      var a = m.alert, c = a.cfg;
+      s += '　【' + (a.level === 'alarm' ? '紅色警告' : '黃色警示') + '｜對' + ALERT_FOR + '】台股 ' +
+        a.cum.from + ' 收盤後累計' + c.word + ' ' + a.mag.toFixed(c.dp) + ' ' + c.unit +
+        '（門檻 ' + (a.level === 'alarm' ? c.alarm : c.warn) + ' ' + c.unit + '，近 2 年第 ' +
+        (a.level === 'alarm' ? '97.5' : '90') + ' 百分位）';
+    }
+    return s;
   }).join('\n');
+  if (_macroSnap.some(function (m) { return m.alert; })) {
+    macroTxt += '\n（警示只針對非投等債 ETF，門檻由歷史分布定位；觸發後隔一個台股交易日，' +
+      '四檔非投債平均 -0.13% ～ -0.19%，無條件基準 -0.01%。屬於「該留意」的量級，不是買賣訊號。）';
+  }
   if (_nightFut) {
     macroTxt += '\n- 台指期近月夜盤（' + (_nightFut.time || '') + '）：' + _fmtNum(_nightFut.price, 0) +
       '（' + (_nightFut.changePct >= 0 ? '+' : '') + _nightFut.changePct.toFixed(2) + '%）';
