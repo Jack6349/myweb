@@ -410,9 +410,9 @@ async function loadInvSettle() {
   _invSettleBusy = true;
   try {
     var rows = await fetchSettlements();
-    var tot = 0;
-    (rows || []).forEach(function (r) { tot += r.amount || 0; });
-    _settleTot = (rows && rows.length) ? Math.round(tot) : null;
+    // 交割日當天那筆銀行凌晨已扣，錢已經不在帳上，算進「待交割」會重複計算
+    var sp = splitSettlements(rows);
+    _settleTot = (rows && rows.length) ? Math.round(sp.pending) : null;
     if (typeof renderTopbarTotals === 'function') renderTopbarTotals();
   } catch (e) {
     console.warn('[待交割]', e);

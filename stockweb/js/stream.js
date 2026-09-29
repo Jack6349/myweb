@@ -565,7 +565,7 @@ function renderTopbarTotals() {
     tt('獲利率', prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%', cvar[pcls]) +
     // 合計待交割（T／T+1／T+2 應收付合計；正＝應收紅、負＝應付綠）
     (typeof _settleTot !== 'undefined' && _settleTot != null
-      ? '<span title="T／T+1／T+2 應收付合計（正＝應收、負＝應付）；各日明細見交易資訊「台幣交割」">' +
+      ? '<span title="尚未交割的應收付合計（正＝應收、負＝應付）。交割日當天那筆銀行凌晨已扣款，不計入；各日明細見交易資訊「台幣交割」">' +
         tt('合計待交割', (_settleTot > 0 ? '+' : '') + _settleTot.toLocaleString('zh-TW'), cvar[colorClass(_settleTot)]) + '</span>'
       : '');
 }

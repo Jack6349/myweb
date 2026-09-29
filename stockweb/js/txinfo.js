@@ -19,19 +19,28 @@ async function loadSettleBox() {
   try {
     var rows = await fetchSettlements();
     if (!rows || !rows.length) { el.innerHTML = '<div class="modal-loading">無交割資料</div>'; return; }
-    var tot = 0, html = '<table class="tx-settle-table">';
+    var sp = splitSettlements(rows);
+    var html = '<table class="tx-settle-table">';
     rows.forEach(function (r) {
-      var amt = r.amount || 0; tot += amt;
+      var amt = r.amount || 0;
+      var paid = settleIsPaid(r, sp.today);
       var cls = amt > 0 ? 'up' : (amt < 0 ? 'down' : '');
       var d = (r.date || '').slice(5).replace('-', '/');
       var tl = r.T === 0 ? 'T' : 'T+' + r.T;
-      html += '<tr><td class="tx-sd">' + d + '<span class="tx-st">' + tl + '</span></td>' +
+      html += '<tr' + (paid ? ' class="tx-settle-paid"' : '') + '>' +
+        '<td class="tx-sd">' + d + '<span class="tx-st">' + tl + '</span>' +
+        (paid ? '<span class="tx-paid">已扣款</span>' : '') + '</td>' +
         '<td class="num ' + cls + '">' + (amt === 0 ? '0' : amt.toLocaleString('zh-TW')) + '</td></tr>';
     });
+    var tot = sp.pending;
     var tcls = tot > 0 ? 'up' : (tot < 0 ? 'down' : '');
     html += '<tr class="tx-settle-total"><td>合計待交割</td><td class="num ' + tcls + '">' +
       (tot === 0 ? '0' : tot.toLocaleString('zh-TW')) + '</td></tr></table>' +
-      '<div class="tx-note">負數＝應付（銀行扣款）、正數＝應收</div>';
+      '<div class="tx-note">負數＝應付（銀行扣款）、正數＝應收。' +
+      (sp.paidRows.length
+        ? '交割日當天銀行凌晨就已扣款，該列標「已扣款」並<b>不計入</b>合計（本次已扣 ' +
+          sp.paid.toLocaleString('zh-TW') + '）。'
+        : '') + '</div>';
     el.innerHTML = html;
   } catch (e) { el.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>'; }
 }

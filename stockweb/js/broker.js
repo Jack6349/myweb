@@ -49,6 +49,25 @@ async function fetchPositionDetail(detailId) {
 async function fetchSettlements() {
   return brokerPost('settlements', {});
 }
+// 交割日當天銀行在凌晨就批次扣款（實測 01:19），所以「日期 ≤ 今天」那筆錢已經進出完畢，
+// 不該再算進「待交割」。這裡只比日期不比時間：扣款時刻各行庫不同，拿單一觀測值當門檻沒有依據。
+// 代價是 00:00 到銀行實際扣款之間（實測約 1 小時多）會提早標成已扣款。
+function _brTwToday() {
+  return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+}
+function settleIsPaid(r, todayIso) {
+  return !!(r && r.date && r.date <= (todayIso || _brTwToday()));
+}
+// 拆成 {paid, pending, paidRows, pendRows}，供交易資訊與頂欄共用同一套判定
+function splitSettlements(rows) {
+  var today = _brTwToday(), paid = 0, pending = 0, paidRows = [], pendRows = [];
+  (rows || []).forEach(function (r) {
+    var a = r.amount || 0;
+    if (settleIsPaid(r, today)) { paid += a; paidRows.push(r); }
+    else { pending += a; pendRows.push(r); }
+  });
+  return { paid: paid, pending: pending, paidRows: paidRows, pendRows: pendRows, today: today };
+}
 // 今日委託含成交回報：[{contract, order, status:{status, deals:[{price,quantity,ts}], ...}}]
 async function fetchOrderTrades() {
   var r = await brokerThrottle(function () { return fetch('/api/v1/order/trades', {
