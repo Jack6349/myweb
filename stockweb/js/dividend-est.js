@@ -366,8 +366,16 @@ async function startDividendEst(force) {
   }
   // 上櫃 ETF 的未來除息只有 TPEx 有；先確保當日快取存在（每日 1 次全市場），股利估算不再相依填息追蹤頁
   try { await fetchTpexExright(); } catch (e) {}
-  _divMergeAnnounced(recMap);   // 併入已公告除息（TPEx 預告表／手動補登），估算改採實際公告值
+  // Yahoo 下一期金額（div-mix.js 非同步載入）：沒等它就併，第一次進頁會少一筆金額
+  if (typeof _dmReady !== 'undefined') { try { await _dmReady; } catch (e) {} }
+  _divMergeAnnounced(recMap);   // 併入已公告除息（TPEx 預告表／Yahoo／手動補登），估算改採實際公告值
   _divRecMap = recMap;   // 供換股試算與填息追蹤共用
+
+  // 除息日曆（未來已公告）：本頁顯示，所以在本頁建。_rfBuildCalendar 的 TPEx 走當日快取，不會多打一次
+  try {
+    _rfCal = await _rfBuildCalendar(
+      codes.filter(function (c) { return shareMap[c] > 0; }), _divTwDate().iso);
+  } catch (e) { console.warn('[divest calendar]', e); _rfCal = _rfCal || []; }
 
   var tw = _divTwDate();
   var stocks = [];
@@ -470,6 +478,9 @@ function renderDividendEst() {
 
   // ── 本月除息個股（按除息日由近至遠）──
   var html = _divExMonthHtml(stocks, money, md);
+
+  // ── 除息日曆（未來已公告）── 原本在填息追蹤頁；這裡才是看「接下來要領什麼」的位置
+  html += '<div class="divest-divider"></div>' + _rfCalHtml();
 
   // ── 個股明細（可折疊）──
   html += '<div class="divest-divider"></div><div class="divest-sec-title">個股明細</div><div class="divest-stocks">';
@@ -908,7 +919,6 @@ function toggleDivStock(code) {
 // ── 上櫃除權息預告表（TPEx OpenAPI，官方 JSON；每日 1 次即涵蓋全市場，零額外成本）──
 // 供股利估算與填息追蹤共用：任一頁先用到就抓並快取，不再互相相依
 var TPEX_CAL_LS = 'refill_cal_v2';   // v2：併入上市 TWSE 預告表
-var _tpexFresh = false;                 // 本次是否真的向 TPEx 抓了新資料
 function _tpexCached() {
   try { var c = JSON.parse(localStorage.getItem(TPEX_CAL_LS) || 'null'); if (c && c.day === _divTwDate().iso) return c.rows; } catch (e) {}
   return null;
@@ -916,7 +926,6 @@ function _tpexCached() {
 async function fetchTpexExright() {
   var hit = _tpexCached();
   if (hit) return hit;
-  _tpexFresh = true;
   var rows = [];
   try {
     var url = 'https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost';
@@ -1063,6 +1072,14 @@ function _divMergeAnnounced(recMap) {
     var cal = JSON.parse(localStorage.getItem(TPEX_CAL_LS) || 'null');
     if (cal && cal.rows) cal.rows.forEach(function (r) { push(String(r.code), r.exDate, r.payDate, r.amount, r.src || 'TPEx'); });
   } catch (e) {}
+  try {                                            // Yahoo 下一期（etf-divnext.py 每日）：官方只申報日期、金額還 pending 時由它補
+    if (typeof dmNextRaw === 'function') {
+      Object.keys(recMap).forEach(function (code) {
+        var y = dmNextRaw(code);
+        if (y) push(code, y.ex, y.pay, y.amt, 'Yahoo預告');
+      });
+    }
+  } catch (e) {}
   try {                                            // 手動補登（後併入，可補上 TPEx 缺的金額/發放日）
     var man = JSON.parse(localStorage.getItem('refill_manual_v1') || '{}');
     Object.keys(man).forEach(function (code) {
@@ -1077,9 +1094,14 @@ function _divMergeAnnounced(recMap) {
     add[code].forEach(function (n) {
       var cur = byEx[n.exDate];
       if (cur) {                                   // 已有同除息日 → 只補缺漏欄位
-        if (cur.amount == null && n.amount != null) cur.amount = n.amount;
-        if (!cur.payDate && n.payDate) cur.payDate = n.payDate;
-      } else {                                     // 新除息日 → 加入（金額未公告時由估算沿用最近一次）
+        var used = false;
+        if (cur.amount == null && n.amount != null) { cur.amount = n.amount; used = true; }
+        if (!cur.payDate && n.payDate) { cur.payDate = n.payDate; used = true; }
+        // 記下是誰補的：除息日曆「來源」欄要看得出金額其實來自 Yahoo 而不是官方
+        if (used && n.src && String(cur._fill || '').indexOf(n.src) < 0) {
+          cur._fill = cur._fill ? cur._fill + '＋' + n.src : n.src;
+        }
+      } else {                                   // 新除息日 → 加入（金額未公告時由估算沿用最近一次）
         var rec = { code: code, name: '', exDate: n.exDate, payDate: n.payDate, amount: n.amount, _src: n.src };
         list.push(rec); byEx[n.exDate] = rec;
       }

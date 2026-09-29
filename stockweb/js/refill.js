@@ -65,19 +65,23 @@ function _rfManPrune() {
 function rfManualInput(code, el) {
   var raw = el.value;
   var map = _rfManLoad();
-  if (!raw.trim()) { delete map[code]; _rfManSave(map); _rfNote = code + ' 手動資料已清除'; _rfSyncDivEst(); renderRefill(); return; }
+  // 輸入框在股利估算頁的除息日曆裡，所以重畫的是那一頁（_rfNote 也顯示在該表標題）
+  if (!raw.trim()) { delete map[code]; _rfManSave(map); _rfNote = code + ' 手動資料已清除'; _rfSyncDivEst(); return; }
   var r = _rfParseManual(raw);
-  if (!r) { _rfNote = code + ' 格式無法解析，請貼上如：0.153　2026/08/18　2026/09/09'; renderRefill(); return; }
+  if (!r) {
+    _rfNote = code + ' 格式無法解析，請貼上如：0.153　2026/08/18　2026/09/09';
+    if (typeof renderDividendEst === 'function') renderDividendEst();   // 只重畫，不重抓
+    return;
+  }
   map[code] = r;
   _rfManSave(map);
   _rfNote = code + ' 已補登：配息 ' + (r.amount != null ? r.amount : '待公告') + '、除息 ' + r.exDate + (r.payDate ? '、發放 ' + r.payDate : '');
   // 貼到過期的除息日時明講：日曆只列未來除息，貼舊資料不會有反應，容易誤以為沒生效
   if (r.exDate < _divTwDate().iso) {
-    _rfNote += '　※ 此除息日已過，不會顯示在下方除息日曆' +
+    _rfNote += '　※ 此除息日已過，不會顯示在除息日曆' +
       (r.payDate && r.payDate >= _divTwDate().iso ? '（發放日未到，仍計入股利估算）' : '');
   }
-  _rfSyncDivEst();                  // 同步刷新股利估算的預估數字
-  startRefill();                    // 重算日曆（併入手動值）
+  _rfSyncDivEst();                  // 重算股利估算：連帶重建除息日曆（併入手動值）並重畫
 }
 var _rfResult = null;             // [{code,name,events:[],filled,total,avgDays,medDays,pending}]
 var _rfOpen = {};                 // code -> 是否展開
@@ -97,9 +101,11 @@ async function _rfBuildCalendar(codes, todayIso) {
   codes.forEach(function (code) {
     ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).forEach(function (r) {
       if (!r.exDate || r.exDate < todayIso) return;
+      // 來源：主來源（e添富／Yahoo歷史／TPEx／Yahoo預告）＋ _fill（補了缺漏欄位的次要來源）
+      var base = r._src || ((typeof _divByCode !== 'undefined' && _divByCode[code]) ? 'e添富' : 'Yahoo歷史');
       cal[code + '|' + r.exDate] = { code: code, name: _swapName(code) || r.name || '',
         exDate: r.exDate, amount: r.amount, payDate: r.payDate || null,
-        src: r._src || ((typeof _divByCode !== 'undefined' && _divByCode[code]) ? 'e添富' : 'Yahoo') };
+        src: base + (r._fill ? '＋' + r._fill : '') };
     });
   });
   // 預告表（上櫃 TPEx＋上市 TWSE）：僅補持股
@@ -249,14 +255,7 @@ async function startRefill(force) {
     return;
   }
 
-  // 除息日曆（未來已公告除息）：上市 e添富＋上櫃 TPEx，缺漏欄位可由使用者手動補登
-  info.textContent = '取得除息預告…';
-  var cal = [];
-  if (typeof _tpexFresh !== 'undefined') _tpexFresh = false;
-  try { cal = await _rfBuildCalendar(codes, todayIso); } catch (e) { console.warn('[refill calendar]', e); }
-  _rfCal = cal;
-  // 若本頁才首次抓到 TPEx（股利估算尚未載入過），同步重算一次讓兩頁數字一致
-  if (typeof _tpexFresh !== 'undefined' && _tpexFresh) { _tpexFresh = false; _rfSyncDivEst(); }
+  // 除息日曆已移到股利估算頁，連帶在那裡建 _rfCal（startDividendEst）；本頁不再自行組
 
   // 本月發放（依 _divRecMap 的發放月；含手動補登與 TPEx 已併入的公告）
   _rfPay = _rfBuildMonthPay(codes, todayIso);
@@ -313,10 +312,9 @@ function renderRefill() {
     sp('貼息中', pendN + ' 檔', pendN ? 'var(--up)' : 'var(--down)') +
     '</div>';
 
-  // 除息日曆（未來已公告）
-  html += _rfCalHtml();
+  // 除息日曆（未來已公告）已移到股利估算頁的「本月除息個股」與「個股明細」之間
 
-  // 本月發放（介於除息日曆與逐檔填息之間）
+  // 本月發放
   html += _rfMonthPayHtml();
 
   // 未填息個股（本月發放與逐檔填息之間）：所有仍在貼息的除息，一次除息一列
@@ -464,7 +462,7 @@ function _rfCalHtml() {
   var h = '<div class="divest-sec-title">除息日曆（未來已公告）' +
     (_rfNote ? '<span class="rf-cmnote">' + _rfNote + '</span>' : '') + '</div>';
   if (!cal.length) {
-    return h + '<div class="rf-cal-empty">目前無已公告的未來除息日（上市查 e添富、上櫃查 TPEx 預告表）。</div>';
+    return h + '<div class="rf-cal-empty">目前無已公告的未來除息日（上市查 e添富、上櫃查 TPEx 預告表、金額另查 Yahoo）。</div>';
   }
   var man = _rfManLoad();
   h += '<div class="inv-table-wrap"><table class="inv-table swap-table rf-cal"><thead><tr>' +
@@ -496,8 +494,10 @@ function _rfCalHtml() {
     '</tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="rf-cal-note">上市 ETF 取自 e添富、上櫃取自 TPEx 除權息預告表（每日更新一次）。' +
-    '投信剛公告、官方資料尚未同步時會顯示「待公告」，此時可在該列「手動補登」貼上整行（例：<code>0.153　2026/08/18　2026/09/09</code>），' +
+    '<div class="rf-cal-note">除息日與發放日：上市取自 e添富、上櫃取自 TPEx 除權息預告表（每日更新一次）。' +
+    '金額另比對 Yahoo 台股（etf-divnext.py 每日）——投信公告後官方常只先申報日期、金額掛「待公告」，Yahoo 通常早幾天就有，' +
+    '此時本表顯示 Yahoo 的金額、來源標「＋Yahoo預告」；官方一公布即改用官方值。' +
+    '三邊都還沒有時才顯示「待公告」，可在該列「手動補登」貼上整行（例：<code>0.153　2026/08/18　2026/09/09</code>），' +
     '自動解析股利／除息日／發放日；官方公告後即改用官方值，手動值僅為暫時填補，清空輸入框可移除。' +
     '預估可領＝預估配息 × 持有股數，未扣二代健保與稅。</div>';
   return h;

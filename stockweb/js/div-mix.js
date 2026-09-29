@@ -26,7 +26,9 @@ var DM_MONTHS = 12;          // 統計區間。用「近 12 個月」而非固�
 
 var _dmMap = null, _dmDay = null, _dmLoaded = false, _dmNext = null, _dmNextDay = null;
 
-(function () {
+// 兩份 JSON 都載完才 resolve。股利估算要在併入「已公告除息」之前 await 它，
+// 否則第一次進頁時 Yahoo 還沒到，除息日曆會少掉那一筆金額。
+var _dmReady = (function () {
   var a = fetch('data/etf-div-mix.json', { cache: 'no-cache' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) { if (j && j.map) { _dmMap = j.map; _dmDay = j.updated || null; } })
@@ -36,7 +38,7 @@ var _dmMap = null, _dmDay = null, _dmLoaded = false, _dmNext = null, _dmNextDay 
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) { if (j && j.map) { _dmNext = j.map; _dmNextDay = j.updated || null; } })
     .catch(function () {});
-  Promise.all([a, b]).then(function () {
+  return Promise.all([a, b]).then(function () {
     _dmLoaded = true;
     if (typeof dmOnLoad === 'function') dmOnLoad();
   });
@@ -84,6 +86,16 @@ function dmNext(code) {
     if (list[i].ex === y.ex && list[i].amt > 0) return null;   // MOPS 已有，不用補
   }
   return { ex: y.ex, pay: y.pay || null, amt: y.amt, period: y.period || null, src: 'Yahoo' };
+}
+
+// Yahoo 的下一期除息原始值，不看 MOPS 有沒有（dmNext 會擋，那是給健康度用的）。
+// 除息日曆與股利估算用：官方（e添富／TPEx）給除息日與發放日，Yahoo 常常先有金額——
+// 2026-10-05 那批九檔，MOPS 都還是 pending（只有日期、沒有金額），Yahoo 已經有 0.042～0.085。
+// 合併端只補缺漏欄位，所以官方一公告就自動改用官方值。
+function dmNextRaw(code) {
+  var y = _dmNext && _dmNext[String(code)];
+  if (!y || !y.ex) return null;
+  return { ex: y.ex, pay: y.pay || null, amt: (y.amt > 0 ? y.amt : null) };
 }
 
 // 尚未公告占比的最近一次除息（表二標「下期待公告」用）
