@@ -322,6 +322,22 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-settle-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .tx-sd { color: var(--text2); }
 .tx-st { color: var(--text3); font-size: 11px; margin-left: 8px; }
+/* 說明收合（note.js 自動包）：預設收起，只留一列「說明」 */
+.nbox { margin: 8px 0 14px; }
+.nbox > summary { cursor: pointer; display: inline-block; font-size: 12px; color: var(--text3);
+  border: 1px solid var(--border); border-radius: 999px; padding: 2px 12px 2px 8px; list-style: none; user-select: none; }
+.nbox > summary::-webkit-details-marker { display: none; }
+.nbox > summary::before { content: '▸'; display: inline-block; width: 12px; }
+.nbox[open] > summary::before { content: '▾'; }
+.nbox > summary:hover { color: var(--text2); border-color: var(--text3); }
+.nbox > *:not(summary) { margin-top: 8px; }
+/* 展開後的說明本文：定義列表式排版，項目名稱獨立成行才掃得到 */
+.nbox dl { margin: 0; }
+.nbox dt { color: var(--accent2); font-weight: 700; font-size: 12px; margin-top: 10px; }
+.nbox dt:first-child { margin-top: 0; }
+.nbox dd { margin: 2px 0 0; }
+.nbox code { background: var(--bg3); border-radius: 4px; padding: 1px 6px; color: var(--text); font-size: 12px; }
+
 .tx-settle-total td { border-bottom: none; font-weight: 700; padding-top: 8px; }
 /* 已扣款：錢已經進出完畢，整列調淡並劃掉金額，跟還沒交割的分開 */
 .tx-settle-paid td { opacity: .5; }

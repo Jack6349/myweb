@@ -349,7 +349,7 @@ function renderRefill() {
   if (_rfResult.noDiv.length) {
     html += '<div class="rf-nodiv">尚未開始除息（未抓取價格）：' + _rfResult.noDiv.join('、') + '</div>';
   }
-  html += '<div class="tx-note">基準價＝除息日前一交易日收盤；除息後首次收盤 ≥ 基準價即為填息，天數以交易日計。' +
+  html += '<div class="tx-note nb">基準價＝除息日前一交易日收盤；除息後首次收盤 ≥ 基準價即為填息，天數以交易日計。' +
     '價格為 Yahoo 未還原收盤（還原價會抹平除息缺口）。統計範圍近 ' + RF_YEARS + ' 年已除息紀錄，資料每日快取，按「重新整理」強制更新。' +
     '<b>本頁為歷史統計，不預測未來填息表現，非投資建議。</b></div>';
   wrap.innerHTML = html;

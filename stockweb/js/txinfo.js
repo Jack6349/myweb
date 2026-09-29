@@ -36,7 +36,7 @@ async function loadSettleBox() {
     var tcls = tot > 0 ? 'up' : (tot < 0 ? 'down' : '');
     html += '<tr class="tx-settle-total"><td>合計待交割</td><td class="num ' + tcls + '">' +
       (tot === 0 ? '0' : tot.toLocaleString('zh-TW')) + '</td></tr></table>' +
-      '<div class="tx-note">負數＝應付（銀行扣款）、正數＝應收。' +
+      '<div class="tx-note nb">負數＝應付（銀行扣款）、正數＝應收。' +
       (sp.paidRows.length
         ? '交割日當天銀行凌晨就已扣款，該列標「已扣款」並<b>不計入</b>合計（本次已扣 ' +
           sp.paid.toLocaleString('zh-TW') + '）。'
