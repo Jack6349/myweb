@@ -794,7 +794,7 @@ function _divExMonthHtml(stocks, money, md) {
   list.sort(function (a, b) { return a.exDate < b.exDate ? -1 : (a.exDate > b.exDate ? 1 : 0); });
 
   var h = '<div class="divest-sec-title">本月除息個股</div>';
-  if (!list.length) return h + '<div class="divest-note">本月無除息個股。</div>';
+  if (!list.length) return h + '<div class="divest-note nb-keep">本月無除息個股。</div>';
 
   h += '<div class="dstat-wrap dexm-wrap"><table class="dstat dexm"><thead><tr>' +
     '<th class="dstat-code">代號</th><th class="num">現價</th>' +
@@ -849,7 +849,7 @@ function _divExMonthHtml(stocks, money, md) {
       });
     });
   });
-  if (notes.length) h += '<div class="divest-note">※ 本表依除息日歸月，月份總覽依發放月：' + notes.join('；') + '</div>';
+  if (notes.length) h += '<div class="divest-note nb-keep">※ 本表依除息日歸月，月份總覽依發放月：' + notes.join('；') + '</div>';
   return h;
 }
 

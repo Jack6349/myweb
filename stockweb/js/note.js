@@ -9,7 +9,7 @@
 
 var NOTE_SEL = [
   '.detail-note', '.rs-note', '.divest-note', '.sig-note',
-  '.swap-qual-note', '.rf-cal-note', '.cs-note', '.macro-alert-note',
+  '.swap-qual-note', '.rf-cal-note', '.cs-note',
   '.nb'
 ].join(',');
 
