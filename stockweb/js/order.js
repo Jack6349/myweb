@@ -83,6 +83,7 @@ function ordTicket(code, px, action) {
   _ordRender();
   var el = document.getElementById('ord-modal');
   if (el) el.style.display = 'flex';
+  ordLoadPend();            // 背景查今日未成交委託，回來再決定「可刪改」要不要 enable
 }
 function ordClose() {
   var el = document.getElementById('ord-modal');
@@ -202,6 +203,106 @@ function _ordRender() {
   if (box) box.className = 'ord-box ' + (buy ? 'ord-buy' : 'ord-sell');
   var t = document.getElementById('ord-title');
   if (t) t.textContent = (buy ? '買進' : '賣出') + '　' + o.code + ' ' + (o.name || '');
+}
+
+// ══════════ 可刪改（階段 3：唯讀部分）══════════
+//
+// 「委託回報／成交回報」不放在這裡：內容已經在 交易資訊 → 今日委託與成交，
+// 放第二份入口不會多出任何能力。只留「可刪改」，那是目前唯一缺的功能。
+//
+// enable 條件是「今日有未成交委託」而不是「本畫面下過單」：ROD 當日有效、
+// 收盤即失效，所以沒有隔夜留倉的單；但今天可能從券商 App 或別台裝置掛過，
+// 所以進畫面要查一次 order/trades，不能只靠本地旗標。
+//
+// 可刪改的判定：狀態仍在委託中或部分成交，且還有未成交的量。
+// Inactive／Cancelled／Failed／Filled 都不能改。
+var ORD_LIVE_ST = { PendingSubmit: 1, PreSubmitted: 1, Submitted: 1, PartFilled: 1, Filling: 1 };
+var _ordPend = [];          // 可刪改的委託
+var _ordPendAt = 0;
+
+function ordPendOf(trades) {
+  var out = [];
+  (trades || []).forEach(function (t) {
+    var o = t.order || {}, s = t.status || {}, st = s.status || '';
+    if (!ORD_LIVE_ST[st]) return;
+    var oq = s.order_quantity != null ? s.order_quantity : (o.quantity || 0);
+    var remain = oq - (s.deal_quantity || 0) - (s.cancel_quantity || 0);
+    if (!(remain > 0)) return;                       // 已全部成交或全部取消，沒有可改的量
+    out.push({
+      id: s.id || '', code: (t.contract || {}).code || '',
+      name: ((typeof _contracts !== 'undefined' && _contracts[(t.contract || {}).code]) || {}).name || '',
+      action: o.action, price: s.modified_price || o.price || 0,
+      qty: oq, deal: s.deal_quantity || 0, cancel: s.cancel_quantity || 0, remain: remain,
+      st: st, ordno: (o.ordno || '').trim(),
+      lot: o.order_lot || 'Common', ts: s.order_ts || 0
+    });
+  });
+  return out.sort(function (a, b) { return b.ts - a.ts; });
+}
+
+async function ordLoadPend() {
+  try {
+    var trades = (typeof fetchOrderTrades === 'function') ? await fetchOrderTrades() : [];
+    _ordPend = ordPendOf(trades);
+  } catch (e) { console.warn('[可刪改]', e); _ordPend = []; }
+  _ordPendAt = Date.now();
+  ordPendBtnRender();
+  return _ordPend;
+}
+
+// 按鈕：沒有可刪改的委託就 disable，有就把筆數標上去
+function ordPendBtnRender() {
+  var b = document.getElementById('ord-pend-btn');
+  if (!b) return;
+  var n = _ordPend.length;
+  b.disabled = !n;
+  b.className = 'ord-pend-btn' + (n ? ' on' : '');
+  b.textContent = '可刪改' + (n ? '　' + n : '');
+  b.title = n ? '今日有 ' + n + ' 筆未成交委託' : '今日無未成交委託';
+}
+
+function ordPendOpen() {
+  if (!_ordPend.length) return;
+  var el = document.getElementById('ord-pend');
+  if (!el) return;
+  el.innerHTML = '<div class="ord-pend-box">' +
+    '<div class="ord-pend-head">可刪改　' + _ordPend.length + ' 筆' +
+      '<button class="modal-close" onclick="ordPendClose()">×</button></div>' +
+    '<div class="ord-pend-body">' + _ordPendHtml() + '</div></div>';
+  el.style.display = 'flex';
+}
+function ordPendClose() {
+  var el = document.getElementById('ord-pend');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+}
+
+function _ordPendHtml() {
+  var stTxt = { PendingSubmit: '送出中', PreSubmitted: '預約中', Submitted: '委託中',
+                PartFilled: '部分成交', Filling: '部分成交' };
+  var h = '<table class="ord-pend-tb"><thead><tr>' +
+    '<th>商品</th><th>買賣</th><th class="num">委託</th><th class="num">已成交</th>' +
+    '<th class="num">可改量</th><th>狀態</th><th>書號</th><th>操作</th></tr></thead><tbody>';
+  _ordPend.forEach(function (p) {
+    var buy = p.action === 'Buy';
+    var unit = p.lot === 'Common' ? '張' : '股';
+    h += '<tr>' +
+      '<td><b>' + p.code + '</b><div class="ord-dim">' + p.name + '</div></td>' +
+      '<td class="' + (buy ? 'up' : 'down') + '">' + (buy ? '買進' : '賣出') + '</td>' +
+      '<td class="num">' + p.qty + unit + '<div class="ord-dim">' + _ordFmt(p.price) + '</div></td>' +
+      '<td class="num">' + (p.deal || '—') + (p.cancel ? '<div class="ord-dim">已刪 ' + p.cancel + '</div>' : '') + '</td>' +
+      '<td class="num"><b>' + p.remain + unit + '</b></td>' +
+      '<td>' + (stTxt[p.st] || p.st) + '</td>' +
+      '<td class="ord-dim">' + (p.ordno || '—') + '</td>' +
+      '<td class="ord-pend-act">' +
+        '<button disabled title="階段 3 寫入尚未啟用">改價</button>' +
+        '<button disabled title="階段 3 寫入尚未啟用">改量</button>' +
+        '<button disabled title="階段 3 寫入尚未啟用">刪單</button>' +
+      '</td></tr>';
+  });
+  return h + '</tbody></table>' +
+    '<div class="ord-pend-note">改價／改量／刪單尚未啟用：這三個動作會真的送出到券商，' +
+    '要等 Shioaji 切到模擬模式驗證過再開。目前只讀取與顯示。<br>' +
+    '「可改量」＝委託量 − 已成交 − 已刪除，只有這個數量能改或刪。</div>';
 }
 
 // 底部成交資訊：沿用五檔頁籤已訂閱的逐筆（_ticks），不另外訂閱
