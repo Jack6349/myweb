@@ -184,8 +184,15 @@ async function loadBrokerPositionsFull(say) {
         var dq = 0, dcost = 0, dpnl = 0;
         // 順手記下建倉批次（日期＋股數）：股利估算要判斷「除息日前是否已持有」，
         // 除息日當天才買進的部位領不到該次配息。此處已抓過明細，不必另外呼叫 API。
+        // cost／pnl／div 供表三「持有報酬」用（＝(未實現損益＋已領配息) ÷ 成本），同樣不必另呼叫 API。
+        // 認購成本補正與庫存明細同一套：券商端 price=0 的筆用「每股認購價 × 股數」還原，損益同步扣回。
         _lotsMap[String(pz.code)] = (det || []).filter(function (d) { return d.quantity > 0 && d.date; })
-          .map(function (d) { return { date: d.date, shares: d.quantity * 1000 }; })
+          .map(function (d) {
+            var cpx = (d.price === 0 && typeof coGet === 'function') ? coGet(pz.code, d.date) : null;
+            var adj = cpx != null ? cpx * d.quantity * 1000 : 0;
+            return { date: d.date, shares: d.quantity * 1000,
+                     cost: (d.price || 0) + adj, pnl: (d.pnl || 0) - adj, div: d.ex_dividends || 0 };
+          })
           .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
         (det || []).forEach(function (d) {
           if (d.quantity > 0) { dq += d.quantity; dcost += (d.price || 0); dpnl += (d.pnl || 0); }
