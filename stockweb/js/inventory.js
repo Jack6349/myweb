@@ -89,7 +89,8 @@ function invTradeCell(code) {
   var r = (typeof _rows !== 'undefined' && _rows[String(code)]) || {};
   var px = (r.close != null && r.close > 0) ? r.close : null;
   var f2 = function (v) { return v.toFixed(2); };
-  // 價差一律定義成「現價 − 該價格」，正負意義由買賣方向自己看，不替使用者判斷好壞
+  // 價差＝現價 − 該價格。正負意義由買賣方向自己看，不替使用者判斷好壞：
+  // 同樣是正值，買進已成交代表帳面賺、賣出已成交代表賣低了。
   var gap = function (base) {
     if (px == null || !(base > 0)) return '';
     var d = px - base;
@@ -112,7 +113,6 @@ function invTradeCell(code) {
         gap(avg));
     }
   });
-  if (px != null) tip.push('價差＝現價 − 該價格');
   if (b && s) tip.push('今日同一檔有買也有賣');
   return '<span class="trd-box" title="' + tip.join('\n') + '">' +
     b + (b && s ? '<br>' : '') + s + '</span>';
