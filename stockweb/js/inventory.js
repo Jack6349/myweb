@@ -43,9 +43,17 @@ function invTradeBuild(trades) {
     var pend = Math.max(0, oq - deal - (s.cancel_quantity || 0));   // 已刪的量不算還掛著
     if (!deal && !pend) return;
     var g = m[code] || (m[code] = {});
-    var e = g[side] || (g[side] = { deal: 0, pend: 0, lot: o.order_lot || 'Common' });
+    var e = g[side] || (g[side] = { deal: 0, pend: 0, lot: o.order_lot || 'Common',
+                                    dSum: 0, pSum: 0, pxs: [] });
     e.deal += deal; e.pend += pend;
     if ((o.order_lot || 'Common') !== 'Common') e.lot = o.order_lot;  // 混用時以零股為準（較小單位）
+    // 委託價：改過價的以改後為準。同方向多筆價格可能不同 → 依數量加權，並記下各價供標示範圍
+    var opx = s.modified_price || o.price || 0;
+    if (pend > 0 && opx > 0) { e.pSum += opx * pend; e.pxs.push(opx); }
+    // 成交均價自逐筆成交回推，不用委託價：限價單可能以更好的價格成交
+    (s.deals || []).forEach(function (d) {
+      if (d.price > 0 && d.quantity > 0) e.dSum += d.price * d.quantity;
+    });
   });
   return m;
 }
@@ -77,13 +85,34 @@ function invTradeCell(code) {
   if (!g) return '';
   var b = _invTrdSide(g.buy, 'buy'), s = _invTrdSide(g.sell, 'sell');
   if (!b && !s) return '';
+  // 現價：與表格其他欄同一個來源，每次重繪都是最新
+  var r = (typeof _rows !== 'undefined' && _rows[String(code)]) || {};
+  var px = (r.close != null && r.close > 0) ? r.close : null;
+  var f2 = function (v) { return v.toFixed(2); };
+  // 價差一律定義成「現價 − 該價格」，正負意義由買賣方向自己看，不替使用者判斷好壞
+  var gap = function (base) {
+    if (px == null || !(base > 0)) return '';
+    var d = px - base;
+    return '　現價 ' + f2(px) + '　價差 ' + (d >= 0 ? '+' : '−') + f2(Math.abs(d)) +
+      '（' + (d >= 0 ? '+' : '−') + Math.abs(d / base * 100).toFixed(2) + '%）';
+  };
   var tip = [];
   ['buy', 'sell'].forEach(function (k) {
     var e = g[k]; if (!e) return;
     var u = e.lot === 'Common' ? '張' : '股';
     tip.push((k === 'buy' ? '買進' : '賣出') + ' 委託 ' + (e.deal + e.pend) + u +
       '：已成交 ' + e.deal + u + '、在途 ' + e.pend + u);
+    if (e.deal > 0 && e.dSum > 0) {
+      tip.push('　成交均價 ' + f2(e.dSum / e.deal) + gap(e.dSum / e.deal));
+    }
+    if (e.pend > 0 && e.pSum > 0) {
+      var avg = e.pSum / e.pend;
+      var lo = Math.min.apply(null, e.pxs), hi = Math.max.apply(null, e.pxs);
+      tip.push('　在途委託價 ' + f2(avg) + (hi - lo > 1e-9 ? '（' + e.pxs.length + ' 筆 ' + f2(lo) + '～' + f2(hi) + '）' : '') +
+        gap(avg));
+    }
   });
+  if (px != null) tip.push('價差＝現價 − 該價格');
   if (b && s) tip.push('今日同一檔有買也有賣');
   return '<span class="trd-box" title="' + tip.join('\n') + '">' +
     b + (b && s ? '<br>' : '') + s + '</span>';
