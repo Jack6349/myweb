@@ -1121,3 +1121,5 @@ td.cost-even::after  { background: var(--text3); }
 .trd-u { font-style: normal; font-size: 10px; opacity: .75; margin-left: 1px; }
 /* 上標用 sup 會撐高行距，改用 vertical-align 自行抬起 */
 .inv-trd sup { font-size: 10px; font-weight: 400; vertical-align: super; line-height: 0; margin-left: 2px; }
+/* 收盤失效的委託量：灰色加刪除線，不能跟在途同色 */
+.trd-dead { color: var(--text3); text-decoration: line-through; font-size: 11px; margin-left: 3px; }

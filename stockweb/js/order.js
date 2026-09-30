@@ -225,6 +225,8 @@ function ordPendOf(trades) {
   (trades || []).forEach(function (t) {
     var o = t.order || {}, s = t.status || {}, st = s.status || '';
     if (!ORD_LIVE_ST[st]) return;
+    // 收盤後的 ROD 已失效（券商可能還回 Submitted），改不動也刪不掉
+    if ((typeof orderExpired === 'function') && orderExpired(o, s)) return;
     var oq = s.order_quantity != null ? s.order_quantity : (o.quantity || 0);
     var remain = oq - (s.deal_quantity || 0) - (s.cancel_quantity || 0);
     if (!(remain > 0)) return;                       // 已全部成交或全部取消，沒有可改的量

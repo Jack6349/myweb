@@ -43,15 +43,18 @@ function invTradeBuild(trades) {
     var pend = Math.max(0, oq - deal - (s.cancel_quantity || 0));   // 已刪的量不算還掛著
     if (!deal && !pend) return;
     var g = m[code] || (m[code] = {});
-    var e = g[side] || (g[side] = { deal: 0, pend: 0, lot: o.order_lot || 'Common',
+    var e = g[side] || (g[side] = { deal: 0, pend: 0, dead: 0, lot: o.order_lot || 'Common',
                                     dSum: 0, plist: [] });
-    e.deal += deal; e.pend += pend;
+    // 收盤後仍掛著的 ROD 其實已經失效，券商只是還沒改狀態 → 歸到 dead，不算在途
+    var expired = (typeof orderExpired === 'function') && orderExpired(o, s);
+    e.deal += deal;
+    if (expired) e.dead += pend; else e.pend += pend;
     if ((o.order_lot || 'Common') !== 'Common') e.lot = o.order_lot;  // 混用時以零股為準（較小單位）
     // 委託價：改過價的以改後為準。在途的逐筆留著，不做加權平均——
     // 9.83 和 9.84 各 5 張平均出來的 9.835 是一個不存在的價位，無法據以判斷，
     // 而且每一筆離現價的距離不同，要分開看才知道哪一筆快成交了。
     var opx = s.modified_price || o.price || 0;
-    if (pend > 0 && opx > 0) {
+    if (pend > 0 && opx > 0 && !expired) {
       var hit = null;
       e.plist.forEach(function (x) { if (Math.abs(x.px - opx) < 1e-9) hit = x; });   // 同價合併
       if (hit) hit.q += pend; else e.plist.push({ px: opx, q: pend });
@@ -108,18 +111,23 @@ document.addEventListener('visibilitychange', function () {
 window.addEventListener('pagehide', stopInvOrderStream);
 
 function _invTrdSide(e, side) {
-  if (!e || (!e.deal && !e.pend)) return '';
+  if (!e || (!e.deal && !e.pend && !e.dead)) return '';
   var sign = side === 'buy' ? '+' : '−';
   var unit = e.lot === 'Common' ? '張' : '股';
   var n = function (v) { return v.toLocaleString('zh-TW'); };
   var cls = 'trd-' + side;                              // buy 紅 / sell 綠
   // 有成交 → 主數字用成交量（亮）；在途掛上標（暗）。沒成交 → 整個用暗色顯示在途量
+  // 失效的量用灰色另標，不能跟在途同色，否則看起來還掛著
+  var dead = e.dead ? '<span class="trd-dead" title="收盤失效">' + n(e.dead) + '</span>' : '';
   if (e.deal) {
     return '<span class="' + cls + ' on">' + sign + n(e.deal) +
       '<em class="trd-u">' + unit + '</em>' +
-      (e.pend ? '<sup class="' + cls + '">' + n(e.pend) + '</sup>' : '') + '</span>';
+      (e.pend ? '<sup class="' + cls + '">' + n(e.pend) + '</sup>' : '') + '</span>' + dead;
   }
-  return '<span class="' + cls + '">' + sign + n(e.pend) + '<em class="trd-u">' + unit + '</em></span>';
+  if (e.pend) {
+    return '<span class="' + cls + '">' + sign + n(e.pend) + '<em class="trd-u">' + unit + '</em></span>' + dead;
+  }
+  return '<span class="trd-dead">' + sign + n(e.dead) + '<em class="trd-u">' + unit + '</em></span>';
 }
 
 function invTradeCell(code) {
@@ -143,8 +151,9 @@ function invTradeCell(code) {
   ['buy', 'sell'].forEach(function (k) {
     var e = g[k]; if (!e) return;
     var u = e.lot === 'Common' ? '張' : '股';
-    tip.push((k === 'buy' ? '買進' : '賣出') + ' 委託 ' + (e.deal + e.pend) + u +
-      '：已成交 ' + e.deal + u + '、在途 ' + e.pend + u);
+    tip.push((k === 'buy' ? '買進' : '賣出') + ' 委託 ' + (e.deal + e.pend + e.dead) + u +
+      '：已成交 ' + e.deal + u + '、在途 ' + e.pend + u +
+      (e.dead ? '、收盤失效 ' + e.dead + u : ''));
     // 已成交用均價：部位已經在手上，混合後的成本才是有意義的那個數字
     if (e.deal > 0 && e.dSum > 0) {
       tip.push('　成交均價 ' + f2(e.dSum / e.deal) + gap(e.dSum / e.deal));
@@ -153,6 +162,7 @@ function invTradeCell(code) {
     e.plist.slice().sort(function (x, y) { return y.px - x.px; }).forEach(function (x) {
       tip.push('　在途 ' + x.q + u + ' @ ' + f2(x.px) + gap(x.px));
     });
+    if (e.dead) tip.push('　' + e.dead + u + ' 未成交，ROD 當日有效、收盤已失效，明天要重掛');
   });
   if (b && s) tip.push('今日同一檔有買也有賣');
   return '<span class="trd-box" title="' + tip.join('\n') + '">' +

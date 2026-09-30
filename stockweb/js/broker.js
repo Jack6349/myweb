@@ -58,6 +58,25 @@ function _brTwToday() {
 function settleIsPaid(r, todayIso) {
   return !!(r && r.date && r.date <= (todayIso || _brTwToday()));
 }
+// 台股整股 ROD 收盤即失效，但券商不會即時改狀態：實測 2026-09-30 收盤後 9 分鐘，
+// 一筆未成交的 ROD 仍回 status=Submitted、cancel_quantity=0。照它顯示的話，
+// 整個晚上都會說那些張數「還掛著」，而它們已經死了，也不可能再改單或刪單。
+// 這裡只比時間、不猜券商何時補狀態，作法與 settleIsPaid 一致。
+// 13:30 收盤，留 5 分鐘給最後的成交回報進來再視為結束。
+function twSessionOver(nowMs) {
+  var t = new Date((nowMs == null ? Date.now() : nowMs) + 8 * 3600000);
+  return t.getUTCHours() * 60 + t.getUTCMinutes() >= 13 * 60 + 35;
+}
+// 這筆委託的未成交量是否已經因為收盤而失效（只對當日有效的整股 ROD）
+function orderExpired(order, status, nowMs) {
+  var o = order || {}, s = status || {};
+  if ((o.order_type || 'ROD') !== 'ROD') return false;          // IOC/FOK 當下就結束，不會留到收盤
+  if ((o.order_lot || 'Common') !== 'Common') return false;     // 零股盤時段不同，不套用
+  var st = s.status || '';
+  if (st === 'Filled' || st === 'Cancelled' || st === 'Failed') return false;
+  return twSessionOver(nowMs);
+}
+
 // 拆成 {paid, pending, paidRows, pendRows}，供交易資訊與頂欄共用同一套判定
 function splitSettlements(rows) {
   var today = _brTwToday(), paid = 0, pending = 0, paidRows = [], pendRows = [];
