@@ -15,6 +15,80 @@ var _invSort = (function () {
 })();
 
 // 排序用衍生值
+// ══════════ 交易欄：今日的買賣進出 ══════════
+//
+// 一邊一行：亮色＝已成交、暗色＝還掛著。部分成交時主數字是成交量、上標是在途量
+// （委託 5 成交 2 → 「+2」亮紅、上標「3」暗紅）；沒有在途就沒有上標。
+// 台股慣例紅買綠賣。
+//
+// 同一檔今天既有買又有賣時列成兩行，<b>不做淨額</b>：買 5 賣 3 顯示 +2 會把
+// 你想抓的狀況藏起來。兩行的列自然會比其他列高，本身就是視覺提示，
+// 不另外加外框：那等於用顏色替你判定「這是錯單」，而換股調節、部分停利回補
+// 是同一個形狀，程式分辨不了意圖。
+//
+// 數量單位跟著委託別走：整股以張計、零股以股計，一律標單位字，
+// 免得 500 股被看成 500 張（旁邊的「餘額」是股，兩欄單位本來就不同）。
+var _invTrd = {};          // code -> { buy:{deal,pend,lot}, sell:{...} }
+
+function invTradeBuild(trades) {
+  var m = {};
+  (trades || []).forEach(function (t) {
+    var o = t.order || {}, s = t.status || {}, st = s.status || '';
+    if (st === 'Failed') return;                       // 沒送進市場，不算今日進出
+    var code = String((t.contract || {}).code || '');
+    if (!code) return;
+    var side = o.action === 'Sell' ? 'sell' : 'buy';
+    var oq = s.order_quantity != null ? s.order_quantity : (o.quantity || 0);
+    var deal = s.deal_quantity || 0;
+    var pend = Math.max(0, oq - deal - (s.cancel_quantity || 0));   // 已刪的量不算還掛著
+    if (!deal && !pend) return;
+    var g = m[code] || (m[code] = {});
+    var e = g[side] || (g[side] = { deal: 0, pend: 0, lot: o.order_lot || 'Common' });
+    e.deal += deal; e.pend += pend;
+    if ((o.order_lot || 'Common') !== 'Common') e.lot = o.order_lot;  // 混用時以零股為準（較小單位）
+  });
+  return m;
+}
+
+async function loadInvTrades() {
+  if (typeof fetchOrderTrades !== 'function') return;
+  try { _invTrd = invTradeBuild(await fetchOrderTrades()); }
+  catch (e) { console.warn('[交易欄]', e); _invTrd = {}; }
+  if (document.getElementById('inv-tbody')) renderInvTable();
+}
+
+function _invTrdSide(e, side) {
+  if (!e || (!e.deal && !e.pend)) return '';
+  var sign = side === 'buy' ? '+' : '−';
+  var unit = e.lot === 'Common' ? '張' : '股';
+  var n = function (v) { return v.toLocaleString('zh-TW'); };
+  var cls = 'trd-' + side;                              // buy 紅 / sell 綠
+  // 有成交 → 主數字用成交量（亮）；在途掛上標（暗）。沒成交 → 整個用暗色顯示在途量
+  if (e.deal) {
+    return '<span class="' + cls + ' on">' + sign + n(e.deal) +
+      '<em class="trd-u">' + unit + '</em>' +
+      (e.pend ? '<sup class="' + cls + '">' + n(e.pend) + '</sup>' : '') + '</span>';
+  }
+  return '<span class="' + cls + '">' + sign + n(e.pend) + '<em class="trd-u">' + unit + '</em></span>';
+}
+
+function invTradeCell(code) {
+  var g = _invTrd[String(code)];
+  if (!g) return '';
+  var b = _invTrdSide(g.buy, 'buy'), s = _invTrdSide(g.sell, 'sell');
+  if (!b && !s) return '';
+  var tip = [];
+  ['buy', 'sell'].forEach(function (k) {
+    var e = g[k]; if (!e) return;
+    var u = e.lot === 'Common' ? '張' : '股';
+    tip.push((k === 'buy' ? '買進' : '賣出') + ' 委託 ' + (e.deal + e.pend) + u +
+      '：已成交 ' + e.deal + u + '、在途 ' + e.pend + u);
+  });
+  if (b && s) tip.push('今日同一檔有買也有賣');
+  return '<span class="trd-box" title="' + tip.join('\n') + '">' +
+    b + (b && s ? '<br>' : '') + s + '</span>';
+}
+
 function invMetrics(p) {
   var code = String(p.code), r = _rows[code], c = _contracts[code];
   var shares = p.quantity, cost = p.price * shares;
@@ -86,6 +160,7 @@ function invValRow(p) {
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + code + '\',this)"></button></td>' +
     '<td class="inv-code' + (typeof limitState === 'function' && limitState(code, price) ? ' lim-' + limitState(code, price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     '<td class="inv-name">' + ((c && c.name) || '') + '</td>' +
+    '<td class="num inv-trd">' + invTradeCell(code) + '</td>' +
     '<td class="num">' + shares.toLocaleString('zh-TW') + '</td>' +
     '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
@@ -340,6 +415,7 @@ async function startInventory() {
   info.textContent = '已連線｜' + _positions.length + ' 檔庫存';
   _invStarted = true;
   loadInvSettle();                                   // 待交割（背景查，不阻塞表格）
+  loadInvTrades();                                   // 交易欄：今日委託與成交（同上，不阻塞）
   if (typeof initConstituents === 'function') initConstituents(); // 背景載入成份股（不阻塞畫面）
 }
 

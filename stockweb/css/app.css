@@ -63,7 +63,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .conn-status.ok { color: var(--down); }
 .conn-status.off { color: var(--up); }
 
-.main-area { max-width: 1400px; margin: 0 auto; padding: 14px 28px 10px; }
+/* 1400 原本是為了控制文字行長，但說明類區塊各自已有 max-width（rs-note 760、rf-cal 1000…），
+   放寬不會讓文字變難讀。1800：1920 螢幕等於填滿，2560 螢幕停在 1800 不會拉到荒謬。
+   注意表格是 width:100%，放寬只會讓欄位更鬆，不會多顯示資訊。 */
+.main-area { max-width: 1800px; margin: 0 auto; padding: 14px 28px 10px; }
 
 /* 功能導覽列：固定於頂欄下方，直接切換各功能頁 */
 .nav-bar { position: sticky; top: 54px; z-index: 9; display: flex; gap: 6px; padding: 8px 28px; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; }
@@ -1107,3 +1110,14 @@ td.cost-even::after  { background: var(--text3); }
   border-radius: 5px; padding: 3px 8px; font-size: 12px; margin-right: 4px; cursor: pointer; }
 .ord-pend-act button:disabled { opacity: .35; cursor: not-allowed; }
 .ord-pend-note { font-size: 12px; color: var(--note); line-height: 1.8; margin-top: 10px; }
+
+/* 交易欄：今日進出。亮＝已成交、暗＝還掛著；上標為在途量 */
+.inv-trd { white-space: nowrap; line-height: 1.35; }
+.trd-box { display: inline-block; }
+.trd-buy  { color: #8a3a3f; }          /* 暗紅：委託中 */
+.trd-sell { color: #1f6b3c; }          /* 暗綠：委託中 */
+.trd-buy.on  { color: var(--up); font-weight: 700; }    /* 亮紅：已成交 */
+.trd-sell.on { color: var(--down); font-weight: 700; }  /* 亮綠：已成交 */
+.trd-u { font-style: normal; font-size: 10px; opacity: .75; margin-left: 1px; }
+/* 上標用 sup 會撐高行距，改用 vertical-align 自行抬起 */
+.inv-trd sup { font-size: 10px; font-weight: 400; vertical-align: super; line-height: 0; margin-left: 2px; }
