@@ -44,12 +44,18 @@ function invTradeBuild(trades) {
     if (!deal && !pend) return;
     var g = m[code] || (m[code] = {});
     var e = g[side] || (g[side] = { deal: 0, pend: 0, lot: o.order_lot || 'Common',
-                                    dSum: 0, pSum: 0, pxs: [] });
+                                    dSum: 0, plist: [] });
     e.deal += deal; e.pend += pend;
     if ((o.order_lot || 'Common') !== 'Common') e.lot = o.order_lot;  // 混用時以零股為準（較小單位）
-    // 委託價：改過價的以改後為準。同方向多筆價格可能不同 → 依數量加權，並記下各價供標示範圍
+    // 委託價：改過價的以改後為準。在途的逐筆留著，不做加權平均——
+    // 9.83 和 9.84 各 5 張平均出來的 9.835 是一個不存在的價位，無法據以判斷，
+    // 而且每一筆離現價的距離不同，要分開看才知道哪一筆快成交了。
     var opx = s.modified_price || o.price || 0;
-    if (pend > 0 && opx > 0) { e.pSum += opx * pend; e.pxs.push(opx); }
+    if (pend > 0 && opx > 0) {
+      var hit = null;
+      e.plist.forEach(function (x) { if (Math.abs(x.px - opx) < 1e-9) hit = x; });   // 同價合併
+      if (hit) hit.q += pend; else e.plist.push({ px: opx, q: pend });
+    }
     // 成交均價自逐筆成交回推，不用委託價：限價單可能以更好的價格成交
     (s.deals || []).forEach(function (d) {
       if (d.price > 0 && d.quantity > 0) e.dSum += d.price * d.quantity;
@@ -139,18 +145,14 @@ function invTradeCell(code) {
     var u = e.lot === 'Common' ? '張' : '股';
     tip.push((k === 'buy' ? '買進' : '賣出') + ' 委託 ' + (e.deal + e.pend) + u +
       '：已成交 ' + e.deal + u + '、在途 ' + e.pend + u);
+    // 已成交用均價：部位已經在手上，混合後的成本才是有意義的那個數字
     if (e.deal > 0 && e.dSum > 0) {
       tip.push('　成交均價 ' + f2(e.dSum / e.deal) + gap(e.dSum / e.deal));
     }
-    if (e.pend > 0 && e.pSum > 0) {
-      var avg = e.pSum / e.pend;
-      var lo = Math.min.apply(null, e.pxs), hi = Math.max.apply(null, e.pxs);
-      var many = hi - lo > 1e-9;
-      // 多筆不同價時加權均價常落在兩檔之間（例 9.83 與 9.84 各 5 張 → 9.835），
-      // 只取兩位小數會剛好等於區間下限，看起來像算錯 → 多給一位
-      tip.push('　在途委託價 ' + (many ? avg.toFixed(3) : f2(avg)) +
-        (many ? '（' + e.pxs.length + ' 筆 ' + f2(lo) + '～' + f2(hi) + '）' : '') + gap(avg));
-    }
+    // 在途逐筆列：每一筆都還能改、能刪，各自離現價多遠是分開的事
+    e.plist.slice().sort(function (x, y) { return y.px - x.px; }).forEach(function (x) {
+      tip.push('　在途 ' + x.q + u + ' @ ' + f2(x.px) + gap(x.px));
+    });
   });
   if (b && s) tip.push('今日同一檔有買也有賣');
   return '<span class="trd-box" title="' + tip.join('\n') + '">' +
