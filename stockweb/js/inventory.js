@@ -65,6 +65,42 @@ async function loadInvTrades() {
   if (document.getElementById('inv-tbody')) renderInvTable();
 }
 
+// ── 交易欄即時更新 ──
+// 委託送出、成交、刪單都會由 order_event 推過來。這裡不解析事件內容，
+// 收到任何一則就整份重抓 order/trades：事件的欄位形狀會因券商而異，
+// 而「有東西變了」這個資訊已經足夠，重抓一次最不會出錯。
+// 連續事件（一筆委託會先送出再回報）用 debounce 併成一次查詢。
+var _invOrdEs = null, _invOrdTimer = null;
+
+function invOrdBump() {
+  clearTimeout(_invOrdTimer);
+  _invOrdTimer = setTimeout(function () { loadInvTrades(); }, 400);
+}
+
+function startInvOrderStream() {
+  if (_invOrdEs) return;
+  try {
+    _invOrdEs = new EventSource(API + '/api/v1/stream/data/order_event');
+    _invOrdEs.addEventListener('order_event', invOrdBump);
+    _invOrdEs.onmessage = invOrdBump;               // 事件名稱若不同也接得到
+    _invOrdEs.onerror = function () {
+      // EventSource 會自己重連；斷線期間可能漏事件，所以重連後補抓一次
+      invOrdBump();
+    };
+  } catch (e) { console.warn('[order_event]', e); }
+}
+function stopInvOrderStream() {
+  if (_invOrdEs) { _invOrdEs.close(); _invOrdEs = null; }
+  clearTimeout(_invOrdTimer);
+}
+// 回到分頁時補一次：瀏覽器在背景分頁可能節流甚至斷開 SSE
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden && _invOrdEs) invOrdBump();
+});
+// 訂閱維持整個 session（委託事件量很小），關頁才收；切到其他功能頁不退訂，
+// 這樣切回來時交易欄已經是最新的，不必重查。
+window.addEventListener('pagehide', stopInvOrderStream);
+
 function _invTrdSide(e, side) {
   if (!e || (!e.deal && !e.pend)) return '';
   var sign = side === 'buy' ? '+' : '−';
@@ -109,8 +145,11 @@ function invTradeCell(code) {
     if (e.pend > 0 && e.pSum > 0) {
       var avg = e.pSum / e.pend;
       var lo = Math.min.apply(null, e.pxs), hi = Math.max.apply(null, e.pxs);
-      tip.push('　在途委託價 ' + f2(avg) + (hi - lo > 1e-9 ? '（' + e.pxs.length + ' 筆 ' + f2(lo) + '～' + f2(hi) + '）' : '') +
-        gap(avg));
+      var many = hi - lo > 1e-9;
+      // 多筆不同價時加權均價常落在兩檔之間（例 9.83 與 9.84 各 5 張 → 9.835），
+      // 只取兩位小數會剛好等於區間下限，看起來像算錯 → 多給一位
+      tip.push('　在途委託價 ' + (many ? avg.toFixed(3) : f2(avg)) +
+        (many ? '（' + e.pxs.length + ' 筆 ' + f2(lo) + '～' + f2(hi) + '）' : '') + gap(avg));
     }
   });
   if (b && s) tip.push('今日同一檔有買也有賣');
@@ -445,6 +484,7 @@ async function startInventory() {
   _invStarted = true;
   loadInvSettle();                                   // 待交割（背景查，不阻塞表格）
   loadInvTrades();                                   // 交易欄：今日委託與成交（同上，不阻塞）
+  startInvOrderStream();                             // 之後靠 order_event 即時更新，不輪詢
   if (typeof initConstituents === 'function') initConstituents(); // 背景載入成份股（不阻塞畫面）
 }
 
