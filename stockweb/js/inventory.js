@@ -69,8 +69,16 @@ function invTradeBuild(trades) {
 
 async function loadInvTrades() {
   if (typeof fetchOrderTrades !== 'function') return;
-  try { _invTrd = invTradeBuild(await fetchOrderTrades()); }
-  catch (e) { console.warn('[交易欄]', e); _invTrd = {}; }
+  var t = [];
+  try { t = await fetchOrderTrades() || []; }
+  catch (e) { console.warn('[交易欄 trades]', e); }
+  // 券商盤後會把 order/trades 清空（實測 14:35 還有、16:37 就沒了，連成交的也不見），
+  // 清空後改用事件流水重建，否則下午之後「今日進出」會整欄消失。
+  if (!t.length && typeof fetchOrderDealRecords === 'function') {
+    try { t = dealRecordsToTrades(await fetchOrderDealRecords()); }
+    catch (e) { console.warn('[交易欄 records]', e); }
+  }
+  _invTrd = invTradeBuild(t);
   if (document.getElementById('inv-tbody')) renderInvTable();
 }
 

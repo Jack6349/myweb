@@ -87,6 +87,51 @@ function splitSettlements(rows) {
   });
   return { paid: paid, pending: pending, paidRows: paidRows, pendRows: pendRows, today: today };
 }
+// 今日委託／成交事件流水：[{StockOrder:{operation,order,status,contract}} | {StockDeal:{...}}]
+// 為什麼需要它：券商會在盤後把 order/trades 清空。實測 2026-09-30，14:35 還回 2 筆，
+// 16:37 就回 0 筆，連已成交那筆也不見了。只靠 order/trades 的話，下午之後
+// 「今日進出」就整個消失。order_deal_records 是事件流水，清除後仍在。
+async function fetchOrderDealRecords() {
+  return brokerPost2('order/order_deal_records', {});
+}
+async function brokerPost2(path, body) {
+  var r = await brokerThrottle(function () { return fetch('/api/v1/' + path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {})
+  }); });
+  if (!r.ok) throw new Error(path + ' HTTP ' + r.status);
+  return r.json();
+}
+// 把事件流水折成 order/trades 的形狀，讓使用端只認一種資料結構。
+// StockOrder(New) → 一筆委託；StockDeal → 累加到同書號的成交。
+function dealRecordsToTrades(recs) {
+  var by = {}, out = [];
+  (recs || []).forEach(function (e) {
+    var v = e.StockOrder;
+    if (!v) return;
+    var o = v.order || {}, st = v.status || {}, c = v.contract || {};
+    var no = (o.ordno || '').trim();
+    if (!no || by[no]) return;                      // 同書號只取第一筆 New
+    var t = { contract: { code: c.code }, order: o,
+      status: { id: st.id, status: 'Submitted', order_quantity: st.order_quantity != null ? st.order_quantity : o.quantity,
+                deal_quantity: 0, cancel_quantity: st.cancel_quantity || 0,
+                modified_price: st.modified_price || 0, order_ts: st.exchange_ts, deals: [] } };
+    by[no] = t; out.push(t);
+  });
+  (recs || []).forEach(function (e) {
+    var d = e.StockDeal;
+    if (!d) return;
+    var t = by[(d.ordno || '').trim()];
+    if (!t) return;
+    t.status.deals.push({ price: d.price, quantity: d.quantity, ts: d.ts });
+    t.status.deal_quantity += d.quantity;
+  });
+  out.forEach(function (t) {
+    var s = t.status, oq = s.order_quantity || 0;
+    s.status = s.deal_quantity >= oq ? 'Filled' : (s.deal_quantity > 0 ? 'PartFilled' : 'Submitted');
+  });
+  return out;
+}
+
 // 今日委託含成交回報：[{contract, order, status:{status, deals:[{price,quantity,ts}], ...}}]
 async function fetchOrderTrades() {
   var r = await brokerThrottle(function () { return fetch('/api/v1/order/trades', {
