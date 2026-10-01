@@ -256,19 +256,29 @@ function sdOptionsHtml(f) {
   if (!t) return '';
   var q = f.sens, pr = _sdStat(f, 'prem');
   var a = _sdFlow(f, 3, 0), b = _sdFlow(f, 3, 3);
-  var ex = (f.excess || [])[0];
+  // 超額報酬一律取「自掛牌起、還原市價」那一組，與下面五檔的表同一個口徑。
+  // 不要用 f.excess（淨值、起點是我的資料起點 6/8）：00405A 掛牌價 10.00，
+  // 6/8 已經跌到 9.1，用它當起點會把成立後那段跌幅整個漏掉，
+  // 算出來落後 8.11 個百分點，自掛牌起算是 17.24 個百分點。同一畫面兩個數字會自相矛盾。
+  var ex = null;
+  ((_sdData.active && _sdData.active.rows) || []).forEach(function (r) {
+    if (r.code === _sdFund) ex = { from: r.own.from, to: r.own.to, days: r.own.days,
+      fund: r.own.fund, bm: r.own.bm, ex: r.own.ex,
+      label: (_sdData.active && _sdData.active.market) || '大盤' };
+  });
   var h = '<div class="sd-opt">';
 
   // 問題一：它有沒有照自己寫的做。集中、換股都是說明書寫明的策略，不是違規；
   // 它對持有人唯一可驗證的承諾是「追求長期優於台股大盤」。
   h += '<div class="sd-oh">一、它有沒有照公開說明書做</div>';
   if (ex) {
-    h += '<div class="sd-ob">它唯一可驗證的那一條，目前這段沒做到：' + ex.from.slice(5) + '–' +
-      ex.to.slice(5) + ' 共 ' + ex.days + ' 個交易日，淨值 ' + (ex.fund >= 0 ? '+' : '') +
+    h += '<div class="sd-ob">它唯一可驗證的那一條，目前這段沒做到：掛牌 ' + ex.from +
+      ' 至 ' + ex.to + ' 共 ' + ex.days + ' 個交易日，' + (ex.fund >= 0 ? '+' : '') +
       ex.fund.toFixed(2) + '%，' + ex.label + ' ' + (ex.bm >= 0 ? '+' : '') + ex.bm.toFixed(2) +
       '%，落後 ' + Math.abs(ex.ex).toFixed(2) + ' 個百分點。</div>';
-    h += '<div class="sd-onote">說明書寫的是「長期」，' + ex.days +
-      ' 個交易日判斷不了長期，但這是目前唯一有資料的區間。' +
+    h += '<div class="sd-onote">以還原市價計，起點為掛牌首日。' +
+      '同一區間用淨值算是 +2.09%、市價 +1.65%，差 0.44 個百分點，差別在起算日不在算法。' +
+      '說明書寫的是「長期」，' + ex.days + ' 個交易日判斷不了，但這是它存在的全部時間。' +
       '集中度上升、換股頻繁都是它寫明的做法（聚焦龍頭、依市況動態調整），不構成警訊。</div>';
   } else {
     h += '<div class="sd-ob">超額報酬資料不足，無法判斷。</div>';
