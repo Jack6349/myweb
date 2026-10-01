@@ -212,20 +212,7 @@ function sdLight(f, key) {
 // 位置的描述一律由資料算出來，不在文案裡寫死「最高」「最低」這種最高級：
 // 2026-10-02 的教訓——我寫「檔數降到成立以來最少」，實際 min 是 45、現在 46；
 // 寫「單一個股走到成立以來最高」，實際 max 是 10.39、現在 9.53。
-function _sdPos(s, m, dir) {
-  var ext = dir > 0 ? s.max : s.min;
-  var fmt = function (v) { return (m.sc ? v / m.sc : v).toFixed(m.dp) + m.u; };
-  if (Math.abs(s.now - ext) < 1e-9) return '成立以來最' + (dir > 0 ? '高' : '低');
-  return '第 ' + s.rank.toFixed(0) + ' 百分位，成立以來區間 ' + fmt(s.min) + '–' + fmt(s.max);
-}
 // 近一個月的走向：只講兩個數字，不下「仍在上升」這種形容詞
-function _sdRecent(f, k, m, back) {
-  var ser = f[k] || [], i = Math.max(0, ser.length - 1 - (back || 20)), v = null;
-  for (var j = i; j < ser.length; j++) { if (ser[j] != null) { v = ser[j]; i = j; break; } }
-  if (v == null) return '';
-  var fmt = function (x) { return (m.sc ? x / m.sc : x).toFixed(m.dp) + m.u; };
-  return f.dates[i].slice(5) + ' ' + fmt(v) + ' → 今 ' + fmt(_sdStat(f, k).now);
-}
 function _sdM(k) { return SD_METRICS.filter(function (x) { return x.k === k; })[0]; }
 
 // 近 n 個交易日的單位數淨變化（億）。用來把「折價代表什麼」講成結論而不是選擇題：
@@ -239,109 +226,30 @@ function _sdFlow(f, n, back) {
   return got ? sum / 1e8 : null;
 }
 
-var SD_BLUF = {
-  top5: function (f, s) { return {
-    head: '前五大集中度 ' + s.now.toFixed(1) + '%，' + _sdPos(s, _sdM('top5'), 1) +
-          '；成立時 ' + s.first.toFixed(1) + '%，' + _sdRecent(f, 'top5', _sdM('top5')) +
-          '。' + _sdTop5Names(f) + '全部屬電子供應鏈',
-    why: '集中是它寫在公開說明書裡的做法（聚焦龍頭、依市況動態調整），不是漂移。' +
-         '要注意的是另一件事：前五大同屬一條供應鏈，你把它當組合裡分散的那一腳，前提不成立。'
-  }; },
-  max1: function (f, s) { return {
-    head: '最大單一 ' + ((f.top && f.top[0] && f.top[0].n) || '最大一檔') + ' ' + s.now.toFixed(1) +
-          '%，' + _sdPos(s, _sdM('max1'), 1) + '；成立時 ' + s.first.toFixed(1) + '%',
-    why: (function () {
-      // 原本寫「那一檔跌 10%，整檔 ETF 掉 1.0%」：10% 是我自己編的，而且權重算出來的
-      // 連動低估了實際的 5 倍——持股彼此相關，最大那檔跌時同族群通常一起跌。
-      var q = f.sens;
-      if (!q) return '權重 ' + s.now.toFixed(1) + '% 只說明它佔多少，不等於連動幅度，' +
-        '實測資料不足，無法給連動係數。';
-      return '實測連動 ' + q.beta.toFixed(2) + '：' + q.name + '每跌 1%，淨值平均跟著跌 ' +
-        q.beta.toFixed(2) + '%（' + q.days + ' 個交易日迴歸）。照權重 ' + q.w.toFixed(1) +
-        '% 推只會算出 ' + (q.w / 100).toFixed(2) + '，低估約 ' + (q.beta / (q.w / 100)).toFixed(0) + ' 倍。';
-    })()
-  }; },
-  n: function (f, s) { return {
-    head: '持股檔數 ' + s.now + ' 檔，' + _sdPos(s, _sdM('n'), -1) + '；成立時 ' + s.first + ' 檔',
-    why: '檔數本身影響有限，它的意義是佐證上面的集中度：是把錢挪到少數名字，不是單純清理尾巴。'
-  }; },
-  bench: function (f, s) { return {
-    head: '台積電 ' + s.now.toFixed(1) + '%，離市值型很遠（' + SD_REF_0.code + ' 同日 ' +
-          SD_REF_0.bench.toFixed(0) + '%）',
-    why: '它跟你的市值型部位沒有重疊，這一項目前不需要處理。'
-  }; },
-  stock: function (f, s) { return {
-    head: '現金 ' + (100 - s.now).toFixed(1) + '%，股票 ' + s.now.toFixed(1) + '%（' +
-          _sdPos(s, _sdM('stock'), 1) + '）',
-    why: '對你的意思：現金是贖回的緩衝，現金薄的時候遇到大額贖回，基金會被迫在不利的價格賣股，' +
-         '那段期間的淨值會比單純的行情更難看。'
-  }; },
-  units: function (f, s) { return {
-    head: '在外單位數 ' + (s.now / 1e8).toFixed(1) + ' 億，' + _sdPos(s, _sdM('units'), -1) +
-          '；比成立時多 ' + ((s.now / s.first - 1) * 100).toFixed(0) + '%，' +
-          _sdRecent(f, 'units', _sdM('units')),
-    why: '資金在流出，不是淨值跌造成的錯覺。流出夠大時會逼基金賣股，那段期間的持股變動不代表經理人的看法。'
-  }; },
-  prem: function (f, s) { return {
-    head: '折溢價 ' + s.now.toFixed(2) + '%（' + (s.now < 0 ? '市價低於淨值' : '市價高於淨值') + '），' +
-          _sdPos(s, _sdM('prem'), -1),
-    why: (function () {
-      // 不留「要看是哪一種」這種問句當結論：折價是買得便宜還是資金在退，
-      // 用單位數就分得出來，分得出來就給答案。
-      var a = _sdFlow(f, 3, 0), b = _sdFlow(f, 3, 3);
-      var head = '現在買比淨值便宜 ' + Math.abs(s.now).toFixed(2) + '%。';
-      if (a == null || b == null) return head + ' 資金是否仍在流出，單位數資料不足，無法判斷。';
-      var t = '近 3 個交易日單位數 ' + a.toFixed(2) + ' 億、前 3 個交易日 ' + b.toFixed(2) + ' 億，';
-      return head + ' ' + t + (Math.abs(a) < Math.abs(b) ? '流出已經收斂。' : '流出仍在擴大。');
-    })()
-  }; }
-};
 
-// 決策視圖：燈號、一句結論、一句為什麼在意。綠燈的併成一行，不逐項佔版面。
+// 指標狀態列：只給燈號、數值與位置，不附理由。
+// 理由寫在上面的結論與依據裡，兩個地方各講一次就是單一出處的問題。
+// 這一塊的角色是「掃一眼現在怎樣」，不是解釋。
 function sdExecHtml(f) {
   var order = ['top5', 'max1', 'bench', 'stock', 'units', 'prem'];
-  var hot = [], ok = [];
-  order.forEach(function (k) {
-    var L = sdLight(f, k);
-    if (!L) return;
-    (L.lv > 0 ? hot : ok).push({ k: k, L: L });
-  });
   var dot = ['🟢', '🟡', '🔴'];
-  var h = '<div class="sd-exec">';
-  // 圖例放最上面：先知道規則，下面四條才讀得懂
+  var h = '<div class="sd-exec"><div class="sd-oh">指標狀態</div>';
   h += '<div class="sd-xkey">🟢 落在歷史常態（P25–P75）　🟡 偏離常態（P25 以下或 P75 以上）　' +
     '🔴 走到成立以來最不利的一天。四分位與走勢圖的 P25／P50／P75 同一套，不另訂門檻。</div>';
-  hot.forEach(function (x) {
-    var b = SD_BLUF[x.k](f, x.L.s);
-    h += '<div class="sd-x sd-x' + x.L.lv + '"><div class="sd-xh">' + dot[x.L.lv] + ' ' + b.head + '</div>' +
-      '<div class="sd-xw">' + b.why + '</div></div>';
+  h += '<div class="sd-grid">';
+  order.forEach(function (k) {
+    var L = sdLight(f, k), m = _sdM(k);
+    if (!L || !m) return;
+    h += '<div class="sd-g sd-x' + L.lv + '">' + dot[L.lv] + ' ' + m.t + '　<b>' +
+      _sdFmt(L.s.now, m) + '</b>　<span class="sd-gp">第 ' + L.s.rank.toFixed(0) + ' 百分位</span></div>';
   });
-  if (ok.length) {
-    h += '<div class="sd-x sd-x0"><div class="sd-xh">🟢 其餘 ' + ok.length + ' 項落在成立以來的常態區間</div>' +
-      '<div class="sd-xw">' + ok.map(function (x) {
-        var m = SD_METRICS.filter(function (y) { return y.k === x.k; })[0];
-        return m.t + ' ' + _sdFmt(x.L.s.now, m);
-      }).join('　') + '</div></div>';
-  }
-  // 參考項：檔數不給燈號，但要說清楚它為什麼不給，否則看起來像漏掉了
   var sn = _sdStat(f, 'n'), st = _sdStat(f, 'tail5');
-  // 分量對等：不重要的事不需要解釋為什麼不重要，一行帶過。
-  // 完整理由在分析視圖的六欄裡，這裡只留數字。
   if (sn) {
-    h += '<div class="sd-x sd-xr"><div class="sd-xh">參考　持股檔數 ' + sn.now + ' 檔（常態 ' +
-      sn.min + '–' + sn.max + '）' + (st ? '　尾部 5 檔合計 ' + st.now.toFixed(3) + '%' : '') +
-      '</div></div>';
+    h += '<div class="sd-g sd-xr">參考　持股檔數　<b>' + sn.now + ' 檔</b>　<span class="sd-gp">常態 ' +
+      sn.min + '–' + sn.max + (st ? '，尾部 5 檔 ' + st.now.toFixed(3) + '%' : '') + '</span></div>';
   }
-  return h + '</div>';
+  return h + '</div></div>';
 }
-
-// ── 可選方案 ──────────────────────────────────────────────────────
-// 只到「發生了什麼、為什麼」還不算做完：讀的人得自己把依據合成一個決定，
-// 那一步該由這裡做掉。每個選項附一句代價或前提，代價一律由資料算出來。
-//
-// 這裡不給傾向。使用者是這些部位的持有人，替他挑哪一個就是個人化的投資建議，
-// 不在這個工具的範圍。列完選項就停，不加「決定權在你」那種責任聲明句——
-// 選項的存在本身已經說明接下來輪到誰。
 
 function sdOptionsHtml(f) {
   var t = _sdStat(f, 'top5');
@@ -365,6 +273,8 @@ function sdOptionsHtml(f) {
   } else {
     h += '<div class="sd-ob">超額報酬資料不足，無法判斷。</div>';
   }
+
+  h += sdActiveHtml();
 
   // 問題二：使用者自己的配置假設。這跟基金做得對不對是兩件事。
   h += '<div class="sd-oh">二、它在你的組合裡還算不算分散的那一腳</div>';
@@ -394,5 +304,38 @@ function sdOptionsHtml(f) {
   h += '<div class="sd-o"><b>C　再觀察</b>　前提：' + t.total +
     ' 個交易日不足以判斷說明書講的「長期」，主動式基金的超額報酬需要更長的區間才看得出來。</div>';
   h += '</div></div>';
+  return h;
+}
+
+// ── 五檔主動式的超額報酬 ────────────────────────────────────────────
+// 這一段不需要持股揭露，只要還原市價與大盤，所以沒接到發行商揭露頁的那幾檔也算得出來。
+// 兩個區間各自回答一個問題：自掛牌起＝它對自己的承諾兌現了沒；
+// 共同區間＝把掛牌早晚的影響拿掉之後，五檔彼此怎麼比。
+function sdActiveHtml() {
+  var a = _sdData && _sdData.active;
+  if (!a || !a.rows || !a.rows.length) return '';
+  var pp = function (v) { return (v >= 0 ? '+' : '') + v.toFixed(2); };
+  var h = '<div class="sd-ctitle">五檔主動式 ETF 對' + a.market + '的超額報酬' +
+    '<span class="sd-chint">' + a.basis + '</span></div>';
+  h += '<div class="inv-table-wrap"><table class="inv-table swap-table"><thead><tr>' +
+    '<th>代號</th><th>掛牌日</th><th class="num">自掛牌　基金</th><th class="num">' + a.market +
+    '</th><th class="num">超額</th><th class="num">共同區間超額</th></tr></thead><tbody>';
+  a.rows.forEach(function (r) {
+    var o = r.own, c = r.common;
+    var link = '<span class="code-link" title="看線圖" onclick="openChartPop(&#39;' + r.code +
+      '&#39;)">' + r.code + '</span>';
+    h += '<tr><td class="inv-code">' + link + '</td>' +
+      '<td>' + o.from + '</td>' +
+      '<td class="num">' + pp(o.fund) + '%</td>' +
+      '<td class="num">' + pp(o.bm) + '%</td>' +
+      '<td class="num" style="font-weight:700;color:' + (o.ex >= 0 ? 'var(--up)' : 'var(--down)') +
+        '">' + pp(o.ex) + ' pp</td>' +
+      '<td class="num"' + (c ? ' style="color:' + (c.ex >= 0 ? 'var(--up)' : 'var(--down)') + '"' : '') +
+        '>' + (c ? pp(c.ex) + ' pp' : '—') + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div class="sd-onote">共同區間自 ' + (a.commonFrom || '—') +
+    ' 起（最晚掛牌那一檔的首日），把掛牌早晚造成的市況差異拿掉。' +
+    '區間都只有幾個月，不足以判斷說明書講的「長期」。</div>';
   return h;
 }

@@ -1186,3 +1186,11 @@ td.cost-even::after  { background: var(--text3); }
 .sd-o { font-size: 13px; color: var(--note); line-height: 1.8; padding: 3px 0; }
 .sd-o b { color: var(--text); }
 .sd-onote { font-size: 12px; color: var(--text3); line-height: 1.75; margin-top: 3px; }
+/* 指標狀態列：掃一眼用，不附理由 */
+.sd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 6px; margin-top: 6px; }
+.sd-g { border-left: 3px solid var(--border); background: var(--bg2); padding: 6px 10px; font-size: 13px; }
+.sd-g.sd-x2 { border-left-color: var(--up); }
+.sd-g.sd-x1 { border-left-color: var(--accent2); }
+.sd-g.sd-x0 { border-left-color: var(--down); }
+.sd-g.sd-xr { border-left-color: var(--text3); }
+.sd-gp { color: var(--text3); font-size: 11px; }

@@ -114,8 +114,9 @@ function renderStyleDrift() {
     '</span></div>';
 
   if (_sdView === 'exec') {
-    h += sdExecHtml(f);
+    // 結論先行：先兩個問題的答案與選項，指標狀態列放後面當佐證
     if (typeof sdOptionsHtml === 'function') h += sdOptionsHtml(f);
+    h += sdExecHtml(f);
     h += _sdPageNote(f);
     wrap.innerHTML = h;
     return;
