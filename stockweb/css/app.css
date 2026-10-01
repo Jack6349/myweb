@@ -1146,3 +1146,9 @@ td.cost-even::after  { background: var(--text3); }
 .sd-chart { margin-bottom: 14px; overflow-x: auto; }
 .sd-ctitle { font-size: 13px; font-weight: 700; margin: 10px 0 6px; }
 .sd-chint { font-weight: 400; font-size: 11px; color: var(--text3); margin-left: 8px; }
+/* 指標六欄說明：預設展開，因為它就是這一頁的重點；佔位太大時可以收起來 */
+.sd-doc { border: 1px solid var(--border); background: var(--bg2); padding: 8px 12px; margin: 10px 0 14px; }
+.sd-doc > summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.sd-doc dl { margin: 8px 0 2px; font-size: 13px; line-height: 1.85; }
+.sd-doc dt { color: var(--accent2); font-weight: 700; margin-top: 7px; }
+.sd-doc dd { margin: 0 0 0 0; color: var(--note); }

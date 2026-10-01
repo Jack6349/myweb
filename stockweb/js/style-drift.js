@@ -123,6 +123,9 @@ function renderStyleDrift() {
   h += '</div>';
 
   h += _sdChart(f, _sdPick);
+  // 選中指標的六欄說明：統計輸出只是起點，走完
+  // 定義→比較基準→白話→機制→行動→侷限 才算交付
+  if (typeof sdDocHtml === 'function') h += sdDocHtml(f, _sdPick);
   h += _sdTopHtml(f);
   h += _sdNote(f);
   wrap.innerHTML = h;
