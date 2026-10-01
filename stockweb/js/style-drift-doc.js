@@ -225,6 +225,17 @@ function _sdRecent(f, k, m, back) {
 }
 function _sdM(k) { return SD_METRICS.filter(function (x) { return x.k === k; })[0]; }
 
+// 近 n 個交易日的單位數淨變化（億）。用來把「折價代表什麼」講成結論而不是選擇題：
+// 折價同時可能是「買得便宜」和「資金在退」，光看折價分不出來，配上單位數就分得出來。
+function _sdFlow(f, n, back) {
+  var u = f.units || [], end = u.length - (back || 0), st = Math.max(1, end - n), sum = 0, got = 0;
+  for (var i = st; i < end; i++) {
+    if (u[i] == null || u[i - 1] == null) continue;
+    sum += u[i] - u[i - 1]; got++;
+  }
+  return got ? sum / 1e8 : null;
+}
+
 var SD_BLUF = {
   top5: function (f, s) { return {
     head: '前五大集中度 ' + s.now.toFixed(1) + '%，' + _sdPos(s, _sdM('top5'), 1) +
@@ -261,8 +272,15 @@ var SD_BLUF = {
   prem: function (f, s) { return {
     head: '折溢價 ' + s.now.toFixed(2) + '%（' + (s.now < 0 ? '市價低於淨值' : '市價高於淨值') + '），' +
           _sdPos(s, _sdM('prem'), -1),
-    why: '對你的意思：現在買，等於用比淨值便宜 ' + Math.abs(s.now).toFixed(2) +
-         '% 的價格進場。但折價也是資金在流出的徵兆，便宜不一定是機會。'
+    why: (function () {
+      // 不留「要看是哪一種」這種問句當結論：折價是買得便宜還是資金在退，
+      // 用單位數就分得出來，分得出來就給答案。
+      var a = _sdFlow(f, 3, 0), b = _sdFlow(f, 3, 3);
+      var head = '現在買比淨值便宜 ' + Math.abs(s.now).toFixed(2) + '%。';
+      if (a == null || b == null) return head + ' 資金是否仍在流出，單位數資料不足，無法判斷。';
+      var t = '近 3 個交易日單位數 ' + a.toFixed(2) + ' 億、前 3 個交易日 ' + b.toFixed(2) + ' 億，';
+      return head + ' ' + t + (Math.abs(a) < Math.abs(b) ? '流出已經收斂。' : '流出仍在擴大。');
+    })()
   }; }
 };
 
@@ -294,12 +312,12 @@ function sdExecHtml(f) {
   }
   // 參考項：檔數不給燈號，但要說清楚它為什麼不給，否則看起來像漏掉了
   var sn = _sdStat(f, 'n'), st = _sdStat(f, 'tail5');
+  // 分量對等：不重要的事不需要解釋為什麼不重要，一行帶過。
+  // 完整理由在分析視圖的六欄裡，這裡只留數字。
   if (sn) {
-    h += '<div class="sd-x sd-xr"><div class="sd-xh">參考　持股檔數 ' + sn.now + ' 檔（成立時 ' +
-      sn.first + ' 檔，成立以來區間 ' + sn.min + '–' + sn.max + '）</div>' +
-      '<div class="sd-xw">不給燈號：少掉的是最小的那幾檔。' +
-      (st ? '目前權重最小的 5 檔加起來只佔股票部位 ' + st.now.toFixed(3) + '%，' : '') +
-      '檔數變動對你的損益沒有影響，集中度才有。</div></div>';
+    h += '<div class="sd-x sd-xr"><div class="sd-xh">參考　持股檔數 ' + sn.now + ' 檔（常態 ' +
+      sn.min + '–' + sn.max + '）' + (st ? '　尾部 5 檔合計 ' + st.now.toFixed(3) + '%' : '') +
+      '</div></div>';
   }
   h += '<div class="sd-xend">是否因此調整部位，是你的決定。這一頁只負責讓你知道它跟你買進時已經不一樣。</div>';
   return h + '</div>';
