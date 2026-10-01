@@ -244,7 +244,8 @@ var SD_BLUF = {
     head: '前五大集中度 ' + s.now.toFixed(1) + '%，' + _sdPos(s, _sdM('top5'), 1) +
           '；成立時 ' + s.first.toFixed(1) + '%，' + _sdRecent(f, 'top5', _sdM('top5')) +
           '。' + _sdTop5Names(f) + '全部屬電子供應鏈',
-    why: '這檔原本是用來分散持股族群的，現在實際上接近押注單一供應鏈。'
+    why: '集中是它寫在公開說明書裡的做法（聚焦龍頭、依市況動態調整），不是漂移。' +
+         '要注意的是另一件事：前五大同屬一條供應鏈，你把它當組合裡分散的那一腳，前提不成立。'
   }; },
   max1: function (f, s) { return {
     head: '最大單一 ' + ((f.top && f.top[0] && f.top[0].n) || '最大一檔') + ' ' + s.now.toFixed(1) +
@@ -341,53 +342,57 @@ function sdExecHtml(f) {
 // 這裡不給傾向。使用者是這些部位的持有人，替他挑哪一個就是個人化的投資建議，
 // 不在這個工具的範圍。列完選項就停，不加「決定權在你」那種責任聲明句——
 // 選項的存在本身已經說明接下來輪到誰。
-function _sdPeak(f, k) {
-  var ser = f[k] || [], mx = -Infinity, mi = -1;
-  ser.forEach(function (v, i) { if (v != null && v > mx) { mx = v; mi = i; } });
-  return mi < 0 ? null : { v: mx, i: mi, date: f.dates[mi], ago: ser.length - 1 - mi };
-}
 
 function sdOptionsHtml(f) {
-  var t = _sdStat(f, 'top5'), m1 = _sdStat(f, 'max1'), pr = _sdStat(f, 'prem');
+  var t = _sdStat(f, 'top5');
   if (!t) return '';
-  var pk = _sdPeak(f, 'top5');
+  var q = f.sens, pr = _sdStat(f, 'prem');
   var a = _sdFlow(f, 3, 0), b = _sdFlow(f, 3, 3);
-  var off = pk ? t.now - pk.v : null;
-
+  var ex = (f.excess || [])[0];
   var h = '<div class="sd-opt">';
-  h += '<div class="sd-oh">結論</div><div class="sd-ob">前五大集中度 ' + t.now.toFixed(2) +
-    '%，比成立時的 ' + t.first.toFixed(2) + '% 高 ' + t.d.toFixed(2) + ' 個百分點；' +
-    (pk && off < 0
-      ? '但這個抬升在 ' + pk.date.slice(5) + ' 見頂 ' + pk.v.toFixed(2) + '% 後停住，' +
-        '近 ' + pk.ago + ' 個交易日回落 ' + Math.abs(off).toFixed(2) + ' 個百分點，沒有繼續往上。'
-      : '並且仍停在成立以來的高點。') + '</div>';
 
-  h += '<div class="sd-oh">判斷依據</div><ol class="sd-ol">';
-  h += '<li>持有理由被稀釋：前五大是' + _sdTop5Names(f) + '，全在電子供應鏈，' +
-    '分散的是個股不是族群。</li>';
-  if (pk && off < 0) {
-    h += '<li>漂移已經發生，不是正在發生：' + pk.date.slice(5) + ' 的 ' + pk.v.toFixed(2) +
-      '% 是高點，之後在高檔橫向整理。要判斷的是能不能接受這個新水準，不是攔截一個還在上升的趨勢。</li>';
+  // 問題一：它有沒有照自己寫的做。集中、換股都是說明書寫明的策略，不是違規；
+  // 它對持有人唯一可驗證的承諾是「追求長期優於台股大盤」。
+  h += '<div class="sd-oh">一、它有沒有照公開說明書做</div>';
+  if (ex) {
+    h += '<div class="sd-ob">它唯一可驗證的那一條，目前這段沒做到：' + ex.from.slice(5) + '–' +
+      ex.to.slice(5) + ' 共 ' + ex.days + ' 個交易日，淨值 ' + (ex.fund >= 0 ? '+' : '') +
+      ex.fund.toFixed(2) + '%，' + ex.label + ' ' + (ex.bm >= 0 ? '+' : '') + ex.bm.toFixed(2) +
+      '%，落後 ' + Math.abs(ex.ex).toFixed(2) + ' 個百分點。</div>';
+    h += '<div class="sd-onote">說明書寫的是「長期」，' + ex.days +
+      ' 個交易日判斷不了長期，但這是目前唯一有資料的區間。' +
+      '集中度上升、換股頻繁都是它寫明的做法（聚焦龍頭、依市況動態調整），不構成警訊。</div>';
+  } else {
+    h += '<div class="sd-ob">超額報酬資料不足，無法判斷。</div>';
+  }
+
+  // 問題二：使用者自己的配置假設。這跟基金做得對不對是兩件事。
+  h += '<div class="sd-oh">二、它在你的組合裡還算不算分散的那一腳</div>';
+  h += '<div class="sd-ob">不算。前五大是' + _sdTop5Names(f) + '，佔股票部位 ' +
+    t.now.toFixed(2) + '%，全在電子供應鏈。</div>';
+  h += '<ol class="sd-ol">';
+  h += '<li>這是它的策略不是漂移：集中度從成立時的 ' + t.first.toFixed(2) + '% 走到 ' +
+    t.now.toFixed(2) + '%，方向與說明書一致，不會因為你希望它分散就回頭。</li>';
+  if (q) {
+    h += '<li>連動比權重大：' + q.name + '每跌 1%，淨值平均跟著跌 ' + q.beta.toFixed(2) +
+      '%（' + q.days + ' 個交易日迴歸），照權重 ' + q.w.toFixed(1) + '% 推只會算出 ' +
+      (q.w / 100).toFixed(2) + '。同族群一起跌，分散的效果比帳面上更小。</li>';
   }
   if (a != null && b != null) {
-    h += '<li>被動因素已排除：造成折價的賣壓收斂（近 3 個交易日單位數 ' + a.toFixed(2) +
-      ' 億、前 3 個交易日 ' + b.toFixed(2) + ' 億），集中度不會因為贖回被動變動。</li>';
+    h += '<li>目前不是被動效應：賣壓已收斂（近 3 個交易日單位數 ' + a.toFixed(2) +
+      ' 億、前 3 個交易日 ' + b.toFixed(2) + ' 億），集中度不會因為贖回自己變動。</li>';
   }
   h += '</ol>';
 
   h += '<div class="sd-oh">可選方案</div><div class="sd-ov">';
-  var q = f.sens;
-  h += '<div class="sd-o"><b>A　維持不動</b>　把它當集中型持有。' +
-    '代價：你原本用來分散族群的那筆錢，實際上集中在一條供應鏈，分散要另外找地方補。' +
-    (q ? '<br>　　實測風險：' + q.name + '每跌 1%，淨值平均跟著跌 ' + q.beta.toFixed(2) +
-      '%（' + q.days + ' 個交易日迴歸）。最差的三天 ' +
-      q.worst.map(function (x) { return x.d.slice(5) + ' ' + x.s.toFixed(1) + '%／淨值 ' + x.n.toFixed(1) + '%'; }).join('、') +
-      '。這個係數衡量的是對整條供應鏈的連動，' + q.name + '只是代表變數。' : '') + '</div>';
-  h += '<div class="sd-o"><b>B　減碼轉出</b>　把部分部位移回原本設定的分散比例。代價：' +
-    (pr ? '目前折價 ' + Math.abs(pr.now).toFixed(2) + '%，賣出等於用低於淨值的價格出場' :
-      '需承擔轉換的交易成本') + '。</div>';
-  h += '<div class="sd-o"><b>C　再觀察</b>　前提：揭露只有 ' + t.total +
-    ' 個交易日，不足一個完整的市況循環；高檔橫向整理也可能是下一段上升前的停頓。</div>';
+  h += '<div class="sd-o"><b>A　維持不動</b>　把它當集中型的 Alpha 部位持有，分散改由組合裡其他部位承擔。' +
+    '代價：' + (ex ? '目前這段它落後大盤 ' + Math.abs(ex.ex).toFixed(2) + ' 個百分點，' : '') +
+    '等於承擔了集中的波動，還沒拿到它承諾的報酬。</div>';
+  h += '<div class="sd-o"><b>B　減碼轉出</b>　把原本指望它分散的那部分資金移到真正分散的標的。代價：' +
+    (pr ? '目前折價 ' + Math.abs(pr.now).toFixed(2) + '%，賣出等於用低於淨值的價格出場；' : '') +
+    '同時放棄它後續可能兌現的 Alpha。</div>';
+  h += '<div class="sd-o"><b>C　再觀察</b>　前提：' + t.total +
+    ' 個交易日不足以判斷說明書講的「長期」，主動式基金的超額報酬需要更長的區間才看得出來。</div>';
   h += '</div></div>';
   return h;
 }
