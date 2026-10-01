@@ -6,22 +6,29 @@
 // 主動式 ETF 買的是風格，不是某幾檔個股。風格變了，持有理由就沒了，而價格看不出來——
 // 漂移中的基金可以繼續漲一段時間，等績效反映時已經晚了。
 //
-// 四個指標都用權重，不用股數：贖回會讓所有持股按比例減少，股數全面下降但權重不變，
-// 用權重才分得出主動調整。
+// 集中度一律用「佔股票部位」的佔比（前五大 ÷ 股票合計），不是佔總資產。
+// 原因（2026-10-02 用 85 天實測修正）：主動式 ETF 走現金申購買回，贖回從現金部位付錢、
+// 不必動到任何一檔股票——2026-09-18 在外單位數少了 1,300 萬，47 檔持股的股數一股沒變。
+// 淨資產縮小而股票部位不變，每一檔的權重就會一起上升，不除掉的話單純贖回會被讀成變集中。
+// 申購買回流量不用從股數推測，揭露頁有「基金在外流通單位數」，直接讀。
 //   檔數        分散到幾檔
-//   前五大合計   集中在前幾名的程度
-//   最大單一     單一個股的曝險上限實際走到哪
-//   台積電權重   有沒有往大型權值股靠攏（往上＝越來越像市值型，持有它的理由變薄）
+//   前五大      集中在前幾名的程度（佔股票部位）
+//   最大單一     單一個股的曝險上限實際走到哪（佔股票部位）
+//   台積電      有沒有往大型權值股靠攏（往上＝越來越像市值型，持有它的理由變薄）
+//   股票水位     股票合計佔總資產，其餘為現金
+//   在外單位數   申購買回流量本身：規模縮水會逼著經理人賣，與主動調整是兩回事
 //
 // 判讀門檻一律取自該檔自己的歷史分位數（P25／P50／P75），不自訂數字：
 // 這檔基金 2026 年 6 月才成立，沒有跨市場可比的基準，唯一有意義的對照是它自己。
 
 var SD_METRICS = [
-  { k: 'n',     t: '持股檔數',     u: '',  dp: 0, hint: '分散到幾檔。往下＝集中' },
-  { k: 'top5',  t: '前五大合計',   u: '%', dp: 2, hint: '前五名權重相加。往上＝集中' },
-  { k: 'max1',  t: '最大單一',     u: '%', dp: 2, hint: '最大一檔的權重。往上＝單一個股曝險變重' },
-  { k: 'bench', t: '台積電權重',   u: '%', dp: 2, hint: '往上＝向市值型靠攏' },
-  { k: 'stock', t: '股票水位',     u: '%', dp: 2, hint: '股票合計權重，其餘為現金' }
+  { k: 'n',     t: '持股檔數',   u: '',  dp: 0, hint: '分散到幾檔。往下＝集中' },
+  { k: 'top5',  t: '前五大',     u: '%', dp: 2, hint: '前五名佔股票部位。往上＝集中' },
+  { k: 'max1',  t: '最大單一',   u: '%', dp: 2, hint: '最大一檔佔股票部位。往上＝單一個股曝險變重' },
+  { k: 'bench', t: '台積電',     u: '%', dp: 2, hint: '佔股票部位。往上＝向市值型靠攏' },
+  { k: 'stock', t: '股票水位',   u: '%', dp: 2, hint: '股票合計佔總資產，其餘為現金' },
+  { k: 'units', t: '在外單位數', u: '億', dp: 2, sc: 1e8,
+    hint: '申購買回流量。往下＝淨贖回，規模縮水會逼著賣，不等於經理人想賣' }
 ];
 var _sdData = null, _sdFund = null, _sdPick = 'top5';
 
@@ -63,7 +70,8 @@ function _sdRank(arr, v) {
   return n / arr.length * 100;
 }
 
-function _sdFmt(v, m) { return v == null ? '—' : v.toFixed(m.dp) + m.u; }
+function _sdVal(v, m) { return v == null ? null : (m.sc ? v / m.sc : v); }
+function _sdFmt(v, m) { var x = _sdVal(v, m); return x == null ? '—' : x.toFixed(m.dp) + m.u; }
 
 function renderStyleDrift() {
   var wrap = document.getElementById('sd-wrap');
@@ -85,19 +93,20 @@ function renderStyleDrift() {
   // ── 指標卡：現值、成立以來變化、在自身歷史的百分位 ──
   h += '<div class="sd-cards">';
   SD_METRICS.forEach(function (m) {
-    var arr = (f[m.k] || []).filter(function (x) { return x != null; });
+    var arr = (f[m.k] || []).filter(function (x) { return x != null; })
+      .map(function (x) { return _sdVal(x, m); });
     if (!arr.length) return;
-    var now = f[m.k][last], first = arr[0], d = now - first;
+    var now = _sdVal(f[m.k][last], m), first = arr[0], d = now - first;
     var rank = _sdRank(arr, now);
     var sign = d > 0 ? '+' : (d < 0 ? '−' : '');
     // 百分比的差值單位是百分點，不是 %：35.48% − 23.57% 是 11.91 個百分點，
     // 寫成 +11.91% 會被讀成成長 11.91%（那是 +50.5%），兩者差很多。
     var du = m.u === '%' ? ' 個百分點' : m.u;
     h += '<div class="sd-card' + (m.k === _sdPick ? ' on' : '') + '" onclick="sdPickMetric(\'' + m.k + '\')" title="' + m.hint + '">' +
-      '<div class="sd-cv">' + _sdFmt(now, m) + '</div>' +
+      '<div class="sd-cv">' + now.toFixed(m.dp) + m.u + '</div>' +
       '<div class="sd-ct">' + m.t + '</div>' +
       '<div class="sd-cd">成立以來 ' + sign + Math.abs(d).toFixed(m.dp) + du +
-        '（' + _sdFmt(first, m) + ' → ' + _sdFmt(now, m) + '）</div>' +
+        '（' + first.toFixed(m.dp) + m.u + ' → ' + now.toFixed(m.dp) + m.u + '）</div>' +
       '<div class="sd-cr">自身歷史第 ' + (rank == null ? '—' : rank.toFixed(0)) + ' 百分位</div>' +
       '</div>';
   });
@@ -112,7 +121,8 @@ function renderStyleDrift() {
 // ── 單一指標的走勢圖：折線＋該指標自身的 P25／P50／P75 參考線 ──
 function _sdChart(f, key) {
   var m = SD_METRICS.filter(function (x) { return x.k === key; })[0] || SD_METRICS[1];
-  var ys = f[key] || [], dates = f.dates;
+  var dates = f.dates;
+  var ys = (f[key] || []).map(function (x) { return _sdVal(x, m); });
   var vals = ys.filter(function (x) { return x != null; });
   if (vals.length < 2) return '<div class="rf-cal-empty">' + m.t + ' 資料不足，畫不出走勢。</div>';
   var sorted = vals.slice().sort(function (a, b) { return a - b; });
@@ -153,8 +163,8 @@ function _sdChart(f, key) {
       (k === 0 ? 'start' : (k === 2 ? 'end' : 'middle')) + '" class="dh-ax">' + dates[i].slice(5) + '</text>';
   });
   // 整張圖加一個 title，滑鼠移上去看頭尾值
-  g = '<title>' + m.t + '　' + dates[0] + ' ' + _sdFmt(ys[0], m) + ' → ' +
-      dates[lastI] + ' ' + _sdFmt(ys[lastI], m) + '</title>' + g;
+  g = '<title>' + m.t + '　' + dates[0] + ' ' + ys[0].toFixed(m.dp) + m.u + ' → ' +
+      dates[lastI] + ' ' + ys[lastI].toFixed(m.dp) + m.u + '</title>' + g;
 
   return '<div class="sd-chart"><div class="sd-ctitle">' + m.t +
     '<span class="sd-chint">' + m.hint + '；虛線為這檔自己歷史的 P25／P50／P75</span></div>' +
@@ -184,8 +194,12 @@ function _sdNote(f) {
   return '<div class="cs-note"><dl>' +
     '<dt>這一頁要回答什麼</dt><dd>持有這檔主動式 ETF 的理由還在不在。買的是風格，不是某幾檔個股；' +
     '風格變了理由就沒了，而價格看不出來。</dd>' +
-    '<dt>為什麼用權重不用股數</dt><dd><code>贖回 → 股數按比例下降、權重不變</code>。' +
-    '用股數分不出主動調整與贖回，用權重才分得出來。</dd>' +
+    '<dt>集中度為什麼除以股票合計</dt><dd>主動式 ETF 走現金申購買回，' +
+    '<code>贖回 → 從現金付錢、持股不動 → 淨資產縮小 → 每一檔權重一起上升</code>。' +
+    '不除掉的話，單純贖回會被讀成變集中。這一頁的前五大、最大單一、台積電都是佔股票部位。</dd>' +
+    '<dt>申購買回怎麼認</dt><dd>不用從股數推測，揭露頁有在外流通單位數，直接讀。' +
+    '實測 85 天：84 個比較日沒有一天出現「所有持股按比例縮減」，29 天完全沒動；' +
+    '2026-09-18 在外單位數少了 1,300 萬單位，47 檔持股的股數一股沒變。</dd>' +
     '<dt>判讀門檻</dt><dd>取這檔自己歷史的 P25／P50／P75。' +
     '它 ' + f.dates[0] + ' 才有第一筆揭露，沒有跨市場可比的基準，唯一有意義的對照是它自己。</dd>' +
     '<dt>往上往下的意思</dt><dd><code>前五大合計、最大單一往上＝越集中</code>；' +
