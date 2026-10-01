@@ -90,6 +90,9 @@ function renderStyleDrift() {
     var now = f[m.k][last], first = arr[0], d = now - first;
     var rank = _sdRank(arr, now);
     var sign = d > 0 ? '+' : (d < 0 ? '−' : '');
+    // 百分比的差值單位是百分點，不是 %：35.48% − 23.57% 是 11.91 個百分點，
+    // 寫成 +11.91% 會被讀成成長 11.91%（那是 +50.5%），兩者差很多。
+    var du = m.u === '%' ? ' 個百分點' : m.u;
     h += '<div class="sd-card' + (m.k === _sdPick ? ' on' : '') + '" onclick="sdPickMetric(\'' + m.k + '\')" title="' + m.hint + '">' +
       '<div class="sd-cv">' + _sdFmt(now, m) + '</div>' +
       '<div class="sd-ct">' + m.t + '</div>' +
