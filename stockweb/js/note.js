@@ -20,6 +20,9 @@ function _noteWrap(el) {
   // 空的或極短的（載入中、單句狀態）不收，收起來反而多一次點擊
   var txt = (el.textContent || '').trim();
   if (!txt) return;
+  // 還沒掛進文件的節點（整塊 innerHTML 組好前就被 observer 看到）沒有 parentNode，
+  // 包了會丟 insertBefore of null；下一輪掃描它已經在文件裡，會再被包一次。
+  if (!el.parentNode) return;
   el.setAttribute('data-nbox', '1');
   var d = document.createElement('details');
   d.className = 'nbox';

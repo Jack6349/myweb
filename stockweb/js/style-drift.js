@@ -267,3 +267,23 @@ function _sdAudit(f) {
     '它固定只回最近 30 個交易日，更早的沒有來源就留空。</dd>' +
     '</dl></details>';
 }
+
+// ── 成分股曝險頁的子頁籤切換（成分股曝險／風格漂移）──
+// 記住選擇：曝險是盤中看的、漂移是幾天看一次的，兩者使用節奏不同，
+// 每次進頁都跳回第一個頁籤會一直要重點。
+var CS_TAB_LS = 'cs_tab_v1';
+var _csTab = (function () {
+  try { var v = localStorage.getItem(CS_TAB_LS); if (v === 'expo' || v === 'drift') return v; } catch (e) {}
+  return 'expo';
+})();
+function csShowTab(tab) {
+  _csTab = tab;
+  try { localStorage.setItem(CS_TAB_LS, tab); } catch (e) {}
+  ['expo', 'drift'].forEach(function (t) {
+    var b = document.getElementById('cs-subtab-' + t);
+    if (b) b.classList.toggle('active', t === tab);
+    var p = document.getElementById('cs-' + t + '-pane');
+    if (p) p.style.display = (t === tab) ? '' : 'none';
+  });
+  if (tab === 'drift') startStyleDrift(false);
+}
