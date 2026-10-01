@@ -41,8 +41,8 @@ var SD_DOC = {
     def: '當日揭露的持股家數，直接數富邦每日持股明細有幾列。',
     base: '跟這檔自己成立以來的 ' + s.total + ' 個交易日比。不跟別檔比：檔數多寡由策略決定，' +
           '同一天 ' + SD_REF_0.code + ' ' + SD_REF_0.name + ' 也是 ' + SD_REF_0.n + ' 檔，但那是追指數的結果，兩者不同義。',
-    plain: '現在 ' + s.now + ' 檔，成立時 ' + s.first + ' 檔，是成立以來最少的區間（第 ' +
-           s.rank.toFixed(0) + ' 百分位，區間 ' + s.min + '–' + s.max + ' 檔）。',
+    plain: '現在 ' + s.now + ' 檔，成立時 ' + s.first + ' 檔（第 ' + s.rank.toFixed(0) +
+           ' 百分位，成立以來區間 ' + s.min + '–' + s.max + ' 檔）。',
     mech: '檔數下降有兩種來源：出清一檔（名字從清單消失），或賣掉後沒有補新倉。' +
           '實測不是單向砍倉——9/30 出清邁科，10/01 新增南亞與景碩、同時又出清一檔，' +
           '是有進有出的淨減少。',
@@ -189,37 +189,60 @@ function sdLight(f, key) {
   return { lv: lv, s: s };
 }
 
+// 位置的描述一律由資料算出來，不在文案裡寫死「最高」「最低」這種最高級：
+// 2026-10-02 的教訓——我寫「檔數降到成立以來最少」，實際 min 是 45、現在 46；
+// 寫「單一個股走到成立以來最高」，實際 max 是 10.39、現在 9.53。
+function _sdPos(s, m, dir) {
+  var ext = dir > 0 ? s.max : s.min;
+  var fmt = function (v) { return (m.sc ? v / m.sc : v).toFixed(m.dp) + m.u; };
+  if (Math.abs(s.now - ext) < 1e-9) return '成立以來最' + (dir > 0 ? '高' : '低');
+  return '第 ' + s.rank.toFixed(0) + ' 百分位，成立以來區間 ' + fmt(s.min) + '–' + fmt(s.max);
+}
+// 近一個月的走向：只講兩個數字，不下「仍在上升」這種形容詞
+function _sdRecent(f, k, m, back) {
+  var ser = f[k] || [], i = Math.max(0, ser.length - 1 - (back || 20)), v = null;
+  for (var j = i; j < ser.length; j++) { if (ser[j] != null) { v = ser[j]; i = j; break; } }
+  if (v == null) return '';
+  var fmt = function (x) { return (m.sc ? x / m.sc : x).toFixed(m.dp) + m.u; };
+  return f.dates[i].slice(5) + ' ' + fmt(v) + ' → 今 ' + fmt(_sdStat(f, k).now);
+}
+function _sdM(k) { return SD_METRICS.filter(function (x) { return x.k === k; })[0]; }
+
 var SD_BLUF = {
   top5: function (f, s) { return {
-    head: '前五大集中度偏高，且仍在上升——' + s.now.toFixed(1) + '%（成立時 ' + s.first.toFixed(1) +
-          '%），' + _sdTop5Names(f) + '全部屬電子供應鏈',
+    head: '前五大集中度 ' + s.now.toFixed(1) + '%，' + _sdPos(s, _sdM('top5'), 1) +
+          '；成立時 ' + s.first.toFixed(1) + '%，' + _sdRecent(f, 'top5', _sdM('top5')) +
+          '。' + _sdTop5Names(f) + '全部屬電子供應鏈',
     why: '這檔原本是用來分散持股族群的，現在實際上接近押注單一供應鏈。'
   }; },
   max1: function (f, s) { return {
-    head: '單一個股曝險走到成立以來最高——' + ((f.top && f.top[0] && f.top[0].n) || '最大一檔') +
-          ' ' + s.now.toFixed(1) + '%（成立時 ' + s.first.toFixed(1) + '%）',
+    head: '最大單一 ' + ((f.top && f.top[0] && f.top[0].n) || '最大一檔') + ' ' + s.now.toFixed(1) +
+          '%，' + _sdPos(s, _sdM('max1'), 1) + '；成立時 ' + s.first.toFixed(1) + '%',
     why: '那一檔跌 10%，整檔 ETF 掉 ' + (s.now / 10).toFixed(1) + '%。'
   }; },
   n: function (f, s) { return {
-    head: '持股檔數降到成立以來最少——' + s.now + ' 檔（成立時 ' + s.first + ' 檔）',
+    head: '持股檔數 ' + s.now + ' 檔，' + _sdPos(s, _sdM('n'), -1) + '；成立時 ' + s.first + ' 檔',
     why: '檔數本身影響有限，它的意義是佐證上面的集中度：是把錢挪到少數名字，不是單純清理尾巴。'
   }; },
   bench: function (f, s) { return {
-    head: '台積電 ' + s.now.toFixed(1) + '%，沒有往市值型靠攏（' + SD_REF_0.code + ' 同日 ' +
+    head: '台積電 ' + s.now.toFixed(1) + '%，離市值型很遠（' + SD_REF_0.code + ' 同日 ' +
           SD_REF_0.bench.toFixed(0) + '%）',
     why: '它跟你的市值型部位沒有重疊，這一項目前不需要處理。'
   }; },
   stock: function (f, s) { return {
-    head: '現金 ' + (100 - s.now).toFixed(1) + '%，股票 ' + s.now.toFixed(1) + '%',
+    head: '現金 ' + (100 - s.now).toFixed(1) + '%，股票 ' + s.now.toFixed(1) + '%（' +
+          _sdPos(s, _sdM('stock'), 1) + '）',
     why: '現金是贖回的緩衝。現金薄的時候遇到大額贖回，基金會被迫賣股。'
   }; },
   units: function (f, s) { return {
-    head: '規模從高峰回落——' + (s.now / 1e8).toFixed(1) + ' 億單位，仍比成立時多 ' +
-          ((s.now / s.first - 1) * 100).toFixed(0) + '%，但低於成立以來 ' + (100 - s.rank).toFixed(0) + '% 的日子',
+    head: '在外單位數 ' + (s.now / 1e8).toFixed(1) + ' 億，' + _sdPos(s, _sdM('units'), -1) +
+          '；比成立時多 ' + ((s.now / s.first - 1) * 100).toFixed(0) + '%，' +
+          _sdRecent(f, 'units', _sdM('units')),
     why: '資金在流出，不是淨值跌造成的錯覺。流出夠大時會逼基金賣股，那段期間的持股變動不代表經理人的看法。'
   }; },
   prem: function (f, s) { return {
-    head: '折價 ' + Math.abs(s.now).toFixed(2) + '%（市價低於淨值）',
+    head: '折溢價 ' + s.now.toFixed(2) + '%（' + (s.now < 0 ? '市價低於淨值' : '市價高於淨值') + '），' +
+          _sdPos(s, _sdM('prem'), -1),
     why: '折價是券商向基金贖回套利的誘因，規模會接著縮。'
   }; }
 };
