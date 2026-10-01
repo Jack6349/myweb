@@ -831,8 +831,31 @@ function _divExMonthHtml(stocks, money, md) {
       '<td class="num">' + (it.perShare ? it.perShare.toFixed(4) : '<span style="color:var(--text3)">待公告</span>') + '</td>' +
       '<td class="num dstat-tot">' + (it.perShare ? money(it.total) : '<span style="color:var(--text3)">—</span>') + '</td></tr>';
   });
+  // 合計列的兩個平均殖利率：用持有金額加權，不取各列百分比的算術平均。
+  // 算術平均會讓 1 張和 50 張的那檔一樣重，算出來的數字不對應任何一筆實際報酬。
+  //   平均預估年殖利率 ＝ Σ(年化每股配息 × 持有股數) ÷ Σ(現價 × 持有股數)
+  //   平均成本殖利率   ＝ Σ(年化每股配息 × 持有股數) ÷ Σ(持股成本 × 持有股數)
+  // 權重用「持有張數」（目前庫存，含出借中），不是除息張數：殖利率講的是手上這些股的未來年報酬。
+  // 兩個平均各自累加，缺現價或缺成本的那檔只從對應的那一個平均裡剔除，分子分母一起剔，比例才不會被拉歪。
+  var wd = { ann: 0, val: 0 }, wc = { ann: 0, val: 0 };
+  list.forEach(function (it) {
+    var sh = it.held || 0;
+    if (!sh || it.yld == null && it.cyld == null) return;
+    if (it.yld != null && it.price > 0) { wd.ann += it.yld / 100 * it.price * sh; wd.val += it.price * sh; }
+    if (it.cyld != null && it.cost > 0) { wc.ann += it.cyld / 100 * it.cost * sh; wc.val += it.cost * sh; }
+  });
+  var avgY = wd.val > 0 ? wd.ann / wd.val * 100 : null;
+  var avgC = wc.val > 0 ? wc.ann / wc.val * 100 : null;
+  var pct = function (v) { return v != null ? v.toFixed(2) + '%' : '<span style="color:var(--text3)">—</span>'; };
   h += '</tbody><tfoot><tr><td class="dstat-code">合計</td><td class="num"></td><td class="num"></td>' +
-    '<td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td>' +
+    '<td class="num"></td><td class="num"></td>' +
+    '<td class="num dexm-yld" title="持有金額加權：Σ(年化每股配息 × 持有股數) ÷ Σ(現價 × 持有股數)">' + pct(avgY) + '</td>' +
+    '<td class="num dexm-cyld" style="color:' + (function () {
+      if (avgC == null || avgY == null) return 'var(--text3)';
+      var d = +avgC.toFixed(2) - +avgY.toFixed(2);
+      return d > 0 ? 'var(--up)' : (d < 0 ? 'var(--down)' : 'var(--text)');
+    })() + '" title="持有成本加權：Σ(年化每股配息 × 持有股數) ÷ Σ(持股成本 × 持有股數)">' + pct(avgC) + '</td>' +
+    '<td class="num"></td><td class="num"></td><td class="num"></td>' +
     '<td class="num dstat-tot">' + money(sum) + '</td></tr></tfoot></table></div>';
 
   // 對帳：本表以「除息日在本月」歸類，月份總覽以「發放月」歸類 → 列出兩邊不一致的除息（金額為 0 的略過）
