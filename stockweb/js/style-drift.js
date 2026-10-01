@@ -183,8 +183,10 @@ function _sdChart(f, key) {
     g += '<text x="' + X(i) + '" y="' + (H - 8) + '" text-anchor="' +
       (k === 0 ? 'start' : (k === 2 ? 'end' : 'middle')) + '" class="dh-ax">' + dates[i].slice(5) + '</text>';
   });
-  // 整張圖加一個 title，滑鼠移上去看頭尾值
-  g = '<title>' + m.t + '　' + dates[0] + ' ' + ys[0].toFixed(m.dp) + m.u + ' → ' +
+  // 整張圖加一個 title，滑鼠移上去看頭尾值（取頭尾「有值」的那兩天）
+  var firstI = 0;
+  while (firstI < ys.length && ys[firstI] == null) firstI++;
+  g = '<title>' + m.t + '　' + dates[firstI] + ' ' + ys[firstI].toFixed(m.dp) + m.u + ' → ' +
       dates[lastI] + ' ' + ys[lastI].toFixed(m.dp) + m.u + '</title>' + g;
 
   return '<div class="sd-chart"><div class="sd-ctitle">' + m.t +
