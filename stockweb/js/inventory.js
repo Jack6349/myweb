@@ -138,6 +138,22 @@ function _invTrdSide(e, side) {
   return '<span class="trd-dead">' + sign + n(e.dead) + '<em class="trd-u">' + unit + '</em></span>';
 }
 
+// 交易欄排序值：今日動的總量（買＋賣，含已成交、在途、收盤失效），換算成股再比。
+// 整股與零股共用同一欄，用張比會把 500 股看成大於 1 張。
+// 不做買賣相抵：這一欄本來就分兩行各自顯示，淨額不是它表達的東西，
+// 同一檔今天有買有賣時，它動的量就是兩邊相加。
+function _invTrdVol(code) {
+  var g = _invTrd[String(code)];
+  if (!g) return 0;
+  var v = 0;
+  ['buy', 'sell'].forEach(function (k) {
+    var e = g[k];
+    if (!e) return;
+    v += (e.deal + e.pend + e.dead) * (e.lot === 'Common' ? 1000 : 1);
+  });
+  return v;
+}
+
 function invTradeCell(code) {
   var g = _invTrd[String(code)];
   if (!g) return '';
@@ -451,6 +467,16 @@ function renderInvTable() {
         var marked = (typeof loadWatch === 'function') ? loadWatch() : new Set();
         var da = marked.has(String(a.code)) ? 1 : 0, db = marked.has(String(b.code)) ? 1 : 0;
         if (da !== db) return _invSort === 'dotAsc' ? da - db : db - da;
+        return String(a.code).localeCompare(String(b.code), undefined, { numeric: true });
+      }
+      // 交易：今天有動的排前面，沒動的一律墊底（升冪降冪皆然，跟最近除息一致）
+      case 'trdDesc': case 'trdAsc': {
+        var ta = _invTrdVol(a.code), tbv = _invTrdVol(b.code);
+        if (ta !== tbv) {
+          if (!ta) return 1;
+          if (!tbv) return -1;
+          return _invSort === 'trdAsc' ? ta - tbv : tbv - ta;
+        }
         return String(a.code).localeCompare(String(b.code), undefined, { numeric: true });
       }
       // 最近除息：依畫面顯示的日期排；沒有除息紀錄的一律墊底（升冪降冪皆然）
