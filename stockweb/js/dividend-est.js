@@ -858,21 +858,6 @@ function _divExMonthHtml(stocks, money, md) {
     '<td class="num"></td><td class="num"></td><td class="num"></td>' +
     '<td class="num dstat-tot">' + money(sum) + '</td></tr></tfoot></table></div>';
 
-  // 對帳：本表以「除息日在本月」歸類，月份總覽以「發放月」歸類 → 列出兩邊不一致的除息（金額為 0 的略過）
-  var notes = [];
-  var payMs = {};
-  list.forEach(function (it) { if (it.payDate && it.total > 0) payMs[+it.payDate.slice(5, 7)] = true; });   // 本表有金額的發放月才對帳
-  Object.keys(payMs).forEach(function (pm) {
-    stocks.forEach(function (s) {
-      (s.res.months || []).forEach(function (mo) {
-        if (mo.month !== +pm || !(mo.total > 0)) return;
-        if (mo.exDate && mo.exDate.slice(0, 7) === ym) return;
-        notes.push(pm + ' 月發放另含 ' + s.code + (mo.exDate ? ' ' + md(mo.exDate) + ' 除息' : '') +
-          (mo.status === 'actual' ? '' : '（預估）') + ' ' + money(mo.total));
-      });
-    });
-  });
-  if (notes.length) h += '<div class="divest-note nb-keep">※ 本表依除息日歸月，月份總覽依發放月：' + notes.join('；') + '</div>';
   return h;
 }
 
