@@ -527,7 +527,8 @@ function renderDividendEst() {
     var yld = (price && annPerShare) ? annPerShare / price * 100 : null;
     // 當月已公告除息（含 TPEx 預告與手動補登，由 _divMergeAnnounced 併入）；無則不顯示
     var _ym = _divTwDate().iso.slice(0, 7);
-    var _exNow = ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [])
+    // 已出清的不顯示：這次除息領不到，標在旁邊只會看起來像有錢要進來
+    var _exNow = s.soldOut ? null : ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [])
       .filter(function (r) { return r.exDate && r.exDate.slice(0, 7) === _ym; })
       .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; })[0];
     var exHtml = _exNow
@@ -783,7 +784,10 @@ function _divExMonthHtml(stocks, money, md) {
       var yld = (price && annPs) ? annPs / price * 100 : null;                              // 現價殖利率
       var costPx = pos && pos.price > 0 ? pos.price : null;
       var cyld = (costPx && annPs) ? annPs / costPx * 100 : null;                          // 成本殖利率（持有這批的實際配息報酬）
-      list.push({ code: s.code, price: price, exDate: mo.exDate, payDate: mo.payDate,
+      // 這個除息日官方是否公告過：_divRecMap 有同一天的紀錄才算。沒有的話，
+      // 除息日與發放日都是 computeEtfYear 依歷史配息節奏推出來的，日期本身還會變。
+      var announced = recsAsc.some(function (x) { return x.exDate === mo.exDate; });
+      list.push({ code: s.code, price: price, exDate: mo.exDate, payDate: mo.payDate, announced: announced,
         cost: costPx, yld: yld, cyld: cyld, yldGuess: !(mo.perShare > 0),
         shares: mo.shares, lent: _divLentShares(s.code),
         held: (typeof _sharesMap !== 'undefined' && _sharesMap && _sharesMap[s.code]) || 0,   // 目前實際持有（股）
@@ -798,7 +802,7 @@ function _divExMonthHtml(stocks, money, md) {
 
   h += '<div class="dstat-wrap dexm-wrap"><table class="dstat dexm"><thead><tr>' +
     '<th class="dstat-code">代號</th><th class="num">現價</th>' +
-    '<th class="num">除息日</th><th class="num">發放日</th>' +
+    '<th class="num" title="標「推」者官方尚未公告，除息日與發放日皆依歷史配息節奏推估">除息日</th><th class="num">發放日</th>' +
     '<th class="num" title="每股成本均價（同持股庫存）">持股成本</th>' +
     '<th class="num" title="每股配息 × 年配息次數 ÷ 現價：現在買進的預估年報酬">預估年殖利率</th>' +
     '<th class="num" title="每股配息 × 年配息次數 ÷ 持股成本：手上這批持股的配息報酬">成本殖利率</th>' +
@@ -811,7 +815,8 @@ function _divExMonthHtml(stocks, money, md) {
     var c = it.status === 'actual' ? ' dv-act' : ' dv-est';
     h += '<tr><td class="dstat-code">' + it.code + '</td>' +
       '<td class="num">' + (it.price != null ? it.price.toFixed(2) : '—') + '</td>' +
-      '<td class="num' + c + '">' + md(it.exDate) + '</td>' +
+      '<td class="num' + c + '">' + md(it.exDate) +
+        (it.announced ? '' : ' <span class="dexm-lent" title="官方尚未公告，除息日與發放日皆依歷史配息節奏推估，日期可能變動">推</span>') + '</td>' +
       '<td class="num">' + md(it.payDate) + '</td>' +
       '<td class="num">' + (it.cost != null ? it.cost.toFixed(2) : '<span style="color:var(--text3)">—</span>') + '</td>' +
       '<td class="num dexm-yld"' + (it.yldGuess && it.yld != null ? ' title="本次金額待公告，以最近一次已知配息估算"' : '') + '>' +
