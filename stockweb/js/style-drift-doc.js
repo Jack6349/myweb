@@ -156,7 +156,10 @@ function sdDocHtml(f, key) {
   if (!s || !doc) return '';
   var d = doc(f, s);
   var m = SD_METRICS.filter(function (x) { return x.k === key; })[0] || {};
-  return '<details class="sd-doc" open><summary>' + (m.t || key) + '　這個數字怎麼讀</summary><dl>' +
+  // 標題與全站一致用「說明」，預設收起：單一指標的六欄很長，展開著會把走勢圖擠出畫面。
+  // 不寫「這個數字怎麼讀」這種對話句型。
+  return '<details class="sd-doc"><summary>說明　<span class="sd-dsum">' + (m.t || key) +
+    '</span></summary><dl>' +
     '<dt>定義</dt><dd>' + d.def + '</dd>' +
     '<dt>比較基準</dt><dd>' + d.base + '</dd>' +
     '<dt>白話意義</dt><dd>' + d.plain + '</dd>' +

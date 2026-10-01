@@ -1152,3 +1152,4 @@ td.cost-even::after  { background: var(--text3); }
 .sd-doc dl { margin: 8px 0 2px; font-size: 13px; line-height: 1.85; }
 .sd-doc dt { color: var(--accent2); font-weight: 700; margin-top: 7px; }
 .sd-doc dd { margin: 0 0 0 0; color: var(--note); }
+.sd-doc > summary .sd-dsum { font-weight: 400; color: var(--text3); font-size: 12px; }
