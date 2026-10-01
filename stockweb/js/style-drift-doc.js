@@ -168,3 +168,87 @@ function sdDocHtml(f, key) {
     '<dt>這個指標不能告訴你什麼</dt><dd>' + d.lim + '</dd>' +
     '</dl></details>';
 }
+
+// ── 決策視圖：每個指標一句結論、一句為什麼在意 ────────────────────────
+// 這裡不講機制、不講方法論、不講驗證過程。那些只在分析視圖的六欄裡出現一次。
+//
+// 燈號的方向：這一頁關心的是「分散的理由還在不在」與「會不會被迫賣股」，
+// 所以每個指標各有一個不利的方向（dir：+1＝越高越不利，−1＝越低越不利）。
+// 門檻用四分位，不自訂數字：落在不利那一端的四分之一亮黃燈，走到成立以來
+// 的極值亮紅燈。四分位是和走勢圖上 P25／P50／P75 同一套，不是另外發明的刻度。
+var SD_DIR = { n: -1, top5: +1, max1: +1, bench: +1, stock: +1, units: -1, prem: -1 };
+
+function sdLight(f, key) {
+  var s = _sdStat(f, key), dir = SD_DIR[key];
+  if (!s || !dir) return null;
+  var bad = dir > 0 ? s.max : s.min;                  // 成立以來最不利的那一天
+  var q = dir > 0 ? s.p75 : s.p25;                    // 不利端的四分位
+  var lv = 0;
+  if ((dir > 0 && s.now >= bad) || (dir < 0 && s.now <= bad)) lv = 2;
+  else if ((dir > 0 && s.now >= q) || (dir < 0 && s.now <= q)) lv = 1;
+  return { lv: lv, s: s };
+}
+
+var SD_BLUF = {
+  top5: function (f, s) { return {
+    head: '前五大集中度偏高，且仍在上升——' + s.now.toFixed(1) + '%（成立時 ' + s.first.toFixed(1) +
+          '%），' + _sdTop5Names(f) + '全部屬電子供應鏈',
+    why: '這檔原本是用來分散持股族群的，現在實際上接近押注單一供應鏈。'
+  }; },
+  max1: function (f, s) { return {
+    head: '單一個股曝險走到成立以來最高——' + ((f.top && f.top[0] && f.top[0].n) || '最大一檔') +
+          ' ' + s.now.toFixed(1) + '%（成立時 ' + s.first.toFixed(1) + '%）',
+    why: '那一檔跌 10%，整檔 ETF 掉 ' + (s.now / 10).toFixed(1) + '%。'
+  }; },
+  n: function (f, s) { return {
+    head: '持股檔數降到成立以來最少——' + s.now + ' 檔（成立時 ' + s.first + ' 檔）',
+    why: '檔數本身影響有限，它的意義是佐證上面的集中度：是把錢挪到少數名字，不是單純清理尾巴。'
+  }; },
+  bench: function (f, s) { return {
+    head: '台積電 ' + s.now.toFixed(1) + '%，沒有往市值型靠攏（' + SD_REF_0.code + ' 同日 ' +
+          SD_REF_0.bench.toFixed(0) + '%）',
+    why: '它跟你的市值型部位沒有重疊，這一項目前不需要處理。'
+  }; },
+  stock: function (f, s) { return {
+    head: '現金 ' + (100 - s.now).toFixed(1) + '%，股票 ' + s.now.toFixed(1) + '%',
+    why: '現金是贖回的緩衝。現金薄的時候遇到大額贖回，基金會被迫賣股。'
+  }; },
+  units: function (f, s) { return {
+    head: '規模從高峰回落——' + (s.now / 1e8).toFixed(1) + ' 億單位，仍比成立時多 ' +
+          ((s.now / s.first - 1) * 100).toFixed(0) + '%，但低於成立以來 ' + (100 - s.rank).toFixed(0) + '% 的日子',
+    why: '資金在流出，不是淨值跌造成的錯覺。流出夠大時會逼基金賣股，那段期間的持股變動不代表經理人的看法。'
+  }; },
+  prem: function (f, s) { return {
+    head: '折價 ' + Math.abs(s.now).toFixed(2) + '%（市價低於淨值）',
+    why: '折價是券商向基金贖回套利的誘因，規模會接著縮。'
+  }; }
+};
+
+// 決策視圖：燈號、一句結論、一句為什麼在意。綠燈的併成一行，不逐項佔版面。
+function sdExecHtml(f) {
+  var order = ['top5', 'max1', 'n', 'bench', 'stock', 'units', 'prem'];
+  var hot = [], ok = [];
+  order.forEach(function (k) {
+    var L = sdLight(f, k);
+    if (!L) return;
+    (L.lv > 0 ? hot : ok).push({ k: k, L: L });
+  });
+  var dot = ['🟢', '🟡', '🔴'];
+  var h = '<div class="sd-exec">';
+  hot.forEach(function (x) {
+    var b = SD_BLUF[x.k](f, x.L.s);
+    h += '<div class="sd-x sd-x' + x.L.lv + '"><div class="sd-xh">' + dot[x.L.lv] + ' ' + b.head + '</div>' +
+      '<div class="sd-xw">' + b.why + '</div></div>';
+  });
+  if (ok.length) {
+    h += '<div class="sd-x sd-x0"><div class="sd-xh">🟢 其餘 ' + ok.length + ' 項落在成立以來的常態區間</div>' +
+      '<div class="sd-xw">' + ok.map(function (x) {
+        var m = SD_METRICS.filter(function (y) { return y.k === x.k; })[0];
+        return m.t + ' ' + _sdFmt(x.L.s.now, m);
+      }).join('　') + '</div></div>';
+  }
+  h += '<div class="sd-xend">是否因此調整部位，是你的決定。這一頁只負責讓你知道它跟你買進時已經不一樣。</div>';
+  h += '<div class="sd-xkey">燈號：🔴 走到成立以來最不利的一天　🟡 落在不利那一端的四分之一　🟢 其餘。' +
+    '四分位與走勢圖上的 P25／P50／P75 同一套，不是另訂的門檻。</div>';
+  return h + '</div>';
+}

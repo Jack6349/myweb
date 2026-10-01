@@ -34,6 +34,18 @@ var SD_METRICS = [
     hint: '市價相對淨值。負值＝折價，是券商贖回套利的誘因，也是單位數減少的起點' }
 ];
 var _sdData = null, _sdFund = null, _sdPick = 'top5';
+// 兩種讀者是兩個輸出，不是同一份輸出的兩種展開密度。
+// 決策視圖＝結論先行，只有燈號與一句為什麼在意；分析視圖＝六欄推理鏈與驗證過程。
+var SD_VIEW_LS = 'sd_view_v1';
+var _sdView = (function () {
+  try { var v = localStorage.getItem(SD_VIEW_LS); if (v === 'exec' || v === 'ana') return v; } catch (e) {}
+  return 'exec';
+})();
+function sdSetView(v) {
+  _sdView = v;
+  try { localStorage.setItem(SD_VIEW_LS, v); } catch (e) {}
+  renderStyleDrift();
+}
 
 async function startStyleDrift(force) {
   var wrap = document.getElementById('sd-wrap');
@@ -91,7 +103,18 @@ function renderStyleDrift() {
         c + ' ' + _sdData.funds[c].name + '</button>';
     }).join('') + '</div>';
   }
-  h += '<div class="sd-title">' + _sdFund + '　' + f.name + '</div>';
+  h += '<div class="sd-title">' + _sdFund + '　' + f.name +
+    '<span class="sd-views">' +
+      '<button class="sd-vbtn' + (_sdView === 'exec' ? ' on' : '') + '" onclick="sdSetView(\'exec\')">決策</button>' +
+      '<button class="sd-vbtn' + (_sdView === 'ana' ? ' on' : '') + '" onclick="sdSetView(\'ana\')">分析</button>' +
+    '</span></div>';
+
+  if (_sdView === 'exec') {
+    h += sdExecHtml(f);
+    h += _sdPageNote(f);
+    wrap.innerHTML = h;
+    return;
+  }
 
   // ── 指標卡：現值、成立以來變化、在自身歷史的百分位 ──
   h += '<div class="sd-cards">';
@@ -127,7 +150,8 @@ function renderStyleDrift() {
   // 定義→比較基準→白話→機制→行動→侷限 才算交付
   if (typeof sdDocHtml === 'function') h += sdDocHtml(f, _sdPick);
   h += _sdTopHtml(f);
-  h += _sdNote(f);
+  h += _sdAudit(f);
+  h += _sdPageNote(f);
   wrap.innerHTML = h;
 }
 
@@ -215,27 +239,11 @@ function _sdTopHtml(f) {
   return h + '</tbody></table></div>';
 }
 
-function _sdNote(f) {
+function _sdPageNote(f) {
   var last = f.dates.length - 1;
   return '<div class="cs-note"><dl>' +
     '<dt>這一頁要回答什麼</dt><dd>持有這檔主動式 ETF 的理由還在不在。買的是風格，不是某幾檔個股；' +
     '風格變了理由就沒了，而價格看不出來。</dd>' +
-    '<dt>集中度為什麼除以股票合計</dt><dd>主動式 ETF 走現金申購買回，' +
-    '<code>贖回 → 從現金付錢、持股不動 → 淨資產縮小 → 每一檔權重一起上升</code>。' +
-    '不除掉的話，單純贖回會被讀成變集中。這一頁的前五大、最大單一、台積電都是佔股票部位。</dd>' +
-    '<dt>申購買回怎麼認</dt><dd>不用從股數推測，揭露頁有在外流通單位數，直接讀。' +
-    '實測 85 天：84 個比較日沒有一天出現「所有持股按比例縮減」，29 天完全沒動；' +
-    '2026-09-18 在外單位數少了 1,300 萬單位，47 檔持股的股數一股沒變。</dd>' +
-    '<dt>單位數為什麼會減少</dt><dd><code>投資人賣超 → 市價低於淨值（折價） → ' +
-    '券商買便宜憑證向基金贖回領淨值 → 單位數減少</code>。起點是投資人離場，不是經理人的判斷。</dd>' +
-    '<dt>為什麼贖回會逼著賣股</dt><dd>基金現金只佔淨資產約 3–6%，贖回要用現金付，' +
-    '<code>贖回金額 &gt; 手上現金 → 只能賣股換現金</code>。' +
-    '2026-09-24 贖回 13.72 億、前一日現金 8.63 億，當天賣出創意 91 張與聯發科 136 張共 14.95 億；' +
-    '那天個股是漲的，不是看壞這兩檔，是要湊錢只能動流動性最好的大部位。</dd>' +
-    '<dt>判讀門檻</dt><dd>取這檔自己歷史的 P25／P50／P75。' +
-    '它 ' + f.dates[0] + ' 才有第一筆揭露，沒有跨市場可比的基準，唯一有意義的對照是它自己。</dd>' +
-    '<dt>往上往下的意思</dt><dd><code>前五大合計、最大單一往上＝越集中</code>；' +
-    '<code>檔數往下＝越集中</code>；<code>台積電權重往上＝向市值型靠攏</code>。</dd>' +
     '<dt>不做什麼</dt><dd>不從單日的進出推測經理人的用意。揭露只給結果，不給理由，' +
     '一天的差異可能是調倉、也可能是應付贖回。</dd>' +
     '<dt>資料</dt><dd>' + (_sdData.source || '') + '，更新於 ' + (_sdData.updated || '—') +
@@ -243,22 +251,19 @@ function _sdNote(f) {
     '</dl></div>';
 }
 
-// ── 成分股曝險頁的子頁籤切換（成分股曝險／風格漂移）──
-// 記住選擇：曝險是盤中看的、漂移是幾天看一次的，兩者使用節奏不同，
-// 每次進頁都跳回第一個頁籤會一直要重點。
-var CS_TAB_LS = 'cs_tab_v1';
-var _csTab = (function () {
-  try { var v = localStorage.getItem(CS_TAB_LS); if (v === 'expo' || v === 'drift') return v; } catch (e) {}
-  return 'expo';
-})();
-function csShowTab(tab) {
-  _csTab = tab;
-  try { localStorage.setItem(CS_TAB_LS, tab); } catch (e) {}
-  ['expo', 'drift'].forEach(function (t) {
-    var b = document.getElementById('cs-subtab-' + t);
-    if (b) b.classList.toggle('active', t === tab);
-    var p = document.getElementById('cs-' + t + '-pane');
-    if (p) p.style.display = (t === tab) ? '' : 'none';
-  });
-  if (tab === 'drift') startStyleDrift(false);
+// 方法論的驗證過程：證明算法站得住腳，但不是看指標時要讀的東西，預設收起。
+function _sdAudit(f) {
+  return '<details class="sd-audit"><summary>驗證過程</summary><dl>' +
+    '<dt>為什麼集中度要除以股票合計</dt><dd>原本以為贖回會讓所有持股按比例減少、權重不變，' +
+    '85 天實測是錯的：84 個比較日沒有一天出現按比例縮減，29 天完全沒動。' +
+    '主動式 ETF 走現金申購買回，2026-09-18 在外單位數少了 1,300 萬，47 檔持股的股數一股沒變。' +
+    '所以股數的型態認不出贖回，權重也不免疫——贖回付現金讓淨資產縮小，每一檔權重會一起上升。' +
+    '兩種算法實測差 0.06 個百分點，這段集中是真的。</dd>' +
+    '<dt>資料日期不等於查詢日期</dt><dd>揭露收盤後才更新，盤前查今天會拿到昨天的內容，' +
+    '非交易日查會拿到前一個交易日的內容。85 個查詢日裡有 5 天是重複的假樣本，' +
+    '改讀頁面自己的「資料日期：」後剩 ' + f.dates.length + ' 天。</dd>' +
+    '<dt>折溢價不自己算</dt><dd>自算要仰賴 Yahoo 日 K 而它有缺漏，改抓 MoneyDJ，' +
+    '與自算值逐筆相符（2026-09-24 淨值 9.46、市價 9.39、−0.74%）。' +
+    '它固定只回最近 30 個交易日，更早的沒有來源就留空。</dd>' +
+    '</dl></details>';
 }

@@ -1153,3 +1153,23 @@ td.cost-even::after  { background: var(--text3); }
 .sd-doc dt { color: var(--accent2); font-weight: 700; margin-top: 7px; }
 .sd-doc dd { margin: 0 0 0 0; color: var(--note); }
 .sd-doc > summary .sd-dsum { font-weight: 400; color: var(--text3); font-size: 12px; }
+/* 決策視圖／分析視圖：兩種讀者是兩個輸出，不是同一份輸出的兩種展開密度 */
+.sd-views { float: right; display: inline-flex; gap: 4px; }
+.sd-vbtn { padding: 3px 12px; font-size: 12px; border: 1px solid var(--border);
+  background: var(--bg2); color: var(--text2); border-radius: 4px; cursor: pointer; }
+.sd-vbtn.on { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+.sd-exec { margin: 6px 0 12px; }
+.sd-x { border-left: 3px solid var(--border); background: var(--bg2); padding: 9px 12px; margin-bottom: 8px; }
+.sd-x2 { border-left-color: var(--up); }
+.sd-x1 { border-left-color: var(--accent2); }
+.sd-x0 { border-left-color: var(--down); }
+.sd-xh { font-size: 14px; font-weight: 700; line-height: 1.6; }
+.sd-xw { font-size: 13px; color: var(--note); line-height: 1.75; margin-top: 3px; }
+.sd-xend { font-size: 13px; color: var(--text2); margin: 12px 0 6px; }
+.sd-xkey { font-size: 11px; color: var(--text3); line-height: 1.7; }
+/* 驗證過程：證明算法站得住腳，但不在看指標的動線上 */
+.sd-audit { border: 1px solid var(--border); background: var(--bg2); padding: 8px 12px; margin: 10px 0; }
+.sd-audit > summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.sd-audit dl { margin: 8px 0 2px; font-size: 12px; line-height: 1.8; }
+.sd-audit dt { color: var(--text2); font-weight: 700; margin-top: 6px; }
+.sd-audit dd { margin: 0; color: var(--text3); }
