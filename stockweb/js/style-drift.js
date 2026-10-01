@@ -28,7 +28,10 @@ var SD_METRICS = [
   { k: 'bench', t: '台積電',     u: '%', dp: 2, hint: '佔股票部位。往上＝向市值型靠攏' },
   { k: 'stock', t: '股票水位',   u: '%', dp: 2, hint: '股票合計佔總資產，其餘為現金' },
   { k: 'units', t: '在外單位數', u: '億', dp: 2, sc: 1e8,
-    hint: '申購買回流量。往下＝淨贖回，規模縮水會逼著賣，不等於經理人想賣' }
+    hint: '申購買回流量。折價時券商買進憑證向基金贖回套利，單位數因此減少；' +
+          '贖回金額超過現金部位時，基金必須賣股換現金' },
+  { k: 'prem',  t: '折溢價',     u: '%', dp: 2,
+    hint: '市價相對淨值。負值＝折價，是券商贖回套利的誘因，也是單位數減少的起點' }
 ];
 var _sdData = null, _sdFund = null, _sdPick = 'top5';
 
@@ -93,10 +96,17 @@ function renderStyleDrift() {
   // ── 指標卡：現值、成立以來變化、在自身歷史的百分位 ──
   h += '<div class="sd-cards">';
   SD_METRICS.forEach(function (m) {
-    var arr = (f[m.k] || []).filter(function (x) { return x != null; })
-      .map(function (x) { return _sdVal(x, m); });
-    if (!arr.length) return;
-    var now = _sdVal(f[m.k][last], m), first = arr[0], d = now - first;
+    var ser = f[m.k] || [];
+    var firstI = -1;
+    for (var i = 0; i < ser.length; i++) { if (ser[i] != null) { firstI = i; break; } }
+    if (firstI < 0) return;
+    var arr = ser.filter(function (x) { return x != null; }).map(function (x) { return _sdVal(x, m); });
+    // 最後一筆可能是空的（折溢價來源只回近 30 個交易日，比持股揭露短）→ 取最後一個有值的
+    var lastV = null;
+    for (var j = ser.length - 1; j >= 0; j--) { if (ser[j] != null) { lastV = ser[j]; break; } }
+    var now = _sdVal(lastV, m), first = arr[0], d = now - first;
+    // 不是從第一天就有資料的，標出起算日，否則「成立以來」會是假的
+    var since = firstI === 0 ? '成立以來' : (f.dates[firstI].slice(5) + ' 起');
     var rank = _sdRank(arr, now);
     var sign = d > 0 ? '+' : (d < 0 ? '−' : '');
     // 百分比的差值單位是百分點，不是 %：35.48% − 23.57% 是 11.91 個百分點，
@@ -105,7 +115,7 @@ function renderStyleDrift() {
     h += '<div class="sd-card' + (m.k === _sdPick ? ' on' : '') + '" onclick="sdPickMetric(\'' + m.k + '\')" title="' + m.hint + '">' +
       '<div class="sd-cv">' + now.toFixed(m.dp) + m.u + '</div>' +
       '<div class="sd-ct">' + m.t + '</div>' +
-      '<div class="sd-cd">成立以來 ' + sign + Math.abs(d).toFixed(m.dp) + du +
+      '<div class="sd-cd">' + since + ' ' + sign + Math.abs(d).toFixed(m.dp) + du +
         '（' + first.toFixed(m.dp) + m.u + ' → ' + now.toFixed(m.dp) + m.u + '）</div>' +
       '<div class="sd-cr">自身歷史第 ' + (rank == null ? '—' : rank.toFixed(0)) + ' 百分位</div>' +
       '</div>';
@@ -150,13 +160,24 @@ function _sdChart(f, key) {
       '<text x="' + (W - mr - 2) + '" y="' + (Y(q[0]) - 3) + '" text-anchor="end" class="dh-lg" ' +
       'fill="var(--accent2)">' + q[1] + ' ' + q[0].toFixed(m.dp) + '</text>';
   });
-  var pts = [];
-  ys.forEach(function (v, i) { if (v != null) pts.push([X(i), Y(v)]); });
-  g += '<polyline points="' + pts.map(function (q) { return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' ') +
-    '" fill="none" stroke="var(--down)" stroke-width="2" stroke-linejoin="round"/>';
-  // 只在最後一點放圓點與數值：85 個點全放會糊成一片
-  var lastI = ys.length - 1;
+  // 缺值處斷線，不把空白兩端接起來（折溢價只有近 30 個交易日有來源）
+  var seg = [], segs = [];
+  ys.forEach(function (v, i) {
+    if (v == null) { if (seg.length > 1) segs.push(seg); seg = []; return; }
+    seg.push([X(i), Y(v)]);
+  });
+  if (seg.length > 1) segs.push(seg);
+  segs.forEach(function (sg) {
+    g += '<polyline points="' + sg.map(function (q) { return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' ') +
+      '" fill="none" stroke="var(--down)" stroke-width="2" stroke-linejoin="round"/>';
+  });
+  var lastI = -1;
+  for (var li = ys.length - 1; li >= 0; li--) { if (ys[li] != null) { lastI = li; break; } }
   g += '<circle cx="' + X(lastI) + '" cy="' + Y(ys[lastI]) + '" r="3.5" fill="var(--bg2)" stroke="var(--down)" stroke-width="2"/>';
+  if (vals.length < ys.length) {
+    g += '<text x="' + ml + '" y="' + (mt - 5) + '" class="dh-lg">僅 ' + vals.length + ' / ' + ys.length +
+      ' 日有資料，缺的日子不連線</text>';
+  }
   // X 軸：首、中、尾三個日期
   [0, Math.floor((dates.length - 1) / 2), dates.length - 1].forEach(function (i, k) {
     g += '<text x="' + X(i) + '" y="' + (H - 8) + '" text-anchor="' +
@@ -200,6 +221,12 @@ function _sdNote(f) {
     '<dt>申購買回怎麼認</dt><dd>不用從股數推測，揭露頁有在外流通單位數，直接讀。' +
     '實測 85 天：84 個比較日沒有一天出現「所有持股按比例縮減」，29 天完全沒動；' +
     '2026-09-18 在外單位數少了 1,300 萬單位，47 檔持股的股數一股沒變。</dd>' +
+    '<dt>單位數為什麼會減少</dt><dd><code>投資人賣超 → 市價低於淨值（折價） → ' +
+    '券商買便宜憑證向基金贖回領淨值 → 單位數減少</code>。起點是投資人離場，不是經理人的判斷。</dd>' +
+    '<dt>為什麼贖回會逼著賣股</dt><dd>基金現金只佔淨資產約 3–6%，贖回要用現金付，' +
+    '<code>贖回金額 &gt; 手上現金 → 只能賣股換現金</code>。' +
+    '2026-09-24 贖回 13.72 億、前一日現金 8.63 億，當天賣出創意 91 張與聯發科 136 張共 14.95 億；' +
+    '那天個股是漲的，不是看壞這兩檔，是要湊錢只能動流動性最好的大部位。</dd>' +
     '<dt>判讀門檻</dt><dd>取這檔自己歷史的 P25／P50／P75。' +
     '它 ' + f.dates[0] + ' 才有第一筆揭露，沒有跨市場可比的基準，唯一有意義的對照是它自己。</dd>' +
     '<dt>往上往下的意思</dt><dd><code>前五大合計、最大單一往上＝越集中</code>；' +
