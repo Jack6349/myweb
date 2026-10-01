@@ -686,6 +686,8 @@ input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
 .rf-cal { max-width: 1000px; }
 .rf-cal-date { color: var(--accent2); font-weight: 700; font-variant-numeric: tabular-nums; }
 .rf-src { color: var(--text3); font-size: 11px; }
+/* 官方公告值與財經網站先前值不同的標記（滑鼠移上去看原本是多少） */
+.rf-cal-diff { color: var(--accent2); font-weight: 700; margin-left: 3px; cursor: help; }
 .rf-cal-note { font-size: 13px; color: var(--note); margin: 10px 2px 16px; line-height: 1.8; }
 .rf-cal-empty { font-size: 13px; color: var(--note); line-height: 1.8; padding: 8px 2px 16px; }
 .rf-cmnote { font-size: 11px; color: var(--accent2); margin-left: 10px; }

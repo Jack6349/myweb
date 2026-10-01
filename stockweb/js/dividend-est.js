@@ -1116,6 +1116,12 @@ function _divMergeAnnounced(recMap) {
       var cur = byEx[n.exDate];
       if (cur) {                                   // 已有同除息日 → 只補缺漏欄位
         var used = false;
+        // 核對：財經網站先給的金額，等官方公告後對一次。官方值一律為準（不覆蓋），
+        // 但兩邊不同就記下來，否則先看到的那個數字被默默換掉，不會知道它曾經錯過。
+        if (cur.amount != null && n.amount != null &&
+            +cur.amount.toFixed(4) !== +n.amount.toFixed(4)) {
+          cur._diff = { src: n.src, amount: n.amount };
+        }
         if (cur.amount == null && n.amount != null) { cur.amount = n.amount; used = true; }
         if (!cur.payDate && n.payDate) { cur.payDate = n.payDate; used = true; }
         // 記下是誰補的：除息日曆「來源」欄要看得出金額其實來自 Yahoo 而不是官方

@@ -105,6 +105,7 @@ async function _rfBuildCalendar(codes, todayIso) {
       var base = r._src || ((typeof _divByCode !== 'undefined' && _divByCode[code]) ? 'e添富' : 'Yahoo歷史');
       cal[code + '|' + r.exDate] = { code: code, name: _swapName(code) || r.name || '',
         exDate: r.exDate, amount: r.amount, payDate: r.payDate || null,
+        diff: r._diff || null,           // 官方公告後與財經網站先前值不同
         src: base + (r._fill ? '＋' + r._fill : '') };
     });
   });
@@ -484,7 +485,9 @@ function _rfCalHtml() {
       '<td class="rf-cal-date">' + e.exDate + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + e.code + '\')">' + e.code + '</span></td>' +
       '<td class="inv-name">' + (e.name || '') + '</td>' +
-      '<td class="num' + (amt == null ? ' swap-warn' : '') + '">' + (amt != null ? amt.toFixed(4) : '待公告') + '</td>' +
+      '<td class="num' + (amt == null ? ' swap-warn' : '') + '">' + (amt != null ? amt.toFixed(4) : '待公告') +
+        (e.diff ? '<span class="rf-cal-diff" title="' + e.diff.src + '先前為 ' + e.diff.amount.toFixed(4) +
+          '，已改用官方公告值">≠</span>' : '') + '</td>' +
       '<td' + (e.payDate ? '' : ' class="swap-warn"') + '>' + (e.payDate || '待公告') + '</td>' +
       '<td class="num">' + _swapLots(sh) + '</td>' +
       '<td class="num">' + (get != null ? fmtMoney(get) : '—') + '</td>' +
@@ -505,6 +508,8 @@ function _rfCalHtml() {
     '<dt>除息日與發放日</dt><dd>上市＝e添富、上櫃＝TPEx 除權息預告表，每日更新一次。</dd>' +
     '<dt>金額</dt><dd>官方常只先申報日期、金額掛「待公告」，此時取 Yahoo 台股（每日），來源標「＋Yahoo預告」；' +
     '官方一公布即改用官方值。</dd>' +
+    '<dt>核對</dt><dd>財經網站的金額通常比官方早。官方公告後一律改用官方值，' +
+    '兩邊不同時在金額後標 <code>≠</code>，滑鼠移上去看原本是多少。</dd>' +
     '<dt>手動補登</dt><dd>三邊都還沒有才顯示「待公告」，可在該列貼上整行' +
     '（例 <code>0.153　2026/08/18　2026/09/09</code>）自動解析。官方公告後即被取代，清空輸入框可移除。</dd>' +
     '</dl></div>';
