@@ -319,6 +319,59 @@ function sdExecHtml(f) {
       sn.min + '–' + sn.max + '）' + (st ? '　尾部 5 檔合計 ' + st.now.toFixed(3) + '%' : '') +
       '</div></div>';
   }
-  h += '<div class="sd-xend">是否因此調整部位，是你的決定。這一頁只負責讓你知道它跟你買進時已經不一樣。</div>';
   return h + '</div>';
+}
+
+// ── 可選方案 ──────────────────────────────────────────────────────
+// 只到「發生了什麼、為什麼」還不算做完：讀的人得自己把依據合成一個決定，
+// 那一步該由這裡做掉。每個選項附一句代價或前提，代價一律由資料算出來。
+//
+// 這裡不給傾向。使用者是這些部位的持有人，替他挑哪一個就是個人化的投資建議，
+// 不在這個工具的範圍。列完選項就停，不加「決定權在你」那種責任聲明句——
+// 選項的存在本身已經說明接下來輪到誰。
+function _sdPeak(f, k) {
+  var ser = f[k] || [], mx = -Infinity, mi = -1;
+  ser.forEach(function (v, i) { if (v != null && v > mx) { mx = v; mi = i; } });
+  return mi < 0 ? null : { v: mx, i: mi, date: f.dates[mi], ago: ser.length - 1 - mi };
+}
+
+function sdOptionsHtml(f) {
+  var t = _sdStat(f, 'top5'), m1 = _sdStat(f, 'max1'), pr = _sdStat(f, 'prem');
+  if (!t) return '';
+  var pk = _sdPeak(f, 'top5');
+  var a = _sdFlow(f, 3, 0), b = _sdFlow(f, 3, 3);
+  var off = pk ? t.now - pk.v : null;
+
+  var h = '<div class="sd-opt">';
+  h += '<div class="sd-oh">結論</div><div class="sd-ob">前五大集中度 ' + t.now.toFixed(2) +
+    '%，比成立時的 ' + t.first.toFixed(2) + '% 高 ' + t.d.toFixed(2) + ' 個百分點；' +
+    (pk && off < 0
+      ? '但這個抬升在 ' + pk.date.slice(5) + ' 見頂 ' + pk.v.toFixed(2) + '% 後停住，' +
+        '近 ' + pk.ago + ' 個交易日回落 ' + Math.abs(off).toFixed(2) + ' 個百分點，沒有繼續往上。'
+      : '並且仍停在成立以來的高點。') + '</div>';
+
+  h += '<div class="sd-oh">判斷依據</div><ol class="sd-ol">';
+  h += '<li>持有理由被稀釋：前五大是' + _sdTop5Names(f) + '，全在電子供應鏈，' +
+    '分散的是個股不是族群。</li>';
+  if (pk && off < 0) {
+    h += '<li>漂移已經發生，不是正在發生：' + pk.date.slice(5) + ' 的 ' + pk.v.toFixed(2) +
+      '% 是高點，之後在高檔橫向整理。要判斷的是能不能接受這個新水準，不是攔截一個還在上升的趨勢。</li>';
+  }
+  if (a != null && b != null) {
+    h += '<li>被動因素已排除：造成折價的賣壓收斂（近 3 個交易日單位數 ' + a.toFixed(2) +
+      ' 億、前 3 個交易日 ' + b.toFixed(2) + ' 億），集中度不會因為贖回被動變動。</li>';
+  }
+  h += '</ol>';
+
+  h += '<div class="sd-oh">可選方案</div><div class="sd-ov">';
+  h += '<div class="sd-o"><b>A　維持不動</b>　把它當集中型持有。代價：承擔單一供應鏈的連動風險，' +
+    (m1 ? ((f.top && f.top[0] && f.top[0].n) || '最大一檔') + '跌 10%，整檔 ETF 跌 ' +
+      (m1.now / 10).toFixed(1) + '%' : '集中度維持在高檔') + '。</div>';
+  h += '<div class="sd-o"><b>B　減碼轉出</b>　把部分部位移回原本設定的分散比例。代價：' +
+    (pr ? '目前折價 ' + Math.abs(pr.now).toFixed(2) + '%，賣出等於用低於淨值的價格出場' :
+      '需承擔轉換的交易成本') + '。</div>';
+  h += '<div class="sd-o"><b>C　再觀察</b>　前提：揭露只有 ' + t.total +
+    ' 個交易日，不足一個完整的市況循環；高檔橫向整理也可能是下一段上升前的停頓。</div>';
+  h += '</div></div>';
+  return h;
 }

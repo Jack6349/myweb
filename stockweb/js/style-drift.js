@@ -113,6 +113,7 @@ function renderStyleDrift() {
 
   if (_sdView === 'exec') {
     h += sdExecHtml(f);
+    if (typeof sdOptionsHtml === 'function') h += sdOptionsHtml(f);
     h += _sdPageNote(f);
     wrap.innerHTML = h;
     return;
