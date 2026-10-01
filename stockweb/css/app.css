@@ -1126,7 +1126,7 @@ td.cost-even::after  { background: var(--text3); }
 /* 收盤失效的委託量：灰色加刪除線，不能跟在途同色 */
 .trd-dead { color: var(--text3); text-decoration: line-through; font-size: 11px; margin-left: 3px; }
 
-/* ── 風格漂移（成分股曝險 → 風格漂移頁籤）────────────────────────── */
+/* ── 策略檢視（成分股曝險 → 策略檢視頁籤）────────────────────────── */
 .sd-funds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 .sd-fbtn { padding: 4px 10px; font-size: 12px; border: 1px solid var(--border);
   background: var(--bg2); color: var(--text2); border-radius: 4px; cursor: pointer; }

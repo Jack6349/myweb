@@ -1,4 +1,6 @@
-// 股利總管 Web — 主動式 ETF 風格漂移（成分股曝險 → 風格漂移頁籤）
+// 股利總管 Web — 主動式 ETF 策略檢視（成分股曝險 → 策略檢視頁籤）
+// 原名「風格漂移」，2026-10-02 改名：00405A 的公開說明書寫明聚焦龍頭、依市況動態調整，
+// 集中是它的策略不是走樣，用「漂移」當頁名等於預設它做錯了。
 // 資料檔 data/etf-style.json 由 shioaji-server/etf-style.py 每日排程產生並上傳。
 // 網頁只讀不抓：富邦投信的揭露頁回 HTML，GAS 代理只收 JSON，瀏覽器端抓不到。
 //
@@ -53,7 +55,7 @@ async function startStyleDrift(force) {
   var wrap = document.getElementById('sd-wrap');
   if (!wrap) return;
   if (!_sdData || force) {
-    wrap.innerHTML = '<div class="modal-loading">讀取風格漂移資料…</div>';
+    wrap.innerHTML = '<div class="modal-loading">讀取策略檢視資料…</div>';
     try {
       var r = await fetch('data/etf-style.json', { cache: force ? 'reload' : 'no-cache' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -273,7 +275,7 @@ function _sdAudit(f) {
     '</dl></details>';
 }
 
-// ── 成分股曝險頁的子頁籤切換（成分股曝險／風格漂移）──
+// ── 成分股曝險頁的子頁籤切換（成分股曝險／策略檢視）──
 // 記住選擇：曝險是盤中看的、漂移是幾天看一次的，兩者使用節奏不同，
 // 每次進頁都跳回第一個頁籤會一直要重點。
 var CS_TAB_LS = 'cs_tab_v1';
