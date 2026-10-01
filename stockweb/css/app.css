@@ -1173,3 +1173,6 @@ td.cost-even::after  { background: var(--text3); }
 .sd-audit dl { margin: 8px 0 2px; font-size: 12px; line-height: 1.8; }
 .sd-audit dt { color: var(--text2); font-weight: 700; margin-top: 6px; }
 .sd-audit dd { margin: 0; color: var(--text3); }
+/* 參考項：沒有燈號，但要說清楚為什麼沒有，否則看起來像漏掉 */
+.sd-xr { border-left-color: var(--text3); opacity: .92; }
+.sd-exec .sd-xkey { margin-bottom: 10px; }

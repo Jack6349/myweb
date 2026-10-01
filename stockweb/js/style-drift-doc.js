@@ -135,6 +135,19 @@ var SD_DOC = {
          '最近四個交易日單位數幾乎不動，看起來像止穩，但四天太短，判斷不了。'
   }; },
 
+  tail5: function (f, s) { return {
+    def: '權重最小的五檔相加，再除以股票合計。<code>Σ最小五檔權重 ÷ 股票合計 × 100</code>',
+    base: '跟自己成立以來的 ' + s.total + ' 個交易日比（區間 ' + s.min.toFixed(3) + '%–' + s.max.toFixed(3) + '%）。',
+    plain: '現在 ' + s.now.toFixed(3) + '%，成立時 ' + s.first.toFixed(3) +
+           '%。基金最小的五檔加起來不到你股票部位的千分之一。',
+    mech: '主動式 ETF 的尾部常常是試水溫的小部位或還沒建完的倉。' +
+          '尾部越薄，代表持股清單上那些名字裡有越多是沒有實質金額的。',
+    act: '它存在的唯一用途是替「持股檔數」做分母：檔數少 4 檔聽起來很多，' +
+         '但如果少掉的是這種尾部部位，對你的損益沒有影響。先看這個再看檔數。',
+    lim: '它不告訴你少掉的那幾檔到底是不是尾部。要嚴格回答這件事，' +
+         '得逐日比對消失名單當時的權重，目前沒做。它只給一個量級上的參考。'
+  }; },
+
   prem: function (f, s) { return {
     def: '<code>(市價 − 淨值) ÷ 淨值 × 100</code>。來源 MoneyDJ ETF 折溢價頁，不自己算。',
     base: '跟自己有資料的 ' + s.n + ' 個交易日比。樣本只有 ' + s.n + ' 天（來源固定只回最近 30 個交易日），' +
@@ -176,7 +189,11 @@ function sdDocHtml(f, key) {
 // 所以每個指標各有一個不利的方向（dir：+1＝越高越不利，−1＝越低越不利）。
 // 門檻用四分位，不自訂數字：落在不利那一端的四分之一亮黃燈，走到成立以來
 // 的極值亮紅燈。四分位是和走勢圖上 P25／P50／P75 同一套，不是另外發明的刻度。
-var SD_DIR = { n: -1, top5: +1, max1: +1, bench: +1, stock: +1, units: -1, prem: -1 };
+// 檔數不給燈號。它的六欄自己就寫了「單獨不構成任何訊號」，一邊這樣寫一邊給它亮黃燈
+// 互相矛盾。更實際的理由：2026-10-01 權重最小的 5 檔加起來只有 0.027%，
+// 檔數 50→46 對損益毫無影響，但百分位會算出第 1 百分位，看起來很嚴重。
+// 統計上極端、實務上無關的指標不該佔一個燈，它改列在參考項。
+var SD_DIR = { top5: +1, max1: +1, bench: +1, stock: +1, units: -1, prem: -1 };
 
 function sdLight(f, key) {
   var s = _sdStat(f, key), dir = SD_DIR[key];
@@ -232,7 +249,8 @@ var SD_BLUF = {
   stock: function (f, s) { return {
     head: '現金 ' + (100 - s.now).toFixed(1) + '%，股票 ' + s.now.toFixed(1) + '%（' +
           _sdPos(s, _sdM('stock'), 1) + '）',
-    why: '現金是贖回的緩衝。現金薄的時候遇到大額贖回，基金會被迫賣股。'
+    why: '對你的意思：現金是贖回的緩衝，現金薄的時候遇到大額贖回，基金會被迫在不利的價格賣股，' +
+         '那段期間的淨值會比單純的行情更難看。'
   }; },
   units: function (f, s) { return {
     head: '在外單位數 ' + (s.now / 1e8).toFixed(1) + ' 億，' + _sdPos(s, _sdM('units'), -1) +
@@ -243,13 +261,14 @@ var SD_BLUF = {
   prem: function (f, s) { return {
     head: '折溢價 ' + s.now.toFixed(2) + '%（' + (s.now < 0 ? '市價低於淨值' : '市價高於淨值') + '），' +
           _sdPos(s, _sdM('prem'), -1),
-    why: '折價是券商向基金贖回套利的誘因，規模會接著縮。'
+    why: '對你的意思：現在買，等於用比淨值便宜 ' + Math.abs(s.now).toFixed(2) +
+         '% 的價格進場。但折價也是資金在流出的徵兆，便宜不一定是機會。'
   }; }
 };
 
 // 決策視圖：燈號、一句結論、一句為什麼在意。綠燈的併成一行，不逐項佔版面。
 function sdExecHtml(f) {
-  var order = ['top5', 'max1', 'n', 'bench', 'stock', 'units', 'prem'];
+  var order = ['top5', 'max1', 'bench', 'stock', 'units', 'prem'];
   var hot = [], ok = [];
   order.forEach(function (k) {
     var L = sdLight(f, k);
@@ -258,6 +277,9 @@ function sdExecHtml(f) {
   });
   var dot = ['🟢', '🟡', '🔴'];
   var h = '<div class="sd-exec">';
+  // 圖例放最上面：先知道規則，下面四條才讀得懂
+  h += '<div class="sd-xkey">🟢 落在歷史常態（P25–P75）　🟡 偏離常態（P25 以下或 P75 以上）　' +
+    '🔴 走到成立以來最不利的一天。四分位與走勢圖的 P25／P50／P75 同一套，不另訂門檻。</div>';
   hot.forEach(function (x) {
     var b = SD_BLUF[x.k](f, x.L.s);
     h += '<div class="sd-x sd-x' + x.L.lv + '"><div class="sd-xh">' + dot[x.L.lv] + ' ' + b.head + '</div>' +
@@ -270,8 +292,15 @@ function sdExecHtml(f) {
         return m.t + ' ' + _sdFmt(x.L.s.now, m);
       }).join('　') + '</div></div>';
   }
+  // 參考項：檔數不給燈號，但要說清楚它為什麼不給，否則看起來像漏掉了
+  var sn = _sdStat(f, 'n'), st = _sdStat(f, 'tail5');
+  if (sn) {
+    h += '<div class="sd-x sd-xr"><div class="sd-xh">參考　持股檔數 ' + sn.now + ' 檔（成立時 ' +
+      sn.first + ' 檔，成立以來區間 ' + sn.min + '–' + sn.max + '）</div>' +
+      '<div class="sd-xw">不給燈號：少掉的是最小的那幾檔。' +
+      (st ? '目前權重最小的 5 檔加起來只佔股票部位 ' + st.now.toFixed(3) + '%，' : '') +
+      '檔數變動對你的損益沒有影響，集中度才有。</div></div>';
+  }
   h += '<div class="sd-xend">是否因此調整部位，是你的決定。這一頁只負責讓你知道它跟你買進時已經不一樣。</div>';
-  h += '<div class="sd-xkey">燈號：🔴 走到成立以來最不利的一天　🟡 落在不利那一端的四分之一　🟢 其餘。' +
-    '四分位與走勢圖上的 P25／P50／P75 同一套，不是另訂的門檻。</div>';
   return h + '</div>';
 }
