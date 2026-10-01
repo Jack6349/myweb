@@ -96,7 +96,7 @@ function renderStyleDrift() {
     h += '<div class="sd-card' + (m.k === _sdPick ? ' on' : '') + '" onclick="sdPickMetric(\'' + m.k + '\')" title="' + m.hint + '">' +
       '<div class="sd-cv">' + _sdFmt(now, m) + '</div>' +
       '<div class="sd-ct">' + m.t + '</div>' +
-      '<div class="sd-cd">成立以來 ' + sign + Math.abs(d).toFixed(m.dp) + m.u +
+      '<div class="sd-cd">成立以來 ' + sign + Math.abs(d).toFixed(m.dp) + du +
         '（' + _sdFmt(first, m) + ' → ' + _sdFmt(now, m) + '）</div>' +
       '<div class="sd-cr">自身歷史第 ' + (rank == null ? '—' : rank.toFixed(0)) + ' 百分位</div>' +
       '</div>';
