@@ -80,11 +80,14 @@ var SD_DOC = {
     mech: '權重變重只有兩種來源：那一檔漲得比別人多，或經理人加碼。' +
           '這一頁分不開兩者，要分開得看股數有沒有增加（原始持股資料有存，目前沒做成指標）。',
     act: '把它換算成你自己的曝險：你在 00405A 的部位 × ' + s.now.toFixed(2) + '% 就是你透過它間接持有' +
-         ((f.top && f.top[0] && f.top[0].n) || '最大那一檔') + '的金額。那一檔跌 10%，整檔 ETF 掉 ' +
-         (s.now / 10).toFixed(2) + '%。',
-    lim: '它不看那一檔的波動度。' + s.now.toFixed(2) + '% 壓在穩定的大型股，和壓在高波動的小型股，' +
-         '風險完全不同。另外它也不知道公開說明書的單一個股上限是多少，' +
-         '所以看不出這個水位離制度上限還有多遠。'
+         ((f.top && f.top[0] && f.top[0].n) || '最大那一檔') + '的金額。' +
+         '但別拿這個權重去推跌幅——實測的連動比權重大得多，見下面的侷限。',
+    lim: '權重不是風險。' + (f.sens
+         ? '實測 ' + f.sens.name + '每跌 1%，淨值跟著跌 ' + f.sens.beta.toFixed(2) +
+           '%，照權重推只會算出 ' + (f.sens.w / 100).toFixed(2) + '，差約 ' +
+           (f.sens.beta / (f.sens.w / 100)).toFixed(0) + ' 倍——因為持股彼此相關，它跌的時候同族群一起跌。'
+         : '持股彼此相關時，權重會低估實際連動。') +
+         ' 另外它也不知道公開說明書的單一個股上限是多少，看不出離制度上限還有多遠。'
   }; },
 
   bench: function (f, s) { return {
@@ -246,7 +249,16 @@ var SD_BLUF = {
   max1: function (f, s) { return {
     head: '最大單一 ' + ((f.top && f.top[0] && f.top[0].n) || '最大一檔') + ' ' + s.now.toFixed(1) +
           '%，' + _sdPos(s, _sdM('max1'), 1) + '；成立時 ' + s.first.toFixed(1) + '%',
-    why: '那一檔跌 10%，整檔 ETF 掉 ' + (s.now / 10).toFixed(1) + '%。'
+    why: (function () {
+      // 原本寫「那一檔跌 10%，整檔 ETF 掉 1.0%」：10% 是我自己編的，而且權重算出來的
+      // 連動低估了實際的 5 倍——持股彼此相關，最大那檔跌時同族群通常一起跌。
+      var q = f.sens;
+      if (!q) return '權重 ' + s.now.toFixed(1) + '% 只說明它佔多少，不等於連動幅度，' +
+        '實測資料不足，無法給連動係數。';
+      return '實測連動 ' + q.beta.toFixed(2) + '：' + q.name + '每跌 1%，淨值平均跟著跌 ' +
+        q.beta.toFixed(2) + '%（' + q.days + ' 個交易日迴歸）。照權重 ' + q.w.toFixed(1) +
+        '% 推只會算出 ' + (q.w / 100).toFixed(2) + '，低估約 ' + (q.beta / (q.w / 100)).toFixed(0) + ' 倍。';
+    })()
   }; },
   n: function (f, s) { return {
     head: '持股檔數 ' + s.now + ' 檔，' + _sdPos(s, _sdM('n'), -1) + '；成立時 ' + s.first + ' 檔',
@@ -364,9 +376,13 @@ function sdOptionsHtml(f) {
   h += '</ol>';
 
   h += '<div class="sd-oh">可選方案</div><div class="sd-ov">';
-  h += '<div class="sd-o"><b>A　維持不動</b>　把它當集中型持有。代價：承擔單一供應鏈的連動風險，' +
-    (m1 ? ((f.top && f.top[0] && f.top[0].n) || '最大一檔') + '跌 10%，整檔 ETF 跌 ' +
-      (m1.now / 10).toFixed(1) + '%' : '集中度維持在高檔') + '。</div>';
+  var q = f.sens;
+  h += '<div class="sd-o"><b>A　維持不動</b>　把它當集中型持有。' +
+    '代價：你原本用來分散族群的那筆錢，實際上集中在一條供應鏈，分散要另外找地方補。' +
+    (q ? '<br>　　實測風險：' + q.name + '每跌 1%，淨值平均跟著跌 ' + q.beta.toFixed(2) +
+      '%（' + q.days + ' 個交易日迴歸）。最差的三天 ' +
+      q.worst.map(function (x) { return x.d.slice(5) + ' ' + x.s.toFixed(1) + '%／淨值 ' + x.n.toFixed(1) + '%'; }).join('、') +
+      '。這個係數衡量的是對整條供應鏈的連動，' + q.name + '只是代表變數。' : '') + '</div>';
   h += '<div class="sd-o"><b>B　減碼轉出</b>　把部分部位移回原本設定的分散比例。代價：' +
     (pr ? '目前折價 ' + Math.abs(pr.now).toFixed(2) + '%，賣出等於用低於淨值的價格出場' :
       '需承擔轉換的交易成本') + '。</div>';
