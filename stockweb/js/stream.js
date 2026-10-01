@@ -66,7 +66,11 @@ function openTrend() { showView('trend'); if (typeof startTrend === 'function') 
 function openSignals() { showView('signals'); if (typeof startSignals === 'function') startSignals(); }
 function openAlerts() { showView('alerts'); if (typeof startAlerts === 'function') startAlerts(); }
 function openParams() { showView('params'); if (typeof startParams === 'function') startParams(); }
-function openTopConst() { showView('topconst'); if (typeof startTopConst === 'function') startTopConst(); }
+function openTopConst() {
+  showView('topconst');
+  if (typeof startTopConst === 'function') startTopConst();     // 曝險表盤中要即時，一律重抓
+  if (typeof csShowTab === 'function') csShowTab(_csTab);        // 回到上次看的子頁籤
+}
 function openWatch() {
   showView('watch');
   if (typeof startWatch === 'function') startWatch();          // 關注清單照常載入（報價訂閱、指標）

@@ -1125,3 +1125,24 @@ td.cost-even::after  { background: var(--text3); }
 .inv-trd sup { font-size: 10px; font-weight: 400; vertical-align: super; line-height: 0; margin-left: 2px; }
 /* 收盤失效的委託量：灰色加刪除線，不能跟在途同色 */
 .trd-dead { color: var(--text3); text-decoration: line-through; font-size: 11px; margin-left: 3px; }
+
+/* ── 風格漂移（成分股曝險 → 風格漂移頁籤）────────────────────────── */
+.sd-funds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.sd-fbtn { padding: 4px 10px; font-size: 12px; border: 1px solid var(--border);
+  background: var(--bg2); color: var(--text2); border-radius: 4px; cursor: pointer; }
+.sd-fbtn.on { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+.sd-title { font-size: 15px; font-weight: 700; margin: 4px 0 10px; }
+/* 指標卡本身就是圖表的切換鈕：點哪一張，下面就畫哪一條 */
+.sd-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px; margin-bottom: 14px; }
+.sd-card { border: 1px solid var(--border); border-left: 3px solid var(--border);
+  background: var(--bg2); padding: 8px 10px; cursor: pointer; }
+.sd-card:hover { border-color: var(--text3); }
+.sd-card.on { border-left-color: var(--down); background: var(--bg3, var(--bg2)); }
+.sd-cv { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sd-ct { font-size: 12px; color: var(--text2); margin-top: 1px; }
+.sd-cd { font-size: 11px; color: var(--text3); margin-top: 5px; font-variant-numeric: tabular-nums; }
+.sd-cr { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; }
+.sd-chart { margin-bottom: 14px; overflow-x: auto; }
+.sd-ctitle { font-size: 13px; font-weight: 700; margin: 10px 0 6px; }
+.sd-chint { font-weight: 400; font-size: 11px; color: var(--text3); margin-left: 8px; }
