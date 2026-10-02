@@ -90,6 +90,23 @@ async function startStyleDrift(force) {
 function sdOnLots() {
   if (_sdData && _sdFund && document.getElementById('sd-wrap')) renderStyleDrift();
 }
+// 自己補一層重試：_lotsMap 是別人逐檔填的，誰先誰後不穩定，單靠一個通知不夠可靠
+// （2026-10-02 實測 00999A 仍被標成未持有，手動重畫就正確）。
+// 每 3 秒檢查一次本頁要用的代號到齊沒有，最多 5 次，到齊或放棄都停。
+var _sdLotTries = 0, _sdLotTimer = null;
+function _sdLotWatch() {
+  clearTimeout(_sdLotTimer);
+  if (!_sdData || typeof _lotsMap === 'undefined') return;
+  var need = ((_sdData.active && _sdData.active.rows) || []).map(function (r) { return r.code; });
+  var miss = need.filter(function (c) { return !(_lotsMap || {})[c]; });
+  if (!miss.length || _sdLotTries >= 5) { _sdLotTries = 0; return; }
+  _sdLotTries++;
+  _sdLotTimer = setTimeout(function () {
+    var still = need.filter(function (c) { return !(_lotsMap || {})[c]; });
+    if (still.length < miss.length && document.getElementById('sd-wrap')) renderStyleDrift();
+    _sdLotWatch();
+  }, 3000);
+}
 function sdPickFund(code) { _sdFund = code; renderStyleDrift(); }
 function sdPickMetric(k) { _sdPick = k; renderStyleDrift(); }
 
@@ -137,6 +154,7 @@ function renderStyleDrift() {
     h += sdExecHtml(f);
     h += _sdPageNote(f);
     wrap.innerHTML = h;
+    _sdLotWatch();
     return;
   }
 
