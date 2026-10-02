@@ -237,6 +237,11 @@ async function loadBrokerPositionsFull(say) {
       } catch (e) { console.warn('[positions] ' + py.code + ' 成本補正失敗', e); }
     }
 
+    // 建倉明細（_lotsMap）到齊了：通知有在用它的頁面重畫。
+    // 沒有這個通知的話，先開畫面的那一頁會停在「未持有」——
+    // 2026-10-02 實測策略檢視的 00999A 就是這樣被標成未持有。
+    if (typeof sdOnLots === 'function') { try { sdOnLots(); } catch (e) {} }
+
     if (_positions.length) {
       _sharesMap = {}; _totalCost = 0;
       _positions.forEach(function (p) {

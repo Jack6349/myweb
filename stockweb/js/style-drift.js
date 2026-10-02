@@ -86,6 +86,10 @@ async function startStyleDrift(force) {
   }
 }
 
+// 建倉明細到齊時由 stream.js 呼叫：這一頁可能在它載完之前就畫好了。
+function sdOnLots() {
+  if (_sdData && _sdFund && document.getElementById('sd-wrap')) renderStyleDrift();
+}
 function sdPickFund(code) { _sdFund = code; renderStyleDrift(); }
 function sdPickMetric(k) { _sdPick = k; renderStyleDrift(); }
 
