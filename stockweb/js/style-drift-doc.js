@@ -306,9 +306,12 @@ function sdOptionsHtml(f) {
   h += '</ol>';
 
   h += '<div class="sd-oh">可選方案</div><div class="sd-ov">';
+  var mine = sdMyExcess(_sdFund);
   h += '<div class="sd-o"><b>A　維持不動</b>　把它當集中型的 Alpha 部位持有，分散改由組合裡其他部位承擔。' +
-    '代價：' + (ex ? '目前這段它落後大盤 ' + Math.abs(ex.ex).toFixed(2) + ' 個百分點，' : '') +
-    '等於承擔了集中的波動，還沒拿到它承諾的報酬。</div>';
+    '代價：' + (mine != null
+      ? '以你的建倉成本算，目前落後大盤 ' + Math.abs(mine).toFixed(2) + ' 個百分點'
+      : (ex ? '這檔自掛牌起落後大盤 ' + Math.abs(ex.ex).toFixed(2) + ' 個百分點' : '')) +
+    '，等於承擔了集中的波動，還沒拿到它承諾的報酬。</div>';
   h += '<div class="sd-o"><b>B　減碼轉出</b>　把原本指望它分散的那部分資金移到真正分散的標的。代價：' +
     (pr ? '目前折價 ' + Math.abs(pr.now).toFixed(2) + '%，賣出等於用低於淨值的價格出場；' : '') +
     '同時放棄它後續可能兌現的 Alpha。</div>';
@@ -427,4 +430,21 @@ function sdHoldHtml() {
   h += '<div class="sd-onote">「自掛牌超額」是基金的成績，「我的超額」是你的成績，兩者不同是進場時點造成的。' +
     '已領股利計入我的報酬；同期大盤未扣交易成本與稅。</div>';
   return h;
+}
+
+// 單一檔「用我的建倉成本算」的超額（給選項 A 用）。
+// 不能拿基金自掛牌的成績當你的代價：00405A 自掛牌落後 17.24 個百分點，
+// 但你 6/10 才進場，實際落後 2.76 個百分點，差了六倍。
+function sdMyExcess(code) {
+  if (typeof _lotsMap === 'undefined' || !_lotsMap) return null;
+  var lots = _lotsMap[String(code)] || [];
+  var cost = 0, gain = 0, bw = 0, bc = 0;
+  lots.forEach(function (l) {
+    if (!(l.cost > 0)) return;
+    cost += l.cost; gain += (l.pnl || 0) + (l.div || 0);
+    var br = _sdBmRet(l.date);
+    if (br != null) { bw += l.cost * br; bc += l.cost; }
+  });
+  if (!(cost > 0) || !(bc > 0)) return null;
+  return gain / cost * 100 - bw / bc;
 }

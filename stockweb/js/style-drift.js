@@ -70,6 +70,15 @@ async function startStyleDrift(force) {
   if (!codes.length) { wrap.innerHTML = '<div class="rf-cal-empty">目前沒有任何主動式 ETF 的持股揭露資料。</div>'; return; }
   if (!_sdFund || codes.indexOf(_sdFund) < 0) _sdFund = codes[0];
   renderStyleDrift();
+  // 建倉明細（_lotsMap）由持股庫存的 loadBrokerPositionsFull 填。這一頁不一定在那之後才開，
+  // 沒有就自己叫一次，不要求使用者先繞去別的頁。抓完重畫，把「用你的建倉成本算」那張表補上。
+  if (typeof _lotsMap !== 'undefined' && typeof loadBrokerPositionsFull === 'function' &&
+      !Object.keys(_lotsMap || {}).length) {
+    try {
+      await loadBrokerPositionsFull(function () {});
+      if (document.getElementById('sd-wrap')) renderStyleDrift();
+    } catch (e) { console.warn('[策略檢視 建倉明細]', e); }
+  }
 }
 
 function sdPickFund(code) { _sdFund = code; renderStyleDrift(); }
