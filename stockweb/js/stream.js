@@ -532,7 +532,7 @@ function renderSummary(targetId) {
   // 沿用 invMetrics 計算，與庫存表的「未實現損益」欄同基準（含/不含稅費隨切換）
   // 另加「點選現值比加總」：分母沿用 _invTotalVal()（全部持股今日總現值，未扣稅費），
   // 與庫存表「現值比」欄同一基準，各列相加才等於這個合計
-  var pickSum = null, pickN = 0, pickCost = null, pickVal = null;
+  var pickSum = null, pickN = 0, pickCost = null, pickVal = null, pickWsum = 0, pickWtot = 0;
   var totValAll = (typeof _invTotalVal === 'function') ? _invTotalVal() : 0;
   if (typeof loadWatch === 'function' && typeof invMetrics === 'function') {
     var marked = loadWatch();
@@ -543,6 +543,14 @@ function renderSummary(targetId) {
       var _r2 = _rows[String(p.code)];
       var _px2 = (_r2 && _r2.close != null) ? _r2.close : (p.last_price != null ? p.last_price : null);
       if (_px2 != null) pickVal = (pickVal || 0) + _px2 * p.quantity;   // 現值（同 _invTotalVal 基準）
+      // 點選加權漲跌：與頂欄「漲跌幅％」同一套——以現值加權，不是各檔漲跌幅取平均。
+      // 取平均會讓 1 張的那檔和 230 張的那檔一樣重，算出來的百分比不對應任何金額。
+      var _c2 = _contracts[String(p.code)];
+      if (_px2 != null && _c2 && _c2.reference) {
+        var _v2 = _px2 * p.quantity;
+        pickWsum += _v2 * ((_px2 - _c2.reference) / _c2.reference * 100);
+        pickWtot += _v2;
+      }
       var m = invMetrics(p);
       if (m.profit == null) return;
       pickSum = (pickSum || 0) + m.profit;
@@ -564,6 +572,9 @@ function renderSummary(targetId) {
     pair('點選現值比加總' + (pickN ? '(' + pickN + ')' : ''),
       (pickVal == null || !totValAll) ? '—' : (pickVal / totValAll * 100).toFixed(2) + '%',
       (pickVal == null || !totValAll) ? 'var(--text3)' : 'var(--accent2)') +
+    pair('點選加權漲跌' + (pickN ? '(' + pickN + ')' : ''),
+      pickWtot > 0 ? fmtPct(pickWsum / pickWtot) : '—',
+      pickWtot > 0 ? cls2var[colorClass(pickWsum / pickWtot)] : 'var(--text3)') +
   '</div>';
 }
 
