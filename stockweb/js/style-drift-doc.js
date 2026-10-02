@@ -437,21 +437,21 @@ function sdPeersHtml() {
   var p = _sdData && _sdData.peers;
   if (!p || !p.rows || !p.rows.length) return '';
   var h = '<div class="sd-ctitle">五檔的持股集中度並排' +
-    '<span class="sd-chint">權重；台積電與期貨單獨列出</span></div>';
+    '<span class="sd-chint">全持股權重；台積電與台股期貨單獨列出</span></div>';
   h += '<div class="inv-table-wrap"><table class="inv-table swap-table"><thead><tr>' +
-    '<th>代號</th><th class="num">前五大</th><th class="num">最大單一</th>' +
-    '<th class="num">台積電</th><th class="num">台股期貨</th><th>前五大名單</th>' +
-    '<th>來源</th></tr></thead><tbody>';
+    '<th>代號</th><th>資料日</th><th class="num">檔數</th><th class="num">前五大</th>' +
+    '<th class="num">最大單一</th><th class="num">台積電</th><th class="num">台股期貨</th>' +
+    '<th>前五大名單</th></tr></thead><tbody>';
+  var dim = function (t) { return '<span style="color:var(--text3)">' + t + '</span>'; };
   p.rows.forEach(function (r) {
     h += '<tr><td class="inv-code">' + r.code + '</td>' +
+      '<td>' + (r.date || '—') + '</td>' +
+      '<td class="num">' + (r.n ? r.n : dim('—')) + '</td>' +
       '<td class="num">' + r.top5.toFixed(1) + '%</td>' +
       '<td class="num">' + r.max1.toFixed(1) + '%</td>' +
-      '<td class="num">' + (r.bench > 0 ? r.bench.toFixed(1) + '%' :
-        '<span style="color:var(--text3)">不在前十</span>') + '</td>' +
-      '<td class="num">' + (r.fut > 0 ? r.fut.toFixed(1) + '%' :
-        '<span style="color:var(--text3)">—</span>') + '</td>' +
-      '<td style="font-size:12px">' + r.names.join('、') + '</td>' +
-      '<td class="rf-src">' + r.src + '</td></tr>';
+      '<td class="num">' + (r.bench > 0 ? r.bench.toFixed(1) + '%' : dim('未持有')) + '</td>' +
+      '<td class="num">' + (r.fut > 0 ? r.fut.toFixed(1) + '%' : dim('—')) + '</td>' +
+      '<td style="font-size:12px">' + r.names.join('、') + '</td></tr>';
   });
   return h + '</tbody></table></div><div class="sd-onote">' + p.note + '</div>';
 }
