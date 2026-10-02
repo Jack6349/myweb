@@ -161,7 +161,7 @@ async function loadOrderBox() {
     var buyAmt = 0, sellAmt = 0;
     var html = '<div class="tx-otable-wrap"><table class="tx-otable"><thead><tr>' +
       '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量、成交均價，後面小字＝現價－成交均價">成交</th>' +
-      '<th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：賣出淨額（扣手續費＋交易稅）－現價×股數，正＝賣掉比留著划算">損益<span class="sort-ind">↕</span></th>' +
+      '<th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：(成交均價－現價)×股數×(1−手續費－交易稅)，正＝賣在現價之上。兩邊都扣賣出成本，同價為 0">損益<span class="sort-ind">↕</span></th>' +
       '<th class="sort-th" data-key="status" onclick="txSortCol(\'status\')">狀態<span class="sort-ind">↕</span></th>' + '<th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
       '<th>書號</th>' + '<th class="sort-th num" data-key="time" onclick="txSortCol(\'time\')">委託時間<span class="sort-ind">↕</span></th>' + '</tr></thead><tbody>';
     var aheads = await Promise.all(trades.map(function (t) { return _txAhead(t, trades).catch(function () { return null; }); }));
@@ -242,13 +242,19 @@ function _txDiffHtml(code, avg) {
 }
 // 成交後損益（元）：費率與換股試算／總現值同基準
 //   買進：現價×股數×(1−賣出手續費與交易稅) − 成交均價×股數×(1＋買進手續費)  ← 等同持股庫存明細的未實現損益
-//   賣出：成交均價×股數×(1−賣出手續費與交易稅) − 現價×股數  ← 賣出實拿淨額 vs 沒賣、留到現在的市值
+//   賣出：(成交均價 − 現價)×股數×(1−賣出手續費與交易稅)  ← 賣出實拿 vs 留到現在才賣實拿
+//
+// 賣出那條 2026-10-02 修正。原本是「賣出淨額(已扣費) − 現價×股數(未扣費)」，
+// 兩邊基準不同：賣掉的扣了 0.2265%，留著的沒扣，等於每一筆賣出都先被記上一筆
+// 費用當虧損。實例：00407A 賣 10 張 @10.24、現價 10.23，賣得比現價高卻顯示 −132。
+// 成交價與現價相同時更明顯，會顯示 −232 而不是 0。
+// 留著的部位將來也要付同一筆賣出成本，兩邊都扣才比得過去；扣完同價就是 0。
 var TX_SELL_COST = 0.002265, TX_BUY_FEE = 0.001425;
 function _txPnlVal(code, avg, sh, buy) {
   var px = _txPxOf(code);
   if (px == null || !(avg > 0) || !(sh > 0)) return null;
   return Math.round(buy ? px * sh * (1 - TX_SELL_COST) - avg * sh * (1 + TX_BUY_FEE)
-                        : avg * sh * (1 - TX_SELL_COST) - px * sh);
+                        : (avg - px) * sh * (1 - TX_SELL_COST));
 }
 function _txPnlHtml(code, avg, sh, buy) {
   var v = _txPnlVal(code, avg, sh, buy);
