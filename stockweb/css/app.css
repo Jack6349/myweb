@@ -1194,3 +1194,4 @@ td.cost-even::after  { background: var(--text3); }
 .sd-g.sd-x0 { border-left-color: var(--down); }
 .sd-g.sd-xr { border-left-color: var(--text3); }
 .sd-gp { color: var(--text3); font-size: 11px; }
+.sum-nopx { font-size: 11px; color: var(--accent2); margin-left: 4px; font-weight: 400; }
