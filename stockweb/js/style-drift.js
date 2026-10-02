@@ -72,8 +72,13 @@ async function startStyleDrift(force) {
   renderStyleDrift();
   // 建倉明細（_lotsMap）由持股庫存的 loadBrokerPositionsFull 填。這一頁不一定在那之後才開，
   // 沒有就自己叫一次，不要求使用者先繞去別的頁。抓完重畫，把「用你的建倉成本算」那張表補上。
-  if (typeof _lotsMap !== 'undefined' && typeof loadBrokerPositionsFull === 'function' &&
-      !Object.keys(_lotsMap || {}).length) {
+  // 判斷「載過了沒」不能只看 _lotsMap 是不是空的：它是逐檔填進去的，
+  // 中途進來會看到一半——2026-10-02 實測 00999A 還沒填完就重畫，整列從表上消失。
+  // 改成本頁要用的那幾檔有沒有到齊。
+  var _need = ((_sdData.active && _sdData.active.rows) || []).map(function (r) { return r.code; });
+  var _miss = typeof _lotsMap === 'undefined' ? _need
+    : _need.filter(function (c) { return !(_lotsMap || {})[c]; });
+  if (typeof _lotsMap !== 'undefined' && typeof loadBrokerPositionsFull === 'function' && _miss.length) {
     try {
       await loadBrokerPositionsFull(function () {});
       if (document.getElementById('sd-wrap')) renderStyleDrift();

@@ -272,20 +272,26 @@ function sdOptionsHtml(f) {
   // 它對持有人唯一可驗證的承諾是「追求長期優於台股大盤」。
   h += '<div class="sd-oh">一、它有沒有照公開說明書做</div>';
   if (ex) {
-    h += '<div class="sd-ob">它唯一可驗證的那一條，目前這段沒做到：掛牌 ' + ex.from +
-      ' 至 ' + ex.to + ' 共 ' + ex.days + ' 個交易日，' + (ex.fund >= 0 ? '+' : '') +
-      ex.fund.toFixed(2) + '%，' + ex.label + ' ' + (ex.bm >= 0 ? '+' : '') + ex.bm.toFixed(2) +
-      '%，落後 ' + Math.abs(ex.ex).toFixed(2) + ' 個百分點。</div>';
-    h += '<div class="sd-onote">以還原市價計，起點為掛牌首日。' +
-      '同一區間用淨值算是 +2.09%、市價 +1.65%，差 0.44 個百分點，差別在起算日不在算法。' +
-      '說明書寫的是「長期」，' + ex.days + ' 個交易日判斷不了，但這是它存在的全部時間。' +
+    // 先講你的成績再講基金的：對你而言你的成績才是結論，
+    // 基金自掛牌的數字是背景——你 6/10 才進場，掛牌後那段跌幅沒有參與到。
+    var my = sdMyExcess(_sdFund);
+    h += '<div class="sd-ob">' + (my != null
+      ? '它唯一可驗證的那一條是「追求長期優於台股大盤」。以你的建倉成本算，目前落後 ' +
+        Math.abs(my).toFixed(2) + ' 個百分點。'
+      : '它唯一可驗證的那一條，目前這段沒做到。') + '</div>';
+    h += '<div class="sd-onote">基金自己的成績是另一個數字：掛牌 ' + ex.from + ' 至 ' + ex.to +
+      ' 共 ' + ex.days + ' 個交易日，' + (ex.fund >= 0 ? '+' : '') + ex.fund.toFixed(2) + '%，' +
+      ex.label + ' ' + (ex.bm >= 0 ? '+' : '') + ex.bm.toFixed(2) + '%，落後 ' +
+      Math.abs(ex.ex).toFixed(2) + ' 個百分點' +
+      (my != null ? '；差距來自進場時點，不是算法' : '') + '。</div>';
+    h += '<div class="sd-onote">說明書寫的是「長期」，' + ex.days +
+      ' 個交易日判斷不了，但這是它存在的全部時間。' +
       '集中度上升、換股頻繁都是它寫明的做法（聚焦龍頭、依市況動態調整），不構成警訊。</div>';
   } else {
     h += '<div class="sd-ob">超額報酬資料不足，無法判斷。</div>';
   }
 
   h += sdActiveHtml();
-  if (typeof sdHoldHtml === 'function') h += sdHoldHtml();
 
   // 問題二：使用者自己的配置假設。這跟基金做得對不對是兩件事。
   h += '<div class="sd-oh">二、它在你的組合裡還算不算分散的那一腳</div>';
@@ -325,110 +331,84 @@ function sdOptionsHtml(f) {
 // 這一段不需要持股揭露，只要還原市價與大盤，所以沒接到發行商揭露頁的那幾檔也算得出來。
 // 兩個區間各自回答一個問題：自掛牌起＝它對自己的承諾兌現了沒；
 // 共同區間＝把掛牌早晚的影響拿掉之後，五檔彼此怎麼比。
-function sdActiveHtml() {
-  var a = _sdData && _sdData.active;
-  if (!a || !a.rows || !a.rows.length) return '';
-  var pp = function (v) { return (v >= 0 ? '+' : '') + v.toFixed(2); };
-  var h = '<div class="sd-ctitle">五檔主動式 ETF 對' + a.market + '的超額報酬' +
-    '<span class="sd-chint">' + a.basis + '</span></div>';
-  h += '<div class="inv-table-wrap"><table class="inv-table swap-table"><thead><tr>' +
-    '<th>代號</th><th>掛牌日</th><th class="num">自掛牌　基金</th><th class="num">' + a.market +
-    '</th><th class="num">超額</th><th class="num">共同區間超額</th></tr></thead><tbody>';
-  a.rows.forEach(function (r) {
-    var o = r.own, c = r.common;
-    var link = '<span class="code-link" title="看線圖" onclick="openChartPop(&#39;' + r.code +
-      '&#39;)">' + r.code + '</span>';
-    h += '<tr><td class="inv-code">' + link + '</td>' +
-      '<td>' + o.from + '</td>' +
-      '<td class="num">' + pp(o.fund) + '%</td>' +
-      '<td class="num">' + pp(o.bm) + '%</td>' +
-      '<td class="num" style="font-weight:700;color:' + (o.ex >= 0 ? 'var(--up)' : 'var(--down)') +
-        '">' + pp(o.ex) + ' pp</td>' +
-      '<td class="num"' + (c ? ' style="color:' + (c.ex >= 0 ? 'var(--up)' : 'var(--down)') + '"' : '') +
-        '>' + (c ? pp(c.ex) + ' pp' : '—') + '</td></tr>';
-  });
-  h += '</tbody></table></div>';
-  h += '<div class="sd-onote">共同區間自 ' + (a.commonFrom || '—') +
-    ' 起（最晚掛牌那一檔的首日），把掛牌早晚造成的市況差異拿掉。' +
-    '區間都只有幾個月，不足以判斷說明書講的「長期」。</div>';
-  return h;
-}
-
-// ── 把建倉成本算進去 ────────────────────────────────────────────────
-// 「自掛牌起落後 17.24 個百分點」講的是這檔基金的成績，不是你的成績。
-// 你不是掛牌日買的：00405A 的第一批在 2026-06-10，掛牌後那段跌幅你沒參與到。
-//
-// 算法：每一批買進各自對照「同一天進場的大盤」，再用成本加權。
-//   我的報酬率   = Σ(未實現損益 + 已領股利) ÷ Σ成本
-//   同期大盤報酬 = Σ(成本 × 大盤從該批買進日到最新收盤的報酬) ÷ Σ成本
-//   超額         = 兩者相減
-// 用成本加權而不是張數：同一檔不同批的單價不同，張數加權會讓便宜那批被低估。
-// 大盤報酬取「該批買進日當天或之後第一個有收盤的交易日」為起點，與實際進場同步。
+// 大盤從某一天到最新收盤的報酬（%）。起點取「買進日當天或之後第一個有收盤的交易日」，
+// 與實際進場同步。買進日晚於序列最後一天（今天才買、大盤還沒收盤）回 null，由呼叫端排除。
 function _sdBmRet(from) {
   var b = _sdData && _sdData.active && _sdData.active.bmSeries;
   if (!b || !b.dates.length) return null;
   var i = -1;
   for (var k = 0; k < b.dates.length; k++) { if (b.dates[k] >= from) { i = k; break; } }
-  if (i < 0) return null;                       // 買進日晚於大盤序列最後一天（今天才買）
+  if (i < 0) return null;
   var a = b.close[i], z = b.close[b.close.length - 1];
   return a > 0 ? (z / a - 1) * 100 : null;
 }
 
-function sdHoldHtml() {
+function sdActiveHtml() {
   var a = _sdData && _sdData.active;
-  if (!a || !a.rows) return '';
-  // 建倉明細由持股庫存頁載入（券商 position_detail）。沒進過那頁就還沒有，
-  // 這時要講出來，不能整張表默默消失讓人以為沒這個功能。
-  if (typeof _lotsMap === 'undefined' || !_lotsMap || !Object.keys(_lotsMap).length) {
-    return '<div class="sd-onote">用你的建倉成本算的那張表還沒有資料：' +
-      '建倉明細要先開過一次「持股庫存」才會載入。</div>';
-  }
-  var rows = [];
+  if (!a || !a.rows || !a.rows.length) return '';
+  var pp = function (v) { return (v >= 0 ? '+' : '') + v.toFixed(2); };
+  var money = function (v) { return '$' + Math.round(v).toLocaleString('zh-TW'); };
+  var cls = function (v) { return v >= 0 ? 'var(--up)' : 'var(--down)'; };
+  var lotsReady = typeof _lotsMap !== 'undefined' && _lotsMap && Object.keys(_lotsMap).length;
+
+  // 一檔一列，兩組數字並排：左邊是你的（含建倉成本），右邊是基金自己的。
+  // 原本拆兩張表，五檔代號與「自掛牌超額」欄重複出現，八成內容是一樣的。
+  var rows = [], skipped = 0;
   a.rows.forEach(function (r) {
-    var lots = _lotsMap[r.code] || [];
+    var o = r.own, e = { code: r.code, listedFrom: o.from, listed: o.ex };
+    var lots = (lotsReady && _lotsMap[r.code]) || [];
     var cost = 0, gain = 0, bw = 0, bc = 0, first = null;
     lots.forEach(function (l) {
       if (!(l.cost > 0)) return;
-      cost += l.cost; gain += (l.pnl || 0) + (l.div || 0);
-      if (!first || l.date < first) first = l.date;
       var br = _sdBmRet(l.date);
-      if (br != null) { bw += l.cost * br; bc += l.cost; }
+      // 買進日晚於大盤序列最後一天（今天才買、大盤還沒收盤）→ 兩邊都排除，
+      // 只扣一邊會讓「我的報酬」與「同期大盤」站在不同的本金上，比不得。
+      if (br == null) { skipped++; return; }
+      cost += l.cost; gain += (l.pnl || 0) + (l.div || 0);
+      bw += l.cost * br; bc += l.cost;
+      if (!first || l.date < first) first = l.date;
     });
-    if (!(cost > 0)) return;
-    var mine = gain / cost * 100;
-    var bm = bc > 0 ? bw / bc : null;
-    rows.push({ code: r.code, first: first, cost: cost, mine: mine, bm: bm,
-                ex: bm == null ? null : mine - bm, listed: r.own.ex });
+    if (cost > 0) {
+      e.first = first; e.cost = cost; e.mine = gain / cost * 100; e.bm = bw / bc;
+      e.ex = e.mine - e.bm;
+    }
+    rows.push(e);
   });
-  if (!rows.length) return '';
-  var pp = function (v) { return (v >= 0 ? '+' : '') + v.toFixed(2); };
-  var money = function (v) { return '$' + Math.round(v).toLocaleString('zh-TW'); };
-  var h = '<div class="sd-ctitle">同一組基金，用你的建倉成本算' +
-    '<span class="sd-chint">每批買進各自對照同一天進場的大盤，再以成本加權</span></div>';
+
+  var h = '<div class="sd-ctitle">五檔主動式 ETF 對' + a.market + '的超額報酬' +
+    '<span class="sd-chint">左：以你的建倉成本，每批各自對照同一天進場的大盤，成本加權｜' +
+    '右：這檔自己的成績，自掛牌起、還原市價</span></div>';
   h += '<div class="inv-table-wrap"><table class="inv-table swap-table"><thead><tr>' +
-    '<th>代號</th><th>首批</th><th class="num">投入成本</th><th class="num">我的報酬</th>' +
-    '<th class="num">同期大盤</th><th class="num">我的超額</th><th class="num">自掛牌超額</th>' +
-    '</tr></thead><tbody>';
+    '<th>代號</th><th>首批買進</th><th class="num">投入成本</th><th class="num">我的報酬</th>' +
+    '<th class="num">同期大盤</th><th class="num">我的超額</th>' +
+    '<th>掛牌日</th><th class="num">自掛牌超額</th></tr></thead><tbody>';
   var tc = 0, tg = 0, tb = 0;
   rows.forEach(function (r) {
-    tc += r.cost; tg += r.mine / 100 * r.cost; if (r.bm != null) tb += r.bm / 100 * r.cost;
-    h += '<tr><td class="inv-code">' + r.code + '</td><td>' + (r.first || '—') + '</td>' +
-      '<td class="num">' + money(r.cost) + '</td>' +
-      '<td class="num">' + pp(r.mine) + '%</td>' +
-      '<td class="num">' + (r.bm == null ? '—' : pp(r.bm) + '%') + '</td>' +
-      '<td class="num" style="font-weight:700;color:' +
-        (r.ex == null ? 'var(--text3)' : (r.ex >= 0 ? 'var(--up)' : 'var(--down)')) + '">' +
-        (r.ex == null ? '—' : pp(r.ex) + ' pp') + '</td>' +
-      '<td class="num" style="color:var(--text3)">' + pp(r.listed) + ' pp</td></tr>';
+    if (r.cost) { tc += r.cost; tg += r.mine / 100 * r.cost; tb += r.bm / 100 * r.cost; }
+    h += '<tr><td class="inv-code">' + r.code + '</td>';
+    if (r.cost) {
+      h += '<td>' + r.first + '</td><td class="num">' + money(r.cost) + '</td>' +
+        '<td class="num">' + pp(r.mine) + '%</td><td class="num">' + pp(r.bm) + '%</td>' +
+        '<td class="num" style="font-weight:700;color:' + cls(r.ex) + '">' + pp(r.ex) + ' pp</td>';
+    } else {
+      h += '<td colspan="4" style="color:var(--text3)">' +
+        (lotsReady ? '未持有' : '建倉明細載入中…') + '</td><td class="num">—</td>';
+    }
+    h += '<td>' + r.listedFrom + '</td>' +
+      '<td class="num" style="color:' + cls(r.listed) + '">' + pp(r.listed) + ' pp</td></tr>';
   });
-  h += '</tbody><tfoot><tr><td>合計</td><td></td><td class="num">' + money(tc) + '</td>' +
-    '<td class="num">' + pp(tg / tc * 100) + '%</td>' +
-    '<td class="num">' + pp(tb / tc * 100) + '%</td>' +
-    '<td class="num" style="font-weight:700;color:' +
-      ((tg - tb) >= 0 ? 'var(--up)' : 'var(--down)') + '">' + pp((tg - tb) / tc * 100) + ' pp</td>' +
-    '<td></td></tr></tfoot></table></div>';
-  h += '<div class="sd-onote">「自掛牌超額」是基金的成績，「我的超額」是你的成績，兩者不同是進場時點造成的。' +
-    '已領股利計入我的報酬；同期大盤未扣交易成本與稅。</div>';
+  h += '</tbody>';
+  if (tc > 0) {
+    h += '<tfoot><tr><td>合計</td><td></td><td class="num">' + money(tc) + '</td>' +
+      '<td class="num">' + pp(tg / tc * 100) + '%</td><td class="num">' + pp(tb / tc * 100) + '%</td>' +
+      '<td class="num" style="font-weight:700;color:' + cls(tg - tb) + '">' +
+        pp((tg - tb) / tc * 100) + ' pp</td><td></td><td></td></tr></tfoot>';
+  }
+  h += '</table></div>';
+  h += '<div class="sd-onote">「我的超額」是你的成績，「自掛牌超額」是這檔基金的成績，' +
+    '兩者差距來自進場時點。已領股利計入我的報酬；同期大盤未扣交易成本與稅。' +
+    (skipped ? '　有 ' + skipped + ' 批買進日晚於大盤最後收盤日（' +
+      a.bmSeries.dates[a.bmSeries.dates.length - 1] + '），兩邊都未計入。' : '') + '</div>';
   return h;
 }
 
