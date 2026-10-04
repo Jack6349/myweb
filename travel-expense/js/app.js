@@ -100,6 +100,140 @@
     toastTimer = setTimeout(() => el.classList.remove('is-show'), 1800);
   }
 
+  /* ================= 計算機 =================
+   * 金額欄位一律用此鍵盤輸入，取代手機原生鍵盤：記帳現場常要邊算邊記
+   * （幾個人均攤、數量乘單價、多張收據相加），避免切換到別的 App 再回來。
+   */
+
+  // 顯示用格式化：最多兩位小數並去掉多餘的零（JPY 整數、TWD 可能有小數）
+  function calcFormat(n) {
+    if (!isFinite(n)) return '0';
+    return String(Math.round(n * 100) / 100);
+  }
+
+  function calcCompute(a, op, b) {
+    if (op === '+') return a + b;
+    if (op === '−') return a - b;
+    if (op === '×') return a * b;
+    if (op === '÷') return b === 0 ? NaN : a / b;
+    return b;
+  }
+
+  /* title：顯示在標題的欄位名稱；value：帶入的初始值；onApply(number)：按下套用時回呼 */
+  function openCalculator(title, value, onApply) {
+    let acc = null;          // 已累積的運算元
+    let op = null;           // 待執行的運算子
+    let cur = (value !== '' && value != null && isFinite(value)) ? String(value) : '0';
+    let waiting = false;     // true 表示剛按完運算子，下一個數字要重新開始輸入
+
+    const KEYS = [
+      ['C', 'clear'], ['⌫', 'back'], ['÷', 'op'], ['×', 'op'],
+      ['7', 'num'], ['8', 'num'], ['9', 'num'], ['−', 'op'],
+      ['4', 'num'], ['5', 'num'], ['6', 'num'], ['+', 'op'],
+      ['1', 'num'], ['2', 'num'], ['3', 'num'], ['=', 'eq'],
+      ['0', 'num'], ['00', 'num'], ['.', 'dot'],
+    ];
+
+    const calcRoot = $('calcRoot');
+    const calcBackdrop = $('calcBackdrop');
+    calcRoot.innerHTML = `
+      <div class="sheet">
+        <div class="sheet__handle"></div>
+        <div class="sheet__title">${title}</div>
+        <div class="calc-display">
+          <div class="calc-display__expr" id="calcExpr"></div>
+          <div class="calc-display__value" id="calcValue">0</div>
+        </div>
+        <div class="calc-keys" id="calcKeys">
+          ${KEYS.map(([label, kind]) => `<button type="button" class="calc-key calc-key--${kind}" data-kind="${kind}" data-key="${label}">${label}</button>`).join('')}
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn--ghost" id="calcCancel">取消</button>
+          <button type="button" class="btn btn--primary" id="calcApply">套用</button>
+        </div>
+      </div>
+    `;
+    calcBackdrop.classList.add('is-open');
+    const sheet = calcRoot.querySelector('.sheet');
+
+    function closeCalculator() {
+      calcRoot.innerHTML = '';
+      calcBackdrop.classList.remove('is-open');
+    }
+    calcBackdrop.onclick = closeCalculator;
+
+    const exprEl = sheet.querySelector('#calcExpr');
+    const valueEl = sheet.querySelector('#calcValue');
+    function refresh() {
+      exprEl.textContent = op !== null ? `${calcFormat(acc)} ${op}` : '';
+      valueEl.textContent = cur;
+    }
+    refresh();
+
+    function inputDigit(d) {
+      if (waiting) { cur = (d === '00') ? '0' : d; waiting = false; }
+      else if (cur === '0') { cur = (d === '00') ? '0' : d; }
+      else { cur += d; }
+    }
+
+    function setOp(next) {
+      const val = parseFloat(cur) || 0;
+      if (op !== null && !waiting) { acc = calcCompute(acc, op, val); cur = calcFormat(acc); }
+      else { acc = val; }
+      op = next;
+      waiting = true;
+    }
+
+    function equals() {
+      if (op === null) return;
+      const val = parseFloat(cur) || 0;
+      const r = calcCompute(acc, op, val);
+      if (!isFinite(r)) { toast('不能除以零'); return; }
+      acc = r;
+      cur = calcFormat(r);
+      op = null;
+      waiting = true;
+    }
+
+    sheet.querySelectorAll('#calcKeys .calc-key').forEach((b) => b.addEventListener('click', () => {
+      const key = b.dataset.key;
+      switch (b.dataset.kind) {
+        case 'num': inputDigit(key); break;
+        case 'dot':
+          if (waiting) { cur = '0.'; waiting = false; }
+          else if (!cur.includes('.')) cur += '.';
+          break;
+        case 'op': setOp(key); break;
+        case 'eq': equals(); break;
+        case 'back':
+          if (waiting) break;
+          cur = cur.slice(0, -1) || '0';
+          break;
+        case 'clear': acc = null; op = null; cur = '0'; waiting = false; break;
+      }
+      refresh();
+    }));
+
+    sheet.querySelector('#calcCancel').addEventListener('click', closeCalculator);
+    sheet.querySelector('#calcApply').addEventListener('click', () => {
+      equals();                       // 還有未結算的運算式就先算完再套用
+      const n = parseFloat(cur);
+      closeCalculator();
+      onApply(isFinite(n) ? n : 0);
+    });
+  }
+
+  /* 把金額輸入框改成「點了開計算機」：設為 readonly 可避免手機彈出原生鍵盤。
+   * onApply 回呼負責寫回欄位值與更新狀態。
+   */
+  function bindCalculator(input, title, onApply) {
+    input.readOnly = true;
+    input.classList.add('is-calc');
+    input.addEventListener('click', () => {
+      openCalculator(title, input.value, (n) => onApply(n));
+    });
+  }
+
   /* ================= 底部彈出 Sheet 共用元件 ================= */
   const backdrop = $('sheetBackdrop');
   const modalRoot = $('modalRoot');
@@ -234,7 +368,10 @@
         `;
         row.querySelector('[data-field="name"]').addEventListener('input', (e) => { it.name = e.target.value; });
         row.querySelector('[data-field="qty"]').addEventListener('input', (e) => { it.qty = parseInt(e.target.value, 10) || 1; });
-        row.querySelector('[data-field="amount"]').addEventListener('input', (e) => { it.amount = parseFloat(e.target.value) || 0; });
+        bindCalculator(row.querySelector('[data-field="amount"]'), '品項金額：' + (it.name || '未命名'), (n) => {
+          it.amount = n;
+          row.querySelector('[data-field="amount"]').value = n;
+        });
         row.querySelector('[data-del]').addEventListener('click', () => {
           const idx = items.indexOf(it);
           if (idx >= 0) items.splice(idx, 1);
@@ -393,6 +530,12 @@
         });
       }
 
+      // 分項分配進度標籤（勾選分攤對象或改金額後即時更新，不整個重繪以免輸入焦點跑掉）
+      function updateItemsLabel() {
+        const label = sheet.querySelector('#f_split_items .field__label');
+        if (label) label.textContent = `品項與分攤對象（已分配 ${itemsAssignedCount()}/${sel.items.length} 項）`;
+      }
+
       // 分項模式：直接在表單內編輯每個品項的名稱/數量/金額，並勾選該品項的分攤對象，不再跳子畫面
       function renderItemsList() {
         const listEl = sheet.querySelector('#f_items_list');
@@ -417,10 +560,12 @@
           `;
           row.querySelector('[data-field="name"]').addEventListener('input', (e) => { it.name = e.target.value; });
           row.querySelector('[data-field="qty"]').addEventListener('input', (e) => { it.qty = parseInt(e.target.value, 10) || 1; });
-          row.querySelector('[data-field="amount"]').addEventListener('input', (e) => {
-            it.amount = parseFloat(e.target.value) || 0;
+          bindCalculator(row.querySelector('[data-field="amount"]'), '品項金額：' + (it.name || '未命名'), (n) => {
+            it.amount = n;
+            row.querySelector('[data-field="amount"]').value = n;
             const amountInput = sheet.querySelector('#f_amount');
-            if (amountInput) amountInput.value = itemsSum();
+            if (amountInput) amountInput.value = itemsSum();   // 分項加總即時跟著更新
+            updateItemsLabel();
           });
           row.querySelector('[data-del]').addEventListener('click', () => {
             const idx = sel.items.indexOf(it);
@@ -432,10 +577,16 @@
             const i = it.split.indexOf(a);
             if (i >= 0) it.split.splice(i, 1); else it.split.push(a);
             b.classList.toggle('is-on');
-            const label = sheet.querySelector('#f_split_items .field__label');
-            if (label) label.textContent = `品項與分攤對象（已分配 ${itemsAssignedCount()}/${sel.items.length} 項）`;
+            updateItemsLabel();
           }));
           listEl.appendChild(row);
+        });
+      }
+
+      if (sel.mode === 'simple') {
+        bindCalculator(sheet.querySelector('#f_amount'), '金額（' + sel.currency + '）', (n) => {
+          sel.amount = n;
+          sheet.querySelector('#f_amount').value = n;
         });
       }
 
