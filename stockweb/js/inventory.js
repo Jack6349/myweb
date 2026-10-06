@@ -294,6 +294,10 @@ function invValRow(p) {
 // 月份取自實際除息紀錄，不是用頻率反推：季配不一定落在 3/6/9/12，
 // 00918 實測是 3/6/9/12 以外的月份也有，照它自己的紀錄列才不會騙人。
 // 取近 24 個月的除息月去重；紀錄還沒載入時回空字串，不要把「還沒載到」顯示成「不配息」。
+function _invFreqWord(step) {
+  return step === 1 ? '月配' : (step === 2 ? '雙月配' : (step === 3 ? '季配'
+    : (step === 6 ? '半年配' : (step === 12 ? '年配' : '每 ' + step + ' 月'))));
+}
 function _invFreqTag(code) {
   code = String(code);
   var map = (typeof _divRecMap !== 'undefined' && _divRecMap) || {};
@@ -302,7 +306,17 @@ function _invFreqTag(code) {
     return '';
   }
   var recs = (map[code] || []).filter(function (r) { return r.exDate; });
-  if (!recs.length) return '<span class="inv-freq">(無)</span>';
+  if (!recs.length) {
+    // 沒有除息紀錄 ≠ 不配息。2026-10-07 實測 00402A／00405A／00988A 都是今年才掛牌、
+    // 還沒除過息，但 MoneyDJ 的頻率表寫明年配／季配，標「(無)」會變成假的結論。
+    var st = (typeof _divMdj !== 'undefined' && _divMdj[code]) || null;
+    if (st) {
+      return '<span class="inv-freq" title="MoneyDJ 配息頻率；尚未有除息紀錄，月份未定">(' +
+        _invFreqWord(st) + ')</span>';
+    }
+    // 連頻率表也沒有：配息資料來源只收 ETF，個股不在範圍，說「查無」不說「不配息」
+    return '<span class="inv-freq" title="配息資料來源（e添富／MoneyDJ 頻率表）只收 ETF，個股不在範圍">(查無)</span>';
+  }
 
   var asc = recs.slice().sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; })
     .map(function (r) { return Object.assign({ code: code }, r); });
@@ -313,7 +327,9 @@ function _invFreqTag(code) {
   var ms = {};
   asc.forEach(function (r) { if (r.exDate >= from) ms[+r.exDate.slice(5, 7)] = true; });
   var list = Object.keys(ms).map(Number).sort(function (a, b) { return a - b; });
-  if (!list.length) return '<span class="inv-freq">(無)</span>';
+  // 有紀錄但都超過兩年 → 列不出月份，退回頻率詞，不要說「無」
+  if (!list.length) return '<span class="inv-freq" title="近兩年無除息紀錄">(' +
+    _invFreqWord(step) + '·近兩年無)</span>';
   return '<span class="inv-freq" title="近兩年實際除息月份">(' + list.join(',') + '月)</span>';
 }
 
