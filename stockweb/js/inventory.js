@@ -297,7 +297,10 @@ function invValRow(p) {
 function _invFreqTag(code) {
   code = String(code);
   var map = (typeof _divRecMap !== 'undefined' && _divRecMap) || {};
-  if (!Object.keys(map).length) return '';                 // 配息資料未載入
+  if (!Object.keys(map).length) {
+    _invEnsureDiv();      // 與最近除息欄同一個懶載入：沒進過股利估算頁也會自己補
+    return '';
+  }
   var recs = (map[code] || []).filter(function (r) { return r.exDate; });
   if (!recs.length) return '<span class="inv-freq">(無)</span>';
 
