@@ -263,7 +263,7 @@ function invValRow(p) {
     '<td class="live-dot-cell"><button class="live-dot' + (dotOn ? ' on' : '') + '" style="--dot:' + dotColor +
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + code + '\',this)"></button></td>' +
     '<td class="inv-code' + (typeof limitState === 'function' && limitState(code, price) ? ' lim-' + limitState(code, price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
-    '<td class="inv-name">' + ((c && c.name) || '') + '</td>' +
+    '<td class="inv-name">' + ((c && c.name) || '') + _invFreqTag(code) + '</td>' +
     '<td class="num inv-trd">' + invTradeCell(code) + '</td>' +
     // 餘額是「股」，借出註記用「張」：與股利估算的持有張數同一種寫法。
     // 借出的股數本來就含在餘額裡（出借期間所有權仍是你的），這裡只是標出其中多少在外面。
@@ -289,6 +289,31 @@ function invValRow(p) {
 //       本月沒有 → 顯示下月起到年底最近一次（含股利估算的預估除息日）＝白字；年底前都沒有 → —。
 // 資料：已公告紀錄取自 _divRecMap（含 TPEx 預告與手動補登）；預估取自股利估算 _divEstResult 的月度結果
 //      （預估月若無除息日，以發放日往前推 28 天回推，與 _divDerivePay 同一組規則）。
+// 配息政策標註（名稱後面的括號）
+//   月配 → (月配)；其餘有配息 → 標出實際的除息月份，例 (3,6,9,12月)；查無配息紀錄 → (無)
+// 月份取自實際除息紀錄，不是用頻率反推：季配不一定落在 3/6/9/12，
+// 00918 實測是 3/6/9/12 以外的月份也有，照它自己的紀錄列才不會騙人。
+// 取近 24 個月的除息月去重；紀錄還沒載入時回空字串，不要把「還沒載到」顯示成「不配息」。
+function _invFreqTag(code) {
+  code = String(code);
+  var map = (typeof _divRecMap !== 'undefined' && _divRecMap) || {};
+  if (!Object.keys(map).length) return '';                 // 配息資料未載入
+  var recs = (map[code] || []).filter(function (r) { return r.exDate; });
+  if (!recs.length) return '<span class="inv-freq">(無)</span>';
+
+  var asc = recs.slice().sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; })
+    .map(function (r) { return Object.assign({ code: code }, r); });
+  var step = (typeof _divInferStep === 'function') ? _divInferStep(asc) : null;
+  if (step === 1) return '<span class="inv-freq">(月配)</span>';
+
+  var from = _divTwDate().iso.slice(0, 4) - 2 + '-' + _divTwDate().iso.slice(5);
+  var ms = {};
+  asc.forEach(function (r) { if (r.exDate >= from) ms[+r.exDate.slice(5, 7)] = true; });
+  var list = Object.keys(ms).map(Number).sort(function (a, b) { return a - b; });
+  if (!list.length) return '<span class="inv-freq">(無)</span>';
+  return '<span class="inv-freq" title="近兩年實際除息月份">(' + list.join(',') + '月)</span>';
+}
+
 function _invExInfo(code) {
   code = String(code);
   var map = (typeof _divRecMap !== 'undefined' && _divRecMap) || {};
