@@ -400,17 +400,36 @@ function _rfPendingHtml(rows) {
   return h + '</tbody></table></div>';
 }
 
-// 本月發放：_divRecMap 中「發放月＝當月」的配息（含已入帳與待發放）
-// 發放日缺漏時沿用估算慣例以「除息月＋1」推導，並標示為推導值
+// 本月發放：發放月＝當月的配息（含已入帳與待發放）
+//
+// 張數一律取「除息日當時可領的量」，不是目前持股。2026-10-06 實測兩邊差 31,555 元：
+//   00918  現在 165 張，9/18 除息當天之後才買的 15 張領不到 → 多算 26,250
+//   00989B 現在 235 張，9/15 之後買的 65 張領不到           → 多算  5,720
+//   00999A 現在   6 張，10/01 買的 1 張領不到                → 多算    290
+//   00988B 現在   5 張，但 9/18 賣掉的 5 張除息當天還持有    → 少算    705
+// 可領量股利估算已經算過（computeEtfYear 依建倉明細與已實現損益判定），
+// 直接取同一份結果，兩頁才不會各自長出一套數字。
 function _rfBuildMonthPay(codes, todayIso) {
   var ym = todayIso.slice(0, 7), out = [];
-  codes.forEach(function (code) {
-    ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).forEach(function (r) {
-      var pay = r.payDate || _divDerivePay(r.exDate);   // 與股利估算同一推算規則
-      if (!pay || pay.slice(0, 7) !== ym) return;
-      out.push({ code: code, payDate: pay, derived: !r.payDate, amount: r.amount, exDate: r.exDate });
+  var est = (typeof _divEstResult !== 'undefined' && _divEstResult && _divEstResult.stocks) || null;
+  if (est) {
+    est.forEach(function (s) {
+      (s.res.months || []).forEach(function (m) {
+        if (!m.payDate || m.payDate.slice(0, 7) !== ym) return;
+        out.push({ code: s.code, payDate: m.payDate, derived: false, amount: m.perShare,
+                   exDate: m.exDate, shares: m.shares, total: m.total, partial: !!m.partial });
+      });
     });
-  });
+  } else {
+    // 估算結果還沒好（直接進填息追蹤頁）→ 退回原本的推算，張數用目前持股
+    codes.forEach(function (code) {
+      ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).forEach(function (r) {
+        var pay = r.payDate || _divDerivePay(r.exDate);   // 與股利估算同一推算規則
+        if (!pay || pay.slice(0, 7) !== ym) return;
+        out.push({ code: code, payDate: pay, derived: !r.payDate, amount: r.amount, exDate: r.exDate });
+      });
+    });
+  }
   out.sort(function (a, b) {
     return a.payDate < b.payDate ? -1 : (a.payDate > b.payDate ? 1 : String(a.code).localeCompare(String(b.code)));
   });
@@ -431,11 +450,13 @@ function _rfMonthPayHtml() {
     '<th class="num" title="配息金額 ÷ 持有成本">成本月殖利率</th>' +
     '<th class="num">持有(張)</th><th class="num">可領金額</th></tr></thead><tbody>';
   rows.forEach(function (e) {
-    var px = _swapPrice(e.code), cost = _swapCostPx(e.code), sh = _swapHeld(e.code);
+    var px = _swapPrice(e.code), cost = _swapCostPx(e.code);
+    // 可領張數優先用估算算好的（除息日當時的持有量），沒有才退回目前持股
+    var sh = (e.shares != null) ? e.shares : _swapHeld(e.code);
     var amt = e.amount;
     var yPx = (amt != null && px > 0) ? amt / px * 100 : null;
     var yCost = (amt != null && cost > 0) ? amt / cost * 100 : null;
-    var get = (amt != null && sh) ? amt * sh : null;
+    var get = (e.total != null) ? e.total : ((amt != null && sh) ? amt * sh : null);
     if (get != null) total += get;
     var paid = e.payDate <= todayIso;
     h += '<tr>' +
@@ -448,7 +469,8 @@ function _rfMonthPayHtml() {
       '<td class="num swap-yield">' + (yPx != null ? yPx.toFixed(2) + '%' : '—') + '</td>' +
       costCellHtml(cost, px) +
       '<td class="num swap-yield">' + (yCost != null ? yCost.toFixed(2) + '%' : '—') + '</td>' +
-      '<td class="num">' + _swapLots(sh) + '</td>' +
+      '<td class="num"' + (e.partial ? ' title="除息日當天（含）之後買進的批次領不到；已賣出但除息時仍持有的照算"' : '') +
+        '>' + _swapLots(sh) + (e.partial ? ' <span class="dexm-lent">(可領)</span>' : '') + '</td>' +
       '<td class="num">' + (get != null ? fmtMoney(get) : '—') + '</td>' +
     '</tr>';
   });
@@ -458,6 +480,8 @@ function _rfMonthPayHtml() {
     '<div class="rf-cal-note"><dl>' +
     '<dt>月殖利率</dt><dd><code>配息金額 ÷ 現價</code></dd>' +
     '<dt>成本月殖利率</dt><dd><code>配息金額 ÷ 持有成本</code>；月配標的即單月報酬率，年化約 ×12。</dd>' +
+    '<dt>持有(張)</dt><dd>除息日當時可領的張數，不是目前持股：除息日當天（含）之後買進的領不到，' +
+    '已賣出但除息時仍持有的照算。與月份總覽同一份計算，兩邊的本月合計相等。</dd>' +
     '<dt>發放日標記</dt><dd>「*」＝尚未公告，以「除息月＋1」推導。日期較淡＝已發放。</dd>' +
     '</dl></div>';
   return h;
