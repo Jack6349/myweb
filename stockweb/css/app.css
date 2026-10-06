@@ -243,13 +243,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .digest-none { color: var(--text3); font-size: 13px; padding: 6px 0; }
 
 /* ── 停損停利：觸發整列反底色（紅=賣、綠=買）；蓋過 hover ── */
-/* 停損停利：持股庫存只標代號格，即時持股維持整列。
-   持股庫存一列 17 欄，整列鋪底色會把現價、損益那些要讀的數字壓在色塊上，
-   而且同時觸發兩三檔時整個表看起來像壞掉。即時持股是精簡雙欄，整列反而好掃。 */
-.inv-table tr.alert-sell td.inv-code { background: rgba(255,70,70,.30) !important; }
-.inv-table tr.alert-buy  td.inv-code { background: rgba(30,200,90,.28) !important; }
-.live-table tr.alert-sell td { background: rgba(255,70,70,.30) !important; }
-.live-table tr.alert-buy  td { background: rgba(30,200,90,.28) !important; }
+/* 停損停利：只標代號格，兩頁一致。
+   整列鋪底色會把現價、損益那些要讀的數字壓在色塊上，同時觸發兩三檔時整個表像壞掉。 */
+.inv-table tr.alert-sell td.inv-code, .live-table tr.alert-sell td.inv-code { background: rgba(255,70,70,.30) !important; }
+.inv-table tr.alert-buy  td.inv-code, .live-table tr.alert-buy  td.inv-code { background: rgba(30,200,90,.28) !important; }
 .al-table .al-in { width: 68px; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-size: 12.5px; padding: 4px 6px; border-radius: 6px; text-align: right; font-family: var(--font); }
 .al-table .al-in:focus { border-color: var(--accent); outline: none; }
 .al-table th.al-red { color: var(--up); }
