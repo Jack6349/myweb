@@ -277,6 +277,69 @@ html.light .topbar__icon {
   font-weight: 700;
 }
 
+/* ---------- 計算機 ----------
+ * 疊在費用表單之上，用獨立容器與 backdrop（z-index 高於一般 sheet）
+ */
+.calc-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 25;
+  display: none;
+}
+.calc-backdrop.is-open { display: block; }
+.calc-root { position: fixed; inset: 0; z-index: 26; pointer-events: none; }
+.calc-root .sheet { pointer-events: auto; }
+
+/* 綁了計算機的金額欄位：外觀維持可輸入，但實際由計算機填值 */
+input.is-calc { cursor: pointer; }
+
+.calc-display {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.calc-display__expr {
+  font-size: 13px;
+  color: var(--text-dim);
+  min-height: 18px;
+}
+.calc-display__value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.calc-keys {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.calc-key {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 16px 0;
+  font-size: 19px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: .1s;
+}
+.calc-key:active { transform: scale(.95); }
+.calc-key--op { background: var(--bg-2); color: var(--accent); }
+.calc-key--clear, .calc-key--back { color: var(--danger); font-size: 17px; }
+/* 等號跨兩列，是標準計算機配置 */
+.calc-key--eq {
+  grid-row: span 2;
+  background: var(--accent);
+  color: var(--accent-on);
+  border-color: var(--accent-dk);
+}
+
 /* ---------- 登入畫面 ---------- */
 .login {
   position: fixed;
