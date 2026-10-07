@@ -241,6 +241,9 @@ async function loadBrokerPositionsFull(say) {
     // 沒有這個通知的話，先開畫面的那一頁會停在「未持有」——
     // 2026-10-02 實測策略檢視的 00999A 就是這樣被標成未持有。
     if (typeof sdOnLots === 'function') { try { sdOnLots(); } catch (e) {} }
+    // 順手記下今天各檔借出幾張：股利估算拆「直接入帳／借券補償」要知道除息日當天的借出量，
+    // 券商 API 沒有歷史，只能自己逐日記（見 lent-log.js）。不等寫入完成，失敗不影響庫存載入。
+    if (typeof lentLogRecord === 'function') { lentLogRecord().catch(function (e) { console.warn('[lent log]', e); }); }
 
     if (_positions.length) {
       _sharesMap = {}; _totalCost = 0;
