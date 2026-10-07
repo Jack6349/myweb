@@ -721,6 +721,7 @@ td.cost-even::after  { background: var(--text3); }
 /* 填息追蹤：本月發放 */
 .rf-pay { max-width: 1100px; }
 .rf-pay .rf-paid { opacity: .55; }
+.rf-pay tr.rf-pay-lent td { color: var(--text2); font-size: 12px; padding-top: 2px; }
 
 /* ── 關注股票：搜尋框與下拉候選 ── */
 .wt-toolbar { align-items: flex-start; }
