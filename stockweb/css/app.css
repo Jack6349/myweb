@@ -473,12 +473,15 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .bid-px.up { color: var(--up); }
 .bid-px.down { color: var(--down); }
 .bid-px.bid-flat { color: var(--accent2); }
-.bid-hl { display: inline-block; width: 1.3em; text-align: center; font-size: .8em; font-weight: 700; }
+/* H／L 在量條欄最外側：固定寬度、不縮放，與量條隔一個字元 */
+.bid-hl { flex: 0 0 auto; width: 1em; text-align: center; font-size: 15px; font-weight: 700; line-height: 1; }
 .bid-last { border-bottom: 2px solid var(--accent2); padding-bottom: 1px; }
 .bid-vol { color: var(--accent2); width: 82px; }
 .bid-bar-cell { width: 20%; position: relative; }
-.bid-bar { display: block; height: 13px; border-radius: 2px; }
-.bid-bar.bid { background: rgba(38,217,98,.5); float: right; }
+.bid-bar-wrap { display: flex; align-items: center; gap: 1ch; }
+.bid-bar-track { flex: 1 1 auto; min-width: 0; display: flex; }
+.bid-bar { display: block; flex: 0 0 auto; height: 13px; border-radius: 2px; }
+.bid-bar.bid { background: rgba(38,217,98,.5); margin-left: auto; }
 .bid-bar.ask { background: rgba(255,82,82,.5); }
 /* 中央分隔：買賣兩欄之間 */
 .bid-table td.bid-px.sell, .bid-table .bid-side-h.sell, .bid-table thead tr:nth-child(2) th:nth-child(4) { border-left: 2px solid var(--border); }
