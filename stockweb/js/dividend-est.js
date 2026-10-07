@@ -6,6 +6,7 @@
 var _divEstRows = null;    // e添富 解析後全 ETF 配息列（每日快取）
 var _divEstResult = null;  // 計算結果，供折疊重繪
 var _divEstOpen = {};      // code -> 是否展開
+var _divLentOpen = {};     // 'code|除息日' -> 借券拆分是否展開（個股明細、本月除息個股共用）
 var _divByCode = {};       // code -> e添富配息列（本次載入）
 var _divRecMap = {};       // code -> 已取得的配息紀錄（e添富 或 Yahoo 後備）；換股試算共用
 
@@ -298,8 +299,13 @@ function computeEtfYear(recs, shares, todayIso, year, code, forceStep) {
   Object.keys(byMonth).forEach(function (mk) {
     var e = byMonth[mk];
     var sh = _divSharesAsOf(code, e.exDate, shares);   // 逐次除息各自判定可領股數
+    // 可領股數裡有幾股在除息日是借出狀態：那部分由借券人另付權益補償，與直接入帳分開到帳（見 lent-log.js）。
+    // 查不到就是 null，畫面不拆。借出不會多於可領股數（除息後才買進又借出的那部分本來就領不到）。
+    var ln = (typeof lentAt === 'function') ? lentAt(code, e.exDate, todayIso) : null;
+    var lent = ln ? Math.min(ln.shares, sh) : 0;
     months.push({ month: e.month, exDate: e.exDate, payDate: e.payDate, derivedPay: e.derivedPay,
-      perShare: e.perShare, shares: sh, partial: sh !== shares, total: e.perShare * sh, status: e.status });
+      perShare: e.perShare, shares: sh, partial: sh !== shares, total: e.perShare * sh, status: e.status,
+      lentShares: lent, lentTotal: e.perShare * lent, lentSrc: ln ? ln.src : null, lentDate: ln ? ln.date : null });
   });
   months.sort(function (a, b) { return (a.month - b.month) || ((a.exDate || '') < (b.exDate || '') ? -1 : 1); });
   var actualTotal = 0, estTotal = 0;
@@ -376,6 +382,9 @@ async function startDividendEst(force) {
     _rfCal = await _rfBuildCalendar(
       codes.filter(function (c) { return shareMap[c] > 0; }), _divTwDate().iso);
   } catch (e) { console.warn('[divest calendar]', e); _rfCal = _rfCal || []; }
+
+  // 除息日借出張數（拆直接入帳／借券補償用）：computeEtfYear 是同步的，先載好
+  if (typeof lentLoad === 'function') { try { await lentLoad(); } catch (e) {} }
 
   var tw = _divTwDate();
   var stocks = [];
@@ -500,14 +509,16 @@ function renderDividendEst() {
         if (mo.shares > 0) stTxt += '（計 ' + (mo.shares / 1000) + ' 張）';
         else stTxt = '除息後才買進，未持有';
       }
+      var hasLent = mo.lentShares > 0;
       return '<div class="divest-drow ' + (mo.status === 'actual' ? 'dv-act' : 'dv-est') + '">' +
         '<span class="divest-dm">' + mo.month + '月</span>' +
         '<span class="divest-dex">' + md(mo.exDate) + '</span>' +
         '<span class="divest-dpay">' + md(mo.payDate) + '</span>' +
         '<span class="divest-dps">' + mo.perShare.toFixed(4) + '</span>' +
         '<span class="divest-dtot">' + money(mo.total) + '</span>' +
-        '<span class="divest-dst">' + stTxt + '</span>' +
-      '</div>';
+        '<span class="divest-dst">' + stTxt + (hasLent ? _divLentBtn(s.code, mo) : '') + '</span>' +
+      '</div>' +
+      (hasLent && _divLentOpen[s.code + '|' + mo.exDate] ? '<div class="divest-lentx">' + _divLentLine(mo, money) + '</div>' : '');
     }).join('');
     // 現價（進頁快照）＋預估年殖利率＝單次配息(每股) × 配息頻率 ÷ 現價 ×100（當前年化殖利率，供換股/調節判斷）
     // 例：00988B 月配、下次預估 0.157、現價 20 → 0.157×12/20 = 9.42%
@@ -792,7 +803,7 @@ function _divExMonthHtml(stocks, money, md) {
         shares: mo.shares, lent: _divLentShares(s.code),
         held: (typeof _sharesMap !== 'undefined' && _sharesMap && _sharesMap[s.code]) || 0,   // 目前實際持有（股）
         after: !!(mo.partial && !mo.shares),   // 除息日當天（含）之後才買進 → 領不到這次配息
-        perShare: mo.perShare, total: mo.total, status: mo.status });
+        perShare: mo.perShare, total: mo.total, status: mo.status, mo: mo });
     });
   });
   list.sort(function (a, b) { return a.exDate < b.exDate ? -1 : (a.exDate > b.exDate ? 1 : 0); });
@@ -829,12 +840,16 @@ function _divExMonthHtml(stocks, money, md) {
       })() + '"' + (it.yldGuess && it.cyld != null ? ' title="本次金額待公告，以最近一次已知配息估算"' : '') + '>' +
         (it.cyld != null ? it.cyld.toFixed(2) + '%' + (it.yldGuess ? '<span class="dexm-lent">*</span>' : '') : '<span style="color:var(--text3)">—</span>') + '</td>' +
       '<td class="num">' + (it.shares / 1000).toLocaleString('zh-TW') +
-        (it.after ? ' <span class="dexm-lent">(除息後買進)</span>' : '') + '</td>' +
+        (it.after ? ' <span class="dexm-lent">(除息後買進)</span>' : '') +
+        (it.mo.lentShares > 0 ? _divLentBtn(it.code, it.mo) : '') + '</td>' +
       // 持有張數：目前庫存；與除息張數不同時（除息後有買賣）變色提示；出借註記跟著目前持有走
       '<td class="num' + (it.held !== it.shares ? ' dexm-diff' : '') + '">' + (it.held / 1000).toLocaleString('zh-TW') +
         (it.lent ? ' <span class="dexm-lent">(借出 ' + (it.lent / 1000).toLocaleString('zh-TW') + ' 張)</span>' : '') + '</td>' +
       '<td class="num">' + (it.perShare ? it.perShare.toFixed(4) : '<span style="color:var(--text3)">待公告</span>') + '</td>' +
       '<td class="num dstat-tot">' + (it.perShare ? money(it.total) : '<span style="color:var(--text3)">—</span>') + '</td></tr>';
+    if (it.mo.lentShares > 0 && _divLentOpen[it.code + '|' + it.exDate]) {
+      h += '<tr class="dexm-lentx"><td class="dstat-code"></td><td colspan="10">' + _divLentLine(it.mo, money) + '</td></tr>';
+    }
   });
   // 合計列的兩個平均殖利率：用持有金額加權，不取各列百分比的算術平均。
   // 算術平均會讓 1 張和 50 張的那檔一樣重，算出來的數字不對應任何一筆實際報酬。
@@ -883,11 +898,13 @@ function divStatSort(key) {
 function _divStatRows(stocks) {
   var rows = [];
   stocks.forEach(function (s) {
-    var r = { code: s.code, out: !!s.soldOut, m: {}, act: {}, tot: 0 };
+    // m／tot 為合計（排序與欄合計用）；lent／lentTot 為其中借券補償的部分，畫面另拆一列
+    var r = { code: s.code, out: !!s.soldOut, m: {}, act: {}, tot: 0, lent: {}, lentTot: 0 };
     (s.res.months || []).forEach(function (m) {
       r.m[m.month] = (r.m[m.month] || 0) + m.total;
       if (m.status === 'actual') r.act[m.month] = true;
       r.tot += m.total;
+      if (m.lentTotal > 0) { r.lent[m.month] = (r.lent[m.month] || 0) + m.lentTotal; r.lentTot += m.lentTotal; }
     });
     if (r.tot > 0) rows.push(r);          // 全年 0 元（今年尚未配息）不列入
   });
@@ -916,20 +933,46 @@ function _divStatTableHtml(stocks, money, title, labels) {
 
   var colT = {}, grand = 0;
   rows.forEach(function (r) {
+    // 有借出的檔拆兩列：主列＝直接入帳（發行公司匯入），子列＝借券補償（借券人另付）。兩列相加＝合計，欄合計不變。
+    var cell = function (v, mo) {
+      return '<td class="num' + (v ? (r.act[mo] ? ' dv-act' : ' dv-est') : '') + '">' + (v ? money(v) : '') + '</td>';
+    };
     h += '<tr><td class="dstat-code"' + (r.out ? ' title="已全數賣出；只計持有期間已領的配息"' : '') + '>' + r.code +
       (r.out ? '<span class="dexm-lent"> (已出清)</span>' : '') + '</td>';
     for (var mo = 1; mo <= 12; mo++) {
       var v = r.m[mo];
       if (v) { colT[mo] = (colT[mo] || 0) + v; grand += v; }
-      h += '<td class="num' + (v ? (r.act[mo] ? ' dv-act' : ' dv-est') : '') + '">' +
-        (v ? money(v) : '') + '</td>';
+      h += cell(v ? v - (r.lent[mo] || 0) : 0, mo);
     }
-    h += '<td class="num dstat-tot">' + money(r.tot) + '</td></tr>';
+    h += '<td class="num dstat-tot">' + money(r.tot - r.lentTot) + '</td></tr>';
+    if (r.lentTot > 0) {
+      h += '<tr class="dstat-lent"><td class="dstat-code" title="除息日借出中的股數：配息由借券人另付權益補償，與直接入帳分開到帳">└ 借券補償</td>';
+      for (var lm = 1; lm <= 12; lm++) h += cell(r.lent[lm] || 0, lm);
+      h += '<td class="num dstat-tot">' + money(r.lentTot) + '</td></tr>';
+    }
   });
   h += '</tbody><tfoot><tr><td class="dstat-code">合計</td>';
   for (var k = 1; k <= 12; k++) h += '<td class="num">' + (colT[k] ? money(colT[k]) : '') + '</td>';
   h += '<td class="num dstat-tot">' + money(grand) + '</td></tr></tfoot></table></div>';
   return h;
+}
+
+// 借券拆分：放不進原本一列，改成點開才顯示的下拉列（個股明細、本月除息個股共用）
+function divLentToggle(key) {
+  _divLentOpen[key] = !_divLentOpen[key];
+  renderDividendEst();
+}
+function _divLentBtn(code, mo) {
+  var key = code + '|' + mo.exDate;
+  return ' <span class="divest-lent-tg" onclick="divLentToggle(\'' + key + '\')" title="拆分直接入帳與借券補償">含借出' +
+    (_divLentOpen[key] ? ' ▾' : ' ▸') + '</span>';
+}
+function _divLentLine(mo, money) {
+  var lots = function (sh) { return (sh / 1000).toLocaleString('zh-TW'); };
+  var direct = mo.shares - mo.lentShares;
+  return '直接入帳 <b>' + lots(direct) + '</b> 張 <b>' + money(mo.total - mo.lentTotal) + '</b>' +
+    '　借券補償 <b>' + lots(mo.lentShares) + '</b> 張 <b>' + money(mo.lentTotal) + '</b>' +
+    '<span class="divest-lent-src">' + (typeof lentSrcText === 'function' ? lentSrcText(mo) : '') + '</span>';
 }
 
 function toggleDivStock(code) {

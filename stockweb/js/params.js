@@ -4,6 +4,7 @@
 
 async function startParams(force) {
   if (typeof renderCostOverride === 'function') renderCostOverride(force);   // 認購成本補正區塊（獨立載入，不擋成份股清單）
+  if (typeof renderLentManual === 'function') renderLentManual();             // 除息日借出張數補登區塊
   var el = document.getElementById('params-const-body');
   el.innerHTML = '<div class="modal-loading">整理需匯入清單…</div>';
   try {

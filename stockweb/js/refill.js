@@ -417,7 +417,8 @@ function _rfBuildMonthPay(codes, todayIso) {
       (s.res.months || []).forEach(function (m) {
         if (!m.payDate || m.payDate.slice(0, 7) !== ym) return;
         out.push({ code: s.code, payDate: m.payDate, derived: false, amount: m.perShare,
-                   exDate: m.exDate, shares: m.shares, total: m.total, partial: !!m.partial });
+                   exDate: m.exDate, shares: m.shares, total: m.total, partial: !!m.partial,
+                   lentShares: m.lentShares || 0, lentTotal: m.lentTotal || 0, lentSrc: m.lentSrc, lentDate: m.lentDate });
       });
     });
   } else {
@@ -458,6 +459,9 @@ function _rfMonthPayHtml() {
     var yCost = (amt != null && cost > 0) ? amt / cost * 100 : null;
     var get = (e.total != null) ? e.total : ((amt != null && sh) ? amt * sh : null);
     if (get != null) total += get;
+    // 除息日借出中的部分由借券人另付權益補償、分開到帳（見 lent-log.js）→ 主列只放直接入帳，補償另起一列。合計不變。
+    var lentSh = e.lentShares > 0 ? e.lentShares : 0;
+    if (lentSh) { sh -= lentSh; get -= e.lentTotal; }
     var paid = e.payDate <= todayIso;
     h += '<tr>' +
       '<td class="rf-cal-date' + (paid ? ' rf-paid' : '') + '" title="' + (paid ? '已發放' : '待發放') +
@@ -473,6 +477,12 @@ function _rfMonthPayHtml() {
         '>' + _swapLots(sh) + (e.partial ? ' <span class="dexm-lent">(可領)</span>' : '') + '</td>' +
       '<td class="num">' + (get != null ? fmtMoney(get) : '—') + '</td>' +
     '</tr>';
+    if (lentSh) {
+      h += '<tr class="rf-pay-lent"><td class="rf-cal-date' + (paid ? ' rf-paid' : '') + '"></td>' +
+        '<td colspan="7" title="' + ((typeof lentSrcText === 'function' && lentSrcText(e)) || '') + '">└ 借券補償</td>' +
+        '<td class="num">' + _swapLots(lentSh) + '</td>' +
+        '<td class="num">' + fmtMoney(e.lentTotal) + '</td></tr>';
+    }
   });
   h += '</tbody></table></div>' +
     '<div class="swap-foot">本月可領合計 <b>' + fmtMoney(total) + '</b>' +
@@ -482,6 +492,8 @@ function _rfMonthPayHtml() {
     '<dt>成本月殖利率</dt><dd><code>配息金額 ÷ 持有成本</code>；月配標的即單月報酬率，年化約 ×12。</dd>' +
     '<dt>持有(張)</dt><dd>除息日當時可領的張數，不是目前持股：除息日當天（含）之後買進的領不到，' +
     '已賣出但除息時仍持有的照算。與月份總覽同一份計算，兩邊的本月合計相等。</dd>' +
+    '<dt>借券補償</dt><dd>除息日借出中的張數，配息由借券人另付權益補償，與直接入帳分開到帳，故另列一行。' +
+    '借出張數來源見參數設定「除息日借出張數」。</dd>' +
     '<dt>發放日標記</dt><dd>「*」＝尚未公告，以「除息月＋1」推導。日期較淡＝已發放。</dd>' +
     '</dl></div>';
   return h;

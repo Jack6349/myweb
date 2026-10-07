@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=216">
+<link rel="stylesheet" href="css/app.css?v=218">
 </head>
 <body>
 
@@ -330,6 +330,15 @@
         設定只在建倉明細仍有「同日、券商端成本 0」的批次時生效；該批次賣出或券商補登成本後自動失效，狀態會顯示「未對應」。</div>
       <div class="tx-note">僅列出自動來源（MoneyDJ/CMoney）抓不到、需手動維護清單的 ETF（境外/主動式）。匯入格式規劃中；目前更新方式：從 CMoney「持股明細」頁複製後由開發端更新 HOLDINGS_OVERRIDES。「今日尚未嘗試自動抓取」的 ETF 不列出，進過持股庫存後狀態才會更新。</div>
     </div>
+    <div class="tx-box">
+      <div class="tx-box-head"><span class="tx-box-title">除息日借出張數</span>
+        <button class="btn-query tx-refresh" onclick="renderLentManual()">↻ 重新整理</button></div>
+      <div id="params-lent-body"></div>
+      <div class="tx-note">除息日當天借出中的股數，配息不由發行公司直接匯入，而是借券人另付<b>權益補償</b>，兩筆分開入帳
+        （例 00989B 9/15 除息：委代入 3,950 為未借出的 45 張、電匯 11,000 為借出的 125 張）。股利估算依此把金額拆成「直接入帳」與「借券補償」。
+        系統每次載入券商庫存時會自動記下當天借出張數，除息日取當天（含）之前最近一筆紀錄；只有開網頁的日子才有紀錄，
+        上次開網頁到除息日之間改過借出張數，或開始紀錄之前的除息，請在此手動補登，手動補登優先於自動紀錄。</div>
+    </div>
   </div>
 
   <!-- 趨勢評估畫面 -->
@@ -413,7 +422,7 @@
 <script src="js/note.js?v=4"></script>
 <script src="js/broker.js?v=21"></script>
 <script src="js/fill-toast.js?v=6"></script>
-<script src="js/stream.js?v=82"></script>
+<script src="js/stream.js?v=83"></script>
 <script src="js/nav-usage.js?v=2"></script>
 <script src="js/daily-refresh.js?v=1"></script>
 <script src="js/category.js?v=1"></script>
@@ -424,19 +433,20 @@
 <script src="js/txinfo.js?v=19"></script>
 <script src="js/sbl.js?v=12"></script>
 <script src="js/cost-override.js?v=1"></script>
-<script src="js/params.js?v=3"></script>
+<script src="js/lent-log.js?v=1"></script>
+<script src="js/params.js?v=4"></script>
 <script src="js/topconst.js?v=8"></script>
 <script src="js/style-drift.js?v=18"></script>
 <script src="js/style-drift-doc.js?v=17"></script>
 <script src="js/watch.js?v=22"></script>
 <script src="js/etf-screen.js?v=21"></script>
-<script src="js/chart.js?v=21"></script>
+<script src="js/chart.js?v=22"></script>
 <script src="js/order.js?v=3"></script>
 <script src="js/div-mix.js?v=6"></script>
 <script src="js/div-meta.js?v=12"></script>
-<script src="js/dividend-est.js?v=62"></script>
+<script src="js/dividend-est.js?v=63"></script>
 <script src="js/swap.js?v=33"></script>
-<script src="js/refill.js?v=23"></script>
+<script src="js/refill.js?v=24"></script>
 <script src="js/nav-premium.js?v=9"></script>
 <script src="js/swap-scan.js?v=4"></script>
 <script src="js/risk-score.js?v=35"></script>

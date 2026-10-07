@@ -503,7 +503,7 @@ function _chartStopBidAsk() {
 // 五檔表：左右兩欄深度對照（買盤左、賣盤右，各 5 檔，買1/賣1 在最上）
 // 版面 左→右：〔量條→買量→買價 ‖ 賣價→賣量→量條〕；量條在最外側、價格在中央面對面
 // 顏色（同券商 App）：價格與昨收比，高於紅、平盤黃、低於綠；買賣量黃。
-// 標記：等於當日最高價標紅色 H、最低價標綠色 L（買盤標在價格左側、賣盤標在右側）；等於最新成交價加黃底線。
+// 標記：等於當日最高價標紅色 H、最低價標綠色 L，放在量條欄最外側（買盤最左、賣盤最右，與量條隔一個字元）；等於最新成交價加黃底線。
 function _bidAskHtml(b, code) {
   var r = _rows[code] || {}, ct = _contracts[code] || {}, ref = ct.reference;
   var dealCls = (r.close != null && ref != null) ? (r.close > ref ? 'up' : (r.close < ref ? 'down' : 'flat')) : '';
@@ -527,15 +527,25 @@ function _bidAskHtml(b, code) {
   var barW = function (v) { return (v / maxV * 100).toFixed(1); };
   var hl = (_bidHL && _bidHL.code === code) ? _bidHL : {};
   var same = function (a, b2) { return a != null && b2 != null && Math.abs(a - b2) < 1e-6; };
+  // H／L 標記：沒有標記時仍留空位，各列量條的起點才會對齊
+  var mark = function (raw) {
+    var p = parseFloat(raw);
+    return same(p, hl.high) ? '<span class="bid-hl up">H</span>' : (same(p, hl.low) ? '<span class="bid-hl down">L</span>' : '<span class="bid-hl"></span>');
+  };
+  // 量條欄：買盤〔標記｜量條靠右〕、賣盤〔量條靠左｜標記〕
+  var barCell = function (has, v, raw, side) {
+    if (!has) return '<td class="bid-bar-cell"></td>';
+    var bar = '<span class="bid-bar-track"><span class="bid-bar ' + (side === 'buy' ? 'bid' : 'ask') + '" style="width:' + barW(v) + '%"></span></span>';
+    return '<td class="bid-bar-cell"><div class="bid-bar-wrap">' + (side === 'buy' ? mark(raw) + bar : bar + mark(raw)) + '</div></td>';
+  };
   var pxCell = function (raw, side) {
     var p = parseFloat(raw);
     var cls = ref == null ? 'bid-flat' : (p > ref + 1e-6 ? 'up' : (p < ref - 1e-6 ? 'down' : 'bid-flat'));
-    var mk = same(p, hl.high) ? '<span class="bid-hl up">H</span>' : (same(p, hl.low) ? '<span class="bid-hl down">L</span>' : '<span class="bid-hl"></span>');
     var txt = '<span class="bid-pxv' + (same(p, r.close) ? ' bid-last' : '') + '">' + p.toFixed(2) + '</span>';
     // 點價下單：買方欄預設買進、賣方欄預設賣出，另一邊在確認框一鍵切換
     var tap = (typeof ordFromLadder === 'function')
       ? ' bid-tap" onclick="ordFromLadder(\'' + code + '\',' + p + ',\'' + side + '\')" title="點選下單"' : '"';
-    return '<td class="num bid-px ' + side + ' ' + cls + tap + '>' + (side === 'buy' ? mk + txt : txt + mk) + '</td>';
+    return '<td class="num bid-px ' + side + ' ' + cls + tap + '>' + txt + '</td>';
   };
 
   // 內外盤比 Bar（移到最上方、加高，兩側放張數與百分比）
@@ -556,13 +566,13 @@ function _bidAskHtml(b, code) {
     var hasB = bp[i] != null, hasA = ap[i] != null;
     rows += '<tr class="bid-row">' +
       // 買盤（左）：量條 → 買量 → 買價
-      '<td class="bid-bar-cell bid-bar-r">' + (hasB ? '<span class="bid-bar bid" style="width:' + barW(bv[i]) + '%"></span>' : '') + '</td>' +
+      barCell(hasB, bv[i], bp[i], 'buy') +
       '<td class="num bid-vol">' + (hasB ? diff(dbv[i]) + (bv[i] || 0).toLocaleString('zh-TW') : '') + '</td>' +
       (hasB ? pxCell(bp[i], 'buy') : '<td class="num bid-px buy"></td>') +
       // 賣盤（右）：賣價 → 賣量 → 量條
       (hasA ? pxCell(ap[i], 'sell') : '<td class="num bid-px sell"></td>') +
       '<td class="num bid-vol">' + (hasA ? diff(dav[i]) + (av[i] || 0).toLocaleString('zh-TW') : '') + '</td>' +
-      '<td class="bid-bar-cell">' + (hasA ? '<span class="bid-bar ask" style="width:' + barW(av[i]) + '%"></span>' : '') + '</td>' +
+      barCell(hasA, av[i], ap[i], 'sell') +
       '</tr>';
   }
   return head + ratio +
