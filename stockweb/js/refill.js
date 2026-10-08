@@ -258,9 +258,6 @@ async function startRefill(force) {
 
   // 除息日曆已移到股利估算頁，連帶在那裡建 _rfCal（startDividendEst）；本頁不再自行組
 
-  // 本月發放（依 _divRecMap 的發放月；含手動補登與 TPEx 已併入的公告）
-  _rfPay = _rfBuildMonthPay(codes, todayIso);
-
   var rows = [];
   for (var i = 0; i < withDiv.length; i++) {
     var code = withDiv[i];
@@ -315,8 +312,7 @@ function renderRefill() {
 
   // 除息日曆（未來已公告）已移到股利估算頁的「本月除息個股」與「個股明細」之間
 
-  // 本月發放
-  html += _rfMonthPayHtml();
+  // 本月發放已移到股利估算頁最上方（_rfPay 仍在那裡建，見 startDividendEst）
 
   // 未填息個股（本月發放與逐檔填息之間）：所有仍在貼息的除息，一次除息一列
   html += _rfPendingHtml(rows);

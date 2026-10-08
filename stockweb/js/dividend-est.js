@@ -486,7 +486,18 @@ function renderDividendEst() {
     sp('已入帳', money(grandActual), 'var(--down)') + sp('月均', money(grand / 12), 'var(--accent2)');
 
   // ── 本月除息個股（按除息日由近至遠）──
-  var html = _divExMonthHtml(stocks, money, md);
+  // ── 本月發放（原在填息追蹤，移到最上方）──
+  // 在這裡建 _rfPay：它的可領張數取自 computeEtfYear 的結果（_divEstResult），
+  // 必須等估算算完才有，而填息追蹤是另一條載入線、不保證跑過。
+  var html = '';
+  if (typeof _rfBuildMonthPay === 'function' && typeof _rfMonthPayHtml === 'function') {
+    try {
+      _rfPay = _rfBuildMonthPay(stocks.map(function (s) { return s.code; }), _divTwDate().iso);
+      html += _rfMonthPayHtml() + '<div class="divest-divider"></div>';
+    } catch (e) { console.warn('[本月發放]', e); }
+  }
+
+  html += _divExMonthHtml(stocks, money, md);
 
   // ── 除息日曆（未來已公告）── 原本在填息追蹤頁；這裡才是看「接下來要領什麼」的位置
   html += '<div class="divest-divider"></div>' + _rfCalHtml();
