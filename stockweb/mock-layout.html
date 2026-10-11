@@ -41,6 +41,10 @@
   /* 1fr 的最小尺寸是內容寬度，抽屜比新聞情勢頁窄會被撐出去。minmax(0,1fr) 強制等分。八格排四欄兩列。 */
   .dw .macro-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .dw .macro-cell { padding: 7px 10px; gap: 6px; min-width: 0; }
+  /* 配置跟盤勢要對齊：.cat-bar 自帶的框與內距會把四欄整體向右推 11px，
+     在抽屜裡拿掉，欄距改成跟 macro-row 一樣的 8px。 */
+  .dw .cat-bar { padding: 0; border: 0; background: none; margin-bottom: 0; }
+  .dw .cat-grid { gap: 8px; }
   .dw-close { float: right; background: none; border: 0; color: var(--text3); cursor: pointer; font-size: 16px; }
 </style>
 </head>
@@ -260,18 +264,27 @@ function renderCats(el, always) {
     }).join('') + '</div>';
     return;
   }
+  // 用正式頁的 .cat-grid / .cat-cell，不自己寫一套 inline style，
+  // 否則字級跟實際上線的版對不起來（名稱 15px、金額 16px、占比 12px）。
   el.className = 'cat-bar open';
-  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">' +
-    MK.cats.concat([['合計', 14, tot.pnl, 46.3, tot.cost, 100, tot.val, 100]]).map(function (c) {
-      return '<div style="border-left:3px solid var(--border);padding:6px 10px;background:var(--bg2)">' +
-        '<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700">' +
-          '<span>' + c[0] + ' <span style="color:var(--text3);font-weight:400">' + c[1] + '</span></span>' +
-          '<span>' + sgn(c[2]) + ' <span style="font-size:10px">' + sgn(c[3], 1, '%') + '</span></span></div>' +
-        '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:2px">' +
-          '<span>成本 ' + n(c[4]) + '</span><span>' + c[5].toFixed(1) + '%</span></div>' +
-        '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2)">' +
-          '<span>現值 ' + n(c[6]) + '</span><span>' + c[7].toFixed(1) + '%</span></div></div>';
-    }).join('') + '</div>';
+  var cell = function (c, cls) {
+    var col = c[2] > 0 ? 'var(--up)' : (c[2] < 0 ? 'var(--down)' : 'var(--text2)');
+    var sp = c[2] > 0 ? '+' : '';
+    return '<div class="cat-cell' + (cls || '') + '">' +
+      '<div class="cat-cname">' + c[0] + '<span class="cat-n">' + c[1] + '</span></div>' +
+      '<div class="cat-pnl" style="color:' + col + '">' + sp + n(Math.round(c[2])) + '</div>' +
+      '<div class="cat-pp" style="color:' + col + '">' + sp + c[3].toFixed(1) + '%</div>' +
+      '<div class="cat-lb">成本</div><div class="cat-cost">' + n(c[4]) + '</div>' +
+      '<div class="cat-cp">' + c[5].toFixed(1) + '%</div>' +
+      '<div class="cat-lb">現值</div>' +
+      '<div class="cat-val" style="color:' + col + '">' + n(c[6]) + '</div>' +
+      '<div class="cat-vp" style="color:' + col + '">' + c[7].toFixed(1) + '%</div></div>';
+  };
+  var cells = MK.cats.map(function (c) { return cell(c); })
+    .concat([cell(['合計', 14, tot.pnl, 46.3, tot.cost, 100, tot.val, 100], ' cat-cell-tot')]);
+  el.innerHTML = '<div class="cat-grid">' + cells.map(function (h, i) {
+    return (i && i % 4 === 0 ? '<div class="cat-sep"></div>' : '') + h;
+  }).join('') + '</div>';
 }
 
 function renderRows() {
