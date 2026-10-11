@@ -225,7 +225,13 @@ function renderDrawer() {
   var d = document.getElementById('dw'), t = MK.tot, p = MK.pos;
   d.hidden = !mkDwOpen;
   if (!mkDwOpen) { d.innerHTML = ''; return; }   // 收起時不保留 DOM，盤中不跟著重繪
+  // 盤勢放最上面：抽屜一展開先看到的是市場，再往下才是自己的部位與配置
   var h = '<button class="dw-close" onclick="mkDrawer()">✕</button>';
+  h += '<div class="dw-sec">盤勢</div><div class="macro-row">' +
+    MK.macro.map(function (m) {
+      return '<div class="macro-cell"><span class="macro-name">' + m[0] + '</span>' +
+        '<span class="macro-price">' + m[1] + '</span>' + pct(m[2]) + '</div>';
+    }).join('') + '</div>';
   h += '<div class="dw-sec">部位</div><div class="dw-row">' +
     pair('總付出成本(含借出)', n(t.cost), '#f5d87a') +
     pair('總庫存(含借出)', n(p.shares)) +
@@ -234,11 +240,6 @@ function renderDrawer() {
     pair('合計待交割', n(t.settle), 'var(--text3)') +
     '</div>';
   h += '<div class="dw-sec">配置</div><div id="dwcats"></div>';
-  h += '<div class="dw-sec">盤勢</div><div class="macro-row">' +
-    MK.macro.map(function (m) {
-      return '<div class="macro-cell"><span class="macro-name">' + m[0] + '</span>' +
-        '<span class="macro-price">' + m[1] + '</span>' + pct(m[2]) + '</div>';
-    }).join('') + '</div>';
   d.innerHTML = h;
   renderCats(document.getElementById('dwcats'), true);
 }
