@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>版面模擬 · 持股庫存</title>
+<!--
+  可拋棄式版面模擬。全部假資料，不連券商、不連行情、不改任何既有檔案。
+  用途：在動既有程式之前，先看「常駐帶 ＋ 抽屜」跟現況差多少。
+  網址：http://127.0.0.1:8080/apps/stockweb/mock-layout.html
+  確認版面後這個檔可以直接刪掉。
+  樣式沿用 css/app.css，不另外寫一套，否則模擬出來的密度跟實際不一樣。
+-->
+<link rel="stylesheet" href="css/app.css">
+<style>
+  /* 只放這個模擬頁自己的東西，既有 class 一律沿用 app.css */
+  .mk-bar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px;
+    padding: 8px 28px; background: #2a1f3d; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .mk-bar b { color: var(--accent2); }
+  .mk-seg { display: inline-flex; gap: 4px; }
+  .mk-seg button { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
+    font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
+  .mk-seg button.on { background: var(--accent2); color: #1a1a1a; border-color: var(--accent2); font-weight: 700; }
+  .mk-note { color: var(--text3); font-size: 12px; margin-left: auto; }
+  .mk-metrics { padding: 6px 28px; font-size: 12px; color: var(--text2); background: var(--bg2);
+    border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  .mk-metrics b { color: var(--accent2); }
+
+  /* 抽屜：浮在內容上方，表格不位移 */
+  .dw-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
+    font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
+  .dw-btn.on { border-color: var(--accent); color: var(--accent2); }
+  .dw { position: absolute; right: 28px; z-index: 30; width: min(1100px, calc(100vw - 56px));
+    background: var(--bg2); border: 1px solid var(--accent); border-radius: 10px;
+    box-shadow: 0 14px 34px rgba(0,0,0,.55); padding: 12px 16px; }
+  .dw[hidden] { display: none; }
+  .dw-sec { font-size: 11px; color: var(--accent2); font-weight: 700; letter-spacing: .5px; margin: 10px 0 6px; }
+  .dw-sec:first-child { margin-top: 0; }
+  .dw-row { display: flex; flex-wrap: wrap; gap: 8px 26px; }
+  .dw-close { float: right; background: none; border: 0; color: var(--text3); cursor: pointer; font-size: 16px; }
+</style>
+</head>
+<body>
+
+<div class="mk-bar">
+  <b>版面模擬</b>
+  <span class="mk-seg">
+    <button id="mk-now" class="on" onclick="mkView('now')">現況</button>
+    <button id="mk-new" onclick="mkView('new')">新版</button>
+  </span>
+  <span class="mk-seg">
+    <button id="mk-cat" onclick="mkCat()">分類列：收起</button>
+    <button id="mk-pick" onclick="mkPick()">點選注意股：0 檔</button>
+  </span>
+  <span class="mk-note">全部假資料，不連券商與行情。確認後此檔可刪。</span>
+</div>
+<div class="mk-metrics" id="mk-metrics"></div>
+
+<!-- 頂欄 -->
+<div class="topbar">
+  <div class="topbar-title">股利總管 <span class="topbar-web">Web</span>
+    <span class="crumb"> / 持股庫存</span>
+    <span class="topbar-totals" id="tb"></span>
+  </div>
+  <div class="topbar-right">
+    <button class="dw-btn" id="dwbtn" hidden onclick="mkDrawer()">▾ 更多</button>
+    <span style="font-size:12px;color:var(--text2)">已連線｜14 檔庫存</span>
+  </div>
+</div>
+
+<!-- 功能列 -->
+<div class="nav-bar">
+  <button class="active">持股庫存</button><button>交易資訊</button><button>股利估算</button>
+  <button>新聞情勢</button><button>成分股曝險</button><button>加減碼報告</button>
+  <button>停損停利</button><button>關注股票</button><button>即時持股</button>
+  <button>即時行情</button><button>籌碼淨值</button><button>趨勢評估</button><button>參數設定</button>
+</div>
+
+<div style="position:relative">
+  <div class="dw" id="dw" hidden></div>
+</div>
+
+<div class="main-area">
+  <div class="stream-summary" id="sumline" style="display:none"></div>
+  <div class="cat-bar" id="cats" style="display:none"></div>
+  <div class="inv-table-wrap">
+    <table class="inv-table">
+      <thead><tr>
+        <th></th><th></th><th>代號</th><th>名稱</th><th class="num">交易</th><th class="num">餘額</th>
+        <th class="num">現價</th><th class="num">漲跌</th><th class="num">漲跌幅</th>
+        <th class="num">成份股漲跌</th><th class="num">成本均價</th><th class="num">付出成本</th>
+        <th class="num">現值</th><th class="num">未實現損益</th><th class="num">獲利率</th>
+        <th class="num">現值比</th><th class="num">最近除息</th>
+      </tr></thead>
+      <tbody id="tb-rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ── 假資料（數字是編的，不是實際部位）──────────────────────────
+var MK = {
+  tot: { val: 17973915, cost: 12312695, pnl: 5661220, rate: 45.98, chg: -0.50, settle: 0 },
+  pos: { shares: 1028680, lent: 430000, book: 10166539 },
+  pick: { n: 4, cost: 4796369, pnl: -53885, vratio: 26.39, wchg: 0.05 },
+  cats: [
+    ['市值型', 2, 3252990, 190.6, 1706580, 13.9, 4959570, 27.5],
+    ['高息型', 1, 2388864, 74.3, 3216186, 26.1, 5605050, 31.1],
+    ['主動市值', 5, 247466, 11.1, 2226714, 18.1, 2474180, 13.7],
+    ['主動高息', 1, 9540, 16.0, 59700, 0.5, 69240, 0.4],
+    ['非投債', 3, -19119, -0.6, 3326369, 27.0, 3307250, 18.4],
+    ['主動非投債', 1, -24000, -1.6, 1470000, 11.9, 1446000, 8.0],
+    ['股票', 1, -153718, -50.0, 307146, 2.5, 153428, 0.9]
+  ],
+  macro: [
+    ['S&P 500', '7,812', 0.59], ['Nasdaq', '27,366', 0.64], ['費城半導體', '12,572', -0.41],
+    ['VIX 恐慌指數', '14.84', -3.70], ['美10年債殖利率', '5.244', 0.25],
+    ['美非投等債 HYG', '77.23', 0.12], ['美元指數', '102.23', 0.09],
+    ['美元兌台幣', '31.916', -0.03], ['台指夜盤 04:59', '48,705', -1.32]
+  ],
+  rows: [
+    ['00923','群益台ESG低碳50','(2,8月)','57,000','42.37',-0.42,-0.98,-1.21,'10.55','601,350','2,415,090',1808270,300.70,13.41,'—'],
+    ['00922','國泰台灣領袖50','(3,10月)','57,000','44.64',-0.51,-1.13,-1.21,'19.39','1,105,230','2,544,480',1433487,129.70,14.12,'10/19'],
+    ['00918','大華優利高填息30','(3,6,9,12月)','165,000','33.97',-0.17,-0.50,-0.68,'19.49','3,216,186','5,605,050',2376169,73.88,31.11,'—'],
+    ['00988A','主動統一全球創新','(年配)','9,000','17.32',-0.27,-1.53,null,'12.73','114,570','155,880',40957,35.75,0.87,'—'],
+    ['00402A','主動安聯美國科技','(年配)','15,000','10.23',0.01,0.10,null,'9.61','144,156','153,450',8601,5.97,0.85,'—'],
+    ['00404A','主動聯博動能50','(9月)','35,000','9.87',-0.01,-0.10,-0.22,'9.21','322,331','345,450',21894,6.79,1.92,'—'],
+    ['00405A','主動富邦台灣龍耀','(季配)','150,000','9.37',0.09,0.97,0.88,'8.83','1,323,867','1,405,500',78426,5.92,7.81,'—'],
+    ['00407A','主動凱基台灣','(查無)','35,000','10.22',0.10,0.99,0.91,'9.37','421,777','357,700',-65152,-15.45,1.99,'—'],
+    ['00981B','第一金優選非投債','(月配)','100,000','8.96',-0.01,-0.11,null,'8.86','886,000','896,000',8028,0.91,4.98,'10/22'],
+    ['00984D','主動聯博全球非投','(月配)','150,000','9.74',-0.01,-0.10,null,'9.80','1,470,000','1,461,000',-12308,-0.84,8.12,'—'],
+    ['00988B','玉山嚴選非投債','(月配)','5,000','19.07',-0.04,-0.21,null,'19.35','96,750','95,350',-1616,-1.67,0.53,'10/16'],
+    ['00989B','台新美國非投等債','(月配)','235,000','9.84',-0.02,-0.20,null,'9.97','2,342,950','2,312,400',-35665,-1.52,12.85,'10/16'],
+    ['00999A','主動野村臺灣高息','(9月)','6,000','11.36',0.06,0.53,0.61,'9.95','59,700','68,160',8306,13.91,0.38,'—'],
+    ['2380','虹光','(查無)','9,680','17.00',0.00,0.00,null,'31.73','307,146','164,560',-142958,-46.54,0.91,'—']
+  ]
+};
+
+var mkMode = 'now', mkCatOpen = false, mkPickOn = false, mkDwOpen = false;
+
+function n(v) { return v.toLocaleString('zh-TW'); }
+function sgn(v, dp, suf) {
+  var c = v > 0 ? 'up' : (v < 0 ? 'down' : 'flat');
+  var t = (v > 0 ? '+' : '') + (dp ? v.toFixed(dp) : n(Math.round(v))) + (suf || '');
+  return '<span class="' + c + '">' + t + '</span>';
+}
+function pct(v) {
+  if (v == null) return '<span class="flat">—</span>';
+  var c = v > 0 ? 'up' : (v < 0 ? 'down' : 'flat');
+  return '<span class="' + c + '">' + (v > 0 ? '▲' : (v < 0 ? '▼' : '')) + Math.abs(v).toFixed(2) + '%</span>';
+}
+function tt(lb, v, color) {
+  return '<span class="tt"><span class="tt-lb">' + lb + '</span>' +
+    '<span class="tt-v"' + (color ? ' style="color:' + color + '"' : '') + '>' + v + '</span></span>';
+}
+function pair(lb, v, color) {
+  return '<span class="sum-pair"><span class="sum-plabel">' + lb + '</span>' +
+    '<span class="sum-pval"' + (color ? ' style="color:' + color + '"' : '') + '>' + v + '</span></span>';
+}
+
+// ── 現況：頂欄 5 項 ＋ 合計列 8 項（點選 4 項沒點選時是「—」）──
+function renderNow() {
+  var t = MK.tot, p = MK.pos, k = MK.pick;
+  document.getElementById('tb').innerHTML =
+    tt('總現值(含借出)', n(t.val), 'var(--accent2)') +
+    tt('總付出成本(含借出)', n(t.cost), '#f5d87a') +
+    tt('損益試算', sgn(t.pnl)) +
+    tt('獲利率', sgn(t.rate, 2, '%')) +
+    tt('合計待交割', n(t.settle), 'var(--text3)');
+
+  var on = mkPickOn;
+  document.getElementById('sumline').innerHTML = '<div class="sum-line">' +
+    '<button class="btn-toggle">含稅費</button>' +
+    pair('總庫存(含借出)', n(p.shares)) +
+    pair('漲跌幅％', pct(t.chg)) +
+    pair('借出', n(p.lent) + ' 股', 'var(--text2)') +
+    pair('帳面現值', n(p.book), 'var(--text2)') +
+    pair('點選成本加總' + (on ? '(' + k.n + ')' : ''), on ? n(k.cost) : '—', on ? 'var(--accent2)' : 'var(--text3)') +
+    pair('點選損益加總' + (on ? '(' + k.n + ')' : ''), on ? sgn(k.pnl) : '—', on ? '' : 'var(--text3)') +
+    pair('點選現值比加總' + (on ? '(' + k.n + ')' : ''), on ? k.vratio.toFixed(2) + '%' : '—', on ? 'var(--accent2)' : 'var(--text3)') +
+    pair('點選加權漲跌' + (on ? '(' + k.n + ')' : ''), on ? pct(k.wchg) : '—', on ? '' : 'var(--text3)') +
+    '</div>';
+  document.getElementById('sumline').style.display = '';
+  document.getElementById('dwbtn').hidden = true;
+  document.getElementById('dw').hidden = true;
+  renderCats(document.getElementById('cats'));
+  document.getElementById('cats').style.display = '';
+}
+
+// ── 新版：常駐帶 4 項 ＋ 抽屜；點選系列有點選才出現 ──
+function renderNew() {
+  var t = MK.tot, k = MK.pick;
+  document.getElementById('tb').innerHTML =
+    tt('總現值', n(t.val), 'var(--accent2)') +
+    tt('損益試算', sgn(t.pnl)) +
+    tt('獲利率', sgn(t.rate, 2, '%')) +
+    tt('漲跌幅％', pct(t.chg));
+
+  // 點選系列：沒點選完全不佔位
+  var sl = document.getElementById('sumline');
+  if (mkPickOn) {
+    sl.innerHTML = '<div class="sum-line">' +
+      '<button class="btn-toggle">含稅費</button>' +
+      pair('點選成本加總(' + k.n + ')', n(k.cost), 'var(--accent2)') +
+      pair('點選損益加總(' + k.n + ')', sgn(k.pnl)) +
+      pair('點選現值比加總(' + k.n + ')', k.vratio.toFixed(2) + '%', 'var(--accent2)') +
+      pair('點選加權漲跌(' + k.n + ')', pct(k.wchg)) +
+      '</div>';
+    sl.style.display = '';
+  } else { sl.innerHTML = ''; sl.style.display = 'none'; }
+
+  document.getElementById('cats').style.display = 'none';
+  var b = document.getElementById('dwbtn');
+  b.hidden = false;
+  b.textContent = (mkDwOpen ? '▴' : '▾') + ' 更多';
+  b.className = 'dw-btn' + (mkDwOpen ? ' on' : '');
+  renderDrawer();
+}
+
+function renderDrawer() {
+  var d = document.getElementById('dw'), t = MK.tot, p = MK.pos;
+  d.hidden = !mkDwOpen;
+  if (!mkDwOpen) { d.innerHTML = ''; return; }   // 收起時不保留 DOM，盤中不跟著重繪
+  var h = '<button class="dw-close" onclick="mkDrawer()">✕</button>';
+  h += '<div class="dw-sec">部位</div><div class="dw-row">' +
+    pair('總付出成本(含借出)', n(t.cost), '#f5d87a') +
+    pair('總庫存(含借出)', n(p.shares)) +
+    pair('借出', n(p.lent) + ' 股', 'var(--text2)') +
+    pair('帳面現值', n(p.book), 'var(--text2)') +
+    pair('合計待交割', n(t.settle), 'var(--text3)') +
+    '</div>';
+  h += '<div class="dw-sec">配置</div><div id="dwcats"></div>';
+  h += '<div class="dw-sec">盤勢</div><div class="macro-row">' +
+    MK.macro.map(function (m) {
+      return '<div class="macro-cell"><span class="macro-name">' + m[0] + '</span>' +
+        '<span class="macro-price">' + m[1] + '</span>' + pct(m[2]) + '</div>';
+    }).join('') + '</div>';
+  d.innerHTML = h;
+  renderCats(document.getElementById('dwcats'), true);
+}
+
+function renderCats(el, always) {
+  if (!el) return;
+  var open = always ? true : mkCatOpen;
+  var tot = { cost: 0, val: 0, pnl: 0 };
+  MK.cats.forEach(function (c) { tot.pnl += c[2]; tot.cost += c[4]; tot.val += c[6]; });
+  if (!open) {
+    el.className = 'cat-bar';
+    el.innerHTML = '<div class="cat-line">' + MK.cats.map(function (c) {
+      return '<span class="sum-pair"><span class="sum-plabel">' + c[0] + ' ' + c[1] + '</span>' +
+        '<span class="sum-pval">' + sgn(c[2]) + '</span></span>';
+    }).join('') + '</div>';
+    return;
+  }
+  el.className = 'cat-bar open';
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">' +
+    MK.cats.concat([['合計', 14, tot.pnl, 46.3, tot.cost, 100, tot.val, 100]]).map(function (c) {
+      return '<div style="border-left:3px solid var(--border);padding:6px 10px;background:var(--bg2)">' +
+        '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700">' +
+          '<span>' + c[0] + ' <span style="color:var(--text3);font-weight:400">' + c[1] + '</span></span>' +
+          '<span>' + sgn(c[2]) + ' <span style="font-size:11px">' + sgn(c[3], 1, '%') + '</span></span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:2px">' +
+          '<span>成本 ' + n(c[4]) + '</span><span>' + c[5].toFixed(1) + '%</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)">' +
+          '<span>現值 ' + n(c[6]) + '</span><span>' + c[7].toFixed(1) + '%</span></div></div>';
+    }).join('') + '</div>';
+}
+
+function renderRows() {
+  document.getElementById('tb-rows').innerHTML = MK.rows.map(function (r, i) {
+    var picked = mkPickOn && i < MK.pick.n;
+    return '<tr>' +
+      '<td><button class="btn-detail btn-ghost" style="font-size:11px">明細</button></td>' +
+      '<td class="live-dot-cell"><button class="live-dot' + (picked ? ' on' : '') + '" style="--dot:#7aa7f0"></button></td>' +
+      '<td class="inv-code"><span class="code-link">' + r[0] + '</span></td>' +
+      '<td class="inv-name">' + r[1] + '<span class="inv-freq">' + r[2] + '</span></td>' +
+      '<td class="num"></td>' +
+      '<td class="num">' + r[3] + '</td>' +
+      '<td class="num">' + r[4] + '</td>' +
+      '<td class="num">' + sgn(r[5], 2) + '</td>' +
+      '<td class="num">' + pct(r[6]) + '</td>' +
+      '<td class="num">' + pct(r[7]) + '</td>' +
+      '<td class="num">' + r[8] + '</td>' +
+      '<td class="num">' + r[9] + '</td>' +
+      '<td class="num">' + r[10] + '</td>' +
+      '<td class="num">' + sgn(r[11]) + '</td>' +
+      '<td class="num">' + sgn(r[12], 2, '%') + '</td>' +
+      '<td class="num">' + r[13].toFixed(2) + '%</td>' +
+      '<td class="num">' + r[14] + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+// 量出「第一列在哪、看得到幾列」，兩個版本可以直接比
+function measure() {
+  var rows = [].slice.call(document.querySelectorAll('#tb-rows tr'));
+  if (!rows.length) return;
+  var top = Math.round(rows[0].getBoundingClientRect().top);
+  var vis = rows.filter(function (r) { return r.getBoundingClientRect().bottom <= innerHeight; }).length;
+  document.getElementById('mk-metrics').innerHTML =
+    '視窗 <b>' + innerWidth + '×' + innerHeight + '</b>　' +
+    '第一筆持股起點 <b>' + top + 'px</b>（佔畫面 ' + (top / innerHeight * 100).toFixed(0) + '%）　' +
+    '完整看得到 <b>' + vis + '</b> / ' + rows.length + ' 筆　' +
+    '<span style="color:var(--text3)">切換上方「現況／新版」直接比較</span>';
+}
+
+function mkView(v) {
+  mkMode = v;
+  document.getElementById('mk-now').className = v === 'now' ? 'on' : '';
+  document.getElementById('mk-new').className = v === 'new' ? 'on' : '';
+  draw();
+}
+function mkCat() { mkCatOpen = !mkCatOpen; draw(); }
+function mkPick() { mkPickOn = !mkPickOn; draw(); }
+function mkDrawer() { mkDwOpen = !mkDwOpen; draw(); }
+
+function draw() {
+  document.getElementById('mk-cat').textContent = '分類列：' + (mkCatOpen ? '展開' : '收起');
+  document.getElementById('mk-cat').disabled = mkMode === 'new';
+  document.getElementById('mk-pick').textContent = '點選注意股：' + (mkPickOn ? MK.pick.n + ' 檔' : '0 檔');
+  if (mkMode === 'now') renderNow(); else renderNew();
+  renderRows();
+  setTimeout(measure, 30);
+}
+addEventListener('resize', measure);
+draw();
+</script>
+</body>
+</html>
