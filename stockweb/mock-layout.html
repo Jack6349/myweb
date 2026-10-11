@@ -21,6 +21,7 @@
   .mk-seg button { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
     font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
   .mk-seg button.on { background: var(--accent2); color: #1a1a1a; border-color: var(--accent2); font-weight: 700; }
+  .mk-seg button:disabled { opacity: .35; cursor: default; }
   .mk-note { color: var(--text3); font-size: 12px; margin-left: auto; }
   .mk-metrics { padding: 6px 28px; font-size: 12px; color: var(--text2); background: var(--bg2);
     border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
@@ -49,8 +50,9 @@
     <button id="mk-new" onclick="mkView('new')">新版</button>
   </span>
   <span class="mk-seg">
-    <button id="mk-cat" onclick="mkCat()">分類列：收起</button>
-    <button id="mk-pick" onclick="mkPick()">點選注意股：0 檔</button>
+    <button id="mk-cat" onclick="mkCat()">分類列</button>
+    <button id="mk-pick" onclick="mkPick()">點選注意股</button>
+    <button id="mk-dw" onclick="mkDrawer()">抽屜</button>
   </span>
   <span class="mk-note">全部假資料，不連券商與行情。確認後此檔可刪。</span>
 </div>
@@ -136,7 +138,9 @@ var MK = {
   ]
 };
 
-var mkMode = 'now', mkCatOpen = false, mkPickOn = false, mkDwOpen = false;
+// 預設就點選 4 檔：這幾個「點選加總」正是持股庫存獨有、要拿來評估版面的東西，
+// 預設 0 檔會讓它們顯示成四個「—」，看起來像沒做。
+var mkMode = 'now', mkCatOpen = false, mkPickOn = true, mkDwOpen = false;
 
 function n(v) { return v.toLocaleString('zh-TW'); }
 function sgn(v, dp, suf) {
@@ -315,9 +319,20 @@ function mkPick() { mkPickOn = !mkPickOn; draw(); }
 function mkDrawer() { mkDwOpen = !mkDwOpen; draw(); }
 
 function draw() {
-  document.getElementById('mk-cat').textContent = '分類列：' + (mkCatOpen ? '展開' : '收起');
-  document.getElementById('mk-cat').disabled = mkMode === 'new';
-  document.getElementById('mk-pick').textContent = '點選注意股：' + (mkPickOn ? MK.pick.n + ' 檔' : '0 檔');
+  // 三顆都是開關，用 on 樣式標出目前狀態，不要只靠文字敘述
+  var bc = document.getElementById('mk-cat');
+  bc.textContent = '分類列' + (mkCatOpen ? '：展開' : '：收起');
+  bc.className = mkCatOpen ? 'on' : '';
+  bc.disabled = mkMode === 'new';
+  bc.title = mkMode === 'new' ? '新版的分類在抽屜裡' : '';
+  var bp = document.getElementById('mk-pick');
+  bp.textContent = '點選注意股：' + (mkPickOn ? MK.pick.n + ' 檔' : '0 檔');
+  bp.className = mkPickOn ? 'on' : '';
+  var bd = document.getElementById('mk-dw');
+  bd.textContent = '抽屜：' + (mkDwOpen ? '展開' : '收起');
+  bd.className = mkDwOpen ? 'on' : '';
+  bd.disabled = mkMode === 'now';
+  bd.title = mkMode === 'now' ? '現況沒有抽屜' : '';
   if (mkMode === 'now') renderNow(); else renderNew();
   renderRows();
   setTimeout(measure, 30);
