@@ -31,13 +31,16 @@
   .dw-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
     font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
   .dw-btn.on { border-color: var(--accent); color: var(--accent2); }
-  .dw { position: absolute; right: 28px; z-index: 30; width: min(1100px, calc(100vw - 56px));
+  .dw { position: absolute; right: 28px; z-index: 30; width: min(1500px, calc(100vw - 56px));
     background: var(--bg2); border: 1px solid var(--accent); border-radius: 10px;
     box-shadow: 0 14px 34px rgba(0,0,0,.55); padding: 12px 16px; }
   .dw[hidden] { display: none; }
   .dw-sec { font-size: 11px; color: var(--accent2); font-weight: 700; letter-spacing: .5px; margin: 10px 0 6px; }
   .dw-sec:first-child { margin-top: 0; }
   .dw-row { display: flex; flex-wrap: wrap; gap: 8px 26px; }
+  /* 抽屜比新聞情勢頁窄，1fr 的最小尺寸是內容寬度，九格會撐出去。改成 minmax(0,1fr) 強制等分。 */
+  .dw .macro-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .dw .macro-cell { padding: 7px 10px; gap: 6px; min-width: 0; }
   .dw-close { float: right; background: none; border: 0; color: var(--text3); cursor: pointer; font-size: 16px; }
 </style>
 </head>
