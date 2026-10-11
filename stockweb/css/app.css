@@ -56,7 +56,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .topbar-txf .txf-lb { font-size: 11px; color: var(--text2); }
 .topbar-txf .txf-v { font-size: 15px; font-weight: 700; letter-spacing: normal; font-variant-numeric: tabular-nums; }
 .topbar-totals .tt { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
-.topbar-totals .tt-lb { font-size: 10px; color: var(--text2); font-weight: 400; }
+.topbar-totals .tt-lb { font-size: 16px; color: var(--text2); font-weight: 400; }
 .topbar-totals .tt-v { font-size: 16px; font-weight: 700; letter-spacing: normal; font-variant-numeric: tabular-nums; }
 .topbar-right { display: flex; align-items: center; gap: 18px; }
 .conn-status { font-size: 13px; color: var(--text2); }
@@ -93,7 +93,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .stream-summary { background: var(--bg2); border-bottom: 1px solid var(--border); margin: -14px calc(50% - 50vw) 10px; padding: 8px calc(50vw - 50%); overflow-x: auto; position: sticky; top: 104px; z-index: 8; }
 .sum-line { display: flex; align-items: center; gap: 8px 26px; flex-wrap: wrap; }
 .sum-pair { white-space: nowrap; display: flex; align-items: baseline; gap: 8px; }
-.sum-plabel { font-size: 12px; color: var(--text2); font-weight: 600; }
+.sum-plabel { font-size: 16px; color: var(--text2); font-weight: 600; }
 .sum-pval { font-size: 16px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
 .btn-toggle { background: rgba(138,180,212,.14); border: 1px solid rgba(138,180,212,.45); color: #8ab4d4; font-size: 12px; font-weight: 600; padding: 4px 0; border-radius: 7px; cursor: pointer; font-family: var(--font); white-space: nowrap; width: 84px; text-align: center; box-sizing: border-box; flex-shrink: 0; }
 .btn-toggle:hover { background: rgba(138,180,212,.26); }
@@ -867,6 +867,26 @@ td.cost-even::after  { background: var(--text3); }
 .bid-cols .tick-title { margin-top: 0; }            /* 與左欄頂端對齊 */
 /* 窄螢幕回到上下排，避免兩欄都被擠扁 */
 @media (max-width: 900px) { .bid-cols { grid-template-columns: 1fr; } }
+
+/* ── 頂欄抽屜（部位與配置）── */
+/* 定位容器本身零高度：抽屜是 absolute，展開時不把下方表格推下去。
+   盤中最常看的是持股列表，第一筆的位置不能因為抽屜開關而跳動。 */
+.dw-anchor { position: relative; height: 0; }
+.dw-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
+  font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
+.dw-btn.on { border-color: var(--accent); color: var(--accent2); }
+.dw { position: absolute; right: 28px; z-index: 30; width: min(1240px, calc(100vw - 56px));
+  background: var(--bg2); border: 1px solid var(--accent); border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.55); padding: 12px 16px; }
+.dw[hidden] { display: none; }
+/* 與功能頁標題（.crumb）同字級 */
+.dw-sec { font-size: 16px; color: var(--accent2); font-weight: 600; margin: 12px 0 6px; }
+.dw-sec:first-of-type { margin-top: 0; }
+.dw-row { display: flex; flex-wrap: wrap; gap: 8px 26px; }
+.dw-close { float: right; background: none; border: 0; color: var(--text3); cursor: pointer; font-size: 16px; }
+/* 配置要跟上方對齊：.cat-bar 自帶的框與內距會把四欄整體向右推。 */
+.dw .cat-bar { padding: 0; border: 0; background: none; margin-bottom: 0; }
+.dw .cat-grid { gap: 8px; }
 
 /* ── 持股分類配置列（持股庫存表格上方）── */
 /* 收起＝單行摘要（字型由 _catLineFit 量測），右侧箭頭展開成 4×2 格線。

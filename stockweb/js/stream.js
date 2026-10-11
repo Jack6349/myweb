@@ -474,67 +474,67 @@ function toggleTaxMode() {
   if (typeof renderInvTable === 'function' && document.getElementById('inv-tbody') && document.getElementById('inv-tbody').children.length) renderInvTable();
   if (typeof renderLiveTables === 'function' && document.getElementById('live-cols') && document.getElementById('live-cols').children.length) renderLiveTables();
 }
-function renderSummary(targetId) {
-  var el = document.getElementById(targetId);
-  if (!el) return;
+// 全站共用的持股總計。頂欄、各頁合計列、抽屜「部位」都從這裡取。
+// 以前頂欄的 _sumGross() 與 renderSummary() 裡是兩份幾乎一樣的程式碼，
+// 改了一邊忘另一邊就會對不起來（2026-10-02 總現值少 1,405,500 就是這樣來的），
+// 所以合成一份。
+// 價格順序：即時報價 → 券商部位的 last_price → 不計入並回報檔數。
+// 少一整筆的總額比沒有總額更糟，所以寧可用稍舊的價格，真的都沒有才標出來。
+function portfolioTotals() {
   var grandTotal = 0, wsum = 0, wtotal = 0, totalShares = 0, noPx = 0;
-  // 註：_sumGross() 是同一套邏輯的精簡版，給頂欄用；兩邊要一起改
-  Object.keys(_sharesMap).forEach(function (code) { totalShares += _sharesMap[code]; });
-  // 沒有即時報價時退回券商部位的 last_price。原本直接跳過那一檔，
-  // 總現值就會少掉整筆而且看不出來——2026-10-02 螢幕上是 16,475,598，
-  // 比實際少 1,405,500，正好是當時還沒有報價的 00405A（它全數出借、
-  // 券商彙總回 0 股，要從建倉明細重建，比別檔晚到）。
-  // 少一整筆的總額比沒有總額更糟，所以寧可用稍舊的價格，真的都沒有才標出來。
-  var _px = {};
-  (_positions || []).forEach(function (p) { if (p.last_price != null) _px[String(p.code)] = p.last_price; });
-  Object.keys(_sharesMap).forEach(function (code) {
-    var r = _rows[code], c = _contracts[code];
+  var px = {};
+  (_positions || []).forEach(function (p) { if (p.last_price != null) px[String(p.code)] = p.last_price; });
+  Object.keys(_sharesMap || {}).forEach(function (code) {
     var sh = _sharesMap[code];
     if (!sh) return;
-    var px = (r && r.close != null) ? r.close : (_px[code] != null ? _px[code] : null);
-    if (px == null) { noPx++; return; }
-    var val = px * sh;
+    totalShares += sh;
+    var r = _rows[code], c = _contracts[code];
+    var v = (r && r.close != null) ? r.close : (px[code] != null ? px[code] : null);
+    if (v == null) { noPx++; return; }
+    var val = v * sh;
     grandTotal += val;
     if (c && c.reference) {
-      wsum += val * ((px - c.reference) / c.reference * 100);
+      wsum += val * ((v - c.reference) / c.reference * 100);
       wtotal += val;
     }
   });
-  if (!grandTotal) { el.style.display = 'none'; return; }
-  var curVal = Math.round(_taxMode ? grandTotal * 0.997735 : grandTotal); // 總現值：含稅費淨額 / 毛額
-  var wpct = wtotal > 0 ? wsum / wtotal : null;          // 加權漲跌幅%
-  var profit = _totalCost ? curVal - _totalCost : null;  // 損益試算
-  var prate = (profit != null && _totalCost) ? profit / _totalCost * 100 : null;
-  var pcls = profit == null ? 'flat' : colorClass(profit);
-  var wcls = wpct == null ? 'flat' : colorClass(wpct);
-  var toggleBtn = '<button class="btn-toggle" onclick="toggleTaxMode()">' + (_taxMode ? '含稅費' : '不含稅費') + '</button>';
-  // 真的連 last_price 都沒有的檔數要說出來，否則總現值少一筆看不出來
-  var noPxTag = noPx ? '<span class="sum-nopx" title="這幾檔連券商的參考價都沒有，未計入總現值">' +
-    '（' + noPx + ' 檔無報價，未計入）</span>' : '';
-  var detailBtn = (targetId === 'inv-summary') ? '' : '<button class="btn-detail" onclick="openInventory()">明細</button>';
-  var pair = function (label, val, colorStyle) {
-    return '<span class="sum-pair"><span class="sum-plabel">' + label + '</span>' +
-      '<span class="sum-pval"' + (colorStyle ? ' style="color:' + colorStyle + '"' : '') + '>' + val + '</span></span>';
-  };
-  var cls2var = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
-  // 出借股數與其現值（帳面現值＝總現值扣除出借部分，與券商帳面一致）
-  // 部分出借時只算 lentShares（出借中股數），不能把整檔 quantity 都算成借出
+  // 出借股數與其現值（帳面現值＝總現值扣除出借部分，與券商帳面一致）。
+  // 部分出借時只算 lentShares，不能把整檔 quantity 都當成借出。
   var lentShares = 0, lentGross = 0;
   (_positions || []).forEach(function (p) {
     if (!p.lent) return;
-    var code = String(p.code);
     var ls = p.lentShares != null ? p.lentShares : p.quantity;
     lentShares += ls;
-    var r = _rows[code];
+    var r = _rows[String(p.code)];
     var lpx = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
     if (lpx != null) lentGross += lpx * ls;   // 與總現值同一套價格來源，否則帳面現值會被灌水
   });
+  var curVal = Math.round(_taxMode ? grandTotal * 0.997735 : grandTotal);   // 含稅費淨額／毛額
   var lentVal = Math.round(_taxMode ? lentGross * 0.997735 : lentGross);
-  var bookVal = curVal - lentVal; // 帳面現值（不含借出）
-  // 點選損益加總：代號前圓點已標記（注意股，live_watch_v1）者的未實現損益合計
-  // 沿用 invMetrics 計算，與庫存表的「未實現損益」欄同基準（含/不含稅費隨切換）
-  // 另加「點選現值比加總」：分母沿用 _invTotalVal()（全部持股今日總現值，未扣稅費），
-  // 與庫存表「現值比」欄同一基準，各列相加才等於這個合計
+  var profit = _totalCost ? curVal - _totalCost : null;
+  return {
+    grandTotal: grandTotal, curVal: curVal, noPx: noPx, totalShares: totalShares,
+    wpct: wtotal > 0 ? wsum / wtotal : null,
+    profit: profit,
+    prate: (profit != null && _totalCost) ? profit / _totalCost * 100 : null,
+    lentShares: lentShares, lentVal: lentVal, bookVal: curVal - lentVal
+  };
+}
+
+// 各頁合計列：只留「含稅費」切換、「明細」與點選四項。
+// 總現值／損益試算／獲利率／漲跌幅％ 在頂欄常駐，總庫存／借出／帳面現值 在抽屜「部位」。
+function renderSummary(targetId) {
+  var el = document.getElementById(targetId);
+  if (!el) return;
+  var t = portfolioTotals();
+  if (!t.grandTotal) { el.style.display = 'none'; return; }
+  var toggleBtn = '<button class="btn-toggle" onclick="toggleTaxMode()">' + (_taxMode ? '含稅費' : '不含稅費') + '</button>';
+  var detailBtn = (targetId === 'inv-summary') ? '' : '<button class="btn-detail" onclick="openInventory()">明細</button>';
+  var cls2var = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
+  // 點選損益加總：代號前圓點已標記（注意股，live_watch_v1）者的未實現損益合計。
+  // 沿用 invMetrics 計算，與庫存表的「未實現損益」欄同基準（含/不含稅費隨切換）。
+  // 點選現值比加總的分母沿用 _invTotalVal()（全部持股今日總現值，未扣稅費），
+  // 與庫存表「現值比」欄同一基準，各列相加才等於這個合計。
   var pickSum = null, pickN = 0, pickCost = null, pickVal = null, pickWsum = 0, pickWtot = 0;
   var totValAll = (typeof _invTotalVal === 'function') ? _invTotalVal() : 0;
   if (typeof loadWatch === 'function' && typeof invMetrics === 'function') {
@@ -560,75 +560,94 @@ function renderSummary(targetId) {
     });
   }
   el.style.display = '';
-  // 總現值/總付出成本/損益試算/獲利率 已移至頂欄；合計列留其餘欄位（回到一行）
   el.innerHTML = '<div class="sum-line">' + toggleBtn + detailBtn +
-    pair('總庫存(含借出)', totalShares.toLocaleString('zh-TW'), '') +
-    pair('漲跌幅％', wpct == null ? '—' : fmtPct(wpct), cls2var[wcls]) +
-    pair('借出', lentShares.toLocaleString('zh-TW') + ' 股', 'var(--text2)') +
-    pair('帳面現值', bookVal.toLocaleString('zh-TW'), 'var(--text2)') +
-    pair('點選成本加總' + (pickN ? '(' + pickN + ')' : ''),
+    sumPair('點選成本加總' + (pickN ? '(' + pickN + ')' : ''),
       pickCost == null ? '—' : Math.round(pickCost).toLocaleString('zh-TW'),
       pickCost == null ? 'var(--text3)' : 'var(--accent2)') +   // 與頂欄「總現值」同色
-    pair('點選損益加總' + (pickN ? '(' + pickN + ')' : ''),
+    sumPair('點選損益加總' + (pickN ? '(' + pickN + ')' : ''),
       pickSum == null ? '—' : (pickSum >= 0 ? '+' : '') + Math.round(pickSum).toLocaleString('zh-TW'),
       pickSum == null ? 'var(--text3)' : cls2var[colorClass(pickSum)]) +
-    pair('點選現值比加總' + (pickN ? '(' + pickN + ')' : ''),
+    sumPair('點選現值比加總' + (pickN ? '(' + pickN + ')' : ''),
       (pickVal == null || !totValAll) ? '—' : (pickVal / totValAll * 100).toFixed(2) + '%',
       (pickVal == null || !totValAll) ? 'var(--text3)' : 'var(--accent2)') +
-    pair('點選加權漲跌' + (pickN ? '(' + pickN + ')' : ''),
+    sumPair('點選加權漲跌' + (pickN ? '(' + pickN + ')' : ''),
       pickWtot > 0 ? fmtPct(pickWsum / pickWtot) : '—',
       pickWtot > 0 ? cls2var[colorClass(pickWsum / pickWtot)] : 'var(--text3)') +
   '</div>';
 }
 
-// 頂欄常駐四項（總現值/總付出成本/損益試算/獲利率，全站可見、隨行情跳動）
-// 總現值（毛額）與沒有任何報價的檔數。頂欄與各頁合計共用，避免兩套算法漂走。
-// 價格順序：即時報價 → 券商部位的 last_price。兩者皆無才不計入，並回報檔數。
-function _sumGross() {
-  var gross = 0, noPx = 0, px = {};
-  (_positions || []).forEach(function (p) { if (p.last_price != null) px[String(p.code)] = p.last_price; });
-  Object.keys(_sharesMap || {}).forEach(function (code) {
-    var sh = _sharesMap[code];
-    if (!sh) return;
-    var r = _rows[code];
-    var v = (r && r.close != null) ? r.close : (px[code] != null ? px[code] : null);
-    if (v == null) { noPx++; return; }
-    gross += v * sh;
-  });
-  return { gross: gross, noPx: noPx };
+// 標籤＋數值一組，合計列與抽屜「部位」共用
+function sumPair(label, val, colorStyle) {
+  return '<span class="sum-pair"><span class="sum-plabel">' + label + '</span>' +
+    '<span class="sum-pval"' + (colorStyle ? ' style="color:' + colorStyle + '"' : '') + '>' + val + '</span></span>';
 }
 
+// 頂欄常駐四項（總現值／損益試算／獲利率／漲跌幅％，全站可見、隨行情跳動）。
+// 其餘部位數字（總付出成本、總庫存、借出、帳面現值、合計待交割）在抽屜「部位」，
+// 那些盤中不跳，不需要一直佔著版面。
 function renderTopbarTotals() {
   var el = document.getElementById('topbar-totals');
+  var btn = document.getElementById('dw-btn');
   if (!el) return;
-  if (_curView === 'risk') { el.innerHTML = ''; return; } // 加減碼報告頁：讓位給台指期徽章
-  if (!_sharesMap || !Object.keys(_sharesMap).length) { el.innerHTML = ''; return; }
-  // 與 renderSummary 同一套：沒有即時報價就退回券商部位的 last_price。
-  // 原本直接跳過，總現值會少掉整筆而且看不出來（2026-10-02 少了全數出借的 00405A 1,405,500）。
-  var _t = _sumGross();
-  var grandTotal = _t.gross, noPx = _t.noPx;
-  var noPxTag = noPx ? '<span class="sum-nopx" title="這幾檔連券商的參考價都沒有，未計入總現值">' +
-    '（' + noPx + ' 檔無報價）</span>' : '';
-  if (!grandTotal) { el.innerHTML = ''; return; }
-  var curVal = Math.round(_taxMode ? grandTotal * 0.997735 : grandTotal);
-  var profit = _totalCost ? curVal - _totalCost : null;
-  var prate = (profit != null && _totalCost) ? profit / _totalCost * 100 : null;
-  var pcls = profit == null ? 'flat' : colorClass(profit);
+  var hide = function () {
+    el.innerHTML = '';
+    if (btn) btn.hidden = true;
+    if (_dwOpen) { _dwOpen = false; renderDrawer(); }
+  };
+  if (_curView === 'risk') { hide(); return; }   // 加減碼報告頁：讓位給台指期徽章
+  if (!_sharesMap || !Object.keys(_sharesMap).length) { hide(); return; }
+  var t = portfolioTotals();
+  if (!t.grandTotal) { hide(); return; }
+  var noPxTag = t.noPx ? '<span class="sum-nopx" title="這幾檔連券商的參考價都沒有，未計入總現值">' +
+    '（' + t.noPx + ' 檔無報價）</span>' : '';
   var cvar = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
+  var pcls = t.profit == null ? 'flat' : colorClass(t.profit);
+  var wcls = t.wpct == null ? 'flat' : colorClass(t.wpct);
   var tt = function (lb, v, c) {
     return '<span class="tt"><span class="tt-lb">' + lb + '</span><span class="tt-v" style="color:' + c + '">' + v + '</span></span>';
   };
   el.innerHTML =
-    tt('總現值(含借出)', curVal.toLocaleString('zh-TW') + noPxTag, 'var(--accent2)') +
-    tt('總付出成本(含借出)', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', '#f5d87a') +
-    tt('損益試算', profit == null ? '—' : (profit >= 0 ? '+' : '') + profit.toLocaleString('zh-TW'), cvar[pcls]) +
-    tt('獲利率', prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%', cvar[pcls]) +
-    // 合計待交割（T／T+1／T+2 應收付合計；正＝應收紅、負＝應付綠）
-    (typeof _settleTot !== 'undefined' && _settleTot != null
-      ? '<span title="尚未交割的應收付合計（正＝應收、負＝應付）。交割日當天那筆銀行凌晨已扣款，不計入；各日明細見交易資訊「台幣交割」">' +
-        tt('合計待交割', (_settleTot > 0 ? '+' : '') + _settleTot.toLocaleString('zh-TW'), cvar[colorClass(_settleTot)]) + '</span>'
-      : '');
+    tt('總現值(含借出)', t.curVal.toLocaleString('zh-TW') + noPxTag, 'var(--accent2)') +
+    tt('損益試算', t.profit == null ? '—' : (t.profit >= 0 ? '+' : '') + t.profit.toLocaleString('zh-TW'), cvar[pcls]) +
+    tt('獲利率', t.prate == null ? '—' : (t.prate > 0 ? '+' : '') + t.prate.toFixed(2) + '%', cvar[pcls]) +
+    tt('漲跌幅％', t.wpct == null ? '—' : fmtPct(t.wpct), cvar[wcls]);
+  if (btn) {
+    btn.hidden = false;
+    btn.textContent = (_dwOpen ? '▴' : '▾') + ' 更多';
+    btn.className = 'dw-btn' + (_dwOpen ? ' on' : '');
+  }
+  renderDrawer();
 }
+
+// ── 頂欄抽屜：部位與配置 ──
+// 刻意不記狀態：每次進頁都是收起，抽屜是臨時查看，不是常駐資訊。
+var _dwOpen = false;
+function toggleDrawer() { _dwOpen = !_dwOpen; renderTopbarTotals(); }
+function renderDrawer() {
+  var d = document.getElementById('dw');
+  if (!d) return;
+  d.hidden = !_dwOpen;
+  if (!_dwOpen) { d.innerHTML = ''; return; }   // 收起時不留 DOM，盤中不跟著重繪
+  var t = portfolioTotals();
+  var cvar = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
+  var h = '<button class="dw-close" onclick="toggleDrawer()" title="收起">✕</button>';
+  h += '<div class="dw-sec">部位</div><div class="dw-row">' +
+    sumPair('總付出成本(含借出)', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', '#f5d87a') +
+    sumPair('總庫存(含借出)', t.totalShares.toLocaleString('zh-TW'), '') +
+    sumPair('借出', t.lentShares.toLocaleString('zh-TW') + ' 股', 'var(--text2)') +
+    sumPair('帳面現值', t.bookVal.toLocaleString('zh-TW'), 'var(--text2)') +
+    // 合計待交割（T／T+1／T+2 應收付合計；正＝應收紅、負＝應付綠）。
+    // 交割日當天那筆銀行凌晨已扣款，不計入；各日明細見交易資訊「台幣交割」。
+    (typeof _settleTot !== 'undefined' && _settleTot != null
+      ? sumPair('合計待交割', (_settleTot > 0 ? '+' : '') + _settleTot.toLocaleString('zh-TW'),
+                cvar[colorClass(_settleTot)])
+      : '') +
+    '</div>';
+  h += '<div class="dw-sec">配置</div><div id="dw-cats"></div>';
+  d.innerHTML = h;
+  if (typeof renderInvCats === 'function') renderInvCats(document.getElementById('dw-cats'), true);
+}
+
 function renderSummaries() {
   renderSummary('stream-summary');
   renderSummary('inv-summary');

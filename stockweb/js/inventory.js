@@ -416,9 +416,12 @@ function toggleInvCats() {
   try { localStorage.setItem(CAT_LS, _catOpen ? '1' : '0'); } catch (e) {}
   renderInvCats();
 }
-function renderInvCats() {
-  var el = document.getElementById('inv-cats');
+// el 省略時沿用持股庫存頁自己的 #inv-cats；頂欄抽屜傳自己的容器進來。
+// always=true：抽屜裡一律展開，不給收合箭頭（抽屜本身就是收合的那一層）。
+function renderInvCats(el, always) {
+  el = el || document.getElementById('inv-cats');
   if (!el || typeof catAggregate !== 'function') return;
+  var open = always ? true : _catOpen;
   var groups = catAggregate(_positions);
   if (!groups.length) { el.style.display = 'none'; return; }
   var totCost = 0, totVal = 0;
@@ -429,11 +432,11 @@ function renderInvCats() {
   var cls2var = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
   // 現值 vs 成本：高於→紅、低於→綠、相等→灰
   var vcOf = function (g) { return cls2var[colorClass(g.val - g.cost)]; };
-  var chev = '<button class="cat-chev" onclick="toggleInvCats()" title="' +
+  var chev = always ? '' : '<button class="cat-chev" onclick="toggleInvCats()" title="' +
     (_catOpen ? '收起' : '展開分類明細') + '">' + (_catOpen ? '▼' : '▶') + '</button>';
 
   var html;
-  if (!_catOpen) {
+  if (!open) {
     html = '<div class="cat-line">' + groups.map(function (g) {
       return '<span class="cat-item" title="' + g.cat + '：' + g.n + ' 檔　成本 ' + money(g.cost) +
           '　現值 ' + money(g.val) + '">' +
@@ -469,9 +472,9 @@ function renderInvCats() {
     }).join('') + '</div>' + chev;
   }
   el.innerHTML = html;
-  el.className = 'cat-bar' + (_catOpen ? ' open' : '');
+  el.className = 'cat-bar' + (open ? ' open' : '');
   el.style.display = '';
-  if (!_catOpen) _catLineFit(el.querySelector('.cat-line'));
+  if (!open) _catLineFit(el.querySelector('.cat-line'));
 }
 // 收起狀態才需要量測：七類塞一行，從 16px（與上方合計列同尺）逐步調小至塞得進，下限 11px。
 // 頁面還沒佈局（clientWidth 0）時不量，否則會一路縮到下限；
@@ -542,7 +545,8 @@ function renderInvTable() {
     var al = invAlert(p);
     return '<tr id="inv-tr-' + String(p.code) + '"' + (al ? ' class="alert-' + al + '"' : '') + '>' + invValRow(p) + '</tr>';
   }).join('');
-  renderInvCats();   // 分類配置列：跟表格同一個重繪周期，隨行情跟稅費切換同步
+  // 分類配置已移到頂欄抽屜，跟表格同一個重繪周期，隨行情與稅費切換同步
+  if (typeof renderDrawer === 'function') renderDrawer();
 }
 
 // 即時更新（SSE 觸發）：整表重繪，讓現值比/現值率等「跨列指標」隨任一檔跳動同步一致
