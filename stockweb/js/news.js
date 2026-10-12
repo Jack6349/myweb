@@ -384,7 +384,8 @@ var _macroAt = 0;
 function _macroCacheWrite() {
   try {
     sessionStorage.setItem(MACRO_CACHE_KEY, JSON.stringify(
-      { at: _macroAt, snap: _macroSnap, tw: _twLastClose, fut: _nightFut }));
+      { at: _macroAt, snap: _macroSnap, tw: _twLastClose, fut: _nightFut,
+        esun: _esun, esunTs: _esunTs }));
   } catch (e) {}   // 容量滿或隱私模式：沒快取就是每次重抓，不該因此壞掉
 }
 function _macroCacheRead() {
@@ -399,7 +400,12 @@ async function ensureMacro(force) {
   if (!force) {
     if (_macroSnap.length && Date.now() - _macroAt < MACRO_TTL_MS) return;
     var c = _macroCacheRead();
-    if (c) { _macroSnap = c.snap; _twLastClose = c.tw; _nightFut = c.fut; _macroAt = c.at; return; }
+    if (c) {
+      _macroSnap = c.snap; _twLastClose = c.tw; _nightFut = c.fut; _macroAt = c.at;
+      if (c.esun) { _esun = c.esun; _esunTs = c.esunTs || 0; }
+      if (!_esun) await loadEsunFx();   // 牌告沒進快取（上次抓失敗）才補一個請求
+      return;
+    }
   }
   await loadMacro();
 }
@@ -419,7 +425,11 @@ async function loadMacro() {
   renderMacroBar();
   if (typeof renderDrawerMacro === 'function') renderDrawerMacro();
   // 玉山牌告匯率（10 分鐘快取）非阻塞補上，回來後重繪
-  loadEsunFx().then(function () { renderMacroBar(); });
+  loadEsunFx().then(function () {
+    _macroCacheWrite();
+    renderMacroBar();
+    if (typeof renderDrawerMacro === 'function') renderDrawerMacro();
+  });
 }
 
 function _fmtNum(v, dp) { return v == null ? '—' : Number(v).toLocaleString('zh-TW', { minimumFractionDigits: dp, maximumFractionDigits: dp }); }
@@ -482,6 +492,21 @@ function _macroCellHtml(m) {
   }
 }
 
+// 玉山日圓即期單格：換匯實際成交的價格（買入＝銀行跟你買，賣出＝銀行賣你）。
+// Yahoo 的 JPYTWD=X 是國際中間價，換匯時拿不到，故另列一格供實際判斷。
+function _esunJpyCellHtml() {
+  if (!(_esun && _esun.rates && _esun.rates['日圓'])) return '';
+  var jp = _esun.rates['日圓'];
+  return '<div class="macro-cell macro-fx" title="玉山銀行牌告即期匯率　掛牌時間 ' +
+    (_esun.at ? _esun.at.slice(5, 16).replace('T', ' ') : '—') +
+    '　銀行買入＝你賣日圓可換得的台幣；銀行賣出＝你買日圓要付的台幣">' +
+    '<span class="macro-name">日圓即期<span class="macro-dim"> 玉山</span></span>' +
+    '<span class="macro-fx-pair"><span class="fx-lb">買入</span><span class="fx-v">' +
+    (jp.spotBuy != null ? jp.spotBuy.toFixed(4) : '—') + '</span>' +
+    '<span class="fx-lb">賣出</span><span class="fx-v">' +
+    (jp.spotSell != null ? jp.spotSell.toFixed(4) : '—') + '</span></span></div>';
+}
+
 // 台指夜盤單格（不在 MACRO_TICKERS 裡，另外抓）
 function _nightFutCellHtml() {
   if (!_nightFut) return '';
@@ -490,14 +515,13 @@ function _nightFutCellHtml() {
     '<span class="macro-chg ' + _chgCls(_nightFut.changePct) + '">' + (_chgTxt(_nightFut.changePct) || '—') + '</span></div>';
 }
 
-// 頂欄抽屜的盤勢：七檔 ＋ 台指夜盤，排 4×2。
-// 不含美元指數（抽屜只有四欄，美元兌台幣對台股持股更直接）；
-// 新聞情勢頁維持原本八檔不動。日圓即期也不放，那是換匯用的，不是看盤用的。
-var MACRO_DRAWER_SKIP = ['DX-Y.NYB'];
+// 頂欄抽屜的盤勢：六檔 ＋ 日圓即期 ＋ 台指夜盤，排 4×2。
+// 不含美元指數與美元兌台幣（抽屜只有四欄）；新聞情勢頁維持原本八檔 ＋ 日圓，不動。
+var MACRO_DRAWER_SKIP = ['DX-Y.NYB', 'TWD=X'];
 function macroDrawerHtml() {
   if (!_macroSnap.length) return '<div class="macro-cell"><span class="macro-name">載入中…</span></div>';
   return _macroSnap.filter(function (m) { return MACRO_DRAWER_SKIP.indexOf(m.sym) < 0; })
-    .map(_macroCellHtml).join('') + _nightFutCellHtml();
+    .map(_macroCellHtml).join('') + _esunJpyCellHtml() + _nightFutCellHtml();
 }
 
 function renderMacroBar() {
@@ -506,17 +530,8 @@ function renderMacroBar() {
   var cells = _macroSnap.map(_macroCellHtml);
   // 玉山日圓即期匯率：換匯實際成交的價格（買入＝銀行跟你買，賣出＝銀行賣你）。
   // Yahoo 的 JPYTWD=X 是國際中間價，換匯時拿不到，故另列一格供實際判斷。
-  if (_esun && _esun.rates && _esun.rates['日圓']) {
-    var jp = _esun.rates['日圓'];
-    cells.push('<div class="macro-cell macro-fx" title="玉山銀行牌告即期匯率　掛牌時間 ' +
-      (_esun.at ? _esun.at.slice(5, 16).replace('T', ' ') : '—') +
-      '　銀行買入＝你賣日圓可換得的台幣；銀行賣出＝你買日圓要付的台幣">' +
-      '<span class="macro-name">日圓即期<span class="macro-dim"> 玉山</span></span>' +
-      '<span class="macro-fx-pair"><span class="fx-lb">買入</span><span class="fx-v">' +
-      (jp.spotBuy != null ? jp.spotBuy.toFixed(4) : '—') + '</span>' +
-      '<span class="fx-lb">賣出</span><span class="fx-v">' +
-      (jp.spotSell != null ? jp.spotSell.toFixed(4) : '—') + '</span></span></div>');
-  }
+  var jpy = _esunJpyCellHtml();
+  if (jpy) cells.push(jpy);
   if (_nightFut) cells.push(_nightFutCellHtml());
   // 整列標報價時間「範圍」而非只標最新：匯率 24 小時交易可能是 1 分鐘前，
   // 美股收盤後的指數卻是數小時前的收盤價，只寫最新會讓人誤以為全部都是即時。
