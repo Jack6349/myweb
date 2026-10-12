@@ -436,11 +436,14 @@ function _rfBuildMonthPay(codes, todayIso) {
 function _rfMonthPayHtml() {
   var rows = _rfPay || [];
   var ymLabel = (_rfResult ? _rfResult.day : _divTwDate().iso).slice(0, 7).replace('-', '/');
-  var h = '<div class="divest-sec-title">本月發放（' + ymLabel + '）</div>';
-  if (!rows.length) return h + '<div class="rf-cal-empty">本月無配息發放。</div>';
+  var title = function (sumHtml) {
+    return '<div class="divest-sec-title">本月發放（' + ymLabel + '）' + (sumHtml || '') + '</div>';
+  };
+  if (!rows.length) return title() + '<div class="rf-cal-empty">本月無配息發放。</div>';
 
+  // 合計擺在標頭後面，但要跑完整張表才算得出來 → 先把表存著，最後再組標頭
   var todayIso = _divTwDate().iso, total = 0;
-  h += '<div class="inv-table-wrap"><table class="inv-table swap-table rf-pay"><thead><tr>' +
+  var h = '<div class="inv-table-wrap"><table class="inv-table swap-table rf-pay"><thead><tr>' +
     '<th>發放日</th><th>代號</th><th>名稱</th><th class="num">配息金額</th><th class="num">現價</th>' +
     '<th class="num" title="配息金額 ÷ 現價">月殖利率</th>' +
     '<th class="num" title="每股成本均價（券商庫存）">持有成本</th>' +
@@ -481,8 +484,6 @@ function _rfMonthPayHtml() {
     }
   });
   h += '</tbody></table></div>' +
-    '<div class="swap-foot">本月可領合計 <b>' + fmtMoney(total) + '</b>' +
-    '<span class="swap-dim">（未扣二代健保與稅；「待公告」金額未計入）</span></div>' +
     '<div class="rf-cal-note"><dl>' +
     '<dt>月殖利率</dt><dd><code>配息金額 ÷ 現價</code></dd>' +
     '<dt>成本月殖利率</dt><dd><code>配息金額 ÷ 持有成本</code>；月配標的即單月報酬率，年化約 ×12。</dd>' +
@@ -492,7 +493,8 @@ function _rfMonthPayHtml() {
     '借出張數來源見參數設定「除息日借出張數」。</dd>' +
     '<dt>發放日標記</dt><dd>「*」＝尚未公告，以「除息月＋1」推導。日期較淡＝已發放。</dd>' +
     '</dl></div>';
-  return h;
+  return title('<span class="divest-sec-sum">本月可領合計 <b>' + fmtMoney(total) + '</b>' +
+    '<span class="swap-dim">（未扣二代健保與稅；「待公告」金額未計入）</span></span>') + h;
 }
 
 // 除息日曆：未來已公告的除息日；缺金額或發放日的列附手動補登輸入框（貼上整行自動解析）
