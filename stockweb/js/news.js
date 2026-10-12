@@ -372,6 +372,38 @@ function renderConsistency() {
   el.innerHTML = h;
 }
 
+// ── 盤勢快取 ────────────────────────────────────────────────
+// loadMacro() 一次要打 11 個請求（8 檔 Yahoo ＋ 台股收盤日 ＋ 夜盤 ＋ 玉山匯率）。
+// 以前只有新聞情勢頁會載，一次就算了；現在每一頁的抽屜都看得到，
+// 沒有快取就會變成每切一頁重打一輪。
+// TTL 取 10 分鐘：沿用 loadEsunFx 既有的牌告匯率快取時間，不另訂一套數字。
+// 用 sessionStorage 不用 localStorage：關掉分頁就丟掉，不會隔天還拿到昨天的收盤價。
+var MACRO_CACHE_KEY = 'macro_snap_v1';
+var MACRO_TTL_MS = 10 * 60 * 1000;
+var _macroAt = 0;
+function _macroCacheWrite() {
+  try {
+    sessionStorage.setItem(MACRO_CACHE_KEY, JSON.stringify(
+      { at: _macroAt, snap: _macroSnap, tw: _twLastClose, fut: _nightFut }));
+  } catch (e) {}   // 容量滿或隱私模式：沒快取就是每次重抓，不該因此壞掉
+}
+function _macroCacheRead() {
+  try {
+    var j = JSON.parse(sessionStorage.getItem(MACRO_CACHE_KEY));
+    if (j && j.snap && j.snap.length && Date.now() - j.at < MACRO_TTL_MS) return j;
+  } catch (e) {}
+  return null;
+}
+// 抽屜展開時呼叫：快取還新就直接用，過期才重抓。
+async function ensureMacro(force) {
+  if (!force) {
+    if (_macroSnap.length && Date.now() - _macroAt < MACRO_TTL_MS) return;
+    var c = _macroCacheRead();
+    if (c) { _macroSnap = c.snap; _twLastClose = c.tw; _nightFut = c.fut; _macroAt = c.at; return; }
+  }
+  await loadMacro();
+}
+
 async function loadMacro() {
   var results = await Promise.allSettled(MACRO_TICKERS.map(fetchYahooQuote).concat([fetchTwLastClose()]));
   var twRes = results.pop();
@@ -382,7 +414,10 @@ async function loadMacro() {
   });
   _macroSnap.forEach(function (m) { m.alert = _macroAlert(m, _twLastClose); });
   _nightFut = await fetchNightFutures();
+  _macroAt = Date.now();
+  _macroCacheWrite();
   renderMacroBar();
+  if (typeof renderDrawerMacro === 'function') renderDrawerMacro();
   // 玉山牌告匯率（10 分鐘快取）非阻塞補上，回來後重繪
   loadEsunFx().then(function () { renderMacroBar(); });
 }
@@ -412,10 +447,9 @@ function _agoTxt(ms) {
   return Math.floor(h / 24) + ' 天前';
 }
 
-function renderMacroBar() {
-  var el = document.getElementById('macro-bar');
-  if (!el) return;
-  var cells = _macroSnap.map(function (m) {
+// 單格 HTML：新聞情勢頁的盤勢列與頂欄抽屜共用，避免兩邊各寫一份而漂走。
+function _macroCellHtml(m) {
+  {
     var tip = m.asOf ? '報價時間 ' + _asOfTxt(m.asOf) + '（台北）　' + _agoTxt(m.asOf) : '';
     var icon = '', tag = '';
     if (m.alert) {
@@ -445,7 +479,31 @@ function renderMacroBar() {
       '>' + icon + '<span class="macro-name">' + m.name + tag + '</span>' +
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
       '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + cumTxt + '</span></div>';
-  });
+  }
+}
+
+// 台指夜盤單格（不在 MACRO_TICKERS 裡，另外抓）
+function _nightFutCellHtml() {
+  if (!_nightFut) return '';
+  return '<div class="macro-cell"><span class="macro-name">台指夜盤 ' + (_nightFut.time || '') + '</span>' +
+    '<span class="macro-price">' + _fmtNum(_nightFut.price, 0) + '</span>' +
+    '<span class="macro-chg ' + _chgCls(_nightFut.changePct) + '">' + (_chgTxt(_nightFut.changePct) || '—') + '</span></div>';
+}
+
+// 頂欄抽屜的盤勢：七檔 ＋ 台指夜盤，排 4×2。
+// 不含美元指數（抽屜只有四欄，美元兌台幣對台股持股更直接）；
+// 新聞情勢頁維持原本八檔不動。日圓即期也不放，那是換匯用的，不是看盤用的。
+var MACRO_DRAWER_SKIP = ['DX-Y.NYB'];
+function macroDrawerHtml() {
+  if (!_macroSnap.length) return '<div class="macro-cell"><span class="macro-name">載入中…</span></div>';
+  return _macroSnap.filter(function (m) { return MACRO_DRAWER_SKIP.indexOf(m.sym) < 0; })
+    .map(_macroCellHtml).join('') + _nightFutCellHtml();
+}
+
+function renderMacroBar() {
+  var el = document.getElementById('macro-bar');
+  if (!el) return;
+  var cells = _macroSnap.map(_macroCellHtml);
   // 玉山日圓即期匯率：換匯實際成交的價格（買入＝銀行跟你買，賣出＝銀行賣你）。
   // Yahoo 的 JPYTWD=X 是國際中間價，換匯時拿不到，故另列一格供實際判斷。
   if (_esun && _esun.rates && _esun.rates['日圓']) {
@@ -459,11 +517,7 @@ function renderMacroBar() {
       '<span class="fx-lb">賣出</span><span class="fx-v">' +
       (jp.spotSell != null ? jp.spotSell.toFixed(4) : '—') + '</span></span></div>');
   }
-  if (_nightFut) {
-    cells.push('<div class="macro-cell"><span class="macro-name">台指夜盤 ' + (_nightFut.time || '') + '</span>' +
-      '<span class="macro-price">' + _fmtNum(_nightFut.price, 0) + '</span>' +
-      '<span class="macro-chg ' + _chgCls(_nightFut.changePct) + '">' + (_chgTxt(_nightFut.changePct) || '—') + '</span></div>');
-  }
+  if (_nightFut) cells.push(_nightFutCellHtml());
   // 整列標報價時間「範圍」而非只標最新：匯率 24 小時交易可能是 1 分鐘前，
   // 美股收盤後的指數卻是數小時前的收盤價，只寫最新會讓人誤以為全部都是即時。
   var newest = 0, oldest = Infinity;

@@ -622,7 +622,19 @@ function renderTopbarTotals() {
 // ── 頂欄抽屜：部位與配置 ──
 // 刻意不記狀態：每次進頁都是收起，抽屜是臨時查看，不是常駐資訊。
 var _dwOpen = false;
-function toggleDrawer() { _dwOpen = !_dwOpen; renderTopbarTotals(); }
+function toggleDrawer() {
+  _dwOpen = !_dwOpen;
+  renderTopbarTotals();
+  // 盤勢是展開時才抓（11 個請求，10 分鐘快取），不在每頁載入時先打一輪
+  if (_dwOpen && typeof ensureMacro === 'function') {
+    ensureMacro().then(renderDrawerMacro).catch(function (e) { console.warn('[盤勢]', e); });
+  }
+}
+// 只換盤勢那一列：抽屜其他部分跟著行情 tick 重繪，盤勢不該跟著跑
+function renderDrawerMacro() {
+  var m = document.getElementById('dw-macro');
+  if (m && typeof macroDrawerHtml === 'function') m.innerHTML = macroDrawerHtml();
+}
 function renderDrawer() {
   var d = document.getElementById('dw');
   if (!d) return;
@@ -630,7 +642,10 @@ function renderDrawer() {
   if (!_dwOpen) { d.innerHTML = ''; return; }   // 收起時不留 DOM，盤中不跟著重繪
   var t = portfolioTotals();
   var cvar = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
+  // 盤勢放最上面：抽屜一展開先看到市場，再往下才是自己的部位與配置
   var h = '<button class="dw-close" onclick="toggleDrawer()" title="收起">✕</button>';
+  h += '<div class="dw-sec">盤勢</div><div id="dw-macro" class="macro-row">' +
+    (typeof macroDrawerHtml === 'function' ? macroDrawerHtml() : '') + '</div>';
   h += '<div class="dw-sec">部位</div><div class="dw-row">' +
     sumPair('總付出成本(含借出)', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', '#f5d87a') +
     sumPair('總庫存(含借出)', t.totalShares.toLocaleString('zh-TW'), '') +
