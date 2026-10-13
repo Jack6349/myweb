@@ -180,7 +180,10 @@ async function loadEsunFx(force) {
       var p = nm[1].split(/\s+/);                          // 例：日圓 即期匯率 銀行買入
       if (p.length < 3) continue;
       var cur = p[0], kind = p[1], side = p[2];
-      var key = (kind.indexOf('即期') >= 0 ? 'spot' : 'cash') + (side.indexOf('買入') >= 0 ? 'Buy' : 'Sell');
+      // 三組牌告：即期 spot／網銀App優惠 pref／現金 cash。
+      // 原本只分即期與現金，優惠那兩筆會先被當成現金、再被真正的現金覆蓋掉。
+      var grp = kind.indexOf('即期') >= 0 ? 'spot' : (kind.indexOf('優惠') >= 0 ? 'pref' : 'cash');
+      var key = grp + (side.indexOf('買入') >= 0 ? 'Buy' : 'Sell');
       (rates[cur] = rates[cur] || {})[key] = +pr[1];
     }
     if (Object.keys(rates).length) { _esun = { at: at, rates: rates }; _esunTs = Date.now(); }
@@ -497,14 +500,27 @@ function _macroCellHtml(m) {
 function _esunJpyCellHtml() {
   if (!(_esun && _esun.rates && _esun.rates['日圓'])) return '';
   var jp = _esun.rates['日圓'];
-  return '<div class="macro-cell macro-fx" title="玉山銀行牌告即期匯率　掛牌時間 ' +
-    (_esun.at ? _esun.at.slice(5, 16).replace('T', ' ') : '—') +
-    '　銀行買入＝你賣日圓可換得的台幣；銀行賣出＝你買日圓要付的台幣">' +
-    '<span class="macro-name">日圓即期<span class="macro-dim"> 玉山</span></span>' +
-    '<span class="macro-fx-pair"><span class="fx-lb">買入</span><span class="fx-v">' +
-    (jp.spotBuy != null ? jp.spotBuy.toFixed(4) : '—') + '</span>' +
-    '<span class="fx-lb">賣出</span><span class="fx-v">' +
-    (jp.spotSell != null ? jp.spotSell.toFixed(4) : '—') + '</span></span></div>';
+  var at = _esun.at ? _esun.at.slice(5, 16).replace('T', ' ') : '—';
+  return '<div class="macro-cell macro-fx" title="玉山銀行 網銀/App優惠 銀行賣出＝線上換匯時你買日圓要付的台幣。' +
+    '　掛牌時間 ' + at + '　同時間即期賣出 ' + (jp.spotSell != null ? jp.spotSell.toFixed(4) : '—') + '">' +
+    '<span class="macro-name">日圓網銀優惠<span class="macro-dim"> 玉山</span>' +
+    '<button class="fx-reload" onclick="event.stopPropagation();esunReload(this)" title="重新抓牌告">↻</button></span>' +
+    '<span class="macro-fx-pair"><span class="fx-lb">賣出</span><span class="fx-v">' +
+    (jp.prefSell != null ? jp.prefSell.toFixed(4) : '—') + '</span></span></div>';
+}
+
+// 牌告一天變動多次，抽屜又有 10 分鐘快取 → 給一個手動重抓的入口
+async function esunReload(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await loadEsunFx(true);
+    if (typeof _macroCacheWrite === 'function') _macroCacheWrite();
+    renderMacroBar();
+    if (typeof renderDrawerMacro === 'function') renderDrawerMacro();
+  } catch (e) {
+    console.warn('[玉山牌告]', e);
+    if (btn) { btn.disabled = false; btn.textContent = '↻'; }
+  }
 }
 
 // 台指夜盤單格（不在 MACRO_TICKERS 裡，另外抓）
@@ -530,8 +546,18 @@ function renderMacroBar() {
   var cells = _macroSnap.map(_macroCellHtml);
   // 玉山日圓即期匯率：換匯實際成交的價格（買入＝銀行跟你買，賣出＝銀行賣你）。
   // Yahoo 的 JPYTWD=X 是國際中間價，換匯時拿不到，故另列一格供實際判斷。
-  var jpy = _esunJpyCellHtml();
-  if (jpy) cells.push(jpy);
+  // 新聞情勢頁維持即期買入／賣出（換匯前後都要看），抽屜那格只給線上換匯會用到的優惠賣出
+  if (_esun && _esun.rates && _esun.rates['日圓']) {
+    var jp2 = _esun.rates['日圓'];
+    cells.push('<div class="macro-cell macro-fx" title="玉山銀行牌告即期匯率　掛牌時間 ' +
+      (_esun.at ? _esun.at.slice(5, 16).replace('T', ' ') : '—') +
+      '　銀行買入＝你賣日圓可換得的台幣；銀行賣出＝你買日圓要付的台幣">' +
+      '<span class="macro-name">日圓即期<span class="macro-dim"> 玉山</span></span>' +
+      '<span class="macro-fx-pair"><span class="fx-lb">買入</span><span class="fx-v">' +
+      (jp2.spotBuy != null ? jp2.spotBuy.toFixed(4) : '—') + '</span>' +
+      '<span class="fx-lb">賣出</span><span class="fx-v">' +
+      (jp2.spotSell != null ? jp2.spotSell.toFixed(4) : '—') + '</span></span></div>');
+  }
   if (_nightFut) cells.push(_nightFutCellHtml());
   // 整列標報價時間「範圍」而非只標最新：匯率 24 小時交易可能是 1 分鐘前，
   // 美股收盤後的指數卻是數小時前的收盤價，只寫最新會讓人誤以為全部都是即時。

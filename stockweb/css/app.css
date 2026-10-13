@@ -847,6 +847,11 @@ td.cost-even::after  { background: var(--text3); }
 
 /* 新聞情勢：銀行牌告匯率卡片（買入／賣出雙價） */
 .macro-fx .macro-fx-pair { display: inline-flex; align-items: baseline; gap: 5px; margin-left: auto; }
+/* 牌告重抓：跟在「玉山」後面，不占格子的數字欄 */
+.fx-reload { background: none; border: 0; color: var(--text3); cursor: pointer; font-size: 11px;
+  padding: 0 0 0 4px; line-height: 1; font-family: var(--font); }
+.fx-reload:hover { color: var(--accent2); }
+.fx-reload:disabled { cursor: default; opacity: .5; }
 .macro-fx .fx-lb { font-size: 10px; color: var(--text3); }
 .macro-fx .fx-v { font-size: 14px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
 
