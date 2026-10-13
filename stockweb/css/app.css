@@ -1267,7 +1267,11 @@ td.cost-even::after  { background: var(--text3); }
 .en-sec:first-child { margin-top: 0; }
 .en-text { font-size: 13px; line-height: 1.9; color: var(--text); }
 /* 欄位對齊：標籤欄寬度固定，值才會在同一條線上 */
-.en-kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 3px 18px; margin-top: 2px; }
+/* 四欄固定：11–12 個欄位就是 3 行。auto-fill 在寬螢幕會排到五六欄，每格被拉得很開，右邊還會被長值（ETF規模）撐出捲軸。
+   minmax(0,1fr) 是關鍵：1fr 的最小尺寸是內容寬度，不歸零就壓不下去。 */
+.en-kv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px 18px; margin-top: 2px; }
+@media (max-width: 1200px) { .en-kv { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 860px)  { .en-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .en-kv .en-k { display: inline-block; width: 86px; color: var(--text2); font-size: 12px; }
 .en-kv .en-v { font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .en-pair { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
