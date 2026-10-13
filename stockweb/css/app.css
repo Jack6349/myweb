@@ -852,6 +852,17 @@ td.cost-even::after  { background: var(--text3); }
   padding: 0 0 0 4px; line-height: 1; font-family: var(--font); }
 .fx-reload:hover { color: var(--accent2); }
 .fx-reload:disabled { cursor: default; opacity: .5; }
+
+/* 新上市 ETF：收益分配欄位較少，三欄就夠；條款全文預設收起 */
+.en-kv-div { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+@media (max-width: 860px) { .en-kv-div { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+.en-std { margin-top: 8px; }
+.en-std > summary { cursor: pointer; color: var(--text2); font-size: 12px; list-style: none; }
+.en-std > summary::-webkit-details-marker { display: none; }
+.en-std > summary::before { content: 'b8 '; color: var(--text3); }
+.en-std[open] > summary::before { content: 'be '; }
+.en-std > summary:hover { color: var(--accent2); }
+.en-std .en-text { font-size: 12.5px; line-height: 1.85; color: var(--text2); margin-top: 6px; }
 .macro-fx .fx-lb { font-size: 10px; color: var(--text3); }
 .macro-fx .fx-v { font-size: 14px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
 
