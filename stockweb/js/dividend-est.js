@@ -230,6 +230,10 @@ async function _divLoadSoldLots(force) {
 function computeEtfYear(recs, shares, todayIso, year, code, forceStep) {
   recs = recs.filter(function (r) { return r.exDate; }).sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
   if (!recs.length) return null;
+  // 一筆金額都沒有（例：剛掛牌、只有一筆已公告除息日但金額待公告）→ 沒有可推估的基準。
+  // 不擋的話 lastAmt 會是 0，整年估算顯示 0 元，看起來像「確定不配」，比不列更誤導。
+  // 除息日曆不受影響，那裡本來就會把 amount=null 顯示成「待公告」。
+  if (!recs.some(function (r) { return r.amount != null; })) return null;
   var lastAmt = 0;
   for (var i = recs.length - 1; i >= 0; i--) { if (recs[i].amount != null) { lastAmt = recs[i].amount; break; } }
   // 缺發放日：沿用該檔最近一次有公告發放日的間隔（各投信天數不同，00984D 約 22 天、00981B 約 28 天），
@@ -374,7 +378,7 @@ async function startDividendEst(force) {
   try { await fetchTpexExright(); } catch (e) {}
   // Yahoo 下一期金額（div-mix.js 非同步載入）：沒等它就併，第一次進頁會少一筆金額
   if (typeof _dmReady !== 'undefined') { try { await _dmReady; } catch (e) {} }
-  _divMergeAnnounced(recMap);   // 併入已公告除息（TPEx 預告表／Yahoo／手動補登），估算改採實際公告值
+  _divMergeAnnounced(recMap, allCodes);   // 併入已公告除息（TPEx 預告表／Yahoo／手動補登），估算改採實際公告值
   _divRecMap = recMap;   // 供換股試算與填息追蹤共用
 
   // 除息日曆（未來已公告）：本頁顯示，所以在本頁建。_rfBuildCalendar 的 TPEx 走當日快取，不會多打一次
@@ -1137,10 +1141,16 @@ function _divMergeOfficialHist(recMap, codes) {
   });
 }
 
-function _divMergeAnnounced(recMap) {
+// allCodes＝本次估算的代號範圍（持股／指定查詢）。
+// 沒有它的話只能處理「本來就有歷史配息紀錄」的代號，剛掛牌、還沒配過息的 ETF
+// 就算 Yahoo 已公告第一次除息也會被擋掉，除息日曆與估算都看不到。
+function _divMergeAnnounced(recMap, allCodes) {
+  var allow = {};
+  (allCodes || []).forEach(function (c) { allow[String(c)] = true; });
   var add = {};
   var push = function (code, exDate, payDate, amount, src) {
-    if (!recMap[code] || !exDate) return;          // 僅處理本來就有配息資料的持股
+    if (!exDate) return;
+    if (!recMap[code] && !allow[code]) return;     // 範圍外的代號不收，避免全市場湧進來
     (add[code] = add[code] || []).push({ exDate: exDate, payDate: payDate || null, amount: amount, src: src });
   };
   try {                                            // TPEx 除權息預告（全市場快取，取持股者）
@@ -1149,7 +1159,11 @@ function _divMergeAnnounced(recMap) {
   } catch (e) {}
   try {                                            // Yahoo 下一期（etf-divnext.py 每日）：官方只申報日期、金額還 pending 時由它補
     if (typeof dmNextRaw === 'function') {
-      Object.keys(recMap).forEach(function (code) {
+      // 掃 recMap ∪ allCodes：只掃 recMap 的話，沒有歷史紀錄的新 ETF 連問都不會問 Yahoo
+      var seen = {};
+      Object.keys(recMap).concat(Object.keys(allow)).forEach(function (code) {
+        if (seen[code]) return;
+        seen[code] = 1;
         var y = dmNextRaw(code);
         if (y) push(code, y.ex, y.pay, y.amt, 'Yahoo預告');
       });
