@@ -94,7 +94,9 @@ function _enDetailHtml(r) {
   if (kv.length) {
     h += '<div class="en-sec">基本資料</div><div class="en-kv">';
     kv.forEach(function (k) {
-      h += '<div class="en-pair"><span class="en-k">' + k + '</span><span class="en-v">' + d[k] + '</span></div>';
+      // 值過長時以省略號收尾，title 保留全文（例「ETF規模 13951.77百萬台幣 (2026/10/13)」）
+      h += '<div class="en-pair"><span class="en-k">' + k + '</span>' +
+           '<span class="en-v" title="' + d[k].replace(/"/g, '&quot;') + '">' + d[k] + '</span></div>';
     });
     h += '</div>';
   }
