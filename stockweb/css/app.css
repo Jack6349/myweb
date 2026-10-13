@@ -1265,6 +1265,10 @@ td.cost-even::after  { background: var(--text3); }
 
 
 /* ── 新上市 ETF（關注股票子頁籤）── */
+/* 新上市 ETF 只有十幾列，不需要內層捲軸；.inv-table-wrap 的 max-height 是為持股庫存那種百列表格設的，
+   展開一筆明細就超過，會冒出一條跟頁面捲軸並列的內層捲軸。
+   解掉高度上限，橫向仍由 overflow:auto 把關。 */
+.en-wrap { max-height: none; }
 .en-table .en-row { cursor: pointer; }
 .en-table .en-row:hover { background: var(--bg3); }
 .en-chk { width: 15px; height: 15px; accent-color: var(--accent2); cursor: pointer; vertical-align: middle; }

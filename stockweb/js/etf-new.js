@@ -195,7 +195,7 @@ function renderEtfNew() {
     '｜清單 ' + (d.src && d.src.list) + '、明細 ' + (d.src && d.src.detail) + '</span></div>';
 
   h += '<div class="divest-sec-title">已上市上櫃</div>';
-  h += '<div class="inv-table-wrap"><table class="inv-table en-table"><thead><tr>' +
+  h += '<div class="inv-table-wrap en-wrap"><table class="inv-table en-table"><thead><tr>' +
     '<th class="num">關注</th>' + _enTh('code', '代號') + '<th>名稱</th>' +
     _enTh('px', '現價', 'num') + _enTh('chg', '今日漲跌', 'num') +
     _enTh('type', '類型') + _enTh('list', '上市日') + '</tr></thead><tbody>';
