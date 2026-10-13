@@ -19,7 +19,7 @@ var _wtIdx = null;       // [{c,n,e}] 合約索引
 var _wtSubbed = [];      // 本頁新訂閱的代號（離開退訂）
 var _wtSug = [];         // 目前下拉候選
 var _wtNote = '';
-var _wtTab = 'list';     // list | bond | act | screen
+var _wtTab = 'list';     // list | bond | act | screen | new
 var _wtBond = null;      // 債券篩選結果
 var _wtAct = null;       // 主動式報酬結果
 var _wtBusy = false;
@@ -360,7 +360,7 @@ function wtRestoreTab() {
 function wtShowTab(tab) {
   _wtTab = tab;
   try { localStorage.setItem(WT_TAB_LS, tab); } catch (e) {}
-  ['list', 'bond', 'act', 'screen'].forEach(function (t) {
+  ['list', 'bond', 'act', 'screen', 'new'].forEach(function (t) {
     var b = document.getElementById('wt-subtab-' + t);
     if (b) b.classList.toggle('active', t === tab);
   });
@@ -369,7 +369,9 @@ function wtShowTab(tab) {
   document.getElementById('wt-bond-wrap').style.display = (tab === 'bond') ? '' : 'none';
   document.getElementById('wt-act-wrap').style.display = (tab === 'act') ? '' : 'none';
   document.getElementById('wt-screen-wrap').style.display = (tab === 'screen') ? '' : 'none';
-  if (tab === 'screen') { if (typeof startEtfScreen === 'function') { renderEtfScreen(); startEtfScreen(false); } }
+  document.getElementById('wt-new-wrap').style.display = (tab === 'new') ? '' : 'none';
+  if (tab === 'new') { if (typeof startEtfNew === 'function') startEtfNew(false); }
+  else if (tab === 'screen') { if (typeof startEtfScreen === 'function') { renderEtfScreen(); startEtfScreen(false); } }
   else if (tab === 'bond') { _wtBondLoad(); renderWatchBond(); }
   else if (tab === 'act') { _wtActLoadCache(); renderWatchAct(); }
   else renderWatch();

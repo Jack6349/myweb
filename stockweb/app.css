@@ -583,6 +583,10 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-mini:hover { border-color: rgba(240,204,122,.5); color: var(--accent2); }
 .swap-warn { color: var(--accent2); font-size: 12px; }
 .swap-dim { color: var(--text3); font-size: 12px; font-weight: 400; }
+/* 章節標題後面的合計：跟標題同一行，字級較小不跟標題搶對比 */
+.divest-sec-sum { margin-left: 14px; font-size: 14px; font-weight: 600; color: var(--sum);
+  letter-spacing: normal; }
+.divest-sec-sum b { color: var(--accent2); font-size: 15px; font-variant-numeric: tabular-nums; }
 /* T5s 總結類：結論、合計、評估結果。比說明文字亮一階並加粗，收尾時一眼看到。 */
 .sum-note { font-size: 14px; font-weight: 600; color: var(--sum); line-height: 1.8; }
 .swap-foot { margin-top: 12px; font-size: 14px; font-weight: 600; color: var(--sum); line-height: 1.8; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -1242,3 +1246,20 @@ td.cost-even::after  { background: var(--text3); }
 .sum-nopx { font-size: 11px; color: var(--accent2); margin-left: 4px; font-weight: 400; }
 /* 持股庫存名稱後的配息政策標註 */
 .inv-freq { color: var(--text3); font-size: 11px; margin-left: 4px; }
+
+
+/* ── 新上市 ETF（關注股票子頁籤）── */
+.en-table .en-row { cursor: pointer; }
+.en-table .en-row:hover { background: var(--bg3); }
+.en-chk { width: 15px; height: 15px; accent-color: var(--accent2); cursor: pointer; vertical-align: middle; }
+.en-caret { color: var(--text3); font-size: 10px; margin-left: 6px; }
+.en-detail > td { padding: 0 !important; background: var(--bg); }
+.en-box { padding: 12px 16px 14px; border-left: 3px solid var(--accent); }
+.en-sec { font-size: 13px; font-weight: 700; color: var(--accent2); margin: 10px 0 5px; }
+.en-sec:first-child { margin-top: 0; }
+.en-text { font-size: 13px; line-height: 1.9; color: var(--text); }
+/* 欄位對齊：標籤欄寬度固定，值才會在同一條線上 */
+.en-kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 3px 18px; margin-top: 2px; }
+.en-kv .en-k { display: inline-block; width: 86px; color: var(--text2); font-size: 12px; }
+.en-kv .en-v { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.en-kv > span:nth-child(odd) { grid-column: auto; }

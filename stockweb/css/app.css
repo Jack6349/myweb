@@ -847,6 +847,11 @@ td.cost-even::after  { background: var(--text3); }
 
 /* 新聞情勢：銀行牌告匯率卡片（買入／賣出雙價） */
 .macro-fx .macro-fx-pair { display: inline-flex; align-items: baseline; gap: 5px; margin-left: auto; }
+/* 牌告重抓：跟在「玉山」後面，不占格子的數字欄 */
+.fx-reload { background: none; border: 0; color: var(--text3); cursor: pointer; font-size: 11px;
+  padding: 0 0 0 4px; line-height: 1; font-family: var(--font); }
+.fx-reload:hover { color: var(--accent2); }
+.fx-reload:disabled { cursor: default; opacity: .5; }
 .macro-fx .fx-lb { font-size: 10px; color: var(--text3); }
 .macro-fx .fx-v { font-size: 14px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
 
@@ -1246,3 +1251,24 @@ td.cost-even::after  { background: var(--text3); }
 .sum-nopx { font-size: 11px; color: var(--accent2); margin-left: 4px; font-weight: 400; }
 /* 持股庫存名稱後的配息政策標註 */
 .inv-freq { color: var(--text3); font-size: 11px; margin-left: 4px; }
+
+
+/* ── 新上市 ETF（關注股票子頁籤）── */
+.en-table .en-row { cursor: pointer; }
+.en-table .en-row:hover { background: var(--bg3); }
+.en-chk { width: 15px; height: 15px; accent-color: var(--accent2); cursor: pointer; vertical-align: middle; }
+.en-caret { color: var(--text3); font-size: 10px; margin-left: 6px; }
+/* .inv-table td 是 nowrap，展開內容有上百字，不改成 normal 整張表會被撐到 5000px 寬 */
+.en-detail > td { padding: 0 !important; background: var(--bg); white-space: normal; }
+/* 展開區的寬度跟著表格容器，不反過來撐寬表格 */
+.en-box { width: 100%; }
+.en-box { padding: 12px 16px 14px; border-left: 3px solid var(--accent); box-sizing: border-box; }
+.en-sec { font-size: 13px; font-weight: 700; color: var(--accent2); margin: 10px 0 5px; }
+.en-sec:first-child { margin-top: 0; }
+.en-text { font-size: 13px; line-height: 1.9; color: var(--text); }
+/* 欄位對齊：標籤欄寬度固定，值才會在同一條線上 */
+.en-kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 3px 18px; margin-top: 2px; }
+.en-kv .en-k { display: inline-block; width: 86px; color: var(--text2); font-size: 12px; }
+.en-kv .en-v { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.en-pair { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.en-pair .en-v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
