@@ -138,17 +138,29 @@ function _enDetailHtml(r) {
   };
   h += kvp('配息頻率', d['配息頻率'] && d['配息頻率'] !== 'N/A' ? d['配息頻率'] : '<span class="swap-dim">尚未公告</span>');
   if (dv) {
-    // 收益平準金：看收益分配標準條款裡有沒有把它列入可分配收益，是條款寫的，不是推論
-    h += kvp('收益平準金', dv.equalization
-      ? '列入可分配收益'
-      : '<span class="swap-dim">條款未提及</span>', '取自證交所公告的「收益分配標準」全文');
-    // 評價日：條款明寫「收益分配評價日（…）」才顯示那一句；沒寫就只給證交所的收益分配基準日，不改名硬湊
-    h += dv.valuationDay
-      ? kvp('評價日', dv.valuationDay)
-      : kvp('收益分配基準日', dv.baseDate || '—', '條款未載明收益分配評價日，這裡給的是證交所公告的收益分配基準日');
-    h += kvp('除息交易日', dv.exDate || '—');
-    h += kvp('收益分配發放日', dv.payDate || '—');
+    // 金額與日期走較早的來源（Yahoo），官方公告常落後一到兩週，金額欄還會是空的
+    h += kvp('配息金額', (dv.amount ? dv.amount + (dv.period ? ' <span class="swap-dim">' + dv.period + '</span>' : '')
+                                    : '<span class="swap-dim">待公告</span>'),
+             '每 1 受益權單位。來源：' + (dv.dateSrc || '—'));
+    h += kvp('除息交易日', (dv.exDate || '—') +
+      (dv.exDiff ? ' <span class="swap-warn" title="與證交所公告的除息日不同，以較早公告者為準並持續核對">≠</span>' : ''),
+      '來源：' + (dv.dateSrc || '—'));
+    h += kvp('收益分配發放日', dv.payDate || '—', '來源：' + (dv.dateSrc || '—'));
+    if (dv.equalization == null) {
+      h += kvp('收益平準金', '<span class="swap-dim">' + (r.termsNote || '條款尚未公告') + '</span>');
+      h += kvp('評價日', '<span class="swap-dim">' + (r.termsNote || '條款尚未公告') + '</span>');
+    } else {
+      // 收益平準金：看收益分配標準條款裡有沒有把它列入可分配收益，是條款寫的，不是推論
+      h += kvp('收益平準金', dv.equalization
+        ? '列入可分配收益'
+        : '<span class="swap-dim">條款未提及</span>', '取自證交所公告的「收益分配標準」全文');
+      // 評價日：條款明寫「收益分配評價日（…）」才顯示那一句；沒寫就只給基準日，不改名硬湊
+      h += dv.valuationDay
+        ? kvp('評價日', dv.valuationDay, '取自收益分配標準條款')
+        : kvp('收益分配基準日', dv.baseDate || '—', '條款未載明收益分配評價日，這裡給的是證交所公告的收益分配基準日');
+    }
   } else {
+    h += kvp('配息金額', '<span class="swap-dim">' + (r.divNote || '無資料') + '</span>');
     h += kvp('收益平準金', '<span class="swap-dim">' + (r.divNote || '無資料') + '</span>');
     h += kvp('評價日', '<span class="swap-dim">' + (r.divNote || '無資料') + '</span>');
   }
@@ -214,9 +226,10 @@ function renderEtfNew() {
     '<dt>清單</dt><dd>證交所 ISIN 公開資訊的 ETF 分類，上市日在近 ' + d.windowDays +
       ' 天內。已核准、還沒掛牌的也會列出，標「待掛牌」。</dd>' +
     '<dt>投資特色</dt><dd>MoneyDJ 的「投資策略」整段原文，未經改寫。</dd>' +
-    '<dt>收益分配</dt><dd>證交所「ETF 收益分配」公告（只有上市、且已公告過配息的檔）。' +
-      '收益平準金看條款有沒有把它列入可分配收益；條款沒載明評價日時改列證交所的收益分配基準日，不改名硬湊。' +
-      '上櫃沒有對應的公開介面，標「無來源」。</dd>' +
+    '<dt>收益分配</dt><dd>日期與金額取 Yahoo 台股配息頁，不以官方公告為主來源：公告會落後一到兩週，' +
+      '今天的實例是 00408A 與 00991B 的除息日兩邊一致，但證交所的金額欄仍是空的，Yahoo 已有 0.21 與 0.067。' +
+      '收益平準金與評價日仍取證交所公告的「收益分配標準」全文，那是公開說明書層級的條款，不隨公告時效變動。' +
+      '條款沒載明評價日時改列收益分配基準日，不改名硬湊。兩邊除息日不同會標「≠」。</dd>' +
     '<dt>關注</dt><dd>勾選即加入「關注股票」清單（上限 ' + (typeof WT_MAX !== 'undefined' ? WT_MAX : 30) +
       ' 檔），與該頁是同一份清單。</dd>' +
     '</dl></div>';
