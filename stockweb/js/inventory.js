@@ -214,8 +214,9 @@ function invMetrics(p) {
   // 含息損益＝未實現損益＋累積已配息，與未實現損益同基準（隨「含稅費」切換）
   var div = invDivSum(code);
   var withDiv = (profit != null && div != null) ? profit + div : null;
+  var wrate = (withDiv != null && cost) ? withDiv / cost * 100 : null;   // 含息獲利率
   return { val: netVal, profit: profit, prate: prate, chg: chg, shares: shares,
-           div: div, withDiv: withDiv };
+           div: div, withDiv: withDiv, wrate: wrate };
 }
 
 // 整欄表頭可點：第一次點降冪（▼ 高→低），再點升冪（▲），再點又降冪…（兩態切換，恆有排序）
@@ -261,6 +262,7 @@ function invValRow(p) {
   var chgAmt = (price != null && c && c.reference) ? price - c.reference : null; // 今日漲跌金額（現價−昨收）
   var divSum = invDivSum(code);                                   // 累積已配息（仍持有的批次）
   var withDiv = (profit != null && divSum != null) ? profit + divSum : null;
+  var wrate = (withDiv != null && cost) ? withDiv / cost * 100 : null;
   var pcls = profit == null ? 'flat' : colorClass(profit);
   var ccls = chg == null ? 'flat' : colorClass(chg);
   // 現值比＝該檔現值佔總現值%
@@ -300,6 +302,10 @@ function invValRow(p) {
         ' ＋ 已配息 ' + Math.round(divSum).toLocaleString('zh-TW') + '"' : '') + '>' +
       (withDiv == null ? '—' : (withDiv >= 0 ? '+' : '') + Math.round(withDiv).toLocaleString('zh-TW')) + '</td>' +
     '<td class="num ' + pcls + '">' + (prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%') + '</td>' +
+    '<td class="num ' + (wrate == null ? 'flat' : colorClass(wrate)) + '"' +
+      (wrate != null ? ' title="含息損益 ' + Math.round(withDiv).toLocaleString('zh-TW') +
+        ' ÷ 付出成本 ' + Math.round(cost).toLocaleString('zh-TW') + '"' : '') + '>' +
+      (wrate == null ? '—' : (wrate > 0 ? '+' : '') + wrate.toFixed(2) + '%') + '</td>' +
     '<td class="num">' + (vRatio == null ? '—' : vRatio.toFixed(2) + '%') + '</td>' +
     _invExCell(code);
 }
@@ -527,6 +533,8 @@ function renderInvTable() {
       case 'pnlAsc': return num(invMetrics(a).profit) - num(invMetrics(b).profit);
       case 'wdivDesc': return num(invMetrics(b).withDiv) - num(invMetrics(a).withDiv);
       case 'wdivAsc': return num(invMetrics(a).withDiv) - num(invMetrics(b).withDiv);
+      case 'wrateDesc': return num(invMetrics(b).wrate) - num(invMetrics(a).wrate);
+      case 'wrateAsc': return num(invMetrics(a).wrate) - num(invMetrics(b).wrate);
       case 'prateDesc': return num(invMetrics(b).prate) - num(invMetrics(a).prate);
       case 'prateAsc': return num(invMetrics(a).prate) - num(invMetrics(b).prate);
       case 'sharesDesc': return num(invMetrics(b).shares) - num(invMetrics(a).shares);
