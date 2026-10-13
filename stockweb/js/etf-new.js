@@ -67,11 +67,53 @@ async function enWatch(code, el) {
 function _enPxCell(r) {
   if (r.upcoming) return '<span class="swap-dim">未上市</span>';
   var p = _enPx[r.code];
-  if (!p || p.close == null) return '—';
-  var c = p.chgPct == null ? 'flat' : colorClass(p.chgPct);
-  return p.close.toFixed(2) +
-    (p.chgPct == null ? '' : ' <span class="' + c + '" style="font-size:11px">' +
-      (p.chgPct > 0 ? '+' : '') + p.chgPct.toFixed(2) + '%</span>');
+  return (p && p.close != null) ? p.close.toFixed(2) : '—';
+}
+function _enChgCell(r) {
+  if (r.upcoming) return '<span class="swap-dim">—</span>';
+  var p = _enPx[r.code];
+  if (!p || p.chgPct == null) return '—';
+  var c = colorClass(p.chgPct);
+  return '<span class="' + c + '">' + (p.chgPct > 0 ? '▲' : (p.chgPct < 0 ? '▼' : '')) +
+    Math.abs(p.chgPct).toFixed(2) + '%</span>';
+}
+
+// ── 排序 ──
+// 未上市的沒有價格也沒有漲跌，不管升冪降冪一律排最後，否則它們會佔住榜首或榜尾。
+var _enSort = 'listDesc';
+function enSortCol(key) {
+  _enSort = (_enSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
+  renderEtfNew();
+}
+function _enSortVal(r, key) {
+  if (key === 'code') return r.code;
+  if (key === 'type') return (r.type || '') + r.market;
+  if (key === 'list') return r.listDate;
+  var p = _enPx[r.code] || {};
+  if (key === 'px') return p.close;
+  if (key === 'chg') return p.chgPct;
+  return null;
+}
+function _enSorted(list) {
+  var m = /^(\w+?)(Desc|Asc)$/.exec(_enSort);
+  if (!m) return list;
+  var key = m[1], asc = m[2] === 'Asc';
+  var txt = (key === 'code' || key === 'type' || key === 'list');
+  return list.slice().sort(function (a, b) {
+    var x = _enSortVal(a, key), y = _enSortVal(b, key);
+    var nx = (x == null || x === ''), ny = (y == null || y === '');
+    if (nx !== ny) return nx ? 1 : -1;      // 沒值的恆在後
+    if (nx) return 0;
+    var d = txt ? String(x).localeCompare(String(y), undefined, { numeric: true }) : x - y;
+    return asc ? d : -d;
+  });
+}
+function _enTh(key, label, cls) {
+  var on = _enSort === key + 'Asc' || _enSort === key + 'Desc';
+  var ind = on ? (_enSort === key + 'Asc' ? '▲' : '▼') : '↕';
+  return '<th class="sort-th' + (cls ? ' ' + cls : '') + (on ? ' on' : '') +
+    '" onclick="enSortCol(\'' + key + '\')" title="點擊排序">' + label +
+    '<span class="sort-ind">' + ind + '</span></th>';
 }
 
 // 展開內容：投資特色＝MoneyDJ 的投資策略整段；其餘欄位照原樣列出。
@@ -81,15 +123,40 @@ var EN_SHOW = ['發行公司', '成立日期', '上市日期', '投資標的', '
 
 function _enDetailHtml(r) {
   var d = r.detail || {};
-  var h = '<tr class="en-detail"><td colspan="6"><div class="en-box">';
+  var h = '<tr class="en-detail"><td colspan="7"><div class="en-box">';
   h += '<div class="en-sec">投資特色</div>';
   h += d['投資策略']
     ? '<div class="en-text">' + d['投資策略'] + '</div>'
     : '<div class="en-text swap-dim">MoneyDJ 沒有這一檔的投資策略說明。</div>';
   h += '<div class="en-sec">收益分配</div>';
-  h += '<div class="en-text">配息頻率 <b>' + (d['配息頻率'] && d['配息頻率'] !== 'N/A' ? d['配息頻率'] : '尚未公告') + '</b>' +
-    '<span class="swap-dim">　完整的收益分配條款（評價日、分配基準、收益平準金）目前沒有可靠來源，' +
-    '要看請查該檔公開說明書。</span></div>';
+  var dv = r.div;
+  h += '<div class="en-kv en-kv-div">';
+  var kvp = function (k, v, title) {
+    return '<div class="en-pair"><span class="en-k">' + k + '</span>' +
+      '<span class="en-v"' + (title ? ' title="' + title.replace(/"/g, '&quot;') + '"' : '') +
+      '>' + v + '</span></div>';
+  };
+  h += kvp('配息頻率', d['配息頻率'] && d['配息頻率'] !== 'N/A' ? d['配息頻率'] : '<span class="swap-dim">尚未公告</span>');
+  if (dv) {
+    // 收益平準金：看收益分配標準條款裡有沒有把它列入可分配收益，是條款寫的，不是推論
+    h += kvp('收益平準金', dv.equalization
+      ? '列入可分配收益'
+      : '<span class="swap-dim">條款未提及</span>', '取自證交所公告的「收益分配標準」全文');
+    // 評價日：條款明寫「收益分配評價日（…）」才顯示那一句；沒寫就只給證交所的收益分配基準日，不改名硬湊
+    h += dv.valuationDay
+      ? kvp('評價日', dv.valuationDay)
+      : kvp('收益分配基準日', dv.baseDate || '—', '條款未載明收益分配評價日，這裡給的是證交所公告的收益分配基準日');
+    h += kvp('除息交易日', dv.exDate || '—');
+    h += kvp('收益分配發放日', dv.payDate || '—');
+  } else {
+    h += kvp('收益平準金', '<span class="swap-dim">' + (r.divNote || '無資料') + '</span>');
+    h += kvp('評價日', '<span class="swap-dim">' + (r.divNote || '無資料') + '</span>');
+  }
+  h += '</div>';
+  if (dv && dv.std) {
+    h += '<details class="en-std"><summary>收益分配標準全文</summary><div class="en-text">' +
+      dv.std.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div></details>';
+  }
   var kv = EN_SHOW.filter(function (k) { return d[k]; });
   if (kv.length) {
     h += '<div class="en-sec">基本資料</div><div class="en-kv">';
@@ -117,18 +184,21 @@ function renderEtfNew() {
 
   h += '<div class="divest-sec-title">已上市上櫃</div>';
   h += '<div class="inv-table-wrap"><table class="inv-table en-table"><thead><tr>' +
-    '<th class="num">關注</th><th>代號</th><th>名稱</th><th class="num">現價</th>' +
-    '<th>類型</th><th>上市日</th></tr></thead><tbody>';
-  d.listed.forEach(function (r) {
+    '<th class="num">關注</th>' + _enTh('code', '代號') + '<th>名稱</th>' +
+    _enTh('px', '現價', 'num') + _enTh('chg', '今日漲跌', 'num') +
+    _enTh('type', '類型') + _enTh('list', '上市日') + '</tr></thead><tbody>';
+  _enSorted(d.listed).forEach(function (r) {
     var on = list.indexOf(r.code) >= 0;
     h += '<tr class="en-row" onclick="enToggle(\'' + r.code + '\')">' +
       '<td class="num" onclick="event.stopPropagation()">' +
         '<input type="checkbox" class="en-chk"' + (on ? ' checked' : '') +
         ' onchange="enWatch(\'' + r.code + '\',this)" title="加入／移除關注股票"></td>' +
-      '<td class="inv-code"><span class="code-link">' + r.code + '</span></td>' +
+      '<td class="inv-code"><span class="code-link" title="看線圖"' +
+        ' onclick="event.stopPropagation();openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-name">' + r.name +
         '<span class="en-caret">' + (_enOpen[r.code] ? '▼' : '▶') + '</span></td>' +
       '<td class="num">' + _enPxCell(r) + '</td>' +
+      '<td class="num">' + _enChgCell(r) + '</td>' +
       '<td>' + (r.type || '—') + '<span class="swap-dim"> ' + r.market + '</span></td>' +
       '<td>' + r.listDate + (r.upcoming ? ' <span class="dexm-lent">(待掛牌)</span>' : '') + '</td></tr>';
     if (_enOpen[r.code]) h += _enDetailHtml(r);
@@ -144,7 +214,9 @@ function renderEtfNew() {
     '<dt>清單</dt><dd>證交所 ISIN 公開資訊的 ETF 分類，上市日在近 ' + d.windowDays +
       ' 天內。已核准、還沒掛牌的也會列出，標「待掛牌」。</dd>' +
     '<dt>投資特色</dt><dd>MoneyDJ 的「投資策略」整段原文，未經改寫。</dd>' +
-    '<dt>收益分配</dt><dd>只有配息頻率一項。完整條款在公開說明書，目前沒有可以程式取得的聚合來源。</dd>' +
+    '<dt>收益分配</dt><dd>證交所「ETF 收益分配」公告（只有上市、且已公告過配息的檔）。' +
+      '收益平準金看條款有沒有把它列入可分配收益；條款沒載明評價日時改列證交所的收益分配基準日，不改名硬湊。' +
+      '上櫃沒有對應的公開介面，標「無來源」。</dd>' +
     '<dt>關注</dt><dd>勾選即加入「關注股票」清單（上限 ' + (typeof WT_MAX !== 'undefined' ? WT_MAX : 30) +
       ' 檔），與該頁是同一份清單。</dd>' +
     '</dl></div>';
