@@ -208,7 +208,10 @@ async function pollTwConst(force) {
     if (!r.ok) throw new Error('snapshots HTTP ' + r.status);
     var snaps = await r.json();
     snaps.forEach(function (s) {
-      if (s.close != null) _constPx['TW:' + s.code] = { chg: s.change_rate, price: s.close };
+      // lim 取 change_type：交易所判定的漲跌停旗標。用漲跌幅推（例 >=9.9%）是自訂門檻，
+      // 而且實際限價會因撮合檔位落在 9.9x%，推不準。外市（Yahoo）沒有這個概念，不設。
+      if (s.close != null) _constPx['TW:' + s.code] = { chg: s.change_rate, price: s.close,
+        lim: s.change_type === 'LimitUp' ? 'up' : (s.change_type === 'LimitDown' ? 'down' : '') };
     });
     _constRecompute();
   } catch (e) { if (force) console.warn('[const snapshots]', e); }
@@ -360,7 +363,9 @@ function renderConstPop() {
   rows.forEach(function (r) {
     var px = _constPx[r.key];
     var cls = (!px || px.chg == null) ? 'flat' : colorClass(px.chg);
-    html += '<tr><td>' + r.code + ' ' + (r.name || '') + '</td>' +
+    var lim = (px && px.lim) ? ' cst-lim-' + px.lim : '';
+    html += '<tr class="' + (lim ? lim.slice(1) : '') + '"><td>' + r.code + ' ' + (r.name || '') +
+      (px && px.lim ? '<span class="cst-lim-tag">' + (px.lim === 'up' ? '漲停' : '跌停') + '</span>' : '') + '</td>' +
       '<td class="num">' + r.weight.toFixed(2) + '%</td>' +
       '<td class="num">' + (px && px.price != null ? (px.price >= 100 ? px.price.toFixed(1) : px.price.toFixed(2)) : '—') + '</td>' +
       '<td class="num ' + cls + '">' + (px && px.chg != null ? fmtPct(px.chg) : '—') + '</td></tr>';

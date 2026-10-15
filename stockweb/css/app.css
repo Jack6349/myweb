@@ -148,6 +148,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .inv-code.lim-down { background: var(--down); }
 .inv-code.lim-up, .inv-code.lim-up .code-link { color: #fff; }
 .inv-code.lim-down, .inv-code.lim-down .code-link { color: #0e1621; }
+/* 成份股彈窗的漲跌停：整列上底。跟持股庫存的 .inv-code.lim-* 同色，
+   但這裡一列只有四欄，標代號格太小，整列比較看得到。透明度調低才不會蓋掉數字。 */
+.detail-table tr.cst-lim-up > td { background: color-mix(in srgb, var(--up) 22%, transparent); }
+.detail-table tr.cst-lim-down > td { background: color-mix(in srgb, var(--down) 22%, transparent); }
+.cst-lim-tag { margin-left: 6px; font-size: 10px; padding: 1px 5px; border-radius: 4px;
+  background: var(--bg3); color: var(--text2); vertical-align: middle; }
+.detail-table tr.cst-lim-up .cst-lim-tag { background: var(--up); color: #fff; }
+.detail-table tr.cst-lim-down .cst-lim-tag { background: var(--down); color: #0e1621; }
 .code-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
 .code-link:hover { color: var(--accent); text-decoration-style: solid; }
 /* 成分股曝險：持有明細（無外框、固定寬度：代碼 6 位＋比例 NN.NN% 亮橘） */
