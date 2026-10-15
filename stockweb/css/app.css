@@ -583,6 +583,8 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-mini:hover { border-color: rgba(240,204,122,.5); color: var(--accent2); }
 .swap-warn { color: var(--accent2); font-size: 12px; }
 .swap-dim { color: var(--text3); font-size: 12px; font-weight: 400; }
+/* 改價後的原始委託價：劃掉摆在新價後面，看得出改過而不會誤讀成現在的價 */
+.tx-oldpx { color: var(--text3); font-size: 11px; text-decoration: line-through; margin-left: 2px; }
 /* 章節標題後面的合計：跟標題同一行，字級較小不跟標題搶對比 */
 .divest-sec-sum { margin-left: 14px; font-size: 14px; font-weight: 600; color: var(--sum);
   letter-spacing: normal; }

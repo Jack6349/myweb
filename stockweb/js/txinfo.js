@@ -63,6 +63,18 @@ function _stPill(t) {
   }
   return '<span class="st-pill st-wait">委託中</span>'; // PendingSubmit / PreSubmitted / Submitted
 }
+// 有效委託價：在券商 App 改價後，order.price 仍是原始價，新價在 status.modified_price。
+// 實測 2026-10-15 的 00988B：order.price 19.07、status.modified_price 19.06，兩者並存。
+// 排隊推估要比對價位、損益要用成交對照價，全部都該用改價後的那個。
+function _txPx(t) {
+  var s = t.status || {}, o = t.order || {};
+  return (s.modified_price > 0) ? +s.modified_price : +(o.price || 0);
+}
+function _txModified(t) {
+  var s = t.status || {}, o = t.order || {};
+  return (s.modified_price > 0 && +s.modified_price !== +(o.price || 0)) ? +(o.price || 0) : null;
+}
+
 // ── 委託排隊前方張數（推估）──
 // 交易所與券商都不揭露排隊序位，只能用逐筆成交回推：
 //   1) 取委託時間之後第一筆成交，讀當下同價位的委賣（賣單）／委買（買單）總量，扣掉自己未成交張數＝掛單當下前方張數
@@ -94,7 +106,7 @@ function _txOwnEarlier(t, all) {
   (all || []).forEach(function (x) {
     if (x === t || !_txLive(x)) return;
     var xo = x.order || {}, xs = x.status || {};
-    if ((x.contract || {}).code !== code || xo.action !== o.action || +xo.price !== +o.price) return;
+    if ((x.contract || {}).code !== code || xo.action !== o.action || _txPx(x) !== _txPx(t)) return;
     if ((xs.order_ts || 0) > (s.order_ts || 0)) return;            // 晚於本筆 → 排在後面，不算前方
     sum += (xo.quantity || 0) - (xs.deal_quantity || 0);
   });
@@ -115,14 +127,14 @@ async function _txAhead(t, all) {
   if (base < 0) return { na: '委託後尚無成交，無法取基準' };
   var buy = o.action === 'Buy';
   var lvlP = buy ? j.bid_price : j.ask_price, lvlV = buy ? j.bid_volume : j.ask_volume;
-  if (+lvlP[base] !== o.price) return { na: '委託價非當時最佳一檔（逐筆只揭示最佳檔），無法估計' };
+  if (+lvlP[base] !== _txPx(t)) return { na: '委託價非當時最佳一檔（逐筆只揭示最佳檔），無法估計' };
   var atOrder = lvlV[base];
   var own = _txOwnEarlier(t, all);                                 // 自己較早、同價位未成交的張數（仍排在前面，但標示出來）
   var ahead0 = Math.max(0, atOrder - left);
   var used = 0;
-  for (var k = base; k < dt.length; k++) { if (+j.close[k] === o.price) used += j.volume[k]; }
+  for (var k = base; k < dt.length; k++) { if (+j.close[k] === _txPx(t)) used += j.volume[k]; }
   var lastLvl = null;
-  for (var m = dt.length - 1; m >= 0; m--) { if (+lvlP[m] === o.price) { lastLvl = { t: String(dt[m]).slice(11, 19), v: lvlV[m] }; break; } }
+  for (var m = dt.length - 1; m >= 0; m--) { if (+lvlP[m] === _txPx(t)) { lastLvl = { t: String(dt[m]).slice(11, 19), v: lvlV[m] }; break; } }
   return { ahead: Math.max(0, ahead0 - used), ahead0: ahead0, used: used, atOrder: atOrder, own: own,
     baseT: String(dt[base]).slice(11, 19), lastLvl: lastLvl };
 }
@@ -183,7 +195,11 @@ async function loadOrderBox() {
       html += '<tr data-code="' + code + '" data-side="' + (buy ? 0 : 1) + '" data-st="' + _txStRank(t) + '" data-ts="' + (s.order_ts || 0) + '">' +
         '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + ((c && c.name) || '') + '</span></td>' +
         '<td class="' + (buy ? 'up' : 'down') + '">' + (buy ? '買進' : '賣出') + '</td>' +
-        '<td class="num">' + o.quantity + unit + '<span class="tx-gap"></span>' + (o.price || 0).toFixed(2) + tif + '</td>' +
+        '<td class="num">' + o.quantity + unit + '<span class="tx-gap"></span>' + _txPx(t).toFixed(2) +
+          (_txModified(t) != null
+            ? ' <span class="tx-oldpx" title="原始委託價 ' + _txModified(t).toFixed(2) + '，已改價">' +
+              _txModified(t).toFixed(2) + '</span>'
+            : '') + tif + '</td>' +
         '<td class="num tx-px" data-code="' + code + '">' + _txPxHtml(code) + '</td>' +
         '<td class="num"' + (dealTitle ? ' title="' + dealTitle + '"' : '') + '>' +
           (dq ? dq + unit + '<span class="tx-gap"></span>' + avg.toFixed(2) + (deals.length > 1 ? ' ×' + deals.length : '') +

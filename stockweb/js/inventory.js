@@ -632,7 +632,7 @@ async function openTradeDetail(code, detailId) {
     var html = '<div class="detail-scroll"><table class="detail-table"><thead><tr>' +
       '<th>買進日</th><th>張</th><th class="num">買價</th><th class="num">單筆成本</th><th class="num">現值</th>' +
       '<th class="num">未實現損益</th><th class="num">已配息</th>' +
-      '<th class="num" title="未實現損益 ＋ 已配息。配息是券商記錄的已入帳金額，未扣二代健保與所得稅">含息損益</th>' +
+      '<th class="num" title="未實現損益 ＋ 已配息。配息是券商帳務記錄的實收金額">含息損益</th>' +
       '<th class="num">手續費</th></tr></thead><tbody>';
     rows.forEach(function (d) {
       var lp = d.last_price != null ? d.last_price : 0;
@@ -667,8 +667,8 @@ async function openTradeDetail(code, detailId) {
       '<td class="num ' + twcls + '">' + (totWith >= 0 ? '+' : '') + Math.round(totWith).toLocaleString('zh-TW') + '</td>' +
       '<td class="num">—</td></tr></tfoot></table></div>' +
       '<div class="detail-note nb-keep">含息損益 ＝ 未實現損益 ＋ 已配息（累積 ' +
-      Math.round(totDiv).toLocaleString('zh-TW') + ' 元）。配息是券商記錄的已入帳金額，' +
-      '未扣二代健保與所得稅；借券補償另外到帳，不一定記在這裡。</div>';
+      Math.round(totDiv).toLocaleString('zh-TW') + ' 元）。配息是券商帳務記錄的實收金額，' +
+      '借券補償另外到帳，不一定記在這裡。</div>';
     body.innerHTML = html;
   } catch (e) {
     body.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>';

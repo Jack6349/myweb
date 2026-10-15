@@ -486,8 +486,13 @@ function renderDividendEst() {
       '<span class="divest-sp-v" style="color:' + c + '">' + v + '</span></span>';
   };
   var sumEl = document.getElementById('divest-sumline');
+  // 拿掉原本的「已入帳」：它只是「發放日已過」的那幾筆，金額仍是
+  //   每股配息（缺公告時沿用上一次）× 重建的可領股數，未扣二代健保與稅，
+  // 不是帳上實收。名稱讀起來像帳戶事實，數字卻是估的，留著只會誤導。
+  // 券商有實收數（建倉明細的 ex_dividends、已實現損益的 ex_dividend_amt），
+  // 但兩者都是「該批持有期間累計」、沒有日期拆分，湊不出「今年實收」。
   if (sumEl) sumEl.innerHTML = sp('年估總額', money(grand), 'var(--accent)') +
-    sp('已入帳', money(grandActual), 'var(--down)') + sp('月均', money(grand / 12), 'var(--accent2)');
+    sp('月均', money(grand / 12), 'var(--accent2)');
 
   // ── 本月除息個股（按除息日由近至遠）──
   // ── 本月發放（原在填息追蹤，移到最上方）──
