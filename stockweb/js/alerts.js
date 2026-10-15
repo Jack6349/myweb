@@ -79,8 +79,12 @@ async function startAlerts() {
     var shares = p.quantity, cost = p.price * shares;
     var prate = (price != null && cost) ? ((price * shares * 0.997735) - cost) / cost * 100 : null;
     var a = all[code] || {};
+    // 漲跌停：沿用持股庫存那套 limitState（比對合約的 limit_up／limit_down），只標代號格。
+    // 這一列的整列底色已經讓給停利／停損／買進訊號了，再用整列會打架。
+    var lim = (typeof limitState === 'function') ? limitState(code, price) : '';
     html += '<tr>' +
-      '<td class="inv-code">' + code + '</td>' +
+      '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"' +
+        (lim ? ' title="' + (lim === 'up' ? '漲停' : '跌停') + '"' : '') + '>' + code + '</td>' +
       '<td class="inv-name">' + ((c && c.name) || names[code] || '') + '</td>' +
       costCellHtml(p.price, price) +
       '<td class="num">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
