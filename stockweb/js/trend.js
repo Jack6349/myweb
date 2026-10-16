@@ -1,4 +1,4 @@
-// 股利總管 Web — 趨勢評估（自 Yahoo 日 K 計算趨勢強弱/股價高低/報酬，ETF 成分股隨選展開）
+// 股利總管 Web — 趨勢評估（自 Yahoo 日 K 計算均線排列/股價高低/期間報酬，ETF 成分股隨選展開）
 // 註：券商 App 的「診斷分數」為其加值產品、不在 Shioaji API；此處指標為自算技術面，非券商診斷。
 
 var TREND_GAS = NEWS_GAS_URL;   // 沿用同一 GAS 代理（?url= Yahoo）
@@ -43,25 +43,19 @@ function computeTrend(c) {
     if (last > ma5 && ma5 > ma20 && ma20 > ma60) arr = '多頭排列';
     else if (last < ma5 && ma5 < ma20 && ma20 < ma60) arr = '空頭排列';
   }
-  // 連續強弱分數 0~10（1 位小數）：基準 5，綜合均線乖離、52週位置、期間動能，各分量夾限後加權
-  function clamp1(v) { return Math.max(-1, Math.min(1, v)); }
-  var maComp = 0; // 均線乖離 ±2
-  if (ma20) maComp += clamp1(((last / ma20) - 1) * 100 / 5);
-  if (ma20 && ma60) maComp += clamp1(((ma20 / ma60) - 1) * 100 / 5);
-  var posComp = posPct != null ? clamp1((posPct - 50) / 50) * 2 : 0; // 位置 ±2
-  var momComp = 0; // 動能 ±3
-  if (r3 != null) momComp += clamp1(r3 / 15) * 1.5;
-  if (r1 != null) momComp += clamp1(r1 / 8) * 1.0;
-  if (r6 != null) momComp += clamp1(r6 / 30) * 0.5;
-  var raw = 5 + maComp * 1.25 + posComp + momComp; // 5 ±7.5
-  var score10 = Math.round(Math.max(0, Math.min(10, raw)) * 10) / 10;
-  var label = score10 >= 7.5 ? '強' : (score10 >= 6 ? '偏強' : (score10 >= 4 ? '中性' : (score10 >= 2.5 ? '偏弱' : '弱')));
-  return { last: last, arr: arr, posPct: posPct, fromHi: fromHi, r1: r1, r3: r3, r6: r6, r12: r12, score10: score10, label: label };
+  // 原本這裡有一個 0~10 的「強弱分數」與「強／偏強／中性／偏弱／弱」標籤，已移除。
+  // 移除理由：那個分數的九個常數（乖離除以 5、r3/15、r1/8、r6/30，
+  // 與 1.25／2／1.5／1.0／0.5 五個權重）全部是自訂的，沒有任何推導，
+  // 標籤的 7.5／6／4／2.5 只是再把這個自訂分數切一次。
+  // 更實際的問題：同一組權重套在債券型 ETF 上必然低分（2026-10-16 實測
+  // 00981B 3.1、00988A 3.0、00989B 2.9、00984D 2.3，全組最低四名），
+  // 那反映的是債券的波動結構，不是「弱」。跨資產類別根本不可比。
+  // 改為只留可直接查證的四項：均線排列、52週位置、各期間報酬率。
+  return { last: last, arr: arr, posPct: posPct, fromHi: fromHi, r1: r1, r3: r3, r6: r6, r12: r12 };
 }
 
 function _pct(v) { return v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%'; }
 function _pctCls(v) { return v == null ? 'flat' : (v > 0 ? 'up' : (v < 0 ? 'down' : 'flat')); }
-function _labelCls(s10) { return s10 == null ? 'flat' : (s10 >= 6 ? 'up' : (s10 <= 4 ? 'down' : 'flat')); }
 
 function isEtfCode(code) { return /^00/.test(String(code)); }
 
@@ -99,28 +93,26 @@ async function startTrend() {
 function renderTrendTable() {
   var wrap = document.getElementById('trend-wrap');
   if (!wrap) return;
+  // 排序改用近 3 月報酬率：它是可以查證的數字，不像原本的強弱分數是自訂加權的產物
   var rows = _trendRows.slice().sort(function (a, b) {
-    var sa = a.trend ? a.trend.score10 : -99, sb = b.trend ? b.trend.score10 : -99;
-    if (sb !== sa) return sb - sa;
     var ra = a.trend && a.trend.r3 != null ? a.trend.r3 : -999, rb = b.trend && b.trend.r3 != null ? b.trend.r3 : -999;
     return rb - ra;
   });
   var html = '<div class="inv-table-wrap"><table class="inv-table trend-table"><thead><tr>' +
-    '<th>代號</th><th>名稱</th><th class="num">強弱</th><th>排列</th><th class="num">52週位置</th>' +
+    '<th>代號</th><th>名稱</th><th>排列</th><th class="num">52週位置</th>' +
     '<th class="num">近1月</th><th class="num">近3月</th><th class="num">近6月</th><th class="num">近1年</th>' +
     '<th></th></tr></thead><tbody>';
   rows.forEach(function (r) {
     var t = r.trend;
     if (!t) {
       html += '<tr><td class="inv-code">' + r.code + '</td><td class="inv-name">' + (r.name || '') + '</td>' +
-        '<td class="num flat" colspan="8">查無日K</td></tr>';
+        '<td class="num flat" colspan="7">查無日K</td></tr>';
       return;
     }
     var arrCls = t.arr === '多頭排列' ? 'up' : (t.arr === '空頭排列' ? 'down' : 'flat');
     html += '<tr>' +
       '<td class="inv-code">' + r.code + '</td>' +
       '<td class="inv-name">' + (r.name || '') + '</td>' +
-      '<td class="num ' + _labelCls(t.score10) + '">' + t.score10.toFixed(1) + ' ' + t.label + '</td>' +
       '<td class="' + arrCls + '">' + t.arr + '</td>' +
       '<td class="num">' + (t.posPct == null ? '—' : Math.round(t.posPct) + '%') + '</td>' +
       '<td class="num ' + _pctCls(t.r1) + '">' + _pct(t.r1) + '</td>' +
@@ -181,21 +173,21 @@ async function showConstituentTrend(code, name) {
     return { code: h.code, name: h.name || '', weight: h.weight, trend: closes ? computeTrend(closes) : null };
   }));
 
-  rows.sort(function (a, b) { var sa = a.trend ? a.trend.score10 : -1, sb = b.trend ? b.trend.score10 : -1; return sb - sa; });
-  var html = '<div class="detail-note nb-keep" style="margin:0 0 8px">來源：' + data.source + '（共 ' + data.holdings.length + ' 檔，顯示前 15 大權重，依強弱排序）</div>' +
-    '<div class="detail-scroll"><table class="detail-table"><thead><tr><th>成分股</th><th class="num">權重</th><th class="num">強弱</th>' +
+  rows.sort(function (a, b) { var ra = a.trend && a.trend.r3 != null ? a.trend.r3 : -999, rb = b.trend && b.trend.r3 != null ? b.trend.r3 : -999; return rb - ra; });
+  var html = '<div class="detail-note nb-keep" style="margin:0 0 8px">來源：' + data.source + '（共 ' + data.holdings.length + ' 檔，顯示前 15 大權重，依近 3 月報酬率排序）</div>' +
+    '<div class="detail-scroll"><table class="detail-table"><thead><tr><th>成分股</th><th class="num">權重</th>' +
     '<th>排列</th><th class="num">近1月</th><th class="num">近3月</th><th class="num">52週位置</th></tr></thead><tbody>';
   rows.forEach(function (r) {
     var t = r.trend;
     html += '<tr><td>' + r.code + ' ' + (r.name || '') + '</td>' +
       '<td class="num">' + (r.weight != null ? r.weight.toFixed(2) + '%' : '—') + '</td>' +
       (t ? (
-        '<td class="num ' + _labelCls(t.score10) + '">' + t.score10.toFixed(1) + ' ' + t.label + '</td>' +
+
         '<td class="' + (t.arr === '多頭排列' ? 'up' : t.arr === '空頭排列' ? 'down' : 'flat') + '">' + t.arr + '</td>' +
         '<td class="num ' + _pctCls(t.r1) + '">' + _pct(t.r1) + '</td>' +
         '<td class="num ' + _pctCls(t.r3) + '">' + _pct(t.r3) + '</td>' +
         '<td class="num">' + (t.posPct == null ? '—' : Math.round(t.posPct) + '%') + '</td>'
-      ) : '<td class="num flat" colspan="5">查無日K</td>') +
+      ) : '<td class="num flat" colspan="4">查無日K</td>') +
     '</tr>';
   });
   html += '</tbody></table></div>';
@@ -220,8 +212,8 @@ function trendSummaryForPrompt() {
   return _trendRows.map(function (r) {
     var t = r.trend;
     if (!t) return '- ' + r.code + ' ' + (r.name || '') + '：查無日K';
-    return '- ' + r.code + ' ' + (r.name || '') + '：強弱 ' + t.score10.toFixed(1) + '/10(' + t.label + ')（' + t.arr +
-      '，52週位置' + (t.posPct == null ? 'N/A' : Math.round(t.posPct) + '%') +
+    return '- ' + r.code + ' ' + (r.name || '') + '：' + t.arr +
+      '（52週位置' + (t.posPct == null ? 'N/A' : Math.round(t.posPct) + '%') +
       '，近1月' + _pct(t.r1) + ' 近3月' + _pct(t.r3) + ' 近1年' + _pct(t.r12) + '）';
   }).join('\n');
 }
