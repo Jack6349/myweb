@@ -504,6 +504,12 @@ function _chartStopBidAsk() {
 // 版面 左→右：〔量條→買量→買價 ‖ 賣價→賣量→量條〕；量條在最外側、價格在中央面對面
 // 顏色（同券商 App）：價格與昨收比，高於紅、平盤黃、低於綠；買賣量黃。
 // 標記：等於當日最高價標紅色 H、最低價標綠色 L，放在量條欄最外側（買盤最左、賣盤最右，與量條隔一個字元）；等於最新成交價加黃底線。
+// 漲跌停鎖住時的兩種 0：
+//   價 0、量 > 0 → 市價單排隊。漲停鎖死時買方第一檔就是它，跌停則出現在賣方。
+//     實例 2026-10-16 的 2380 虹光漲停 18.85：bid_price[0]=0、bid_volume[0]=44。
+//     照原本的寫法會印成「0.00」，還因為 0 < 昨收而上綠色，讀起來像有人掛 0 元買。
+//   價 0、量 0 → 這一檔根本沒有單。漲停鎖死時賣方五檔全是這種。
+// 所以不能用 != null 判斷有沒有這一檔，要看價與量。
 function _bidAskHtml(b, code) {
   var r = _rows[code] || {}, ct = _contracts[code] || {}, ref = ct.reference;
   var dealCls = (r.close != null && ref != null) ? (r.close > ref ? 'up' : (r.close < ref ? 'down' : 'flat')) : '';
@@ -520,6 +526,12 @@ function _bidAskHtml(b, code) {
       '</div>' + _bidSnapNote();
   }
   var bp = b.bid_price || [], bv = b.bid_volume || [], ap = b.ask_price || [], av = b.ask_volume || [];
+  // 'px'＝一般限價檔、'mkt'＝市價單排隊（價 0 量 >0）、'none'＝沒有這一檔
+  var lvl = function (px, v) {
+    if (px == null) return 'none';
+    if (+px > 0) return 'px';
+    return (v > 0) ? 'mkt' : 'none';
+  };
   var dbv = b.diff_bid_vol || [], dav = b.diff_ask_vol || [];
   var maxV = 1;
   bv.concat(av).forEach(function (v) { if (v > maxV) maxV = v; });
@@ -538,7 +550,11 @@ function _bidAskHtml(b, code) {
     var bar = '<span class="bid-bar-track"><span class="bid-bar ' + (side === 'buy' ? 'bid' : 'ask') + '" style="width:' + barW(v) + '%"></span></span>';
     return '<td class="bid-bar-cell"><div class="bid-bar-wrap">' + (side === 'buy' ? mark(raw) + bar : bar + mark(raw)) + '</div></td>';
   };
-  var pxCell = function (raw, side) {
+  var pxCell = function (raw, side, kind) {
+    if (kind === 'mkt') {
+      // 市價沒有價位可點，不給下單；顏色也不走紅綠，它不是一個價格
+      return '<td class="num bid-px ' + side + ' bid-mkt" title="市價單排隊（漲跌停鎖住時出現）">市價</td>';
+    }
     var p = parseFloat(raw);
     var cls = ref == null ? 'bid-flat' : (p > ref + 1e-6 ? 'up' : (p < ref - 1e-6 ? 'down' : 'bid-flat'));
     var txt = '<span class="bid-pxv' + (same(p, r.close) ? ' bid-last' : '') + '">' + p.toFixed(2) + '</span>';
@@ -563,14 +579,15 @@ function _bidAskHtml(b, code) {
   // 五列：買 i／賣 i 同列（i=0 為最佳買賣，置頂）
   var rows = '';
   for (var i = 0; i < 5; i++) {
-    var hasB = bp[i] != null, hasA = ap[i] != null;
+    var kB = lvl(bp[i], bv[i]), kA = lvl(ap[i], av[i]);
+    var hasB = kB !== 'none', hasA = kA !== 'none';
     rows += '<tr class="bid-row">' +
       // 買盤（左）：量條 → 買量 → 買價
       barCell(hasB, bv[i], bp[i], 'buy') +
       '<td class="num bid-vol">' + (hasB ? diff(dbv[i]) + (bv[i] || 0).toLocaleString('zh-TW') : '') + '</td>' +
-      (hasB ? pxCell(bp[i], 'buy') : '<td class="num bid-px buy"></td>') +
+      (hasB ? pxCell(bp[i], 'buy', kB) : '<td class="num bid-px buy"></td>') +
       // 賣盤（右）：賣價 → 賣量 → 量條
-      (hasA ? pxCell(ap[i], 'sell') : '<td class="num bid-px sell"></td>') +
+      (hasA ? pxCell(ap[i], 'sell', kA) : '<td class="num bid-px sell"></td>') +
       '<td class="num bid-vol">' + (hasA ? diff(dav[i]) + (av[i] || 0).toLocaleString('zh-TW') : '') + '</td>' +
       barCell(hasA, av[i], ap[i], 'sell') +
       '</tr>';
