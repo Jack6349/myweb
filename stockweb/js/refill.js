@@ -307,7 +307,7 @@ function renderRefill() {
     sp('填息率', (rate != null ? tFilled + '/' + tTotal + '（' + rate.toFixed(0) + '%）' : '—'), 'var(--accent2)') +
     sp('平均填息', avgAll != null ? avgAll.toFixed(1) + ' 天' : '—', 'var(--text)') +
     sp('中位填息', medAll != null ? medAll + ' 天' : '—', 'var(--text)') +
-    sp('貼息中', pendN + ' 檔', pendN ? 'var(--up)' : 'var(--down)') +
+    sp('貼息中', pendN + ' 檔', pendN ? 'var(--down)' : 'var(--text2)') +
     '</div>';
 
   // 除息日曆（未來已公告）已移到股利估算頁的「本月除息個股」與「個股明細」之間
@@ -322,18 +322,19 @@ function renderRefill() {
   rows.forEach(function (r) {
     var open = !!_rfOpen[r.code];
     var pr = r.total ? r.filled / r.total * 100 : 0;
-    var prCls = pr >= 80 ? 'down' : (pr >= 50 ? 'flat' : 'up');   // 台股慣例：好＝綠
+    // 不分色：原本以 80／50 分紅白綠，那兩個門檻是自訂的、不是從資料推的。
+    // 樣本只有個位數檔，改用分位數也撐不起來，索性只給數字，讓讀的人自己比。
     var latest = r.events[0];
     var lastTxt;
     if (!latest) lastTxt = '—';
     else if (latest.waiting) lastTxt = '<span class="flat">待收盤資料</span>';
-    else if (latest.pending) lastTxt = '<span class="up">貼息中</span>';
-    else lastTxt = '<span class="down">已填息</span>';
+    else if (latest.pending) lastTxt = '<span class="down">貼息中</span>';
+    else lastTxt = '<span class="up">已填息</span>';
     html += '<div class="rf-item">' +
       '<div class="rf-head" onclick="toggleRefill(\'' + r.code + '\')">' +
         '<span class="rf-code">' + r.code + '</span>' +
         '<span class="rf-name">' + r.name + '</span>' +
-        '<span class="rf-rate ' + prCls + '">' + r.filled + '/' + r.total + '（' + pr.toFixed(0) + '%）</span>' +
+        '<span class="rf-rate">' + r.filled + '/' + r.total + '（' + pr.toFixed(0) + '%）</span>' +
         '<span class="rf-avg">平均 ' + (r.avgDays != null ? r.avgDays.toFixed(1) + ' 天' : '—') + '</span>' +
         '<span class="rf-last">最近 ' + (latest ? _rfMd(latest.exDate) + ' 除息 ' + latest.amount.toFixed(3) + '　' + lastTxt : '—') + '</span>' +
         '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span>' +
@@ -561,7 +562,7 @@ function _rfDetailHtml(r) {
       '<td class="num">' + e.base.toFixed(2) + '</td>' +
       '<td>' + (e.filledDate || '—') + '</td>' +
       '<td class="num">' + (e.waiting ? '—' : e.days) + '</td>' +
-      '<td class="' + (e.waiting ? 'flat' : (e.pending ? 'up' : 'down')) + '">' +
+      '<td class="' + (e.waiting ? 'flat' : (e.pending ? 'down' : 'up')) + '">' +
         (e.waiting ? '待收盤資料'
           : (e.pending ? '貼息中 ' + e.days + ' 天　距填息 ' + e.gapPct.toFixed(2) + '%　現價 ' + e.lastPx.toFixed(2) + '＜基準 ' + e.base.toFixed(2)
             : '已填息（' + e.days + ' 天）')) +
