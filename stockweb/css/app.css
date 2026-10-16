@@ -480,6 +480,8 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 /* 五檔價格：與昨收比 高紅／平黃／低綠（同券商 App），不再以買賣方向配色 */
 .bid-px.up { color: var(--up); }
 .bid-px.down { color: var(--down); }
+/* 市價單排隊：不是價格，不走紅綠，也不可點價下單 */
+.bid-px.bid-mkt { color: var(--accent2); font-weight: 700; cursor: default; }
 .bid-px.bid-flat { color: var(--accent2); }
 /* H／L 在量條欄最外側：固定寬度、不縮放，與量條隔一個字元 */
 .bid-hl { flex: 0 0 auto; width: 1em; text-align: center; font-size: 15px; font-weight: 700; line-height: 1; }
