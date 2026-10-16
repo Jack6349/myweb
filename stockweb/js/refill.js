@@ -391,7 +391,10 @@ function _rfPendingHtml(rows) {
       '<td class="num">' + x.px.toFixed(2) + '</td>' +
       '<td class="num down">' + x.diff.toFixed(2) + '</td>' +
       '<td class="num">' + x.days + ' 天</td>' +
-      '<td class="num up">' + x.gap.toFixed(2) + '%</td>' +
+      // 距填息不上色：它跟左邊的「價差」是同一件事的兩種寫法（價差 -2.3 元＝距填息 2.3%），
+      // 原本一個綠一個紅，同一列把同一個事實標成兩種顏色。而且這張表整張都是未填息的，
+      // 顏色分不出任何東西；要比遠近看數字即可（本表已依距填息由小到大排序）。
+      '<td class="num">' + x.gap.toFixed(2) + '%</td>' +
     '</tr>';
   });
   return h + '</tbody></table></div>';
