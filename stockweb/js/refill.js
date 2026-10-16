@@ -322,9 +322,8 @@ function renderRefill() {
   rows.forEach(function (r) {
     var open = !!_rfOpen[r.code];
     var pr = r.total ? r.filled / r.total * 100 : 0;
-    // 台股慣例紅漲綠跌：填息率高＝價格大多漲回去了＝紅。
-    // 註：80／50 這兩個門檻是當初自己訂的，不是從資料推的，待改（見頁尾說明）。
-    var prCls = pr >= 80 ? 'up' : (pr >= 50 ? 'flat' : 'down');
+    // 不分色：原本以 80／50 分紅白綠，那兩個門檻是自訂的、不是從資料推的。
+    // 樣本只有個位數檔，改用分位數也撐不起來，索性只給數字，讓讀的人自己比。
     var latest = r.events[0];
     var lastTxt;
     if (!latest) lastTxt = '—';
@@ -335,7 +334,7 @@ function renderRefill() {
       '<div class="rf-head" onclick="toggleRefill(\'' + r.code + '\')">' +
         '<span class="rf-code">' + r.code + '</span>' +
         '<span class="rf-name">' + r.name + '</span>' +
-        '<span class="rf-rate ' + prCls + '">' + r.filled + '/' + r.total + '（' + pr.toFixed(0) + '%）</span>' +
+        '<span class="rf-rate">' + r.filled + '/' + r.total + '（' + pr.toFixed(0) + '%）</span>' +
         '<span class="rf-avg">平均 ' + (r.avgDays != null ? r.avgDays.toFixed(1) + ' 天' : '—') + '</span>' +
         '<span class="rf-last">最近 ' + (latest ? _rfMd(latest.exDate) + ' 除息 ' + latest.amount.toFixed(3) + '　' + lastTxt : '—') + '</span>' +
         '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span>' +
