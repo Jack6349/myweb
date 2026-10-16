@@ -258,7 +258,7 @@ async function startSignals() {
 
   // 逐檔並行算成分股籌碼
   _sigRows = [];
-  var cards = await Promise.all(held.map(async function (h) {
+  var built = await Promise.all(held.map(async function (h) {
     var nav = sigGetNav(h.code);
     var mgn = sigMargin(h.code, mgnDays);
     var chip = null, overnight = null, adr = null;
@@ -271,8 +271,29 @@ async function startSignals() {
     var rec = hist[h.code] || {}; var ds = Object.keys(rec).sort().reverse();
     var tdcc = ds.length ? { cur: rec[ds[0]], prev: ds.length > 1 ? rec[ds[1]] : null, date: ds[0], prevDate: ds[1] } : null;
     _sigRows.push({ code: h.code, name: h.name, nav: nav, chip: chip, margin: mgn, tdcc: tdcc, overnight: overnight, adr: adr });
-    return sigCardHtml(h, nav, chip, mgn, tdcc, overnight, adr);
+    return { code: h.code, score: chip ? chip.score : null, html: sigCardHtml(h, nav, chip, mgn, tdcc, overnight, adr) };
   }));
+
+  // 排序：法人連買的在上、連賣的在後，都依強度排。
+  // 界線用 0 而不是卡片標籤的 ±2——0 是「外資與投信都沒有淨連買賣」的定義，
+  // 不是挑出來的切點；±2 是自訂的，不拿來分組。
+  // 算不出籌碼分數的（美股／債券成分 ETF）不參與排序，整組放最後並用橫線隔開。
+  var scored = built.filter(function (x) { return x.score != null; });
+  var unscored = built.filter(function (x) { return x.score == null; });
+  scored.sort(function (a, b) {
+    var ga = a.score > 0 ? 0 : (a.score < 0 ? 1 : 2), gb = b.score > 0 ? 0 : (b.score < 0 ? 1 : 2);
+    if (ga !== gb) return ga - gb;
+    if (ga === 0) return b.score - a.score;     // 連買：分數高的在前
+    if (ga === 1) return a.score - b.score;     // 連賣：分數低（賣最兇）的在前
+    return String(a.code).localeCompare(String(b.code), undefined, { numeric: true });
+  });
+  unscored.sort(function (a, b) { return String(a.code).localeCompare(String(b.code), undefined, { numeric: true }); });
+  var cards = scored.map(function (x) { return x.html; });
+  if (unscored.length) {
+    cards.push('<div class="sig-divider">以下 ' + unscored.length +
+      ' 檔算不出法人籌碼分數（美股或債券成分，無台股 T86 資料），不列入排序</div>');
+    unscored.forEach(function (x) { cards.push(x.html); });
+  }
   wrap.innerHTML = cards.join('') +
     '<div class="sig-note"><dl>' +
     '<dt>隔夜美股</dt><dd><code>成分股隔夜漲跌 × 匯率</code>，推估純美股 ETF 今日開盤方向。</dd>' +
@@ -280,7 +301,9 @@ async function startSignals() {
     '<dt>L2 折溢價</dt><dd>大幅折價（市價 &lt; 淨值）＝可能被錯殺；大幅溢價＝追價過熱。</dd>' +
     '<dt>L3 籌碼分數</dt><dd><code>Σ 成分股權重 ×（外資連買賣天數 ＋ 投信連買賣天數）</code>，各 ±5、合計範圍 ±10，' +
       '個股視為「成分只有自己、權重 100%」，算出來就是該股自己的連買賣天數。' +
+      '上限 ±5 不是人工門檻，等於查詢區間 5 個交易日（連買最多就 5 天）。' +
     '正（紅）偏多。融資 5 日增 ≥ 10% 且溢價 → ⚠️過熱。</dd>' +
+    '<dt>排序</dt><dd>分數 &gt; 0 由高到低、&lt; 0 由低到高。界線取 <b>0</b>（＝外資與投信都沒有淨連買賣），不用卡片標籤的 ±2，那個 2 是人工設定的。算不出分數的另成一段放最後，不列入排序。</dd>' +
     '<dt>TDCC 股權分散</dt><dd>千張大戶比升＝籌碼向大戶集中（偏多）；散戶比升＝轉散（警訊）。</dd>' +
     '<dt>涵蓋範圍</dt><dd>僅上市成分股，美股／債券型 ETF 籌碼不適用。</dd>' +
     '</dl></div>';

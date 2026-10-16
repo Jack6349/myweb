@@ -278,6 +278,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .sig-tdcur { font-weight: 700; flex: 0 0 78px; white-space: nowrap; }
 .sig-tdrow > span:last-child { margin-left: auto; font-size: 11px; white-space: nowrap; }
 .sig-warn { color: #f5d87a; }
+/* 算不出籌碼分數的那一組：用橫線隔開，讀的人才不會以為它們排在最後是因為最差 */
+.sig-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px;
+  font-size: 12px; color: var(--text3); white-space: nowrap; }
+.sig-divider::before, .sig-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 .sig-note { font-size: 13px; color: var(--note); line-height: 1.8; margin-top: 8px; }
 
 /* ── 趨勢評估 ── */
