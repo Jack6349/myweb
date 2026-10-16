@@ -460,8 +460,8 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 /* 內外盤比 Bar（頂部，加高，兩側放張數/百分比） */
 .bid-ratio { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .bid-ratio-bar { flex: 1; display: flex; height: 19px; border-radius: 4px; overflow: hidden; }
-.bid-ratio-bar i.bid { background: var(--down); }
-.bid-ratio-bar i.ask { background: var(--up); }
+.bid-ratio-bar i.bid { background: var(--up); }    /* 委買＝紅，與表頭「買盤」同色 */
+.bid-ratio-bar i.ask { background: var(--down); }  /* 委賣＝綠 */
 .bid-ratio-side { font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bid-ratio-side.left { text-align: right; min-width: 120px; }
 .bid-ratio-side.right { text-align: left; min-width: 120px; }
@@ -491,8 +491,9 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .bid-bar-wrap { display: flex; align-items: center; gap: 1ch; }
 .bid-bar-track { flex: 1 1 auto; min-width: 0; display: flex; }
 .bid-bar { display: block; flex: 0 0 auto; height: 13px; border-radius: 2px; }
-.bid-bar.bid { background: rgba(38,217,98,.5); margin-left: auto; }
-.bid-bar.ask { background: rgba(255,82,82,.5); }
+/* 深度量條跟著 --up / --down 走，不寫死色碼（原本的 rgba 則是反的） */
+.bid-bar.bid { background: color-mix(in srgb, var(--up) 50%, transparent); margin-left: auto; }
+.bid-bar.ask { background: color-mix(in srgb, var(--down) 50%, transparent); }
 /* 中央分隔：買賣兩欄之間 */
 .bid-table td.bid-px.sell, .bid-table .bid-side-h.sell, .bid-table thead tr:nth-child(2) th:nth-child(4) { border-left: 2px solid var(--border); }
 .bid-diff { font-size: 11px; margin: 0 4px; color: var(--text3); }
