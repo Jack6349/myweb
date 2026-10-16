@@ -217,16 +217,16 @@ async function startSignals() {
   errEl.style.display = 'none';
   wrap.innerHTML = '<div class="modal-loading">載入官方淨值、法人籌碼、集保週報…</div>';
 
-  // 持股中的 ETF
+  // 持股全部列入（ETF 與個股）
   var held = [];
   try {
     var positions = (_positions && _positions.length) ? _positions : await fetchBrokerPositions();
     var names = {};
     try { (await loadPortfolioFallback()).forEach(function (s) { if (s.name) names[String(s.code)] = s.name; }); } catch (e) {}
     held = (positions || []).map(function (p) { return { code: String(p.code).toUpperCase(), name: (_contracts[String(p.code)] && _contracts[String(p.code)].name) || names[String(p.code)] || '' }; })
-      .filter(function (h) { return /^00/.test(h.code); });
+      .map(function (h) { h.isEtf = /^00/.test(h.code); return h; });
   } catch (e) { errEl.style.display = 'block'; errEl.textContent = '讀不到持股：' + e.message; wrap.innerHTML = ''; return; }
-  if (!held.length) { wrap.innerHTML = '<div class="modal-loading">持股中無 ETF</div>'; return; }
+  if (!held.length) { wrap.innerHTML = '<div class="modal-loading">無持股</div>'; return; }
 
   await sigEnsureNavMap();
   var t86days = [], mgnDays = [];
@@ -263,10 +263,10 @@ async function startSignals() {
     var mgn = sigMargin(h.code, mgnDays);
     var chip = null, overnight = null, adr = null;
     try {
-      var data = await fetchEtfConstituents(h.code);
-      chip = sigComputeChipScore(data.holdings, t86days);
-      if (sigIsUsHolding(data.holdings)) overnight = await sigEstNavUS(data.holdings);
-      else adr = await sigAdrBias(data.holdings);
+      var parts = h.isEtf ? (await fetchEtfConstituents(h.code)).holdings : sigSelfHolding(h.code, h.name);
+      chip = sigComputeChipScore(parts, t86days);
+      if (sigIsUsHolding(parts)) overnight = await sigEstNavUS(parts);
+      else adr = await sigAdrBias(parts);
     } catch (e) {}
     var rec = hist[h.code] || {}; var ds = Object.keys(rec).sort().reverse();
     var tdcc = ds.length ? { cur: rec[ds[0]], prev: ds.length > 1 ? rec[ds[1]] : null, date: ds[0], prevDate: ds[1] } : null;
@@ -279,6 +279,7 @@ async function startSignals() {
     '<dt>ADR 隔夜</dt><dd>台股成分股在美股掛牌的 ADR 隔夜漲跌，與台股高連動。</dd>' +
     '<dt>L2 折溢價</dt><dd>大幅折價（市價 &lt; 淨值）＝可能被錯殺；大幅溢價＝追價過熱。</dd>' +
     '<dt>L3 籌碼分數</dt><dd><code>Σ 成分股權重 ×（外資連買賣天數 ＋ 投信連買賣天數）</code>，各 ±5、合計範圍 ±10，' +
+      '個股視為「成分只有自己、權重 100%」，算出來就是該股自己的連買賣天數。' +
     '正（紅）偏多。融資 5 日增 ≥ 10% 且溢價 → ⚠️過熱。</dd>' +
     '<dt>TDCC 股權分散</dt><dd>千張大戶比升＝籌碼向大戶集中（偏多）；散戶比升＝轉散（警訊）。</dd>' +
     '<dt>涵蓋範圍</dt><dd>僅上市成分股，美股／債券型 ETF 籌碼不適用。</dd>' +
@@ -298,6 +299,7 @@ function _tdRow(label, cur, prev, kind) {
 }
 
 function sigCardHtml(h, nav, chip, mgn, tdcc, overnight, adr) {
+  var isEtf = /^00/.test(String(h.code || '').toUpperCase());
   // L2b 隔夜美股預估開盤 / ADR 隔夜參考
   var onHtml = '';
   if (overnight) {
@@ -321,7 +323,8 @@ function sigCardHtml(h, nav, chip, mgn, tdcc, overnight, adr) {
       '<span>淨值 ' + nav.nav.toFixed(2) + '｜市價 ' + (nav.price != null ? nav.price.toFixed(2) : '—') +
       '｜折溢價 <b class="' + pcls + '">' + _sigPct(nav.premium) + '</b>（' + tag + '）</span></div>';
   } else {
-    navHtml = '<div class="sig-sec"><span class="sig-label">L2 淨值錨</span><span class="flat">官方淨值查無（主動式/上櫃可能不在列）</span></div>';
+    navHtml = '<div class="sig-sec"><span class="sig-label">L2 淨值錨</span><span class="flat">' +
+      (isEtf ? '官方淨值查無（主動式/上櫃可能不在列）' : '個股無淨值，折溢價不適用') + '</span></div>';
   }
   // L3 chip
   var chipHtml;
@@ -339,7 +342,8 @@ function sigCardHtml(h, nav, chip, mgn, tdcc, overnight, adr) {
       '<span class="sig-sub' + (lowCov ? ' sig-warn' : '') + '">覆蓋 ' + chip.coveredPct + '%' +
       (lowCov ? ' ⚠️僅代表台股部位' : '') + '｜近' + chip.days + '日</span></span></div>' + contrib;
   } else {
-    chipHtml = '<div class="sig-sec"><span class="sig-label">L3 法人籌碼</span><span class="flat">成分股籌碼不適用（美股/債券成分）</span></div>';
+    chipHtml = '<div class="sig-sec"><span class="sig-label">L3 法人籌碼</span><span class="flat">' +
+      (isEtf ? '成分股籌碼不適用（美股/債券成分）' : '查無本檔法人買賣超（近日無 T86 紀錄）') + '</span></div>';
   }
   // margin
   var mgnHtml = '';
@@ -365,22 +369,30 @@ function sigCardHtml(h, nav, chip, mgn, tdcc, overnight, adr) {
     onHtml + navHtml + chipHtml + mgnHtml + tdccHtml + '</div>';
 }
 
+// 個股沒有成分股，但本頁的各層算法都是「對一組 {code,name,weight} 做加權」。
+// 把個股當成「成分只有自己、權重 100%」的組合，就能原封不動沿用：
+//   籌碼分數 → 該股自己的外資／投信連買賣天數（覆蓋率必然 100%）
+//   ADR      → 該股自己有無 ADR（虹光沒有，回 null；台積電這類就抓得到）
+// 折溢價是 ETF 專有（個股沒有淨值），sigGetNav 回 null，卡片本來就會跳過那一段。
+function sigSelfHolding(code, name) { return [{ code: String(code), name: name || '', weight: 100 }]; }
+
 // ═════ 供 AI Prompt 併入 ═════
 async function ensureSignals() {
   if (_sigRows.length) return;
   // 靜默：只算 L2 折溢價 + L3 法人分數（TDCC/融資略，避免過慢）
   try {
     var positions = (_positions && _positions.length) ? _positions : await fetchBrokerPositions();
-    var held = (positions || []).map(function (p) { return String(p.code).toUpperCase(); }).filter(function (c) { return /^00/.test(c); });
+    var held = (positions || []).map(function (p) { return String(p.code).toUpperCase(); });
     await sigEnsureNavMap();
     var t86days = await sigRecentT86(SIG_T86_DAYS);
     _sigRows = await Promise.all(held.map(async function (code) {
       var nav = sigGetNav(code), chip = null, overnight = null, adr = null;
       try {
-        var data = await fetchEtfConstituents(code);
-        chip = sigComputeChipScore(data.holdings, t86days);
-        if (sigIsUsHolding(data.holdings)) overnight = await sigEstNavUS(data.holdings);
-        else adr = await sigAdrBias(data.holdings);
+        var parts = /^00/.test(code) ? (await fetchEtfConstituents(code)).holdings
+                                     : sigSelfHolding(code, (_contracts[code] && _contracts[code].name) || '');
+        chip = sigComputeChipScore(parts, t86days);
+        if (sigIsUsHolding(parts)) overnight = await sigEstNavUS(parts);
+        else adr = await sigAdrBias(parts);
       } catch (e) {}
       return { code: code, name: (_contracts[code] && _contracts[code].name) || '', nav: nav, chip: chip, overnight: overnight, adr: adr };
     }));
