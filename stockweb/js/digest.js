@@ -35,10 +35,13 @@ function fuseDigest(code, trend, sig) {
     if (sig.chip.score >= 2) { buy++; reasons.push('法人偏多+' + sig.chip.score.toFixed(1)); }
     else if (sig.chip.score <= -2) { risk++; reasons.push('法人偏空' + sig.chip.score.toFixed(1)); }
   }
-  // L1 趨勢
-  if (trend) {
-    if (trend.score10 <= 3.5) { risk++; reasons.push('趨勢弱' + trend.score10.toFixed(1)); }
-    else if (trend.score10 >= 8) { sell++; reasons.push('趨勢強' + trend.score10.toFixed(1) + '(高檔)'); }
+  // L1 趨勢：改用均線排列，不再用強弱分數。
+  // 那個分數的九個權重與除數都是自訂的，3.5／8 又在它之上再疊兩個自訂切點。
+  // 均線排列的定義是明確的（收盤>5日>20日>60日 為多頭排列，反向為空頭排列），
+  // 不需要任何門檻，條件成立與否可以直接核對。
+  if (trend && trend.arr) {
+    if (trend.arr === '空頭排列') { risk++; reasons.push('空頭排列(收盤<5日<20日<60日)'); }
+    else if (trend.arr === '多頭排列') { buy++; reasons.push('多頭排列(收盤>5日>20日>60日)'); }
   }
   if (!reasons.length) return null;
   var lean = (risk > 0 && risk >= buy) ? 'risk' : (sell > buy ? 'sell' : (buy > 0 ? 'buy' : null));

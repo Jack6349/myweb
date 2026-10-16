@@ -781,7 +781,7 @@ async function buildNewsPrompt() {
     (function () {
       var sec = 'C'.charCodeAt(0);
       var out = '## (B) 我的持股\n' + holdings.join('、') + '\n\n';
-      if (trendTxt) { out += '## (' + String.fromCharCode(sec++) + ') 持股技術面趨勢（自算日 K：強弱／均線排列／52週位置／期間報酬）\n' + trendTxt + '\n\n'; }
+      if (trendTxt) { out += '## (' + String.fromCharCode(sec++) + ') 持股技術面趨勢（自算日 K：均線排列／52週位置／期間報酬）\n' + trendTxt + '\n\n'; }
       if (sigTxt) { out += '## (' + String.fromCharCode(sec++) + ') 籌碼/淨值面（隔夜美股預估開盤：純美股 ETF 以成分股隔夜漲跌×匯率推估今日開盤方向，前晚美股大跌通常隔日必跌；ADR 隔夜偏向：台股成分股的美股 ADR 隔夜漲跌，與台股高連動；L2 官方折溢價：折價=可能錯殺、溢價=過熱；L3 成分股法人籌碼分數±10）\n' +
         '※ 重要：法人籌碼分數僅來自 TWSE T86 台股法人買賣，只涵蓋「有台股法人資料的成分股」（覆蓋率標於各檔後）。' +
         '外資股、債券成分股本來就無此資料，覆蓋率無法達 100%。覆蓋率低於約 60% 時，該分數只代表 ETF 內的台股部位，' +
