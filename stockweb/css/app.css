@@ -86,6 +86,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .btn-back { background: none; border: 1px solid var(--border); color: var(--text2); font-size: 13px; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-family: var(--font); }
 .btn-back:hover { color: var(--text); border-color: var(--text3); }
 .stream-info { font-size: 13px; color: var(--text2); }
+/* 錯誤框刻意不綁 --up：它表達的是錯誤不是上漲，綁了改主題會連錯誤色一起被改掉 */
 .stream-error { background: rgba(255,82,82,.08); border: 1px solid rgba(255,82,82,.35); border-radius: 12px; padding: 18px 22px; font-size: 14px; line-height: 1.8; color: var(--text2); margin-bottom: 20px; white-space: pre-line; }
 .stream-error code { background: var(--bg3); padding: 2px 8px; border-radius: 6px; color: var(--accent2); font-size: 13px; }
 
@@ -117,8 +118,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .scard.lim-up .scard-sub span, .scard.lim-down .scard-sub span { color: inherit; }
 .scard.flash-up { animation: flashUp .45s; }
 .scard.flash-down { animation: flashDown .45s; }
-@keyframes flashUp { 0% { background: rgba(255,82,82,.22); } 100% { background: var(--bg3); } }
-@keyframes flashDown { 0% { background: rgba(38,217,98,.22); } 100% { background: var(--bg3); } }
+@keyframes flashUp { 0% { background: color-mix(in srgb, var(--up) 22%, transparent); } 100% { background: var(--bg3); } }
+@keyframes flashDown { 0% { background: color-mix(in srgb, var(--down) 22%, transparent); } 100% { background: var(--bg3); } }
 .scard-head { display: flex; align-items: baseline; gap: 7px; margin-bottom: 4px; min-width: 0; }
 .scard-code { font-size: 14px; font-weight: 700; color: var(--accent2); flex-shrink: 0; }
 .scard-name { font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -238,12 +239,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .digest-caret { color: var(--text3); font-size: 10px; flex-shrink: 0; }
 .digest-body { margin-top: 4px; }
 .dg-risk { color: #f5d87a; font-weight: 700; }
-.dg-sell { color: var(--up); font-weight: 700; }
-.dg-buy { color: var(--down); font-weight: 700; }
+/* 低接＝買進動作＝紅、停利＝賣出動作＝綠（台股慣例買紅賣綠，券商下單畫面亦同）。
+   原本相反：低接吃 --down、停利吃 --up。 */
+.dg-sell { color: var(--down); font-weight: 700; }
+.dg-buy { color: var(--up); font-weight: 700; }
 .digest-item { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); font-size: 13px; flex-wrap: wrap; }
 .digest-lean { font-size: 12px; font-weight: 700; padding: 1px 9px; border-radius: 6px; flex-shrink: 0; white-space: nowrap; }
-.digest-lean.buy { color: var(--down); background: rgba(38,217,98,.12); border: 1px solid rgba(38,217,98,.3); }
-.digest-lean.sell { color: var(--up); background: rgba(255,82,82,.12); border: 1px solid rgba(255,82,82,.3); }
+.digest-lean.buy { color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); border: 1px solid color-mix(in srgb, var(--up) 30%, transparent); }
+.digest-lean.sell { color: var(--down); background: color-mix(in srgb, var(--down) 12%, transparent); border: 1px solid color-mix(in srgb, var(--down) 30%, transparent); }
 .digest-lean.risk { color: #f5d87a; background: rgba(240,204,122,.1); border: 1px solid rgba(240,204,122,.3); }
 .digest-code { font-weight: 700; color: var(--accent2); flex-shrink: 0; }
 .digest-name { color: var(--text2); flex-shrink: 0; }
@@ -368,10 +371,10 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-oname { color: var(--text2); font-size: 12px; margin-left: 6px; }
 .tx-dseq { color: var(--text3); font-size: 12px; }
 .st-pill { font-size: 11px; padding: 2px 10px; border-radius: 99px; white-space: nowrap; flex: 0 0 auto; }
-.st-ok { background: rgba(38,217,98,.15); color: var(--down); }
+.st-ok { background: color-mix(in srgb, var(--down) 15%, transparent); color: var(--down); }
 .st-part { background: rgba(240,204,122,.15); color: var(--accent2); }
 .st-cancel { background: rgba(95,114,136,.2); color: var(--text2); }
-.st-fail { background: rgba(255,82,82,.15); color: var(--up); }
+.st-fail { background: color-mix(in srgb, var(--up) 15%, transparent); color: var(--up); }
 .st-wait { background: rgba(157,176,196,.15); color: var(--text2); }
 
 /* ── 交易資訊子頁籤＋出借行情 ── */
@@ -434,8 +437,8 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ck-iline { fill: none; stroke-width: 1.6; }
 .ck-iline.up { stroke: var(--up); }
 .ck-iline.dn { stroke: var(--down); }
-.ck-fill.up { fill: rgba(255,82,82,.16); stroke: none; }
-.ck-fill.dn { fill: rgba(38,217,98,.16); stroke: none; }
+.ck-fill.up { fill: color-mix(in srgb, var(--up) 16%, transparent); stroke: none; }
+.ck-fill.dn { fill: color-mix(in srgb, var(--down) 16%, transparent); stroke: none; }
 .ck-fill { stroke: none; }
 .ck-vwap { fill: none; stroke: #e2e8f0; stroke-width: 1.2; }
 .ck-ivol { fill: #6aa9e8; opacity: .75; }
@@ -566,7 +569,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-vlabel { font-size: 11px; color: var(--text3); margin-bottom: 2px; }
 .rs-verdict-txt { font-size: 15px; }
 .rs-flag { font-size: 13px; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
-.rs-flag.on { background: rgba(255,82,82,.12); border-color: rgba(255,82,82,.5); color: var(--up); font-weight: 700; }
+.rs-flag.on { background: color-mix(in srgb, var(--up) 12%, transparent); border-color: color-mix(in srgb, var(--up) 50%, transparent); color: var(--up); font-weight: 700; }
 .rs-sec-title { font-size: 18px; font-weight: 700; color: var(--accent2); margin: 22px 0 12px; letter-spacing: .5px; padding-left: 11px; border-left: 4px solid var(--accent); line-height: 1.45; }
 .rs-table { width: 100%; border-collapse: collapse; font-size: 14px; max-width: 520px; }
 .rs-table th { text-align: left; color: var(--th); font-weight: 600; font-size: 11.5px; letter-spacing: .8px; padding: 9px 10px; border-bottom: 2px solid var(--border); background: var(--thbg); }
@@ -633,11 +636,11 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 /* ── 加減碼報告：指標說明小字 + 債券型信用風險子模組 ── */
 .rs-idesc { font-size: 11.5px; color: var(--text2); margin-top: 3px; font-weight: 400; line-height: 1.5; white-space: normal; }
 .rs-bond-us { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--text3); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text2); margin-bottom: 8px; }
-.rs-bond-us.on { border-left-color: var(--up); background: rgba(255,82,82,.06); color: var(--text); }
+.rs-bond-us.on { border-left-color: var(--up); background: color-mix(in srgb, var(--up) 6%, transparent); color: var(--text); }
 .rs-bond-oas { font-size: 13px; color: var(--note); margin-bottom: 10px; padding: 0 2px; line-height: 1.8; }
 .rs-bond-table { max-width: 640px; }
 .rs-bond-table td { vertical-align: top; }
-.rs-bond-hit td { background: rgba(255,82,82,.08); }
+.rs-bond-hit td { background: color-mix(in srgb, var(--up) 8%, transparent); }
 .rs-bond-verdict { display: inline-block; border: 1px solid var(--border); border-left-width: 3px; border-radius: 8px; padding: 9px 14px; font-size: 15px; font-weight: 700; margin-bottom: 12px; background: var(--bg2); }
 .rs-bond-item { margin-bottom: 12px; max-width: 640px; }
 .rs-bond-code { font-size: 14px; font-weight: 700; color: var(--accent2); margin-bottom: 4px; }
@@ -985,10 +988,10 @@ td.cost-even::after  { background: var(--text3); }
   font-size: 12px; padding: 2px 4px; font-family: var(--font); }
 .dm-src { display: inline-block; margin-left: 6px; font-size: 10px; padding: 0 5px; border-radius: 3px;
   border: 1px solid var(--border); color: var(--text2); }
-.dm-src-off { border-color: rgba(38,217,98,.5); color: var(--down); }        /* 官方 TWSE／TPEx */
+.dm-src-off { border-color: color-mix(in srgb, var(--down) 50%, transparent); color: var(--down); }        /* 官方 TWSE／TPEx */
 .dm-src-manual, .dm-src-code { border-color: rgba(240,204,122,.6); color: var(--accent2); }
 .dm-src-infer { color: var(--text2); }
-.dm-src-guess { border-color: rgba(255,82,82,.6); color: var(--up); }
+.dm-src-guess { border-color: color-mix(in srgb, var(--up) 60%, transparent); color: var(--up); }
 /* 費率輸入：number 型別的上下箭頭會吃掉寬度把 0.035 截斷 → 隱藏箭頭、加寬；% 緊貼數字、級距標記固定佔位 */
 .dm-feewrap { display: inline-flex; align-items: baseline; justify-content: flex-end; white-space: nowrap; }
 .dm-fee { width: 4.2em; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 3px;
@@ -1082,7 +1085,7 @@ td.cost-even::after  { background: var(--text3); }
 .es-table td, .es-table th { padding-left: 6px; padding-right: 6px; white-space: nowrap; }
 .es-table td { font-size: 13px; }
 .es-tag { display: inline-block; margin-left: 4px; font-size: 10px; padding: 0 4px; border-radius: 3px; vertical-align: 1px; }
-.es-held { background: rgba(255,82,82,.18); color: var(--up); }
+.es-held { background: color-mix(in srgb, var(--up) 18%, transparent); color: var(--up); }
 .es-watch { background: rgba(90,169,255,.18); color: #5aa9ff; }
 .es-wcell { text-align: center; }
 .es-wbtn { white-space: nowrap; min-width: 64px; }
