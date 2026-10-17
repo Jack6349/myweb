@@ -1316,3 +1316,19 @@ td.cost-even::after  { background: var(--text3); }
 .en-kv .en-v { font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .en-pair { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .en-pair .en-v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── 總現值走勢抽屜 ── */
+.pv-dw { padding-bottom: 8px; }
+.pv-svg { max-height: 52vh; }
+.pv-line { fill: none; stroke-width: 1.6; }
+.pv-line.val { stroke: var(--accent2); }
+.pv-line.rate { stroke: #7fb0ff; }
+.pv-bar.up { fill: var(--up); opacity: .6; }
+.pv-bar.dn { fill: var(--down); opacity: .6; }
+.pv-ax-r { fill: #7fb0ff; }
+.pv-lg { font-size: 12px; margin-right: 12px; }
+.pv-lg::before { content: '━ '; }
+.pv-lg.val { color: var(--accent2); }
+.pv-lg.rate { color: #7fb0ff; }
+.pv-lg.bar { color: var(--up); }
+.pv-lg.bar::before { content: '▌ '; }

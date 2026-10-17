@@ -588,11 +588,14 @@ function sumPair(label, val, colorStyle) {
 function renderTopbarTotals() {
   var el = document.getElementById('topbar-totals');
   var btn = document.getElementById('dw-btn');
+  var pbtn = document.getElementById('pv-btn');
   if (!el) return;
   var hide = function () {
     el.innerHTML = '';
     if (btn) btn.hidden = true;
+    if (pbtn) pbtn.hidden = true;
     if (_dwOpen) { _dwOpen = false; renderDrawer(); }
+    if (typeof _pvOpen !== 'undefined' && _pvOpen) { _pvOpen = false; if (typeof pvRender === 'function') pvRender(); }
   };
   if (_curView === 'risk') { hide(); return; }   // 加減碼報告頁：讓位給台指期徽章
   if (!_sharesMap || !Object.keys(_sharesMap).length) { hide(); return; }
@@ -616,6 +619,11 @@ function renderTopbarTotals() {
     btn.textContent = (_dwOpen ? '▴' : '▾') + ' 更多';
     btn.className = 'dw-btn' + (_dwOpen ? ' on' : '');
   }
+  if (pbtn) {
+    pbtn.hidden = false;
+    pbtn.textContent = ((typeof _pvOpen !== 'undefined' && _pvOpen) ? '▴' : '▾') + ' 走勢';
+    pbtn.className = 'dw-btn' + ((typeof _pvOpen !== 'undefined' && _pvOpen) ? ' on' : '');
+  }
   renderDrawer();
 }
 
@@ -624,6 +632,11 @@ function renderTopbarTotals() {
 var _dwOpen = false;
 function toggleDrawer() {
   _dwOpen = !_dwOpen;
+  // 兩個抽屜會疊在一起，一次只開一個
+  if (_dwOpen && typeof _pvOpen !== 'undefined' && _pvOpen) {
+    _pvOpen = false;
+    if (typeof pvRender === 'function') pvRender();
+  }
   renderTopbarTotals();
   // 盤勢是展開時才抓（11 個請求，10 分鐘快取），不在每頁載入時先打一輪
   if (_dwOpen && typeof ensureMacro === 'function') {
