@@ -194,7 +194,9 @@ async function loadBrokerPositionsFull(say) {
           .map(function (d) {
             var cpx = (d.price === 0 && typeof coGet === 'function') ? coGet(pz.code, d.date) : null;
             var adj = cpx != null ? cpx * d.quantity * 1000 : 0;
-            return { date: d.date, shares: d.quantity * 1000,
+            // sub：券商端有記成本的筆，它的 cost 已被扣掉該筆累積配息（原始成本要加回）；
+            // price=0 由認購價還原的筆沒有被扣過，加回去會重複。
+            return { date: d.date, shares: d.quantity * 1000, sub: d.price > 0,
                      cost: (d.price || 0) + adj, pnl: (d.pnl || 0) - adj, div: d.ex_dividends || 0 };
           })
           .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
@@ -249,7 +251,9 @@ async function loadBrokerPositionsFull(say) {
       _sharesMap = {}; _totalCost = 0;
       _positions.forEach(function (p) {
         _sharesMap[String(p.code)] = p.quantity; // quantity 已是「股」（含零股）
-        _totalCost += Math.round(p.price * p.quantity);
+        // 原始成本：券商的成本已扣掉累積配息，加回才是實際付出（見 inventory.js invOrigCost）
+        var oc = (typeof invOrigCost === 'function') ? invOrigCost(p).cost : p.price * p.quantity;
+        _totalCost += Math.round(oc);
       });
     } else {
       // 備援：Firestore（shares 為張、cost 為總成本元）
@@ -463,7 +467,7 @@ function costCellHtml(avg, price, extraClass) {
 function fmtMoney(v) { return '$' + Math.round(v).toLocaleString('zh-TW'); }
 
 // ── 總覽合計（即時行情 / 持股庫存共用；每筆 tick 即時重算） ──
-// 欄位：[含稅費/不含稅費 切換]（＋即時行情頁的 明細）| 總庫存 | 總現值 | 總付出成本 | 損益試算 | 獲利率 | 漲跌幅%
+// 欄位：[含稅費/不含稅費 切換]（＋即時行情頁的 明細）| 總庫存 | 總現值 | 原始成本 | 資本損益 | 獲利率 | 漲跌幅%
 // true=含稅費（淨額）, false=不含稅費（毛額）；切換結果存本機，重新整理後維持
 var TAX_MODE_LS = 'tax_mode_v1';
 var _taxMode = (function () { try { return localStorage.getItem(TAX_MODE_LS) !== '0'; } catch (e) { return true; } })();
@@ -522,7 +526,7 @@ function portfolioTotals() {
 }
 
 // 各頁合計列：只留「含稅費」切換、「明細」與點選四項。
-// 總現值／損益試算／獲利率／漲跌幅％ 在頂欄常駐，總庫存／借出／帳面現值 在抽屜「部位」。
+// 總現值／資本損益／獲利率／漲跌幅％ 在頂欄常駐，總庫存／借出／帳面現值 在抽屜「部位」。
 function renderSummary(targetId) {
   var el = document.getElementById(targetId);
   if (!el) return;
@@ -582,7 +586,7 @@ function sumPair(label, val, colorStyle) {
     '<span class="sum-pval"' + (colorStyle ? ' style="color:' + colorStyle + '"' : '') + '>' + val + '</span></span>';
 }
 
-// 頂欄常駐四項（總現值／損益試算／獲利率／漲跌幅％，全站可見、隨行情跳動）。
+// 頂欄常駐四項（總現值／資本損益／獲利率／漲跌幅％，全站可見、隨行情跳動）。
 // 其餘部位數字（總付出成本、總庫存、借出、帳面現值、合計待交割）在抽屜「部位」，
 // 那些盤中不跳，不需要一直佔著版面。
 function renderTopbarTotals() {
@@ -611,7 +615,7 @@ function renderTopbarTotals() {
   };
   el.innerHTML =
     tt('總現值(含借出)', t.curVal.toLocaleString('zh-TW') + noPxTag, 'var(--accent2)') +
-    tt('損益試算', t.profit == null ? '—' : (t.profit >= 0 ? '+' : '') + t.profit.toLocaleString('zh-TW'), cvar[pcls]) +
+    tt('資本損益', t.profit == null ? '—' : (t.profit >= 0 ? '+' : '') + t.profit.toLocaleString('zh-TW'), cvar[pcls]) +
     tt('獲利率', t.prate == null ? '—' : (t.prate > 0 ? '+' : '') + t.prate.toFixed(2) + '%', cvar[pcls]) +
     tt('漲跌幅％', t.wpct == null ? '—' : fmtPct(t.wpct), cvar[wcls]);
   if (btn) {

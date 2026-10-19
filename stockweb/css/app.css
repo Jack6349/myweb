@@ -702,10 +702,19 @@ input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
 .rf-list { font-size: 13px; }
 .rf-item { border-bottom: 1px solid var(--border); }
 .rf-item:last-child { border-bottom: none; }
-.rf-head { display: grid; grid-template-columns: 72px 1fr 96px 92px minmax(240px, 1.4fr) 18px; align-items: center; gap: 10px; padding: 9px 4px; cursor: pointer; }
+/* 名稱改 minmax(0,1fr)：1fr 的最小尺寸是內容寬度，右邊多了三個 nowrap 數字格會把整列撐出去。
+   新增的三欄一律固定寬，不參與等分。 */
+.rf-head { display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 88px 136px 84px 96px 92px minmax(240px, 1.4fr) 18px;
+  align-items: center; gap: 10px; padding: 9px 4px; cursor: pointer; }
 .rf-head:hover { background: var(--bg2); }
 .rf-code { color: var(--accent2); font-weight: 700; }
 .rf-name { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-cost { text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
+.rf-wdiv, .rf-wrate { text-align: right; font-variant-numeric: tabular-nums; }
+.rf-wdiv.up, .rf-wrate.up { color: var(--up); }
+.rf-wdiv.down, .rf-wrate.down { color: var(--down); }
+.rf-wdiv.flat, .rf-wrate.flat { color: var(--text3); }
 .rf-rate { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .rf-avg { text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
 .rf-last { color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

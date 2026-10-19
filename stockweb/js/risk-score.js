@@ -733,7 +733,7 @@ function _rsRank(rows, field, out, descIsBetter) {
 // 年化配息率：與表二同式（近 12 個月各期金額平均 × 每年期數 ÷ 現價）
 function _rsSatYield(code, px) { return _rsBondYield(code, px); }
 
-// 持有報酬（含息）＝(未實現損益 ＋ 持有期間已領配息) ÷ 付出成本，資料來自建倉明細。
+// 持有報酬（含息）＝(資本損益 ＋ 持有期間已領配息) ÷ 原始成本，資料來自建倉明細。
 // 含息是因為衛星部位有一半的目的是月收入，只看價差會低估。
 // 這一欄「不進綜合分」：換股當下賣出拿到的是市價、成本基準隨即重設，成本是沉沒成本
 // （換股掃描已驗算：市價推得 5,446 對得上，成本推得 6,462 高估 19%）。
@@ -743,7 +743,10 @@ function _rsHoldRet(code) {
   var cost = 0, pnl = 0, div = 0, first = null;
   lots.forEach(function (l) {
     if (!(l.cost > 0)) return;                 // 成本補正仍為 0 的筆無法計算報酬率，整筆略過
-    cost += l.cost; pnl += (l.pnl || 0); div += (l.div || 0);
+    // 原始成本：券商記錄的成本已扣掉該筆累積配息，sub 為真表示被扣過，加回才是實際付出
+    cost += l.cost + (l.sub ? (l.div || 0) : 0);
+    pnl += (l.pnl || 0) - (l.sub ? (l.div || 0) : 0);   // 資本損益
+    div += (l.div || 0);
     if (!first || l.date < first) first = l.date;
   });
   if (!(cost > 0)) return null;
@@ -822,7 +825,7 @@ async function _rsSatTableHtml() {
     '<th class="num" title="近 6 個月價格報酬（不含配息）。上市未滿 6 個月者為「上市以來」，會標出實際涵蓋天數' +
       (_rsCmnFull ? '' : '。因為有檔未滿半年，成長排名改用共同區間 ' + _rsCmnFrom + ' 起（' + _rsCmnDays + ' 天），另列一行') + '">' +
       '近6月<div class="rs-b-sub">市場</div></th>' +
-    '<th class="num" title="(未實現損益 ＋ 持有期間已領配息) ÷ 付出成本，含息。這是你在這一檔上實際賺多少，不列入綜合分">持有報酬<div class="rs-b-sub">對成本</div></th>' +
+    '<th class="num" title="(資本損益 ＋ 持有期間已領配息) ÷ 原始成本，含息。這是你在這一檔上實際賺多少，不列入綜合分">持有報酬<div class="rs-b-sub">對成本</div></th>' +
     '<th class="num" title="近 12 個月各期配發金額平均 × 每年期數 ÷ 現價">年化配</th>' +
     '<th class="num" title="年化配息率 ×（股利＋利息占比）；扣掉平準金與資本利得後真正來自成分股配息的部分">真實配</th>' +
     '<th class="num" title="收益平準金占比（近 12 個月加權）">平準金</th>' +
@@ -850,7 +853,7 @@ async function _rsSatTableHtml() {
         (x.rkR ? '<div class="rs-b-name">成長 ' + x.rkR + '/' + rows.length + '</div>' : '') + '</td>' +
       // 持有天數一定要一起看：49 天與 194 天的報酬不可直接比較
       '<td class="num"' + (x.hold ? ' title="成本 ' + Math.round(x.hold.cost).toLocaleString('zh-TW') +
-          '　未實現損益 ' + (x.hold.pnl >= 0 ? '+' : '') + Math.round(x.hold.pnl).toLocaleString('zh-TW') +
+          '　資本損益 ' + (x.hold.pnl >= 0 ? '+' : '') + Math.round(x.hold.pnl).toLocaleString('zh-TW') +
           '　已領配息 ' + Math.round(x.hold.div).toLocaleString('zh-TW') +
           '　最早買進 ' + x.hold.first + '"' : '') + '>' +
         (x.hold ? ret(x.hold.ret) + '<div class="rs-b-name">持有 ' + x.hold.days + ' 天</div>'
@@ -911,10 +914,10 @@ async function _rsSatTableHtml() {
         '各檔的共同區間報酬另列一行「共同」。') +
     '<br>不這樣做的話會拿 106 天的報酬跟 183 天的報酬比名次，比到的是上市多久而不是表現：' +
     '實測本組第一名與最後一名會對調。</dd>' +
-    '<dt>持有報酬是「對成本」</dt><dd><code>(未實現損益 ＋ 持有期間已領配息) ÷ 付出成本</code>，含息。' +
+    '<dt>持有報酬是「對成本」</dt><dd><code>(資本損益 ＋ 持有期間已領配息) ÷ 原始成本</code>，含息。' +
     '回答「我在這一檔上實際賺多少」，<b>不列入綜合分</b>，否則會變成賺的捨不得賣、賠的不想認賠。' +
     '<b>務必同時看持有天數</b>：49 天與 194 天的報酬不可直接比較。' +
-    '資料取自建倉明細（成本、未實現損益、已領配息逐筆加總）。</dd>' +
+    '資料取自建倉明細（原始成本、資本損益、已領配息逐筆加總）。</dd>' +
     '<dt>資本利得</dt><dd>基金賣股價差發的配息，行情轉弱會縮水。括號內權利金＝掩護性買權收入' +
     '（主動式 ETF 才有），比賣股價差可重複。</dd>' +
     (thin.length ? '<dt class="up">' + thin.join('／') + ' 紀錄不足</dt><dd>近 12 個月只有 1–2 期配息（上市未滿一年），' +

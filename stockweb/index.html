@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=219">
+<link rel="stylesheet" href="css/app.css?v=221">
 </head>
 <body>
 
@@ -69,7 +69,7 @@
     <div class="func-card" onclick="openInventory()">
       <div class="func-icon">📊</div>
       <div class="func-name">持股庫存</div>
-      <div class="func-desc">券商即時庫存、成本均價、未實現損益，逐檔可查建倉明細</div>
+      <div class="func-desc">券商即時庫存、成本均價、資本損益與含息損益，逐檔可查建倉明細</div>
     </div>
     <div class="func-card" onclick="openDividendEst()">
       <div class="func-icon">💰</div>
@@ -145,12 +145,13 @@
           <th class="num sort-th" data-key="shares" onclick="invSortCol('shares')" title="目前持有股數，出借中的也在裡面（出借期間所有權仍是你的）；括號標出其中有多少張在外面。點擊排序">餘額<span class="sort-ind">↕</span></th>
           <th class="num">現價</th><th class="num">漲跌</th>
           <th class="num sort-th" data-key="chg" onclick="invSortCol('chg')" title="點擊排序">漲跌幅<span class="sort-ind">↕</span></th>
-          <th class="num">成份股漲跌</th><th class="num">成本均價</th>
-          <th class="num">付出成本</th><th class="num">現值</th>
-          <th class="num sort-th" data-key="pnl" onclick="invSortCol('pnl')" title="點擊排序">未實現損益<span class="sort-ind">↕</span></th>
-          <th class="num sort-th" data-key="wdiv" onclick="invSortCol('wdiv')" title="未實現損益 ＋ 累積已配息（僅目前仍持有的批次）。配息為券商帳務記錄的實收金額；點擊排序">含息損益<span class="sort-ind">↕</span></th>
-          <th class="num sort-th" data-key="prate" onclick="invSortCol('prate')" title="點擊排序">獲利率<span class="sort-ind">↕</span></th>
-          <th class="num sort-th" data-key="wrate" onclick="invSortCol('wrate')" title="含息損益 ÷ 付出成本。累積數不是年化，持有期間不同的兩檔不能直接比；點擊排序">含息獲利率<span class="sort-ind">↕</span></th>
+          <th class="num">成份股漲跌</th><th class="num" title="原始成本 ÷ 股數">成本均價</th>
+          <th class="num" title="當初實際付出的錢。券商記錄的成本已被扣掉累積配息，這裡加回還原">原始成本</th><th class="num">現值</th>
+          <th class="num sort-th" data-key="pnl" onclick="invSortCol('pnl')" title="現值 － 原始成本，純價差，不含配息；點擊排序">資本損益<span class="sort-ind">↕</span></th>
+          <th class="num" title="自買進以來累積領到的配息，僅目前仍持有的批次。券商帳務記錄的實收金額">已配息</th>
+          <th class="num sort-th" data-key="wdiv" onclick="invSortCol('wdiv')" title="資本損益 ＋ 已配息。等同券商自己報的損益，因為券商的成本已扣過配息；點擊排序">含息損益<span class="sort-ind">↕</span></th>
+          <th class="num sort-th" data-key="prate" onclick="invSortCol('prate')" title="資本損益 ÷ 原始成本；點擊排序">獲利率<span class="sort-ind">↕</span></th>
+          <th class="num sort-th" data-key="wrate" onclick="invSortCol('wrate')" title="含息損益 ÷ 原始成本。累積數不是年化，持有期間不同的兩檔不能直接比；點擊排序">含息獲利率<span class="sort-ind">↕</span></th>
           <th class="num sort-th" data-key="vratio" onclick="invSortCol('vratio')" title="該檔現值佔總現值%；點擊排序">現值比<span class="sort-ind">↕</span></th>
           <th class="num sort-th" data-key="ex" onclick="invSortCol('ex')" title="本月有除息就顯示本月那次（灰＝已過、橘＝尚未到）；本月沒有則顯示下月起到年底最近一次（含預估，標*）；點擊排序">最近除息<span class="sort-ind">↕</span></th>
         </tr></thead>
@@ -431,13 +432,13 @@
 <script src="js/note.js?v=4"></script>
 <script src="js/broker.js?v=21"></script>
 <script src="js/fill-toast.js?v=6"></script>
-<script src="js/stream.js?v=84"></script>
+<script src="js/stream.js?v=85"></script>
 <script src="js/nav-usage.js?v=2"></script>
 <script src="js/daily-refresh.js?v=1"></script>
 <script src="js/category.js?v=1"></script>
-<script src="js/inventory.js?v=94"></script>
+<script src="js/inventory.js?v=95"></script>
 <script src="js/constituents.js?v=13"></script>
-<script src="js/live.js?v=49"></script>
+<script src="js/live.js?v=50"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=19"></script>
 <script src="js/sbl.js?v=12"></script>
@@ -451,16 +452,16 @@
 <script src="js/etf-screen.js?v=21"></script>
 <script src="js/etf-new.js?v=1"></script>
 <script src="js/chart.js?v=22"></script>
-<script src="js/pvhist.js?v=1"></script>
+<script src="js/pvhist.js?v=3"></script>
 <script src="js/order.js?v=3"></script>
 <script src="js/div-mix.js?v=6"></script>
 <script src="js/div-meta.js?v=12"></script>
 <script src="js/dividend-est.js?v=64"></script>
 <script src="js/swap.js?v=33"></script>
-<script src="js/refill.js?v=25"></script>
+<script src="js/refill.js?v=27"></script>
 <script src="js/nav-premium.js?v=9"></script>
 <script src="js/swap-scan.js?v=4"></script>
-<script src="js/risk-score.js?v=35"></script>
+<script src="js/risk-score.js?v=36"></script>
 <script src="js/news.js?v=45"></script>
 <script src="js/trend.js?v=33"></script>
 <script src="js/signals.js?v=28"></script>

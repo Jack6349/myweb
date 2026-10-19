@@ -1,5 +1,6 @@
 // 股利總管 Web — 即時持股（左右兩欄精簡表，盤中逐筆即時更新）
-// 欄位：代號｜餘額(股)｜成本均價｜現價｜漲跌幅｜現值｜未實現損益｜獲利率（無明細鈕、無名稱）
+// 欄位：代號｜餘額(股)｜成本均價｜現價｜漲跌幅｜現值｜資本損益｜獲利率（無明細鈕、無名稱）
+// 成本一律用原始成本（券商的成本已扣掉累積配息），與持股庫存同一套，停損停利的獲利率也跟著這個基準
 // 分配：先左後右平均分配，奇數檔左欄多一（如 13 檔 → 左 7 右 6）
 
 // 排序狀態：存本機，重新整理後維持；不在可排序欄位內的值回到預設（代號 ▲）
@@ -40,7 +41,9 @@ function liveCalc(p) {
   var code = String(p.code);
   var c = _contracts[code], r = _rows[code];
   var shares = p.quantity; // 股
-  var cost = p.price * shares;
+  // 原始成本：券商記錄的成本已扣掉累積配息，加回才是實際付出（見 inventory.js invOrigCost）
+  var _oc = (typeof invOrigCost === 'function') ? invOrigCost(p) : { cost: p.price * shares };
+  var cost = _oc.cost;
   var price = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
   var val = price != null ? price * shares : null;
   var netVal = val != null ? (_taxMode ? val * 0.997735 : val) : null;
@@ -49,7 +52,8 @@ function liveCalc(p) {
   var chg = (price != null && c && c.reference) ? (price - c.reference) / c.reference * 100 : null;
   var chgAmt = (price != null && c && c.reference) ? price - c.reference : null; // 今日漲跌金額
   var alert = (typeof evalAlert === 'function') ? evalAlert(code, price, prate) : null;
-  return { code: code, cost: cost, price: price, val: netVal, profit: profit, prate: prate, chg: chg, chgAmt: chgAmt, avg: p.price, alert: alert };
+  return { code: code, cost: cost, price: price, val: netVal, profit: profit, prate: prate, chg: chg, chgAmt: chgAmt,
+           avg: shares ? cost / shares : p.price, alert: alert };
 }
 
 function liveRowHtml(p) {
@@ -102,7 +106,7 @@ function liveHead() {
     '<th class="num">漲跌</th>' +
     _liveSortTh('漲跌幅', 'chg', true) +
     '<th class="num">現值</th>' +
-    _liveSortTh('未實現損益', 'pnl', true) +
+    _liveSortTh('資本損益', 'pnl', true) +
     _liveSortTh('獲利率', 'prate', true) + '</tr></thead>';
 }
 

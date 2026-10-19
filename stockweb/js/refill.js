@@ -319,8 +319,28 @@ function renderRefill() {
 
   // 逐檔
   html += '<div class="divest-sec-title">逐檔填息（近 ' + RF_YEARS + ' 年，點列展開歷次）</div><div class="rf-list">';
+  // 成本均價（對原始成本）／含息損益／含息獲利率：整支沿用持股庫存的 invMetrics，
+  // 兩頁同一個數字不會各算各的。逐檔填息每一列都是現有持股，成本一定查得到；
+  // 走 Firestore 後備來源（id 為 null）時沒有建倉明細，配息加不出來 → 顯示「—」。
+  var posOf = function (code) {
+    var arr = (typeof _positions !== 'undefined' && _positions) ? _positions : [];
+    for (var i = 0; i < arr.length; i++) if (String(arr[i].code) === String(code)) return arr[i];
+    return null;
+  };
   rows.forEach(function (r) {
     var open = !!_rfOpen[r.code];
+    var pz = posOf(r.code);
+    var mt = (pz && typeof invMetrics === 'function') ? invMetrics(pz) : null;
+    var avgTxt = (mt && mt.avg != null) ? mt.avg.toFixed(2) : '—';   // 原始成本均價
+    var wdTxt = '—', wrTxt = '—', wdCls = 'flat', wrCls = 'flat';
+    if (mt && mt.withDiv != null) {
+      wdCls = colorClass(mt.withDiv);
+      wdTxt = (mt.withDiv >= 0 ? '+' : '') + Math.round(mt.withDiv).toLocaleString('zh-TW');
+    }
+    if (mt && mt.wrate != null) {
+      wrCls = colorClass(mt.wrate);
+      wrTxt = (mt.wrate > 0 ? '+' : '') + mt.wrate.toFixed(2) + '%';
+    }
     var pr = r.total ? r.filled / r.total * 100 : 0;
     // 不分色：原本以 80／50 分紅白綠，那兩個門檻是自訂的、不是從資料推的。
     // 樣本只有個位數檔，改用分位數也撐不起來，索性只給數字，讓讀的人自己比。
@@ -334,6 +354,9 @@ function renderRefill() {
       '<div class="rf-head" onclick="toggleRefill(\'' + r.code + '\')">' +
         '<span class="rf-code">' + r.code + '</span>' +
         '<span class="rf-name">' + r.name + '</span>' +
+        '<span class="rf-cost">均價 ' + avgTxt + '</span>' +
+        '<span class="rf-wdiv ' + wdCls + '">含息 ' + wdTxt + '</span>' +
+        '<span class="rf-wrate ' + wrCls + '">' + wrTxt + '</span>' +
         '<span class="rf-rate">' + r.filled + '/' + r.total + '（' + pr.toFixed(0) + '%）</span>' +
         '<span class="rf-avg">平均 ' + (r.avgDays != null ? r.avgDays.toFixed(1) + ' 天' : '—') + '</span>' +
         '<span class="rf-last">最近 ' + (latest ? _rfMd(latest.exDate) + ' 除息 ' + latest.amount.toFixed(3) + '　' + lastTxt : '—') + '</span>' +
@@ -349,6 +372,14 @@ function renderRefill() {
   }
   html += '<div class="tx-note nb"><dl>' +
     '<dt>填息</dt><dd><code>基準價 ＝ 除息日前一交易日收盤</code>，除息後首次<code>收盤 ≥ 基準價</code>即填息，天數以交易日計。</dd>' +
+    '<dt>成本均價</dt><dd><code>原始成本 ÷ 股數</code>，含手續費與銀行認購成本補正，與持股庫存同一個值。' +
+    '券商記錄的成本已被扣掉累積配息，這裡加回還原成當初實際付出的錢。</dd>' +
+    '<dt>含息損益</dt><dd><code>資本損益（現值 － 原始成本）＋ 累積已配息</code>，獲利率為其除以原始成本。' +
+    '配息取自券商建倉明細的 <code>ex_dividends</code>，是<b>自買進以來的累計</b>，沒有日期可拆：' +
+    '同一列左邊的填息率只算近 ' + RF_YEARS + ' 年，兩個欄位的時間區間不一樣。' +
+    '出借中的權益補償是否計入這個欄位，券商沒有說明，尚未確認。</dd>' +
+    '<dt>填息與賺賠是兩件事</dt><dd>填息比的是市場基準（除息前一日收盤），成本均價是你自己的進場點。' +
+    '可以「已填息」但還在賠，也可以「貼息中」但是賺的，兩組紅綠不互相印證。</dd>' +
     '<dt>價格</dt><dd>Yahoo 未還原收盤（還原價會抹平除息缺口）。</dd>' +
     '<dt>範圍</dt><dd>近 ' + RF_YEARS + ' 年已除息紀錄，每日快取，按「重新整理」強制更新。' +
     '歷史統計，不預測未來填息表現，非投資建議。</dd>' +

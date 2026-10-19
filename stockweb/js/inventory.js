@@ -203,19 +203,40 @@ function invDivSum(code) {
   return lots.reduce(function (a, l) { return a + (l.div || 0); }, 0);
 }
 
+// 原始成本：券商 position_detail 的成本「已經扣掉累積配息」，加回才是實際付出的錢。
+// 2026-10-19 以四筆建倉實測確認（加回配息後的每股成本才落在買進當日的成交區間內）：
+//   00923 2026-03-23 淨額 25.201／加回 28.251，當日 28.04～28.40
+//   00918 2026-03-27 淨額 19.009／加回 22.019，當日 22.00～22.18
+//   00922 2026-03-23 淨額 25.400／加回 27.500，當日 27.28～27.60
+//   00989B 2026-10-02 淨額 9.736／加回 9.824，當日 9.81～9.85
+// 淨額一律低於當日最低價，買進價不可能低於當日最低價。
+// 建倉明細還沒到齊時回不出配息 → 退回券商淨成本並標記 divReady=false，畫面要註明尚未還原。
+function invOrigCost(p) {
+  var lots = (typeof _lotsMap !== 'undefined' && _lotsMap[String(p.code)]) || null;
+  if (!lots || !lots.length) return { cost: p.price * p.quantity, div: null, ready: false };
+  var cost = 0, div = 0;
+  lots.forEach(function (l) {
+    div += (l.div || 0);
+    cost += l.cost + (l.sub ? (l.div || 0) : 0);   // 認購還原的筆沒被扣過配息，不再加回
+  });
+  return { cost: cost, div: div, ready: true };
+}
+
+// 資本損益＝現值 − 原始成本（價差）；含息損益＝資本損益 ＋ 已配息（價差＋配息）。
+// 兩者的分母都是原始成本。券商自己報的 pnl 等同這裡的含息損益，因為它的成本已扣過配息。
 function invMetrics(p) {
   var code = String(p.code), r = _rows[code], c = _contracts[code];
-  var shares = p.quantity, cost = p.price * shares;
+  var shares = p.quantity;
+  var oc = invOrigCost(p), cost = oc.cost, div = oc.div;
   var price = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
   var netVal = price != null ? (_taxMode ? price * shares * 0.997735 : price * shares) : null;
   var profit = netVal != null ? netVal - cost : null;
   var prate = (profit != null && cost) ? profit / cost * 100 : null;
   var chg = (price != null && c && c.reference) ? (price - c.reference) / c.reference * 100 : null;
-  // 含息損益＝未實現損益＋累積已配息，與未實現損益同基準（隨「含稅費」切換）
-  var div = invDivSum(code);
   var withDiv = (profit != null && div != null) ? profit + div : null;
   var wrate = (withDiv != null && cost) ? withDiv / cost * 100 : null;   // 含息獲利率
-  return { val: netVal, profit: profit, prate: prate, chg: chg, shares: shares,
+  return { val: netVal, profit: profit, prate: prate, chg: chg, shares: shares, cost: cost,
+           avg: shares ? cost / shares : null, divReady: oc.ready,
            div: div, withDiv: withDiv, wrate: wrate };
 }
 
@@ -252,17 +273,20 @@ function invValRow(p) {
   var code = String(p.code);
   var c = _contracts[code], r = _rows[code];
   var shares = p.quantity;                   // 已是「股」（含零股）
-  var cost = p.price * shares;               // 總付出成本
+  var _oc = invOrigCost(p);
+  var cost = _oc.cost;                       // 原始成本（券商淨成本 ＋ 累積已配息）
+  var avgPx = shares ? cost / shares : null; // 原始成本均價
   var price = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
   var val = price != null ? price * shares : null;   // 即時現值
   var netVal = val != null ? (_taxMode ? val * 0.997735 : val) : null;
-  var profit = netVal != null ? netVal - cost : null;
+  var profit = netVal != null ? netVal - cost : null;   // 資本損益
   var prate = (profit != null && cost) ? profit / cost * 100 : null;
   var chg = (price != null && c && c.reference) ? (price - c.reference) / c.reference * 100 : null;
   var chgAmt = (price != null && c && c.reference) ? price - c.reference : null; // 今日漲跌金額（現價−昨收）
-  var divSum = invDivSum(code);                                   // 累積已配息（仍持有的批次）
-  var withDiv = (profit != null && divSum != null) ? profit + divSum : null;
+  var divSum = _oc.div;                                           // 累積已配息（仍持有的批次）
+  var withDiv = (profit != null && divSum != null) ? profit + divSum : null;   // 含息損益
   var wrate = (withDiv != null && cost) ? withDiv / cost * 100 : null;
+  var notReady = _oc.ready ? '' : ' title="建倉明細尚未到齊，成本未還原配息，暫以券商淨成本計"';
   var pcls = profit == null ? 'flat' : colorClass(profit);
   var ccls = chg == null ? 'flat' : colorClass(chg);
   // 現值比＝該檔現值佔總現值%
@@ -293,18 +317,22 @@ function invValRow(p) {
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
     '<td class="num inv-cchg ' + estCls + '" ' + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
       (cm && cm.est != null ? fmtPct(cm.est) : (constWait ? '<i class="spin"></i>' : '—')) + '</td>' +
-    costCellHtml(p.price, price) +
-    '<td class="num">' + Math.round(cost).toLocaleString('zh-TW') + '</td>' +
+    costCellHtml(avgPx, price) +
+    '<td class="num"' + notReady + '>' + Math.round(cost).toLocaleString('zh-TW') + '</td>' +
     '<td class="num">' + (val != null ? Math.round(val).toLocaleString('zh-TW') : '—') + '</td>' +
-    '<td class="num ' + pcls + '">' + (profit == null ? '—' : (profit >= 0 ? '+' : '') + Math.round(profit).toLocaleString('zh-TW')) + '</td>' +
+    '<td class="num ' + pcls + '"' +
+      (profit != null ? ' title="現值 ' + Math.round(netVal).toLocaleString('zh-TW') +
+        ' － 原始成本 ' + Math.round(cost).toLocaleString('zh-TW') + '"' : '') + '>' +
+      (profit == null ? '—' : (profit >= 0 ? '+' : '') + Math.round(profit).toLocaleString('zh-TW')) + '</td>' +
+    '<td class="num">' + (divSum == null ? '—' : Math.round(divSum).toLocaleString('zh-TW')) + '</td>' +
     '<td class="num ' + (withDiv == null ? 'flat' : colorClass(withDiv)) + '"' +
-      (withDiv != null ? ' title="未實現損益 ' + Math.round(profit).toLocaleString('zh-TW') +
+      (withDiv != null ? ' title="資本損益 ' + Math.round(profit).toLocaleString('zh-TW') +
         ' ＋ 已配息 ' + Math.round(divSum).toLocaleString('zh-TW') + '"' : '') + '>' +
       (withDiv == null ? '—' : (withDiv >= 0 ? '+' : '') + Math.round(withDiv).toLocaleString('zh-TW')) + '</td>' +
     '<td class="num ' + pcls + '">' + (prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%') + '</td>' +
     '<td class="num ' + (wrate == null ? 'flat' : colorClass(wrate)) + '"' +
       (wrate != null ? ' title="含息損益 ' + Math.round(withDiv).toLocaleString('zh-TW') +
-        ' ÷ 付出成本 ' + Math.round(cost).toLocaleString('zh-TW') + '"' : '') + '>' +
+        ' ÷ 原始成本 ' + Math.round(cost).toLocaleString('zh-TW') + '"' : '') + '>' +
       (wrate == null ? '—' : (wrate > 0 ? '+' : '') + wrate.toFixed(2) + '%') + '</td>' +
     '<td class="num">' + (vRatio == null ? '—' : vRatio.toFixed(2) + '%') + '</td>' +
     _invExCell(code);
@@ -630,20 +658,26 @@ async function openTradeDetail(code, detailId) {
     if (!rows || !rows.length) { body.innerHTML = '<div class="modal-loading">無明細資料</div>'; return; }
     var totQ = 0, totCost = 0, totPnl = 0, totDiv = 0;
     var html = '<div class="detail-scroll"><table class="detail-table"><thead><tr>' +
-      '<th>買進日</th><th>張</th><th class="num">買價</th><th class="num">單筆成本</th><th class="num">現值</th>' +
-      '<th class="num">未實現損益</th><th class="num">已配息</th>' +
-      '<th class="num" title="未實現損益 ＋ 已配息。配息是券商帳務記錄的實收金額">含息損益</th>' +
+      '<th>買進日</th><th>張</th><th class="num" title="原始成本 ÷ 股數">買價</th>' +
+      '<th class="num" title="券商記錄的成本已扣掉該筆累積配息，這裡加回，等於當初實際付出的錢">原始成本</th>' +
+      '<th class="num">現值</th>' +
+      '<th class="num" title="現值 － 原始成本，純價差">資本損益</th><th class="num">已配息</th>' +
+      '<th class="num" title="資本損益 ＋ 已配息。配息是券商帳務記錄的實收金額">含息損益</th>' +
       '<th class="num">手續費</th></tr></thead><tbody>';
     rows.forEach(function (d) {
       var lp = d.last_price != null ? d.last_price : 0;
       // 認購成本補正（參數設定頁維護）：券商端 price=0 的筆用「每股認購價 × 股數」還原成本，損益同步扣回
       var cpx = (d.price === 0 && typeof coGet === 'function') ? coGet(code, d.date) : null;
       var adj = cpx != null ? cpx * d.quantity * 1000 : 0;
-      var dCost = d.price + adj, dPnl = (d.pnl || 0) - adj;
-      var buyPx = d.quantity ? dCost / (d.quantity * 1000) : null; // 每股買價 = 單筆成本 / 股數
-      totQ += d.quantity; totCost += dCost; totPnl += dPnl; totDiv += (d.ex_dividends || 0);
       var dDiv = d.ex_dividends || 0;
-      var dWith = dPnl + dDiv;                 // 含息損益：未實現損益 ＋ 這一批領過的配息
+      // 券商記錄的成本已扣掉該筆累積配息（price>0 的筆才有被扣）；加回才是原始成本。
+      // price=0 由認購價還原的筆沒被扣過，加回去會重複。
+      var sub = d.price > 0;
+      var dCost = d.price + adj + (sub ? dDiv : 0);     // 原始成本
+      var dPnl = (d.pnl || 0) - adj - (sub ? dDiv : 0); // 資本損益＝現值 － 原始成本
+      var buyPx = d.quantity ? dCost / (d.quantity * 1000) : null; // 每股買價 = 原始成本 / 股數
+      totQ += d.quantity; totCost += dCost; totPnl += dPnl; totDiv += dDiv;
+      var dWith = dPnl + dDiv;                 // 含息損益：資本損益 ＋ 這一批領過的配息
       var pcls = dPnl >= 0 ? 'up' : 'down';
       var wcls = dWith >= 0 ? 'up' : 'down';
       html += '<tr><td>' + d.date + '</td><td class="num">' + d.quantity + '</td>' +
@@ -658,7 +692,7 @@ async function openTradeDetail(code, detailId) {
     var totWith = totPnl + totDiv;
     var tcls = totPnl >= 0 ? 'up' : 'down';
     var twcls = totWith >= 0 ? 'up' : 'down';
-    var avgPx = totQ ? totCost / (totQ * 1000) : null; // 加權平均買價
+    var avgPx = totQ ? totCost / (totQ * 1000) : null; // 加權平均買價（對原始成本）
     html += '</tbody><tfoot><tr><td>合計</td><td class="num">' + totQ + '</td>' +
       '<td class="num">' + (avgPx != null ? avgPx.toFixed(2) : '—') + '</td>' +
       '<td class="num">' + Math.round(totCost).toLocaleString('zh-TW') + '</td><td class="num">—</td>' +
@@ -666,9 +700,10 @@ async function openTradeDetail(code, detailId) {
       '<td class="num">' + Math.round(totDiv).toLocaleString('zh-TW') + '</td>' +
       '<td class="num ' + twcls + '">' + (totWith >= 0 ? '+' : '') + Math.round(totWith).toLocaleString('zh-TW') + '</td>' +
       '<td class="num">—</td></tr></tfoot></table></div>' +
-      '<div class="detail-note nb-keep">含息損益 ＝ 未實現損益 ＋ 已配息（累積 ' +
-      Math.round(totDiv).toLocaleString('zh-TW') + ' 元）。配息是券商帳務記錄的實收金額，' +
-      '借券補償另外到帳，不一定記在這裡。</div>';
+      '<div class="detail-note nb-keep">原始成本 ＝ 券商記錄的成本 ＋ 該筆累積配息 ' +
+      Math.round(totDiv).toLocaleString('zh-TW') + ' 元。券商把領過的配息直接從成本裡扣掉，' +
+      '它報的損益因此已經含息；這裡把成本還原，才分得出資本損益（純價差）與含息損益。' +
+      '配息是券商帳務記錄的實收金額，借券補償另外到帳，不一定記在這裡。</div>';
     body.innerHTML = html;
   } catch (e) {
     body.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>';
