@@ -423,10 +423,11 @@ async function startDividendEst(force) {
 function _divRoll12(stocks) {
   var tw = _divTwDate(), y = tw.y, m0 = +tw.iso.slice(5, 7);
   var base = y * 12 + (m0 - 1);
-  var labels = [];
+  var labels = [], cal = [];
   for (var i = 0; i < 12; i++) {
     var t = base + i, yy = Math.floor(t / 12), mm = t % 12 + 1;
     labels.push((i === 0 || mm === 1) ? (yy % 100) + '/' + mm + '月' : mm + '月');   // 第一欄與跨年處標年份
+    cal.push(mm);                                   // 日曆月（1–12），退休現金流的支出覆寫以此對應
   }
   var out = [];
   stocks.forEach(function (s) {
@@ -442,7 +443,23 @@ function _divRoll12(stocks) {
     add(s.resNext, y + 1);
     if (months.length) out.push({ code: s.code, soldOut: s.soldOut, res: { months: months } });
   });
-  return { stocks: out, labels: labels };
+  return { stocks: out, labels: labels, cal: cal };
+}
+
+// 月份總覽的逐月合計，供退休現金流設定對照支出。
+// 只有股利估算渲染過才有值（_divRoll 在 renderDividendEst 裡存下），沒有就回 null，
+// 由呼叫端顯示「請先開啟股利估算頁」，不自己偷跑一次完整估算。
+var _divRoll = null;
+function divMonthlyTotals() {
+  if (!_divRoll) return null;
+  var rows = _divStatRows(_divRoll.stocks);
+  var out = [];
+  for (var i = 1; i <= 12; i++) {
+    var amt = 0;
+    rows.forEach(function (r) { amt += (r.m[i] || 0); });
+    out.push({ i: i, label: _divRoll.labels[i - 1], m: _divRoll.cal[i - 1], amt: Math.round(amt) });
+  }
+  return out;
 }
 
 // ── 明年預估（依發放月）──
@@ -585,6 +602,7 @@ function renderDividendEst() {
   // 原本分「今年 1–12 月」與「明年預估」兩張：今年已過的月份受買賣、出清影響不易核對，實用性低
   // → 合併成一張：第一欄＝本月發放（多為上月除息），往後共 12 個月，跨年接明年預估。
   var roll = _divRoll12(stocks);
+  _divRoll = roll;                                   // 供 retire.js 的現金流對照取用
   html += _divStatTableHtml(roll.stocks, money, '月份總覽（本月起 12 個月，依發放月）', roll.labels);
 
   html += '<div class="divest-note"><dl>' +

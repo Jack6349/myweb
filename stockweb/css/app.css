@@ -1345,3 +1345,64 @@ td.cost-even::after  { background: var(--text3); }
 
 /* 頂欄損益表：損益後面接的百分比，同色但小一級 */
 .tt-sub { font-size: .82em; margin-left: 4px; opacity: .85; }
+
+/* ── 參數設定頁：左欄分類、右欄內容 ── */
+.set-top { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.set-search { background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+  font-family: var(--font); font-size: 14px; padding: 7px 12px; border-radius: 8px; width: 280px; }
+.set-search:focus { outline: none; border-color: var(--accent); }
+.set-store { font-size: 12px; color: var(--text3); }
+.set-store.ok { color: var(--text2); }
+
+.set-shell { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 18px; align-items: start; }
+.set-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 8px; }
+.set-navitem { text-align: left; background: none; border: 0; border-left: 3px solid transparent;
+  color: var(--text2); font-family: var(--font); font-size: 14px; padding: 9px 12px;
+  border-radius: 0 6px 6px 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.set-navitem:hover { background: var(--bg2); color: var(--text); }
+.set-navitem.on { background: var(--bg2); border-left-color: var(--accent); color: var(--accent2); font-weight: 600; }
+.set-navitem.dim { opacity: .4; }
+.set-navn { font-size: 11px; color: var(--text3); }
+
+.set-pane { min-width: 0; }
+.set-sectitle { font-size: 16px; font-weight: 600; color: var(--accent2); margin: 4px 0 10px; }
+.set-sectitle:not(:first-child) { margin-top: 22px; }
+
+.set-row { border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); margin-bottom: 8px; }
+.set-head { display: flex; align-items: center; gap: 16px; padding: 12px 14px; }
+.set-head[onclick] { cursor: pointer; }
+.set-head[onclick]:hover { background: var(--bg3); border-radius: 8px; }
+.set-main { min-width: 0; flex: 1; }
+.set-title { font-size: 14px; color: var(--text); font-weight: 600; }
+.set-desc { font-size: 12px; color: var(--text3); margin-top: 3px; line-height: 1.5; }
+.set-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.set-status { font-size: 12px; color: var(--text2); font-variant-numeric: tabular-nums; }
+.set-chev { color: var(--text3); font-size: 12px; width: 12px; text-align: center; }
+.set-body { display: none; padding: 0 14px 14px; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 12px; }
+.set-row.open > .set-body { display: block; }
+
+.set-field { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; }
+.set-field label { font-size: 13px; color: var(--text2); min-width: 110px; }
+.set-unit { font-size: 12px; color: var(--text3); }
+.set-hint { font-size: 12px; color: var(--note); line-height: 1.7; margin: 6px 0; }
+.set-key { font-size: 11px; color: var(--text3); margin-left: 8px; font-family: monospace; }
+.set-inline { display: inline-flex; align-items: center; gap: 4px; }
+.set-triple { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.set-lb { font-size: 12px; color: var(--text2); }
+.set-switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); cursor: pointer; }
+
+/* 每月支出：12 格，4 欄 3 列 */
+.rt-mons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0 4px; max-width: 560px; }
+.rt-mon { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+.rt-mon span { min-width: 30px; }
+.rt-mon input { width: 100%; }
+.set-cash { margin-top: 10px; max-width: 680px; }
+
+@media (max-width: 900px) {
+  .set-shell { grid-template-columns: 1fr; }
+  .set-nav { flex-direction: row; flex-wrap: wrap; position: static; }
+  .set-navitem { border-left: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
+  .set-navitem.on { border-left: 0; border-bottom-color: var(--accent); }
+}
+.rt-mon.on span { color: var(--accent2); font-weight: 600; }
+.rt-mon.on input { border-color: var(--accent); }

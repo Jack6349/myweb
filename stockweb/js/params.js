@@ -1,10 +1,8 @@
-// 股利總管 Web — 參數設定（手動維護資料集中地）
-// 目前：成份股匯入框架——只列出無法自動抓取、需手動維護清單的 ETF（境外/主動式）。
-// 匯入格式後續實作；之後其他需手動匯入的資料也集中放在本頁新增區塊。
+// 股利總管 Web — 參數設定：成份股匯入區塊
+// 只列出無法自動抓取、需手動維護清單的 ETF（境外/主動式）。匯入格式後續實作。
+// 頁面外殼（左欄分類、右欄內容、搜尋）在 settings.js。
 
-async function startParams(force) {
-  if (typeof renderCostOverride === 'function') renderCostOverride(force);   // 認購成本補正區塊（獨立載入，不擋成份股清單）
-  if (typeof renderLentManual === 'function') renderLentManual();             // 除息日借出張數補登區塊
+async function renderConstImport(force) {
   var el = document.getElementById('params-const-body');
   el.innerHTML = '<div class="modal-loading">整理需匯入清單…</div>';
   try {
