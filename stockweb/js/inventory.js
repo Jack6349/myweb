@@ -449,11 +449,10 @@ function _invEnsureDiv() {
 function invAlert(p) {
   var code = String(p.code), r = _rows[code];
   var price = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
-  var shares = p.quantity, cost = p.price * shares;
-  var netVal = price != null ? (_taxMode ? price * shares * 0.997735 : price * shares) : null;
-  var profit = netVal != null ? netVal - cost : null;
-  var prate = (profit != null && cost) ? profit / cost * 100 : null;
-  return (typeof evalAlert === 'function') ? evalAlert(code, price, prate) : null;
+  // 停損停利看含息獲利率（價差＋已落袋配息，對原始成本），不是只看價差。
+  // 這是該部位真正的損益：即使價差為負，領到的配息是實際入帳的現金。
+  var m = invMetrics(p);
+  return (typeof evalAlert === 'function') ? evalAlert(code, price, m.wrate) : null;
 }
 
 // ── 分類配置列（表格上方）──

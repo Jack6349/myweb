@@ -51,7 +51,9 @@ function liveCalc(p) {
   var prate = (profit != null && cost) ? profit / cost * 100 : null;
   var chg = (price != null && c && c.reference) ? (price - c.reference) / c.reference * 100 : null;
   var chgAmt = (price != null && c && c.reference) ? price - c.reference : null; // 今日漲跌金額
-  var alert = (typeof evalAlert === 'function') ? evalAlert(code, price, prate) : null;
+  // 停損停利看含息獲利率（見 inventory.js），不是畫面上這個純價差的 prate
+  var _wr = (typeof invMetrics === 'function') ? invMetrics(p).wrate : prate;
+  var alert = (typeof evalAlert === 'function') ? evalAlert(code, price, _wr) : null;
   return { code: code, cost: cost, price: price, val: netVal, profit: profit, prate: prate, chg: chg, chgAmt: chgAmt,
            avg: shares ? cost / shares : p.price, alert: alert };
 }

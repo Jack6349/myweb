@@ -1,5 +1,7 @@
 // 股利總管 Web — 停損停利點設定
 // 每檔可設：停利價(≥賣)、停利率%(≥賣)、停損價(≤賣)、停損率%(≤賣)、買進價(≤買)
+// 停利率／停損率比對「含息獲利率」＝(價差 ＋ 已落袋配息) ÷ 原始成本，不是只看價差：
+// 價差為負時領到的配息仍是實際入帳的現金，那是這個部位真正的損益。
 // 觸發時：賣出→反紅底、買進→反綠底（僅底色，不顯示文字）。狀態存 localStorage。
 
 var ALERTS_KEY = 'alerts_v1';
@@ -68,7 +70,8 @@ async function startAlerts() {
   info.textContent = '共 ' + rows.length + ' 檔｜留白＝不設定，輸入即存';
 
   var html = '<div class="inv-table-wrap"><table class="inv-table al-table"><thead><tr>' +
-    '<th>代號</th><th>名稱</th><th class="num">成本均價</th><th class="num">現價</th><th class="num">獲利率</th>' +
+    '<th>代號</th><th>名稱</th><th class="num" title="原始成本 ÷ 股數">成本均價</th><th class="num">現價</th>' +
+    '<th class="num" title="(價差 ＋ 已落袋配息) ÷ 原始成本。停利率／停損率比對的就是這個數字">含息獲利率</th>' +
     '<th class="num al-red">停利價≥</th><th class="num al-red">停利率%≥</th>' +
     '<th class="num al-red">停損價≤</th><th class="num al-red">停損率%≤</th>' +
     '<th class="num al-green">買進價≤</th></tr></thead><tbody>';
@@ -76,8 +79,9 @@ async function startAlerts() {
     var code = String(p.code);
     var r = _rows[code], c = _contracts[code];
     var price = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
-    var shares = p.quantity, cost = p.price * shares;
-    var prate = (price != null && cost) ? ((price * shares * 0.997735) - cost) / cost * 100 : null;
+    var m = (typeof invMetrics === 'function') ? invMetrics(p) : null;
+    var wrate = m ? m.wrate : null;          // 含息獲利率：觸發條件看這個
+    var prate = m ? m.prate : null;          // 純價差，拆解用
     var a = all[code] || {};
     // 漲跌停：沿用持股庫存那套 limitState（比對合約的 limit_up／limit_down），只標代號格。
     // 這一列的整列底色已經讓給停利／停損／買進訊號了，再用整列會打架。
@@ -86,9 +90,12 @@ async function startAlerts() {
       '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"' +
         (lim ? ' title="' + (lim === 'up' ? '漲停' : '跌停') + '"' : '') + '>' + code + '</td>' +
       '<td class="inv-name">' + ((c && c.name) || names[code] || '') + '</td>' +
-      costCellHtml(p.price, price) +
+      costCellHtml(m ? m.avg : p.price, price) +
       '<td class="num">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
-      '<td class="num ' + (prate == null ? 'flat' : (prate >= 0 ? 'up' : 'down')) + '">' + (prate == null ? '—' : (prate >= 0 ? '+' : '') + prate.toFixed(1) + '%') + '</td>' +
+      '<td class="num ' + (wrate == null ? 'flat' : (wrate >= 0 ? 'up' : 'down')) + '"' +
+        (m && m.div != null ? ' title="價差 ' + (prate == null ? '—' : prate.toFixed(2) + '%') +
+          ' ＋ 已配息 ' + Math.round(m.div).toLocaleString('zh-TW') + '"' : '') + '>' +
+        (wrate == null ? '—' : (wrate >= 0 ? '+' : '') + wrate.toFixed(1) + '%') + '</td>' +
       '<td class="num">' + _alInput(code, 'tpPrice', a.tpPrice) + '</td>' +
       '<td class="num">' + _alInput(code, 'tpRate', a.tpRate) + '</td>' +
       '<td class="num">' + _alInput(code, 'slPrice', a.slPrice) + '</td>' +
