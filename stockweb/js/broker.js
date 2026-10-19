@@ -174,7 +174,8 @@ async function syncPositionsToFirestore(positions) {
       if (!p) return; // 已出清 → 移除
       var upd = Object.assign({}, s);
       upd.shares = p.quantity / 1000; // 張（含零股小數）
-      upd.cost = Math.round(p.price * p.quantity); // 總成本（元）＝每股成本 × 股數
+      // 原始成本（元）：券商的成本已扣掉累積配息，逐筆還原才是實際付出（見 inventory.js invOrigCost）
+      upd.cost = Math.round((typeof invOrigCost === 'function') ? invOrigCost(p).cost : p.price * p.quantity);
       merged.push(upd);
     });
     // 新增券商有、手機版沒有的
@@ -184,7 +185,7 @@ async function syncPositionsToFirestore(positions) {
         code: String(p.code),
         name: (_contracts[p.code] && _contracts[p.code].name) || '',
         shares: p.quantity / 1000,
-        cost: Math.round(p.price * p.quantity)
+        cost: Math.round((typeof invOrigCost === 'function') ? invOrigCost(p).cost : p.price * p.quantity)
       });
     });
 

@@ -48,7 +48,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .crumb:empty { display: none; }
 .crumb:empty::before { content: none; }
 /* 頂欄常駐四項總計（小一級字，避免擁擠；窄螢幕可捲動） */
-.topbar-totals { display: inline-flex; align-items: baseline; gap: 16px; margin-left: 20px; overflow-x: auto; max-width: 58vw; vertical-align: middle; }
+/* 損益表五項比原本四項寬，間距收緊並放寬上限；仍保留 overflow-x 當最後防線 */
+.topbar-totals { display: inline-flex; align-items: baseline; gap: 12px; margin-left: 16px; overflow-x: auto; max-width: 66vw; vertical-align: middle; }
 .topbar-totals:empty { display: none; }
 /* 台指期即時徽章（加減碼報告頁，標題後方） */
 .topbar-txf { display: inline-flex; align-items: baseline; gap: 6px; margin-left: 16px; vertical-align: middle; }
@@ -1341,3 +1342,6 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lg.rate { color: #7fb0ff; }
 .pv-lg.bar { color: var(--up); }
 .pv-lg.bar::before { content: '▌ '; }
+
+/* 頂欄損益表：損益後面接的百分比，同色但小一級 */
+.tt-sub { font-size: .82em; margin-left: 4px; opacity: .85; }

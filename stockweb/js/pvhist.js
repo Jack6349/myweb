@@ -1,6 +1,6 @@
 // 股利總管 Web — 總現值走勢（頂欄抽屜）
 //
-// 上方：總現值(含借出) 折線（左軸、元）＋ 獲利率 折線（右軸、%）
+// 上方：總現值(含借出) 折線（左軸、元）＋ 資本報酬率 折線（右軸、%）
 // 下方：資本損益 長條（紅正綠負）
 //
 // 歷史怎麼來：券商沒有「每日總現值」這種 API，但買賣台帳查得到，逐日重算即可。
@@ -14,7 +14,7 @@
 //   （profit_loss_detail 實測 00900：10 張 × 13.02 ＋ 手續費 51 − 配息 35,210 ＝ 95,041；
 //    position_detail 實測 00923 2026-03-23 淨額 25.201／加回 28.251，當日成交 28.04～28.40）。
 //   兩邊一律還原成「原始成本 ＝ 淨額 ＋ 累積配息」，成本線才是當初實際付出的錢。
-//   因此這張圖的損益是資本損益（純價差）：配息沒有逐日資料，無法畫含息版本。
+//   這張圖畫的是資本損益與資本報酬率（純價差）。配息沒有逐日資料，不在圖上。
 //
 // 收盤價：kbars 固定 1 分 K，前端聚合成日 K（與 chart.js 日線同一套做法）。
 //   成交清淡的日子沒有分 K（實測同區間 00918 有 89 個交易日、2380 只有 82），缺的日子用前一日收盤補。
@@ -254,7 +254,7 @@ function pvSvg(data) {
   var head = '<div class="chart-info"><span id="pv-tip">' +
     n + ' 日　總現值 <b>' + a.v.toLocaleString('zh-TW') + '</b> → <b>' + z.v.toLocaleString('zh-TW') + '</b>　' +
     '<span class="' + cls + '">' + (dv >= 0 ? '+' : '') + dv.toLocaleString('zh-TW') + '</span>' +
-    '</span>　<span class="pv-lg val">總現值</span><span class="pv-lg rate">獲利率</span><span class="pv-lg bar">資本損益</span></div>';
+    '</span>　<span class="pv-lg val">總現值</span><span class="pv-lg rate">資本報酬率</span><span class="pv-lg bar">資本損益</span></div>';
   return head + s;
 }
 
@@ -278,7 +278,7 @@ function pvBindHover(data) {
     tip.innerHTML = r.d.slice(5).replace('-', '/') +
       '　總現值 <b>' + v.toLocaleString('zh-TW') + '</b>' +
       '　資本損益 <b class="' + c2 + '">' + (p == null ? '—' : (p >= 0 ? '+' : '') + p.toLocaleString('zh-TW')) + '</b>' +
-      '　獲利率 <b class="' + c2 + '">' + (rate == null ? '—' : (rate > 0 ? '+' : '') + rate.toFixed(2) + '%') + '</b>';
+      '　資本報酬率 <b class="' + c2 + '">' + (rate == null ? '—' : (rate > 0 ? '+' : '') + rate.toFixed(2) + '%') + '</b>';
   });
   hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
 }
@@ -323,7 +323,7 @@ function pvRender() {
     '</div>' + body + warn +
     '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日。持股與成本由買賣台帳逐日重建' +
       (_pvData ? '（' + _pvData.codes + ' 檔）' : '') + '，收盤價用 Shioaji 1 分 K 聚合、無成交日沿用前一日。' +
-      '長條是資本損益（現值 － 原始成本，純價差），配息沒有逐日資料，畫不出含息版本；' +
+      '<code>資本損益 ＝ 現值 － 原始成本</code>，資本報酬率為其除以原始成本；' +
       '賣出當天現值與成本會同時減少，已實現獲利不留在線上；除息當天價格先扣、配息還沒入帳，' +
       '總現值會出現向下的台階，那不是虧損。長條的底是區間外側、不是 0（整段同號時 0 基準每根都會頂到天花板），實際基準標在左軸。' +
       '含息版本做不到：券商的配息欄位是自買進以來的累計，沒有日期可拆。</div>';

@@ -467,7 +467,7 @@ function costCellHtml(avg, price, extraClass) {
 function fmtMoney(v) { return '$' + Math.round(v).toLocaleString('zh-TW'); }
 
 // ── 總覽合計（即時行情 / 持股庫存共用；每筆 tick 即時重算） ──
-// 欄位：[含稅費/不含稅費 切換]（＋即時行情頁的 明細）| 總庫存 | 總現值 | 原始成本 | 資本損益 | 獲利率 | 漲跌幅%
+// 欄位：[含稅費/不含稅費 切換]（＋即時行情頁的 明細）| 總庫存 | 現值 | 原始成本 | 損益 | 今日
 // true=含稅費（淨額）, false=不含稅費（毛額）；切換結果存本機，重新整理後維持
 var TAX_MODE_LS = 'tax_mode_v1';
 var _taxMode = (function () { try { return localStorage.getItem(TAX_MODE_LS) !== '0'; } catch (e) { return true; } })();
@@ -515,18 +515,29 @@ function portfolioTotals() {
   });
   var curVal = Math.round(_taxMode ? grandTotal * 0.997735 : grandTotal);   // 含稅費淨額／毛額
   var lentVal = Math.round(_taxMode ? lentGross * 0.997735 : lentGross);
-  var profit = _totalCost ? curVal - _totalCost : null;
+  var profit = _totalCost ? curVal - _totalCost : null;        // 資本損益＝現值 － 原始成本
+  // 已領配息合計（僅目前仍持有的批次）。含息損益＝資本損益 ＋ 已領配息，
+  // 頂欄的損益表以它為結論數字：投入、現值、已領配息三項相加得到的就是這個。
+  var divSum = null;
+  (_positions || []).forEach(function (p) {
+    var d = (typeof invDivSum === 'function') ? invDivSum(String(p.code)) : null;
+    if (d != null) divSum = (divSum || 0) + d;
+  });
+  var withDiv = (profit != null && divSum != null) ? profit + divSum : null;
   return {
     grandTotal: grandTotal, curVal: curVal, noPx: noPx, totalShares: totalShares,
     wpct: wtotal > 0 ? wsum / wtotal : null,
     profit: profit,
     prate: (profit != null && _totalCost) ? profit / _totalCost * 100 : null,
+    div: divSum, withDiv: withDiv,
+    wrate: (withDiv != null && _totalCost) ? withDiv / _totalCost * 100 : null,
     lentShares: lentShares, lentVal: lentVal, bookVal: curVal - lentVal
   };
 }
 
 // 各頁合計列：只留「含稅費」切換、「明細」與點選四項。
-// 總現值／資本損益／獲利率／漲跌幅％ 在頂欄常駐，總庫存／借出／帳面現值 在抽屜「部位」。
+// 損益表四項（原始成本／現值／已領配息／損益）＋今日 在頂欄常駐，
+// 總庫存／借出／帳面現值／資本損益 在抽屜「部位」。
 function renderSummary(targetId) {
   var el = document.getElementById(targetId);
   if (!el) return;
@@ -588,8 +599,8 @@ function sumPair(label, val, colorStyle) {
     '<span class="sum-pval"' + (colorStyle ? ' style="color:' + colorStyle + '"' : '') + '>' + val + '</span></span>';
 }
 
-// 頂欄常駐四項（總現值／資本損益／獲利率／漲跌幅％，全站可見、隨行情跳動）。
-// 其餘部位數字（原始成本、總庫存、借出、帳面現值、合計待交割）在抽屜「部位」，
+// 頂欄常駐損益表：原始成本／現值／已領配息／損益（＝前三項相加）＋今日漲跌，全站可見。
+// 其餘部位數字（資本損益、總庫存、借出、帳面現值、合計待交割）在抽屜「部位」，
 // 那些盤中不跳，不需要一直佔著版面。
 function renderTopbarTotals() {
   var el = document.getElementById('topbar-totals');
@@ -610,16 +621,22 @@ function renderTopbarTotals() {
   var noPxTag = t.noPx ? '<span class="sum-nopx" title="這幾檔連券商的參考價都沒有，未計入總現值">' +
     '（' + t.noPx + ' 檔無報價）</span>' : '';
   var cvar = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
-  var pcls = t.profit == null ? 'flat' : colorClass(t.profit);
+  var pcls = t.withDiv == null ? 'flat' : colorClass(t.withDiv);
   var wcls = t.wpct == null ? 'flat' : colorClass(t.wpct);
   var tt = function (lb, v, c) {
     return '<span class="tt"><span class="tt-lb">' + lb + '</span><span class="tt-v" style="color:' + c + '">' + v + '</span></span>';
   };
+  // 損益表四項：投入、現值、已領配息、損益（前三項加得起來就是第四項）。
+  // 第五項「今日」是當日漲跌，與前面的累計不同期間，標籤寫明以免混讀。
+  var pl = t.withDiv == null ? '—'
+    : (t.withDiv >= 0 ? '+' : '') + t.withDiv.toLocaleString('zh-TW') +
+      (t.wrate == null ? '' : '<span class="tt-sub">(' + (t.wrate > 0 ? '+' : '') + t.wrate.toFixed(2) + '%)</span>');
   el.innerHTML =
-    tt('總現值(含借出)', t.curVal.toLocaleString('zh-TW') + noPxTag, 'var(--accent2)') +
-    tt('資本損益', t.profit == null ? '—' : (t.profit >= 0 ? '+' : '') + t.profit.toLocaleString('zh-TW'), cvar[pcls]) +
-    tt('獲利率', t.prate == null ? '—' : (t.prate > 0 ? '+' : '') + t.prate.toFixed(2) + '%', cvar[pcls]) +
-    tt('漲跌幅％', t.wpct == null ? '—' : fmtPct(t.wpct), cvar[wcls]);
+    tt('原始成本', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', 'var(--text2)') +
+    tt('現值(含借出)', t.curVal.toLocaleString('zh-TW') + noPxTag, 'var(--accent2)') +
+    tt('已領配息', t.div == null ? '—' : t.div.toLocaleString('zh-TW'), 'var(--text2)') +
+    tt('損益', pl, cvar[pcls]) +
+    tt('今日', t.wpct == null ? '—' : fmtPct(t.wpct), cvar[wcls]);
   if (btn) {
     btn.hidden = false;
     btn.textContent = (_dwOpen ? '▴' : '▾') + ' 更多';
@@ -666,7 +683,10 @@ function renderDrawer() {
   h += '<div class="dw-sec">盤勢</div><div id="dw-macro" class="macro-row">' +
     (typeof macroDrawerHtml === 'function' ? macroDrawerHtml() : '') + '</div>';
   h += '<div class="dw-sec">部位</div><div class="dw-row">' +
-    sumPair('原始成本(含借出)', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', '#f5d87a') +
+    sumPair('資本損益(不含配息)', t.profit == null ? '—'
+      : (t.profit >= 0 ? '+' : '') + t.profit.toLocaleString('zh-TW') +
+        (t.prate == null ? '' : '（' + (t.prate > 0 ? '+' : '') + t.prate.toFixed(2) + '%）'),
+      t.profit == null ? 'var(--text3)' : (t.profit >= 0 ? 'var(--up)' : 'var(--down)')) +
     sumPair('總庫存(含借出)', t.totalShares.toLocaleString('zh-TW'), '') +
     sumPair('借出', t.lentShares.toLocaleString('zh-TW') + ' 股', 'var(--text2)') +
     sumPair('帳面現值', t.bookVal.toLocaleString('zh-TW'), 'var(--text2)') +

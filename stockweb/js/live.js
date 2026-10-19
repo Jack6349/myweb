@@ -1,6 +1,7 @@
 // 股利總管 Web — 即時持股（左右兩欄精簡表，盤中逐筆即時更新）
-// 欄位：代號｜餘額(股)｜成本均價｜現價｜漲跌幅｜現值｜資本損益｜獲利率（無明細鈕、無名稱）
-// 成本一律用原始成本（券商的成本已扣掉累積配息），與持股庫存同一套，停損停利的獲利率也跟著這個基準
+// 欄位：代號｜餘額(股)｜成本均價｜現價｜漲跌幅｜現值｜含息損益｜含息獲利率（無明細鈕、無名稱）
+// 成本一律用原始成本（券商的成本已扣掉累積配息），與持股庫存同一套；
+// 顯示的損益與獲利率都含息，與停損停利的觸發基準一致
 // 分配：先左後右平均分配，奇數檔左欄多一（如 13 檔 → 左 7 右 6）
 
 // 排序狀態：存本機，重新整理後維持；不在可排序欄位內的值回到預設（代號 ▲）
@@ -51,10 +52,15 @@ function liveCalc(p) {
   var prate = (profit != null && cost) ? profit / cost * 100 : null;
   var chg = (price != null && c && c.reference) ? (price - c.reference) / c.reference * 100 : null;
   var chgAmt = (price != null && c && c.reference) ? price - c.reference : null; // 今日漲跌金額
-  // 停損停利看含息獲利率（見 inventory.js），不是畫面上這個純價差的 prate
-  var _wr = (typeof invMetrics === 'function') ? invMetrics(p).wrate : prate;
-  var alert = (typeof evalAlert === 'function') ? evalAlert(code, price, _wr) : null;
-  return { code: code, cost: cost, price: price, val: netVal, profit: profit, prate: prate, chg: chg, chgAmt: chgAmt,
+  // 顯示與觸發一律用含息：整列反紅是含息獲利率觸發的，畫面若顯示純價差會出現
+  // 「數字沒到門檻但整列紅了」。價差的拆解留在持股庫存。
+  var _m = (typeof invMetrics === 'function') ? invMetrics(p) : null;
+  var wprofit = _m ? _m.withDiv : null, wrate = _m ? _m.wrate : null;
+  var alert = (typeof evalAlert === 'function') ? evalAlert(code, price, wrate) : null;
+  return { code: code, cost: cost, price: price, val: netVal,
+           profit: wprofit != null ? wprofit : profit,     // 含息損益
+           prate: wrate != null ? wrate : prate,           // 含息獲利率
+           chg: chg, chgAmt: chgAmt,
            avg: shares ? cost / shares : p.price, alert: alert };
 }
 
@@ -108,8 +114,8 @@ function liveHead() {
     '<th class="num">漲跌</th>' +
     _liveSortTh('漲跌幅', 'chg', true) +
     '<th class="num">現值</th>' +
-    _liveSortTh('資本損益', 'pnl', true) +
-    _liveSortTh('獲利率', 'prate', true) + '</tr></thead>';
+    _liveSortTh('含息損益', 'pnl', true) +
+    _liveSortTh('含息獲利率', 'prate', true) + '</tr></thead>';
 }
 
 function renderLiveTables() {

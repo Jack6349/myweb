@@ -44,8 +44,8 @@ function catSortKey(name) {
 }
 
 // 依分類汇總持股：回傳 [{cat, cost, val, n}]（依 CAT_ORDER 排序）。
-// cost＝付出成本（p.price × 股數）、val＝現值（現價 × 股數，未扣稅費），
-// 與庫存表「付出成本」「現值」兩欄同基準，占比才能和「現值比」對得起來。
+// cost＝原始成本（逐筆還原配息，見 inventory.js invOrigCost）、val＝現值（現價 × 股數，未扣稅費），
+// 與庫存表「原始成本」「現值」兩欄同基準，占比才能和「現值比」對得起來。
 function catAggregate(positions) {
   var map = {};
   (positions || []).forEach(function (p) {
@@ -53,7 +53,7 @@ function catAggregate(positions) {
     var r = (typeof _rows !== 'undefined') && _rows[code];
     var price = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
     var g = map[cat] || (map[cat] = { cat: cat, cost: 0, val: 0, n: 0 });
-    g.cost += p.price * p.quantity;
+    g.cost += (typeof invOrigCost === 'function') ? invOrigCost(p).cost : p.price * p.quantity;
     if (price != null) g.val += price * p.quantity;
     g.n++;
   });
