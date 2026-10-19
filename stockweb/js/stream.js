@@ -9,7 +9,7 @@ var _es = null;        // EventSource
 var _positions = [];   // 券商庫存原始列（含 id/quantity/price/pnl）
 var _sharesMap = {};   // code → 股數
 var _lotsMap = {};     // code → [{date, shares}] 建倉批次（供股利估算判斷除息日前的持有量）
-var _totalCost = 0;    // 總付出成本（元）
+var _totalCost = 0;    // 原始成本（元）＝實際付出的錢，券商成本已扣配息故逐筆還原
 var _feedReady = null; // ensureFeed 的 Promise（避免重複初始化）
 var STREAM_OTHER_N = 15; // 即時行情下段「其他主要成分股」檔數（依曝險）
 
@@ -545,7 +545,9 @@ function renderSummary(targetId) {
     var marked = loadWatch();
     (_positions || []).forEach(function (p) {
       if (!marked.has(String(p.code))) return;
-      pickCost = (pickCost || 0) + p.price * p.quantity;   // 付出成本（與庫存表「付出成本」欄同基準）
+      // 原始成本（與庫存表「原始成本」欄同基準）：券商均價只到小數第二位，
+      // 乘回股數會有尾差，invOrigCost 逐筆加總且已還原配息
+      pickCost = (pickCost || 0) + ((typeof invOrigCost === 'function') ? invOrigCost(p).cost : p.price * p.quantity);
       pickN++;
       var _r2 = _rows[String(p.code)];
       var _px2 = (_r2 && _r2.close != null) ? _r2.close : (p.last_price != null ? p.last_price : null);
@@ -587,7 +589,7 @@ function sumPair(label, val, colorStyle) {
 }
 
 // 頂欄常駐四項（總現值／資本損益／獲利率／漲跌幅％，全站可見、隨行情跳動）。
-// 其餘部位數字（總付出成本、總庫存、借出、帳面現值、合計待交割）在抽屜「部位」，
+// 其餘部位數字（原始成本、總庫存、借出、帳面現值、合計待交割）在抽屜「部位」，
 // 那些盤中不跳，不需要一直佔著版面。
 function renderTopbarTotals() {
   var el = document.getElementById('topbar-totals');
@@ -664,7 +666,7 @@ function renderDrawer() {
   h += '<div class="dw-sec">盤勢</div><div id="dw-macro" class="macro-row">' +
     (typeof macroDrawerHtml === 'function' ? macroDrawerHtml() : '') + '</div>';
   h += '<div class="dw-sec">部位</div><div class="dw-row">' +
-    sumPair('總付出成本(含借出)', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', '#f5d87a') +
+    sumPair('原始成本(含借出)', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', '#f5d87a') +
     sumPair('總庫存(含借出)', t.totalShares.toLocaleString('zh-TW'), '') +
     sumPair('借出', t.lentShares.toLocaleString('zh-TW') + ' 股', 'var(--text2)') +
     sumPair('帳面現值', t.bookVal.toLocaleString('zh-TW'), 'var(--text2)') +
