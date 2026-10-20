@@ -34,8 +34,9 @@ function _swapLoad() {
 function _swapSave() { try { localStorage.setItem(SWAP_LS, JSON.stringify(_swapState)); } catch (e) {} }
 
 // ── 子頁籤切換（股利估算 / 換股試算 / 填息追蹤）──
-var DIV_TABS = ['est', 'swap', 'refill', 'meta'];
-// 子頁籤（股利估算／換股試算／填息追蹤／配息資料）記在本機：重新整理或從別頁回來時停在上次的頁籤
+// 配息資料已提到主選單（divmeta-view），不在這裡。
+var DIV_TABS = ['est', 'swap', 'refill'];
+// 子頁籤（股利估算／換股試算／填息追蹤）記在本機：重新整理或從別頁回來時停在上次的頁籤
 var DIV_TAB_LS = 'divest_tab_v1';
 function divRestoreTab() {
   var t = null;
@@ -45,16 +46,10 @@ function divRestoreTab() {
 function divShowTab(tab) {
   if (DIV_TABS.indexOf(tab) < 0) tab = 'est';
   try { localStorage.setItem(DIV_TAB_LS, tab); } catch (e) {}
-  DIV_TABS.forEach(function (t) {
-    var pane = document.getElementById('divest-tab-' + t);
-    var btn = document.getElementById('divest-subtab-' + t);
-    if (pane) pane.style.display = (t === tab) ? '' : 'none';
-    if (btn) btn.classList.toggle('active', t === tab);
-  });
+  // 顯示哪一個 pane 由 divnav.js 的左側選單決定，這裡只管延遲載入
   if (tab === 'swap') startSwap();
   else if (tab === 'refill' && typeof startRefill === 'function' &&
     (typeof _rfNeedsRefresh !== 'function' || _rfNeedsRefresh())) startRefill();   // 未算過、跨日、或收盤前算的 → 重算
-  else if (tab === 'meta' && typeof startDivMeta === 'function') startDivMeta();
 }
 
 // ── 期數/日期工具（ym = 年*12 + 月-1）──

@@ -370,6 +370,7 @@ function renderRefill() {
         '<span class="rf-rate">' + r.filled + '/' + r.total + '（' + pr.toFixed(0) + '%）</span>' +
         '<span class="rf-avg">平均 ' + (r.avgDays != null ? r.avgDays.toFixed(1) + ' 天' : '—') + '</span>' +
         '<span class="rf-last">最近 ' + (latest ? _rfMd(latest.exDate) + ' 除息 ' + latest.amount.toFixed(3) + '　' + lastTxt : '—') + '</span>' +
+        '<span class="rf-gap"></span>' +
         '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span>' +
       '</div>' +
       (open ? _rfDetailHtml(r) : '') +

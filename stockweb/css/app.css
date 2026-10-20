@@ -703,14 +703,17 @@ input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
 .rf-list { font-size: 13px; }
 .rf-item { border-bottom: 1px solid var(--border); }
 .rf-item:last-child { border-bottom: none; }
-/* 名稱改 minmax(0,1fr)：1fr 的最小尺寸是內容寬度，右邊多了三個 nowrap 數字格會把整列撐出去。
-   新增的三欄一律固定寬，不參與等分。 */
+/* 名稱與「最近除息」原本是 1fr／1.2fr，螢幕愈寬吃愈多，文字靠左就在欄位中間留下空洞
+   （1744px 容器實測浪費 284＋288＝572px）。兩欄改成依內容決定寬度，倒數第二欄補一個
+   彈性空白把剩餘寬度集中到右邊，資料欄就會緊靠在一起。
+   名稱另加 max-width 160px，避免欄寬隨當下最長的名稱跳動。 */
 .rf-head { display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 88px 136px 84px 104px 94px 92px 92px minmax(210px, 1.2fr) 18px;
+  grid-template-columns: 72px minmax(0, max-content) 88px 136px 84px 104px 94px 92px 92px minmax(0, max-content) minmax(0, 1fr) 18px;
   align-items: center; gap: 10px; padding: 9px 4px; cursor: pointer; }
+.rf-gap { min-width: 0; }
 .rf-head:hover { background: var(--bg2); }
 .rf-code { color: var(--accent2); font-weight: 700; }
-.rf-name { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-name { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
 .rf-cost { text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
 .rf-wdiv, .rf-wrate { text-align: right; font-variant-numeric: tabular-nums; }
 .rf-wdiv.up, .rf-wrate.up { color: var(--up); }
@@ -1463,3 +1466,30 @@ td.cost-even::after  { background: var(--text3); }
 .pv-limtx.now.up { fill: #4da3ff; }
 .pv-limtx.now.dn { fill: #ff5252; }
 .pv-limtx.now.na { fill: #e0b94a; }
+
+/* ── 股利估算：左側選單 ── */
+.dv-shell { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 18px; align-items: start; }
+.dv-shell.collapsed { grid-template-columns: 34px minmax(0, 1fr); gap: 10px; }
+.dv-shell.collapsed .dv-navitem, .dv-shell.collapsed .dv-navsep { display: none; }
+.dv-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 8px; }
+.dv-colbtn { align-self: flex-end; background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text3); font-family: var(--font); font-size: 12px; width: 26px; height: 24px;
+  border-radius: 6px; cursor: pointer; margin-bottom: 6px; }
+.dv-colbtn:hover { color: var(--text); }
+.dv-navitem { text-align: left; background: none; border: 0; border-left: 3px solid transparent;
+  color: var(--text2); font-family: var(--font); font-size: 14px; padding: 9px 12px;
+  border-radius: 0 6px 6px 0; cursor: pointer; }
+.dv-navitem:hover { background: var(--bg2); color: var(--text); }
+.dv-navitem.on { background: var(--bg2); border-left-color: var(--accent); color: var(--accent2); font-weight: 600; }
+.dv-navsep { height: 1px; background: var(--border); margin: 6px 0; }
+.dv-pane { min-width: 0; }
+.dv-sec { min-width: 0; }
+#dv-cash { margin-top: 14px; }
+
+@media (max-width: 900px) {
+  .dv-shell, .dv-shell.collapsed { grid-template-columns: 1fr; }
+  .dv-nav { flex-direction: row; flex-wrap: wrap; position: static; }
+  .dv-navsep { display: none; }
+  .dv-navitem { border-left: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
+  .dv-navitem.on { border-left: 0; border-bottom-color: var(--accent); }
+}

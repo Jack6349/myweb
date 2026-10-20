@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=230">
+<link rel="stylesheet" href="css/app.css?v=232">
 </head>
 <body>
 
@@ -37,6 +37,7 @@
   <button data-view="live" onclick="openLive()">即時持股</button>
   <button data-view="inv" onclick="openInventory()">持股庫存</button>
   <button data-view="divest" onclick="openDividendEst()">股利估算</button>
+  <button data-view="divmeta" onclick="openDivMeta()">配息資料</button>
   <button data-view="txinfo" onclick="openTxinfo()">交易資訊</button>
   <button data-view="trend" onclick="openTrend()">趨勢評估</button>
   <button data-view="signals" onclick="openSignals()">籌碼淨值</button>
@@ -170,12 +171,10 @@
 
   <!-- 股利估算畫面（子頁籤：股利估算＝月份總覽＋個股明細 / 換股試算＝賣出換入後的月股利增減） -->
   <div id="divest-view" style="display:none">
-    <div class="tx-subtabs">
-      <button id="divest-subtab-est" class="tx-subtab active" onclick="divShowTab('est')">股利估算</button>
-      <button id="divest-subtab-swap" class="tx-subtab" onclick="divShowTab('swap')">換股試算</button>
-      <button id="divest-subtab-refill" class="tx-subtab" onclick="divShowTab('refill')">填息追蹤</button>
-      <button id="divest-subtab-meta" class="tx-subtab" onclick="divShowTab('meta')">配息資料</button>
-    </div>
+    <div id="dv-shell" class="dv-shell">
+      <nav class="dv-nav"><button id="dv-collapse" class="dv-colbtn" onclick="dvCollapse()" title="收合選單">«</button>
+        <div id="dv-nav"></div></nav>
+      <div class="dv-pane">
     <div id="divest-tab-est">
       <div class="diveset-topbar">
         <button class="btn-query" onclick="startDividendEst(true)">↻ 重新整理</button>
@@ -185,6 +184,7 @@
       </div>
       <div id="divest-error" class="stream-error" style="display:none"></div>
       <div id="divest-wrap"></div>
+      <div id="dv-cash"></div>
     </div>
 
     <!-- 換股試算：賣出部分/全部張數 → 買現有持股或指定代碼，試算未來 12 個月股利增減 -->
@@ -206,15 +206,19 @@
       </div>
       <div id="refill-wrap"></div>
     </div>
-
-    <!-- 配息資料：持有 ETF 的配息頻率／費用／除息紀錄總表；官方抓不到的可手動輸入（存 Firestore） -->
-    <div id="divest-tab-meta" style="display:none">
-      <div class="swap-toolbar">
-        <button class="btn-query" onclick="startDivMeta(true)">↻ 重抓官方規格</button>
-        <span id="divmeta-info" style="font-size:13px;color:var(--text2)"></span>
       </div>
-      <div id="divmeta-wrap"></div>
     </div>
+  </div>
+
+  <!-- 配息資料：ETF 屬性對照表（頻率／費用／除息紀錄／殖利率）。17 欄最小 1692px，
+       放在股利估算底下再加左側選單會塞不下；而且它回答的是「這檔是什麼樣的 ETF」，
+       與「我會領到多少」的三個功能性質不同，所以提到主選單。 -->
+  <div id="divmeta-view" style="display:none">
+    <div class="swap-toolbar">
+      <button class="btn-query" onclick="startDivMeta(true)">↻ 重抓官方規格</button>
+      <span id="divmeta-info" style="font-size:13px;color:var(--text2)"></span>
+    </div>
+    <div id="divmeta-wrap"></div>
   </div>
 
   <!-- 成分股曝險：持股 ETF 台股成分股曝險前 10（盤中即時） -->
@@ -415,7 +419,7 @@
 <script src="js/note.js?v=4"></script>
 <script src="js/broker.js?v=22"></script>
 <script src="js/fill-toast.js?v=6"></script>
-<script src="js/stream.js?v=88"></script>
+<script src="js/stream.js?v=91"></script>
 <script src="js/nav-usage.js?v=2"></script>
 <script src="js/daily-refresh.js?v=1"></script>
 <script src="js/category.js?v=2"></script>
@@ -429,7 +433,7 @@
 <script src="js/lent-log.js?v=1"></script>
 <script src="js/params.js?v=5"></script>
 <script src="js/settings.js?v=3"></script>
-<script src="js/retire.js?v=5"></script>
+<script src="js/retire.js?v=6"></script>
 <script src="js/topconst.js?v=8"></script>
 <script src="js/style-drift.js?v=18"></script>
 <script src="js/style-drift-doc.js?v=17"></script>
@@ -442,8 +446,9 @@
 <script src="js/div-mix.js?v=6"></script>
 <script src="js/div-meta.js?v=12"></script>
 <script src="js/dividend-est.js?v=65"></script>
-<script src="js/swap.js?v=33"></script>
-<script src="js/refill.js?v=30"></script>
+<script src="js/divnav.js?v=1"></script>
+<script src="js/swap.js?v=35"></script>
+<script src="js/refill.js?v=31"></script>
 <script src="js/nav-premium.js?v=9"></script>
 <script src="js/swap-scan.js?v=4"></script>
 <script src="js/risk-score.js?v=36"></script>

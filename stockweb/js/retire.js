@@ -131,13 +131,14 @@ function rtStatus() {
 }
 function rtRenderSummary() {
   var el = document.getElementById('rt-summary');
-  if (el) el.innerHTML = _rtSummaryHtml();
+  if (el) el.innerHTML = rtCashHtml();
   var st = document.querySelector('[data-set-status="retire-exp"]');
   if (st) st.textContent = rtStatus();
 }
 
 // 支出對照配息：月份總覽已經算出逐月入帳，這裡只做相減與累計餘額
-function _rtSummaryHtml() {
+// 現金流對照表：顯示在 股利估算 → 月份總覽 底下（divnav.js 呼叫），不在設定頁
+function rtCashHtml() {
   var y = rtYearTotal();
   if (_rtCfg.base == null && !Object.keys(_rtCfg.months).length) {
     return '<div class="set-hint">填入月基準後，這裡會顯示年支出合計；配息對照需要股利估算頁先載入月份總覽。</div>';
@@ -194,7 +195,7 @@ function renderRetire() {
         ' placeholder="' + RT_DEP_DEFAULT + '" oninput="rtSet(\'depRate\',this.value)"><span class="set-unit">%</span></div>' +
       '<div class="set-hint">空白時用 ' + RT_DEP_DEFAULT + '%，來源：' + RT_DEP_SOURCE + '。' +
         '大額存款（一般以 500 萬為界）牌告低於此數且各行自訂，要用大額請自行填入。</div>' +
-      '<div id="rt-summary"></div>' +
+      '<div class="set-hint">逐月淨額與累計餘額顯示在 股利估算 → 月份總覽 底下。</div>' +
       '<div class="set-hint">儲存位置：' + (_rtStore === 'firestore' ? 'Firestore（已登入）' : '本機瀏覽器' +
         (_rtErr ? '（' + _rtErr + '）' : '')) + '</div>';
     rtRenderSummary();
