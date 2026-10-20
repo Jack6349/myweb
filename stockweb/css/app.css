@@ -1435,13 +1435,16 @@ td.cost-even::after  { background: var(--text3); }
 .pv-c-dn { color: #ff5252; }
 .pv-c-na { color: #e0b94a; }
 
+/* 上下限是參考框架不是資料，用中性亮灰白：這張圖的藍紅黃紫都已有語意，
+   青色色相太靠近上升段的藍，掃一眼會混。中線同色系暗一階，當從屬。 */
 .pv-lim { stroke-width: 1.2; stroke-dasharray: 6 4; fill: none; }
-.pv-lim.up, .pv-lim.lo { stroke: #8fa6c0; }
-.pv-lim.mid { stroke: #6b8099; stroke-dasharray: 2 4; }
+.pv-lim.up, .pv-lim.lo { stroke: #e8eef5; stroke-width: 1.6; stroke-dasharray: 8 5; }
+.pv-lim.mid { stroke: #7b8ea4; stroke-dasharray: 2 5; }
 .pv-lim.avg { stroke: #b388d8; stroke-dasharray: 10 3 2 3; }
+.pv-band { fill: #ffffff; opacity: .04; }
 .pv-limtx { font-size: 11px; font-family: var(--font); }
-.pv-limtx.up, .pv-limtx.lo { fill: #8fa6c0; }
-.pv-limtx.mid { fill: #6b8099; }
+.pv-limtx.up, .pv-limtx.lo { fill: #e8eef5; }
+.pv-limtx.mid { fill: #7b8ea4; }
 .pv-limtx.avg { fill: #b388d8; }
 
 .pv-lamps { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }

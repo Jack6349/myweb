@@ -370,6 +370,14 @@ function pvSpcSvg(data) {
     }
   });
 
+  // 目標區間鋪極淡底色：不新增顏色，「在不在區間內」不用對照線就看得出來。
+  // 畫在格線之後、界線與折線之前，免得蓋住線。
+  var bTop = y(Math.min(cfg.up, hi)), bBot = y(Math.max(cfg.lo, lo));
+  if (bBot > bTop) {
+    s += '<rect class="pv-band" x="' + PAD_L + '" y="' + bTop.toFixed(1) + '" width="' + (W - PAD_L - PAD_R) +
+      '" height="' + (bBot - bTop).toFixed(1) + '"/>';
+  }
+
   // 界線與標註分兩側：
   //   左側（目標上限、中線、目標下限）貼著 Y 軸刻度，重疊時往右退一格。
   //   右側留白放「90 日平均」與線尾的「目前總現值」。右側沒有往右退的空間，
