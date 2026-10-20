@@ -283,6 +283,158 @@ function pvBindHover(data) {
   hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
 }
 
+// ── 頁籤二：管制圖 ──
+// 用途是看資產波動，不是品管意義的製程管制：目標上下緣是你自己設的資產水位
+// （設定 → 退休現金流），不是從資料算出來的 ±3σ。
+//
+// 配色與走勢頁籤刻意不同（這一頁屬管制圖性質，顏色只在這張圖內有意義）：
+//   藍＝連續上升達標、紅＝連續下降達標、黃＝未達標準。燈號同一套，黃當空位。
+// 「連續 N 日」以「每日較前一日」計：N=5 就是連續 5 個交易日同方向（5 段、6 個點）。
+// 實測 90 個交易日內總現值沒有任何一天與前一日完全相同，所以持平不必特別處理。
+
+// 逐段方向：回傳每一段（第 i 段＝第 i 點到第 i+1 點）的狀態 'up'|'dn'|'na'
+function _pvRuns(vals, n) {
+  var m = vals.length, dirs = [], i;
+  for (i = 1; i < m; i++) dirs.push(vals[i] > vals[i - 1] ? 1 : (vals[i] < vals[i - 1] ? -1 : 0));
+  var state = dirs.map(function () { return 'na'; });
+  var st = 0;
+  for (i = 0; i <= dirs.length; i++) {
+    if (i < dirs.length && dirs[i] !== 0 && dirs[i] === dirs[st]) continue;
+    var len = i - st;
+    if (len >= n && dirs[st] !== 0) {
+      for (var k = st; k < i; k++) state[k] = dirs[st] > 0 ? 'up' : 'dn';
+    }
+    st = i;
+  }
+  return state;
+}
+
+// 目前（從最後一點往回算）的連續方向與長度，供燈號用
+function _pvCurRun(vals) {
+  var cur = 0, dir = 0;
+  for (var i = vals.length - 1; i > 0; i--) {
+    var sgn = vals[i] > vals[i - 1] ? 1 : (vals[i] < vals[i - 1] ? -1 : 0);
+    if (sgn === 0) break;
+    if (dir === 0) { dir = sgn; cur = 1; } else if (sgn === dir) cur++; else break;
+  }
+  return { dir: dir, len: cur };
+}
+
+function _pvLampsHtml(vals, n) {
+  var r = _pvCurRun(vals), cls = r.dir > 0 ? 'up' : (r.dir < 0 ? 'dn' : 'na');
+  var lit = Math.min(r.len, n), h = '';
+  for (var i = 0; i < n; i++) h += '<span class="pv-lamp ' + (i < lit ? cls : 'na') + '"></span>';
+  var txt = r.dir === 0 ? '無連續' : (r.dir > 0 ? '連續上升 ' : '連續下降 ') + r.len + ' 日';
+  return '<span class="pv-lamps" title="設定 ' + n + ' 日；目前 ' + txt + '">' + h +
+    '<span class="pv-lamptx ' + cls + '">' + txt + (r.len >= n ? '（達標）' : '') + '</span></span>';
+}
+
+function pvSpcSvg(data) {
+  var rows = (data && data.days) || [];
+  if (rows.length < 2) return '<div class="modal-loading">資料不足</div>';
+  var tax = (typeof _taxMode !== 'undefined' && _taxMode) ? 0.997735 : 1;
+  var pts = rows.map(function (r) { return { d: r.d, v: Math.round(r.v * tax) }; });
+  var vals = pts.map(function (o) { return o.v; });
+  var cfg = (typeof rtSpc === 'function') ? rtSpc()
+    : { n: 5, up: 18000000, lo: 17000000, mid: 17500000, avg: true };
+  var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+
+  var W = 1180, H = 330, PAD_L = 74, PAD_R = 16, PAD_T = 14, FOOT = 18;
+  var PH = H - PAD_T - FOOT;
+  var n = pts.length, step = (W - PAD_L - PAD_R) / n;
+  var x = function (k) { return PAD_L + step * (k + 0.5); };
+
+  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  [cfg.up, cfg.lo, cfg.mid].concat(cfg.avg ? [mean] : []).forEach(function (v) {
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  });
+  var pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  var y = function (v) { return PAD_T + (hi - v) * PH / (hi - lo); };
+
+  var s = '<svg class="chart-svg pv-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
+  for (var g = 0; g <= 4; g++) {
+    var gv = hi - (hi - lo) * g / 4, gy = PAD_T + PH * g / 4;
+    s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) + '"/>' +
+      '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' + _pvWan(gv) + '</text>';
+  }
+  var prevMo = '';
+  pts.forEach(function (o, k) {
+    var mo = o.d.slice(0, 7);
+    if (mo !== prevMo) {
+      if (k > 0) s += '<line class="ck-sep" x1="' + (x(k) - step / 2).toFixed(1) + '" y1="' + PAD_T +
+        '" x2="' + (x(k) - step / 2).toFixed(1) + '" y2="' + (PAD_T + PH) + '"/>';
+      s += '<text class="ck-axis" x="' + x(k).toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">' +
+        o.d.slice(5).replace('-', '/') + '</text>';
+      prevMo = mo;
+    }
+  });
+
+  // 目標上下緣、中線、90 日平均，全部虛線（平均用不同的虛線樣式）。
+  // 兩條線靠得太近時文字會疊住（實測目標下緣 1,700 萬與 90 日平均 1,710 萬只差 10 萬），
+  // 所以依 y 排序後逐一檢查間距，太近的標籤往左退一格。
+  var lims = [[cfg.up, 'up', '目標上緣'], [cfg.mid, 'mid', '中線'], [cfg.lo, 'lo', '目標下緣']];
+  if (cfg.avg) lims.push([mean, 'avg', '90 日平均']);
+  lims = lims.filter(function (a) { return a[0] != null && a[0] >= lo && a[0] <= hi; })
+    .map(function (a) { return { v: a[0], cls: a[1], lb: a[2], y: y(a[0]) }; })
+    .sort(function (a, b) { return a.y - b.y; });
+  var lastY = -99, slot = 0;
+  lims.forEach(function (o) {
+    if (o.y - lastY < 13) slot++; else slot = 0;
+    lastY = o.y;
+    var tx = W - PAD_R - 4 - slot * 118;
+    s += '<line class="pv-lim ' + o.cls + '" x1="' + PAD_L + '" y1="' + o.y.toFixed(1) +
+      '" x2="' + (W - PAD_R) + '" y2="' + o.y.toFixed(1) + '"/>' +
+      '<text class="pv-limtx ' + o.cls + '" x="' + tx + '" y="' + (o.y - 4).toFixed(1) +
+      '" text-anchor="end">' + o.lb + ' ' + _pvWan(o.v) + '</text>';
+  });
+
+  // 折線逐段著色：達標的連續段藍（上升）／紅（下降），其餘黃
+  var state = _pvRuns(vals, cfg.n);
+  for (var i = 1; i < n; i++) {
+    s += '<line class="pv-seg ' + state[i - 1] + '" x1="' + x(i - 1).toFixed(1) + '" y1="' + y(vals[i - 1]).toFixed(1) +
+      '" x2="' + x(i).toFixed(1) + '" y2="' + y(vals[i]).toFixed(1) + '"/>';
+  }
+  s += '<rect id="pvs-hit" x="' + PAD_L + '" y="' + PAD_T + '" width="' + (W - PAD_L - PAD_R) + '" height="' + PH + '" fill="transparent"/>' +
+    '<line id="pvs-cross" class="ck-cross" x1="0" y1="' + PAD_T + '" x2="0" y2="' + (PAD_T + PH) + '" style="display:none"/></svg>';
+
+  var inBand = vals.filter(function (v) { return v >= cfg.lo && v <= cfg.up; }).length;
+  var head = '<div class="chart-info"><span id="pvs-tip">' +
+    n + ' 日　' + _pvLampsHtml(vals, cfg.n) +
+    '　區間內 <b>' + inBand + '</b>/' + n + ' 日（' + (inBand / n * 100).toFixed(0) + '%）' +
+    '</span></div>';
+  return head + s;
+}
+
+function pvBindSpcHover(data) {
+  var svg = document.querySelector('#pv .pv-svg');
+  var hit = document.getElementById('pvs-hit'), cross = document.getElementById('pvs-cross'), tip = document.getElementById('pvs-tip');
+  if (!svg || !hit || !cross || !tip) return;
+  var tax = (typeof _taxMode !== 'undefined' && _taxMode) ? 0.997735 : 1;
+  var rows = data.days, n = rows.length;
+  var PAD_L = 74, step = (1180 - PAD_L - 16) / n, base = tip.innerHTML;
+  var cfg = (typeof rtSpc === 'function') ? rtSpc() : { lo: 17000000, up: 18000000 };
+  hit.addEventListener('mousemove', function (ev) {
+    var vx = (typeof _chartVX === 'function') ? _chartVX(svg, ev.clientX) : null;
+    if (vx == null) return;
+    var k = Math.floor((vx - PAD_L) / step);
+    if (k < 0) k = 0;
+    if (k > n - 1) k = n - 1;
+    var xx = PAD_L + step * (k + 0.5);
+    cross.setAttribute('x1', xx); cross.setAttribute('x2', xx); cross.style.display = '';
+    var v = Math.round(rows[k].v * tax);
+    var prev = k > 0 ? Math.round(rows[k - 1].v * tax) : null;
+    var dv = prev == null ? null : v - prev;
+    var pos = v > cfg.up ? '高於上緣' : (v < cfg.lo ? '低於下緣' : '區間內');
+    tip.innerHTML = rows[k].d.slice(5).replace('-', '/') +
+      '　總現值 <b>' + v.toLocaleString('zh-TW') + '</b>' +
+      (dv == null ? '' : '　較前日 <b class="' + (dv >= 0 ? 'pv-c-up' : 'pv-c-dn') + '">' +
+        (dv >= 0 ? '+' : '') + dv.toLocaleString('zh-TW') + '</b>') +
+      '　' + pos;
+  });
+  hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
+}
+
 // ── 抽屜 ──
 function pvToggle() {
   _pvOpen = !_pvOpen;
@@ -299,6 +451,11 @@ function pvToggle() {
 function pvClose() { _pvOpen = false; pvRender(); if (typeof renderTopbarTotals === 'function') renderTopbarTotals(); }
 function pvReload() { _pvData = null; try { localStorage.removeItem(PV_LS); } catch (e) {} pvRender(); pvEnsure(true).then(pvRender); }
 
+// 抽屜兩個頁籤共用同一份 90 日序列，切換不重抓。
+// 走勢＝紅綠（全站慣例）；管制圖＝藍紅黃（只在那張圖內有意義），兩套刻意不同。
+var _pvTab = 'trend';
+function pvTab(t) { _pvTab = t; pvRender(); }
+
 function pvRender() {
   var el = document.getElementById('pv');
   if (!el) return;
@@ -307,26 +464,42 @@ function pvRender() {
   if (btn) { btn.textContent = (_pvOpen ? '▴' : '▾') + ' 走勢'; btn.className = 'dw-btn' + (_pvOpen ? ' on' : ''); }
   if (!_pvOpen) { el.innerHTML = ''; return; }
 
+  var ready = _pvData && !_pvLoading && !_pvErr;
   var body;
   if (_pvLoading) body = '<div class="modal-loading">重建買賣台帳與日收盤中…（首次約 3～5 秒）</div>';
   else if (_pvErr) body = '<div class="modal-loading">載入失敗：' + _pvErr + '</div>';
   else if (!_pvData) body = '<div class="modal-loading">載入中…</div>';
-  else body = pvSvg(_pvData);
+  else body = (_pvTab === 'spc') ? pvSpcSvg(_pvData) : pvSvg(_pvData);
 
   var warn = (_pvData && _pvData.warn && _pvData.warn.length)
     ? '<div class="detail-note">' + _pvData.warn.join('；') + '</div>' : '';
 
-  el.innerHTML =
-    '<button class="dw-close" onclick="pvClose()" title="關閉">✕</button>' +
-    '<div class="dw-sec">總現值走勢' +
-      '<button class="fx-reload" onclick="pvReload()" title="重新計算">↻</button>' +
-    '</div>' + body + warn +
-    '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日。持股與成本由買賣台帳逐日重建' +
+  var tab = function (id, lb) {
+    return '<button class="pv-tab' + (_pvTab === id ? ' on' : '') + '" onclick="pvTab(\'' + id + '\')">' + lb + '</button>';
+  };
+
+  var note = (_pvTab === 'spc')
+    ? '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日的總現值，用來看資產波動。' +
+      '<b>目標上緣／下緣</b>是你自己設的資產水位（設定 → 退休現金流），不是從資料算出來的統計界線；' +
+      '<b>中線</b>是上下緣的中點，<b>90 日平均</b>是這段期間的實際平均，兩條不是同一回事。' +
+      '折線逐段著色：<span class="pv-c-up">藍＝連續上升達標</span>、' +
+      '<span class="pv-c-dn">紅＝連續下降達標</span>、<span class="pv-c-na">黃＝未達設定天數</span>；' +
+      '上方燈號亮幾格就是目前連續幾日，黃格是還沒走到的格數。連續天數以「每日較前一日」計。' +
+      '總現值下降不等於虧損：可能是市價跌、賣出部位，或除息，這張圖分不出來。</div>'
+    : '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日。持股與成本由買賣台帳逐日重建' +
       (_pvData ? '（' + _pvData.codes + ' 檔）' : '') + '，收盤價用 Shioaji 1 分 K 聚合、無成交日沿用前一日。' +
       '<code>資本損益 ＝ 現值 － 原始成本</code>，資本報酬率為其除以原始成本；' +
       '賣出當天現值與成本會同時減少，已實現獲利不留在線上；除息當天價格先扣、配息還沒入帳，' +
       '總現值會出現向下的台階，那不是虧損。長條的底是區間外側、不是 0（整段同號時 0 基準每根都會頂到天花板），實際基準標在左軸。' +
       '含息版本做不到：券商的配息欄位是自買進以來的累計，沒有日期可拆。</div>';
 
-  if (_pvData && !_pvLoading && !_pvErr) pvBindHover(_pvData);
+  el.innerHTML =
+    '<button class="dw-close" onclick="pvClose()" title="關閉">✕</button>' +
+    '<div class="dw-sec">總現值' +
+      '<button class="fx-reload" onclick="pvReload()" title="重新計算（清快取重抓分 K）">↻</button>' +
+      '<span class="pv-tabs">' + tab('trend', '走勢') + tab('spc', '管制圖') + '</span>' +
+    '</div>' + body + warn + note;
+
+  if (!ready) return;
+  if (_pvTab === 'spc') pvBindSpcHover(_pvData); else pvBindHover(_pvData);
 }

@@ -24,7 +24,22 @@ function _rtCloud() { return !!(window.FB && window.OWNER_UID); }
 function _rtNorm(d) {
   return { base: (d && d.base != null) ? +d.base : null,
            months: (d && d.months) || {},
-           depRate: (d && d.depRate != null) ? +d.depRate : null };
+           depRate: (d && d.depRate != null) ? +d.depRate : null,
+           spcN: (d && d.spcN != null) ? +d.spcN : null,
+           spcUp: (d && d.spcUp != null) ? +d.spcUp : null,
+           spcLo: (d && d.spcLo != null) ? +d.spcLo : null,
+           spcAvg: d ? d.spcAvg !== false : true };
+}
+
+// 總現值管制圖的參數。中線不另外存，一律取上下緣的中點。
+var RT_SPC_N = 5, RT_SPC_UP = 18000000, RT_SPC_LO = 17000000;
+function rtSpc() {
+  var c = _rtCfg || {};
+  var up = c.spcUp != null ? c.spcUp : RT_SPC_UP;
+  var lo = c.spcLo != null ? c.spcLo : RT_SPC_LO;
+  if (up < lo) { var t = up; up = lo; lo = t; }          // 填反了就自己對調，不要畫出上下顛倒的區間
+  return { n: c.spcN != null ? Math.max(2, Math.round(c.spcN)) : RT_SPC_N,
+           up: up, lo: lo, mid: (up + lo) / 2, avg: c.spcAvg !== false };
 }
 
 async function rtLoad(force) {
@@ -90,6 +105,13 @@ function rtSet(field, value) {
   _rtCfg[field] = v;
   _rtSave();
   rtRenderSummary();
+  if (typeof pvRender === 'function' && typeof _pvOpen !== 'undefined' && _pvOpen) pvRender();
+}
+function rtSetBool(field, on) {
+  if (!_rtCfg) return;
+  _rtCfg[field] = !!on;
+  _rtSave();
+  if (typeof pvRender === 'function' && typeof _pvOpen !== 'undefined' && _pvOpen) pvRender();
 }
 function rtSetMonth(m, value) {
   if (!_rtCfg) return;
@@ -172,6 +194,21 @@ function renderRetire() {
         ' placeholder="' + RT_DEP_DEFAULT + '" oninput="rtSet(\'depRate\',this.value)"><span class="set-unit">%</span></div>' +
       '<div class="set-hint">空白時用 ' + RT_DEP_DEFAULT + '%，來源：' + RT_DEP_SOURCE + '。' +
         '大額存款（一般以 500 萬為界）牌告低於此數且各行自訂，要用大額請自行填入。</div>' +
+      '<div class="set-sub">總現值管制圖</div>' +
+      '<div class="set-field"><label>連續天數</label>' +
+        '<input type="number" step="1" min="2" class="al-in" value="' + (_rtCfg.spcN == null ? '' : _rtCfg.spcN) + '"' +
+        ' placeholder="' + RT_SPC_N + '" oninput="rtSet(\'spcN\',this.value)"><span class="set-unit">日</span></div>' +
+      '<div class="set-field"><label>目標上緣</label>' +
+        '<input type="number" step="100000" class="al-in" value="' + (_rtCfg.spcUp == null ? '' : _rtCfg.spcUp) + '"' +
+        ' placeholder="' + RT_SPC_UP + '" oninput="rtSet(\'spcUp\',this.value)"><span class="set-unit">元</span></div>' +
+      '<div class="set-field"><label>目標下緣</label>' +
+        '<input type="number" step="100000" class="al-in" value="' + (_rtCfg.spcLo == null ? '' : _rtCfg.spcLo) + '"' +
+        ' placeholder="' + RT_SPC_LO + '" oninput="rtSet(\'spcLo\',this.value)"><span class="set-unit">元</span></div>' +
+      '<div class="set-field"><label>90 日平均線</label>' +
+        '<label class="set-switch"><input type="checkbox"' + (_rtCfg.spcAvg !== false ? ' checked' : '') +
+        ' onchange="rtSetBool(\'spcAvg\',this.checked)"><span>顯示</span></label></div>' +
+      '<div class="set-hint">中線不用填，一律取上下緣的中點。連續天數以「每日較前一日上升或下降」計，' +
+        '設 5 就是連續 5 個交易日同方向。改完這裡，走勢抽屜的管制圖會立刻重畫。</div>' +
       '<div id="rt-summary"></div>' +
       '<div class="set-hint">儲存位置：' + (_rtStore === 'firestore' ? 'Firestore（已登入）' : '本機瀏覽器' +
         (_rtErr ? '（' + _rtErr + '）' : '')) + '</div>';

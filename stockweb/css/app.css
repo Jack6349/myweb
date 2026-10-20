@@ -1417,3 +1417,39 @@ td.cost-even::after  { background: var(--text3); }
 .rf-amt { font-size: 12px; }
 .rf-amt.up { color: var(--up); }
 .rf-amt.down { color: var(--down); }
+
+/* ── 總現值抽屜：管制圖頁籤 ── */
+/* 這一頁的配色只在這張圖內有意義：藍＝連續上升達標、紅＝連續下降達標、黃＝未達標準。
+   與走勢頁籤的紅綠（全站慣例）刻意不同，兩者不互相參照。 */
+.pv-tabs { float: right; display: inline-flex; gap: 4px; }
+.pv-tab { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
+  font-family: var(--font); font-size: 12px; padding: 3px 12px; border-radius: 6px; cursor: pointer; }
+.pv-tab:hover { color: var(--text); }
+.pv-tab.on { border-color: var(--accent); color: var(--accent2); background: var(--bg2); }
+
+.pv-seg { stroke-width: 2; fill: none; }
+.pv-seg.up { stroke: #4da3ff; }
+.pv-seg.dn { stroke: #ff5252; }
+.pv-seg.na { stroke: #e0b94a; }
+.pv-c-up { color: #4da3ff; }
+.pv-c-dn { color: #ff5252; }
+.pv-c-na { color: #e0b94a; }
+
+.pv-lim { stroke-width: 1.2; stroke-dasharray: 6 4; fill: none; }
+.pv-lim.up, .pv-lim.lo { stroke: #8fa6c0; }
+.pv-lim.mid { stroke: #6b8099; stroke-dasharray: 2 4; }
+.pv-lim.avg { stroke: #b388d8; stroke-dasharray: 10 3 2 3; }
+.pv-limtx { font-size: 11px; font-family: var(--font); }
+.pv-limtx.up, .pv-limtx.lo { fill: #8fa6c0; }
+.pv-limtx.mid { fill: #6b8099; }
+.pv-limtx.avg { fill: #b388d8; }
+
+.pv-lamps { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+.pv-lamp { width: 11px; height: 11px; border-radius: 50%; display: inline-block;
+  border: 1px solid rgba(0,0,0,.35); }
+.pv-lamp.up { background: #4da3ff; }
+.pv-lamp.dn { background: #ff5252; }
+.pv-lamp.na { background: #e0b94a; opacity: .45; }
+.pv-lamptx { font-size: 12px; margin-left: 4px; }
+.set-sub { font-size: 13px; font-weight: 600; color: var(--text2); margin: 16px 0 2px;
+  border-top: 1px solid var(--border); padding-top: 12px; }
