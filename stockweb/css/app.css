@@ -704,18 +704,23 @@ input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
 .rf-item { border-bottom: 1px solid var(--border); }
 .rf-item:last-child { border-bottom: none; }
 /* 名稱與「最近除息」原本是 1fr／1.2fr，螢幕愈寬吃愈多，文字靠左就在欄位中間留下空洞
-   （1744px 容器實測浪費 284＋288＝572px）。兩欄改成依內容決定寬度，倒數第二欄補一個
-   彈性空白把剩餘寬度集中到右邊，資料欄就會緊靠在一起。
-   名稱另加 max-width 160px，避免欄寬隨當下最長的名稱跳動。 */
+   （1744px 容器實測浪費 284＋288＝572px）。改成固定寬，倒數第二欄補一個彈性空白
+   把剩餘寬度集中到右邊，資料欄就會緊靠在一起。
+   這兩欄不能用 max-content：每一列是各自獨立的 grid，max-content 會讓每列依自己的
+   名稱長度算欄寬，列與列之間差十幾 px，整欄看起來沒對齊。 */
 .rf-head { display: grid;
-  grid-template-columns: 72px minmax(0, max-content) 88px 136px 84px 104px 94px 92px 92px minmax(0, max-content) minmax(0, 1fr) 18px;
+  grid-template-columns: 72px 160px 104px 148px 84px 118px 110px 92px 104px 200px minmax(0, 1fr) 18px;
   align-items: center; gap: 10px; padding: 9px 4px; cursor: pointer; }
 .rf-gap { min-width: 0; }
 .rf-head:hover { background: var(--bg2); }
 .rf-code { color: var(--accent2); font-weight: 700; }
 .rf-name { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
-.rf-cost { text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
-.rf-wdiv, .rf-wrate { text-align: right; font-variant-numeric: tabular-nums; }
+/* 標籤貼左、數值貼右：整格靠右時字數不同會讓標籤起點各自不同，看起來像沒對齊 */
+.rf-lv { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; }
+.rf-lb { font-style: normal; font-size: 12px; color: var(--text3); flex-shrink: 0; }
+.rf-v { font-weight: inherit; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rf-cost { color: var(--text2); }
+.rf-wrate { text-align: right; font-variant-numeric: tabular-nums; }
 .rf-wdiv.up, .rf-wrate.up { color: var(--up); }
 .rf-wdiv.down, .rf-wrate.down { color: var(--down); }
 .rf-wdiv.flat, .rf-wrate.flat { color: var(--text3); }
@@ -1411,12 +1416,12 @@ td.cost-even::after  { background: var(--text3); }
 .rt-mon.on input { border-color: var(--accent); }
 
 /* 逐檔填息：可重複配息占比 */
-.rf-rep { text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
+.rf-rep { color: var(--text2); }
 .rf-src { font-size: 12px; white-space: nowrap; }
 .rf-rep-on { color: var(--text); }
 .rf-rep-off { color: var(--text3); }
 .rf-rep-on + .rf-rep-off, .rf-rep-on + .rf-rep-on, .rf-rep-off + .rf-rep-off { margin-left: 6px; }
-.rf-amtc { text-align: right; font-variant-numeric: tabular-nums; }
+.rf-amtc .rf-v { font-weight: 400; }
 .rf-amt { font-size: 12px; }
 .rf-amt.up { color: var(--up); }
 .rf-amt.down { color: var(--down); }

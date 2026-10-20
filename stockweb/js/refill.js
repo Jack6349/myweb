@@ -359,16 +359,16 @@ function renderRefill() {
       '<div class="rf-head" onclick="toggleRefill(\'' + r.code + '\')">' +
         '<span class="rf-code">' + r.code + '</span>' +
         '<span class="rf-name">' + r.name + '</span>' +
-        '<span class="rf-cost">均價 ' + avgTxt + '</span>' +
-        '<span class="rf-wdiv ' + wdCls + '">含息 ' + wdTxt + '</span>' +
+        _rfLv('rf-cost', '均價', avgTxt) +
+        _rfLv('rf-wdiv ' + wdCls, '含息', wdTxt) +
         '<span class="rf-wrate ' + wrCls + '">' + wrTxt + '</span>' +
-        '<span class="rf-amtc">' + _rfAmtCell(r.code) + '</span>' +
-        '<span class="rf-rep"' + (mx ? ' title="近 ' + mx.n + ' 期加權：股利 ' + mx.d.toFixed(1) +
-          '、利息 ' + mx.i.toFixed(1) + '、權利金 ' + mx.cc.toFixed(1) +
-          '、賣股價差 ' + mx.c.toFixed(1) + '、平準金 ' + mx.e.toFixed(1) + '"' : '') + '>' +
-          (repPct == null ? '<span class="flat">—</span>' : '可重複 ' + repPct.toFixed(0) + '%') + '</span>' +
+        _rfLv('rf-amtc', '配息', _rfAmtCell(r.code)) +
+        _rfLv('rf-rep', '可重複', repPct == null ? '—' : repPct.toFixed(0) + '%',
+          mx ? '近 ' + mx.n + ' 期加權：股利 ' + mx.d.toFixed(1) +
+            '、利息 ' + mx.i.toFixed(1) + '、權利金 ' + mx.cc.toFixed(1) +
+            '、賣股價差 ' + mx.c.toFixed(1) + '、平準金 ' + mx.e.toFixed(1) : '') +
         '<span class="rf-rate">' + r.filled + '/' + r.total + '（' + pr.toFixed(0) + '%）</span>' +
-        '<span class="rf-avg">平均 ' + (r.avgDays != null ? r.avgDays.toFixed(1) + ' 天' : '—') + '</span>' +
+        _rfLv('rf-avg', '平均', r.avgDays != null ? r.avgDays.toFixed(1) + ' 天' : '—') +
         '<span class="rf-last">最近 ' + (latest ? _rfMd(latest.exDate) + ' 除息 ' + latest.amount.toFixed(3) + '　' + lastTxt : '—') + '</span>' +
         '<span class="rf-gap"></span>' +
         '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span>' +
@@ -422,6 +422,13 @@ function _rfRepAll(rows) {
   return tot ? (rep / tot * 100).toFixed(0) + '%' : '—';
 }
 
+// 一格「標籤 ＋ 數值」。整格靠右對齊時，字數不同會讓標籤起點跟著跑，
+// 所以拆成兩個子元素：標籤貼左、數值貼右，同一欄的標籤與數字各自對齊。
+function _rfLv(cls, lb, val, tip) {
+  return '<span class="rf-lv ' + cls + '"' + (tip ? ' title="' + tip + '"' : '') + '>' +
+    '<i class="rf-lb">' + lb + '</i><b class="rf-v">' + val + '</b></span>';
+}
+
 // 配息金額趨勢：近 6 個月「每期平均」vs 前 6 個月「每期平均」。
 // 用每期平均而不是區間總額，因為月配與季配在同一個區間的期數不同，
 // 總額會把配息頻率混進來，比到的是一年配幾次而不是每次配多少。
@@ -458,7 +465,7 @@ function _rfAmtCell(code) {
     (t.pct == null ? '' : '&#10;近半年每期平均 ' + fmt(t.now) + '（' + t.nNow + ' 期）' +
       '、前半年 ' + fmt(t.prev) + '（' + t.nPrev + ' 期）');
   var wrap = function (cls, txt) {
-    return '<span class="rf-amt ' + cls + '" title="' + tip + '">配息 ' + txt + '</span>';
+    return '<span class="rf-amt ' + cls + '" title="' + tip + '">' + txt + '</span>';
   };
   if (t.pct == null) {
     // 期數不夠分半年：不推估方向，只陳述看得到的事實
