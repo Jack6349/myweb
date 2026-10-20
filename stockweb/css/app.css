@@ -1453,3 +1453,10 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lamptx { font-size: 12px; margin-left: 4px; }
 .set-sub { font-size: 13px; font-weight: 600; color: var(--text2); margin: 16px 0 2px;
   border-top: 1px solid var(--border); padding-top: 12px; }
+.pv-dot.up { fill: #4da3ff; }
+.pv-dot.dn { fill: #ff5252; }
+.pv-dot.na { fill: #e0b94a; }
+.pv-limtx.now { font-weight: 700; }
+.pv-limtx.now.up { fill: #4da3ff; }
+.pv-limtx.now.dn { fill: #ff5252; }
+.pv-limtx.now.na { fill: #e0b94a; }

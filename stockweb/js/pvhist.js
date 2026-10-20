@@ -339,7 +339,7 @@ function pvSpcSvg(data) {
     : { n: 5, up: 18000000, lo: 17000000, mid: 17500000, avg: true };
   var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
 
-  var W = 1180, H = 330, PAD_L = 74, PAD_R = 16, PAD_T = 14, FOOT = 18;
+  var W = 1180, H = 330, PAD_L = 74, PAD_R = 118, PAD_T = 14, FOOT = 18;  // 右側留白放 90 日平均與線尾現值
   var PH = H - PAD_T - FOOT;
   var n = pts.length, step = (W - PAD_L - PAD_R) / n;
   var x = function (k) { return PAD_L + step * (k + 0.5); };
@@ -370,22 +370,22 @@ function pvSpcSvg(data) {
     }
   });
 
-  // 目標上下限、中線、90 日平均，全部虛線（平均用不同的虛線樣式）。
-  // 兩條線靠得太近時文字會疊住（實測目標下限 1,700 萬與 90 日平均 1,710 萬只差 10 萬），
-  // 所以依 y 排序後逐一檢查間距，太近的標籤往右退一格。
-  var lims = [[cfg.up, 'up', '目標上限'], [cfg.mid, 'mid', '中線'], [cfg.lo, 'lo', '目標下限']];
-  if (cfg.avg) lims.push([mean, 'avg', '90 日平均']);
-  lims = lims.filter(function (a) { return a[0] != null && a[0] >= lo && a[0] <= hi; })
+  // 界線與標註分兩側：
+  //   左側（目標上限、中線、目標下限）貼著 Y 軸刻度，重疊時往右退一格。
+  //   右側留白放「90 日平均」與線尾的「目前總現值」。右側沒有往右退的空間，
+  //   所以改成把下面那個往下挪，挪到彼此至少差 13px（實測兩者只差約 12 萬，會疊住）。
+  var lastV = vals[n - 1], lastY = y(lastV);
+  var leftLims = [[cfg.up, 'up', '目標上限'], [cfg.mid, 'mid', '中線'], [cfg.lo, 'lo', '目標下限']]
+    .filter(function (a) { return a[0] != null && a[0] >= lo && a[0] <= hi; })
     .map(function (a) { return { v: a[0], cls: a[1], lb: a[2], y: y(a[0]) }; })
     .sort(function (a, b) { return a.y - b.y; });
-  var lastY = -99, slot = 0;
-  lims.forEach(function (o) {
-    if (o.y - lastY < 13) slot++; else slot = 0;
-    lastY = o.y;
-    var tx = PAD_L + 6 + slot * 118;        // 數字靠左，與左側 Y 軸刻度同一側
+  var prevY = -99, slot = 0;
+  leftLims.forEach(function (o) {
+    if (o.y - prevY < 13) slot++; else slot = 0;
+    prevY = o.y;
     s += '<line class="pv-lim ' + o.cls + '" x1="' + PAD_L + '" y1="' + o.y.toFixed(1) +
       '" x2="' + (W - PAD_R) + '" y2="' + o.y.toFixed(1) + '"/>' +
-      '<text class="pv-limtx ' + o.cls + '" x="' + tx + '" y="' + (o.y - 4).toFixed(1) +
+      '<text class="pv-limtx ' + o.cls + '" x="' + (PAD_L + 6 + slot * 118) + '" y="' + (o.y - 4).toFixed(1) +
       '" text-anchor="start">' + o.lb + ' ' + _pvWan(o.v) + '</text>';
   });
 
@@ -395,6 +395,27 @@ function pvSpcSvg(data) {
     s += '<line class="pv-seg ' + state[i - 1] + '" x1="' + x(i - 1).toFixed(1) + '" y1="' + y(vals[i - 1]).toFixed(1) +
       '" x2="' + x(i).toFixed(1) + '" y2="' + y(vals[i]).toFixed(1) + '"/>';
   }
+
+  // 右側：90 日平均線（畫線）＋線尾的目前總現值（畫點）
+  var right = [];
+  if (cfg.avg && mean >= lo && mean <= hi) {
+    s += '<line class="pv-lim avg" x1="' + PAD_L + '" y1="' + y(mean).toFixed(1) +
+      '" x2="' + (W - PAD_R) + '" y2="' + y(mean).toFixed(1) + '"/>';
+    right.push({ y: y(mean), cls: 'avg', lb: '90 日平均 ' + _pvWan(mean) });
+  }
+  s += '<circle class="pv-dot ' + (state[n - 2] || 'na') + '" cx="' + x(n - 1).toFixed(1) +
+    '" cy="' + lastY.toFixed(1) + '" r="3.5"/>';
+  right.push({ y: lastY, cls: 'now ' + (state[n - 2] || 'na'),
+    lb: '目前 ' + lastV.toLocaleString('zh-TW') });
+  right.sort(function (a, b) { return a.y - b.y; });
+  var usedY = -99;
+  right.forEach(function (o) {
+    var ty = Math.max(o.y + 4, usedY + 13);
+    usedY = ty;
+    s += '<text class="pv-limtx ' + o.cls + '" x="' + (W - PAD_R + 6) + '" y="' + ty.toFixed(1) +
+      '" text-anchor="start">' + o.lb + '</text>';
+  });
+
   s += '<rect id="pvs-hit" x="' + PAD_L + '" y="' + PAD_T + '" width="' + (W - PAD_L - PAD_R) + '" height="' + PH + '" fill="transparent"/>' +
     '<line id="pvs-cross" class="ck-cross" x1="0" y1="' + PAD_T + '" x2="0" y2="' + (PAD_T + PH) + '" style="display:none"/></svg>';
 
@@ -412,7 +433,7 @@ function pvBindSpcHover(data) {
   if (!svg || !hit || !cross || !tip) return;
   var tax = (typeof _taxMode !== 'undefined' && _taxMode) ? 0.997735 : 1;
   var rows = data.days, n = rows.length;
-  var PAD_L = 74, step = (1180 - PAD_L - 16) / n, base = tip.innerHTML;
+  var PAD_L = 74, step = (1180 - PAD_L - 118) / n, base = tip.innerHTML;   // PAD_R 與 pvSpcSvg 一致
   var cfg = (typeof rtSpc === 'function') ? rtSpc() : { lo: 17000000, up: 18000000 };
   hit.addEventListener('mousemove', function (ev) {
     var vx = (typeof _chartVX === 'function') ? _chartVX(svg, ev.clientX) : null;
@@ -485,6 +506,8 @@ function pvRender() {
       '折線逐段著色：<span class="pv-c-up">藍＝連續上升達標</span>、' +
       '<span class="pv-c-dn">紅＝連續下降達標</span>、<span class="pv-c-na">黃＝未達設定天數</span>；' +
       '上方燈號亮幾格就是目前連續幾日，黃格是還沒走到的格數。連續天數以「每日較前一日」計。' +
+      '線尾的「目前」是這張圖建立當下的分 K 收盤，與頂欄的即時報價取樣時點不同，' +
+      '盤中會有小幅落差（實測 11,262 元，0.065%），按 ↻ 重新計算即對齊。' +
       '總現值下降不等於虧損：可能是市價跌、賣出部位，或除息，這張圖分不出來。</div>'
     : '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日。持股與成本由買賣台帳逐日重建' +
       (_pvData ? '（' + _pvData.codes + ' 檔）' : '') + '，收盤價用 Shioaji 1 分 K 聚合、無成交日沿用前一日。' +
