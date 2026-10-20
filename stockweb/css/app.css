@@ -706,7 +706,7 @@ input[type=number]::-webkit-inner-spin-button { margin-left: 8px; }
 /* 名稱改 minmax(0,1fr)：1fr 的最小尺寸是內容寬度，右邊多了三個 nowrap 數字格會把整列撐出去。
    新增的三欄一律固定寬，不參與等分。 */
 .rf-head { display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 88px 136px 84px 96px 92px minmax(240px, 1.4fr) 18px;
+  grid-template-columns: 72px minmax(0, 1fr) 88px 136px 84px 94px 92px 92px minmax(230px, 1.3fr) 18px;
   align-items: center; gap: 10px; padding: 9px 4px; cursor: pointer; }
 .rf-head:hover { background: var(--bg2); }
 .rf-code { color: var(--accent2); font-weight: 700; }
@@ -1406,3 +1406,10 @@ td.cost-even::after  { background: var(--text3); }
 }
 .rt-mon.on span { color: var(--accent2); font-weight: 600; }
 .rt-mon.on input { border-color: var(--accent); }
+
+/* 逐檔填息：可重複配息占比 */
+.rf-rep { text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
+.rf-src { font-size: 12px; white-space: nowrap; }
+.rf-rep-on { color: var(--text); }
+.rf-rep-off { color: var(--text3); }
+.rf-rep-on + .rf-rep-off, .rf-rep-on + .rf-rep-on, .rf-rep-off + .rf-rep-off { margin-left: 6px; }

@@ -478,6 +478,35 @@ function toggleTaxMode() {
   if (typeof renderInvTable === 'function' && document.getElementById('inv-tbody') && document.getElementById('inv-tbody').children.length) renderInvTable();
   if (typeof renderLiveTables === 'function' && document.getElementById('live-cols') && document.getElementById('live-cols').children.length) renderLiveTables();
 }
+// ── 盤中大盤指數（合計列最前面）──
+// Shioaji 的指數合約：security_type IND、exchange TSE、code 001（發行量加權股價指數）。
+// 合計列會跟著每筆報價重繪，不能每次都打 API → 快取 20 秒，過期才在背景重抓，
+// 畫面一律讀快取，抓回來再觸發一次重繪。
+var _twIdx = null, _twIdxAt = 0, _twIdxBusy = false;
+var TW_IDX_TTL = 20000;
+function _twseIdxFetch() {
+  if (_twIdxBusy || Date.now() - _twIdxAt < TW_IDX_TTL) return;
+  _twIdxBusy = true;
+  fetch(API + '/api/v1/data/snapshots', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contracts: [{ security_type: 'IND', exchange: 'TSE', code: '001' }] })
+  }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    var o = j && j[0];
+    if (o && o.close) { _twIdx = { v: o.close, pct: o.change_rate, chg: o.change_price }; _twIdxAt = Date.now(); }
+    _twIdxBusy = false;
+    if (typeof renderSummaries === 'function') renderSummaries();
+  }).catch(function () { _twIdxBusy = false; _twIdxAt = Date.now(); });
+}
+function _twseIdxHtml() {
+  _twseIdxFetch();
+  if (!_twIdx) return '';
+  var cls = _twIdx.pct > 0 ? 'var(--up)' : (_twIdx.pct < 0 ? 'var(--down)' : 'var(--text3)');
+  var arrow = _twIdx.pct > 0 ? '▲' : (_twIdx.pct < 0 ? '▼' : '');
+  return sumPair('加權指數',
+    _twIdx.v.toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+    ' <span style="font-size:.9em">' + arrow + Math.abs(_twIdx.pct).toFixed(2) + '%</span>', cls);
+}
+
 // 全站共用的持股總計。頂欄、各頁合計列、抽屜「部位」都從這裡取。
 // 以前頂欄的 _sumGross() 與 renderSummary() 裡是兩份幾乎一樣的程式碼，
 // 改了一邊忘另一邊就會對不起來（2026-10-02 總現值少 1,405,500 就是這樣來的），
@@ -577,7 +606,7 @@ function renderSummary(targetId) {
     });
   }
   el.style.display = '';
-  el.innerHTML = '<div class="sum-line">' + toggleBtn + detailBtn +
+  el.innerHTML = '<div class="sum-line">' + toggleBtn + detailBtn + _twseIdxHtml() +
     sumPair('點選成本加總' + (pickN ? '(' + pickN + ')' : ''),
       pickCost == null ? '—' : Math.round(pickCost).toLocaleString('zh-TW'),
       pickCost == null ? 'var(--text3)' : 'var(--accent2)') +   // 與頂欄「總現值」同色

@@ -308,6 +308,7 @@ function renderRefill() {
     sp('平均填息', avgAll != null ? avgAll.toFixed(1) + ' 天' : '—', 'var(--text)') +
     sp('中位填息', medAll != null ? medAll + ' 天' : '—', 'var(--text)') +
     sp('貼息中', pendN + ' 檔', pendN ? 'var(--down)' : 'var(--text2)') +
+    sp('可重複配息', _rfRepAll(rows), 'var(--text)') +
     '</div>';
 
   // 除息日曆（未來已公告）已移到股利估算頁的「本月除息個股」與「個股明細」之間
@@ -330,6 +331,10 @@ function renderRefill() {
   rows.forEach(function (r) {
     var open = !!_rfOpen[r.code];
     var pz = posOf(r.code);
+    // 可重複配息占比：dmMix 的線性遞減加權（最新一期權重最高，平均會把趨勢抹掉）。
+    // d 股利 ＋ i 利息 ＋ cc 賣出選擇權權利金；排除 c 賣股價差、e 平準金、o 其他。
+    var mx = (typeof dmMix === 'function') ? dmMix(r.code, 12) : null;
+    var repPct = mx ? (mx.d + mx.i + mx.cc) : null;
     var mt = (pz && typeof invMetrics === 'function') ? invMetrics(pz) : null;
     var avgTxt = (mt && mt.avg != null) ? mt.avg.toFixed(2) : '—';   // 原始成本均價
     var wdTxt = '—', wrTxt = '—', wdCls = 'flat', wrCls = 'flat';
@@ -357,6 +362,10 @@ function renderRefill() {
         '<span class="rf-cost">均價 ' + avgTxt + '</span>' +
         '<span class="rf-wdiv ' + wdCls + '">含息 ' + wdTxt + '</span>' +
         '<span class="rf-wrate ' + wrCls + '">' + wrTxt + '</span>' +
+        '<span class="rf-rep"' + (mx ? ' title="近 ' + mx.n + ' 期加權：股利 ' + mx.d.toFixed(1) +
+          '、利息 ' + mx.i.toFixed(1) + '、權利金 ' + mx.cc.toFixed(1) +
+          '、賣股價差 ' + mx.c.toFixed(1) + '、平準金 ' + mx.e.toFixed(1) + '"' : '') + '>' +
+          (repPct == null ? '<span class="flat">—</span>' : '可重複 ' + repPct.toFixed(0) + '%') + '</span>' +
         '<span class="rf-rate">' + r.filled + '/' + r.total + '（' + pr.toFixed(0) + '%）</span>' +
         '<span class="rf-avg">平均 ' + (r.avgDays != null ? r.avgDays.toFixed(1) + ' 天' : '—') + '</span>' +
         '<span class="rf-last">最近 ' + (latest ? _rfMd(latest.exDate) + ' 除息 ' + latest.amount.toFixed(3) + '　' + lastTxt : '—') + '</span>' +
@@ -378,6 +387,9 @@ function renderRefill() {
     '配息取自券商建倉明細的 <code>ex_dividends</code>，是<b>自買進以來的累計</b>，沒有日期可拆：' +
     '同一列左邊的填息率只算近 ' + RF_YEARS + ' 年，兩個欄位的時間區間不一樣。' +
     '出借中的權益補償是否計入這個欄位，券商沒有說明，尚未確認。</dd>' +
+    '<dt>可重複配息</dt><dd><code>股利 ＋ 利息 ＋ 賣出選擇權權利金</code>，排除賣股價差與收益平準金。' +
+    '前者只要策略照跑就會再發生；賣股價差要行情配合，平準金是把新申購者的本金發還。' +
+    '逐檔取近 12 期線性遞減加權（最新一期最重），合計列以配息金額加權。來源：公開資訊觀測站。</dd>' +
     '<dt>填息與賺賠是兩件事</dt><dd>填息比的是市場基準（除息前一日收盤），成本均價是你自己的進場點。' +
     '可以「已填息」但還在賠，也可以「貼息中」但是賺的，兩組紅綠不互相印證。</dd>' +
     '<dt>價格</dt><dd>Yahoo 未還原收盤（還原價會抹平除息缺口）。</dd>' +
@@ -385,6 +397,24 @@ function renderRefill() {
     '歷史統計，不預測未來填息表現，非投資建議。</dd>' +
     '</dl></div>';
   wrap.innerHTML = html;
+}
+
+// 整體可重複占比：以近 12 個月的配息金額加權（每股金額 × 目前股數），
+// 不是各檔取平均——6 萬的 00999A 不該和 69 萬的 00918 一樣重。
+function _rfRepAll(rows) {
+  if (typeof dmRecs !== 'function') return '—';
+  var tot = 0, rep = 0;
+  rows.forEach(function (r) {
+    var sh = (typeof _sharesMap !== 'undefined' && _sharesMap[r.code]) || 0;
+    if (!sh) return;
+    (dmRecs(r.code, 12) || []).forEach(function (x) {
+      if (x.amt == null || !x.pct) return;
+      var amt = x.amt * sh;
+      tot += amt;
+      rep += amt * ((x.pct.d || 0) + (x.pct.i || 0) + (x.pct.cc || 0)) / 100;
+    });
+  });
+  return tot ? (rep / tot * 100).toFixed(0) + '%' : '—';
 }
 
 function _rfMd(iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; }
@@ -585,14 +615,33 @@ function _rfCalHtml() {
   return h;
 }
 
+// 該次除息的組成：公開資訊觀測站申報值，只列占比 > 0 的項目
+var RF_SRC_LB = { d: '股利', i: '利息', cc: '權利金', c: '賣股價差', e: '平準金', o: '其他' };
+var RF_SRC_REP = { d: 1, i: 1, cc: 1 };
+function _rfSrcText(code, exDate) {
+  if (typeof dmRecs !== 'function') return '—';
+  var hit = null;
+  (dmRecs(code, 24) || []).forEach(function (x) { if (x.ex === exDate) hit = x; });
+  if (!hit || !hit.pct) return '<span class="flat">—</span>';
+  var out = [];
+  ['d', 'i', 'cc', 'c', 'e', 'o'].forEach(function (k) {
+    var v = hit.pct[k] || 0;
+    if (v <= 0) return;
+    out.push('<span class="' + (RF_SRC_REP[k] ? 'rf-rep-on' : 'rf-rep-off') + '">' +
+      RF_SRC_LB[k] + ' ' + v.toFixed(1) + '</span>');
+  });
+  return out.length ? out.join(' ') : '<span class="flat">—</span>';
+}
+
 function _rfDetailHtml(r) {
   var h = '<div class="rf-detail"><table class="inv-table swap-table"><thead><tr>' +
-    '<th>除息日</th><th class="num">配息</th><th class="num">基準價</th>' +
+    '<th>除息日</th><th class="num">配息</th><th>來源</th><th class="num">基準價</th>' +
     '<th>填息日</th><th class="num">天數</th><th>狀態</th></tr></thead><tbody>';
   r.events.forEach(function (e) {
     h += '<tr>' +
       '<td>' + e.exDate + '</td>' +
       '<td class="num">' + e.amount.toFixed(3) + '</td>' +
+      '<td class="rf-src">' + _rfSrcText(r.code, e.exDate) + '</td>' +
       '<td class="num">' + e.base.toFixed(2) + '</td>' +
       '<td>' + (e.filledDate || '—') + '</td>' +
       '<td class="num">' + (e.waiting ? '—' : e.days) + '</td>' +
