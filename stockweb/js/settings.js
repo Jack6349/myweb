@@ -45,7 +45,11 @@ var SET_SECTIONS = [
     { key: 'retire-exp', title: '每月預計支出與定存利率', bodyId: 'params-retire-body',
       desc: '月基準加上特定月份覆寫；填好後對照月份總覽的配息入帳，算出逐月淨額與累計餘額',
       render: function () { if (typeof renderRetire === 'function') renderRetire(); },
-      status: function () { return (typeof rtStatus === 'function' && typeof _rtCfg !== 'undefined' && _rtCfg) ? rtStatus() : null; } }
+      status: function () { return (typeof rtStatus === 'function' && typeof _rtCfg !== 'undefined' && _rtCfg) ? rtStatus() : null; } },
+    { key: 'retire-spc', title: '總現值管制圖', bodyId: 'params-spc-body',
+      desc: '連續天數、目標上下限、90 日平均線。走勢抽屜「管制圖」頁籤用的參數，改完立刻重畫',
+      render: function () { if (typeof renderRetireSpc === 'function') renderRetireSpc(); },
+      status: function () { return (typeof rtSpcStatus === 'function' && typeof _rtCfg !== 'undefined' && _rtCfg) ? rtSpcStatus() : null; } }
   ] },
   { id: 'alert', title: '停損停利', rows: [
     { key: 'al', title: '各檔停利／停損門檻', link: 'openAlerts()', linkText: '前往停損停利',

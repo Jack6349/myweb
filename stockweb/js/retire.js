@@ -194,7 +194,27 @@ function renderRetire() {
         ' placeholder="' + RT_DEP_DEFAULT + '" oninput="rtSet(\'depRate\',this.value)"><span class="set-unit">%</span></div>' +
       '<div class="set-hint">空白時用 ' + RT_DEP_DEFAULT + '%，來源：' + RT_DEP_SOURCE + '。' +
         '大額存款（一般以 500 萬為界）牌告低於此數且各行自訂，要用大額請自行填入。</div>' +
-      '<div class="set-sub">總現值管制圖</div>' +
+      '<div id="rt-summary"></div>' +
+      '<div class="set-hint">儲存位置：' + (_rtStore === 'firestore' ? 'Firestore（已登入）' : '本機瀏覽器' +
+        (_rtErr ? '（' + _rtErr + '）' : '')) + '</div>';
+    rtRenderSummary();
+  });
+}
+
+// 管制圖參數獨立一列：和每月支出放同一列的話，收合後只看得到「每月預計支出」，
+// 不知道裡面還有管制圖的設定。
+function rtSpcStatus() {
+  if (!_rtCfg) return null;
+  var c = rtSpc();
+  return c.n + ' 日　' + Math.round(c.lo / 10000).toLocaleString('zh-TW') + '～' +
+    Math.round(c.up / 10000).toLocaleString('zh-TW') + ' 萬';
+}
+function renderRetireSpc() {
+  var el = document.getElementById('params-spc-body');
+  if (!el) return;
+  el.innerHTML = '<div class="modal-loading">載入設定…</div>';
+  rtLoad().then(function () {
+    el.innerHTML =
       '<div class="set-field"><label>連續天數</label>' +
         '<input type="number" step="1" min="2" class="al-in" value="' + (_rtCfg.spcN == null ? '' : _rtCfg.spcN) + '"' +
         ' placeholder="' + RT_SPC_N + '" oninput="rtSet(\'spcN\',this.value)"><span class="set-unit">日</span></div>' +
@@ -208,10 +228,7 @@ function renderRetire() {
         '<label class="set-switch"><input type="checkbox"' + (_rtCfg.spcAvg !== false ? ' checked' : '') +
         ' onchange="rtSetBool(\'spcAvg\',this.checked)"><span>顯示</span></label></div>' +
       '<div class="set-hint">中線不用填，一律取上下限的中點。連續天數以「每日較前一日上升或下降」計，' +
-        '設 5 就是連續 5 個交易日同方向。改完這裡，走勢抽屜的管制圖會立刻重畫。</div>' +
-      '<div id="rt-summary"></div>' +
-      '<div class="set-hint">儲存位置：' + (_rtStore === 'firestore' ? 'Firestore（已登入）' : '本機瀏覽器' +
-        (_rtErr ? '（' + _rtErr + '）' : '')) + '</div>';
-    rtRenderSummary();
+        '設 5 就是連續 5 個交易日同方向。改完這裡，走勢抽屜的管制圖會立刻重畫。</div>'
+      '';
   });
 }
