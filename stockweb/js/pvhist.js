@@ -284,7 +284,7 @@ function pvBindHover(data) {
 }
 
 // ── 頁籤二：管制圖 ──
-// 用途是看資產波動，不是品管意義的製程管制：目標上下緣是你自己設的資產水位
+// 用途是看資產波動，不是品管意義的製程管制：目標上下限是你自己設的資產水位
 // （設定 → 退休現金流），不是從資料算出來的 ±3σ。
 //
 // 配色與走勢頁籤刻意不同（這一頁屬管制圖性質，顏色只在這張圖內有意義）：
@@ -370,10 +370,10 @@ function pvSpcSvg(data) {
     }
   });
 
-  // 目標上下緣、中線、90 日平均，全部虛線（平均用不同的虛線樣式）。
-  // 兩條線靠得太近時文字會疊住（實測目標下緣 1,700 萬與 90 日平均 1,710 萬只差 10 萬），
-  // 所以依 y 排序後逐一檢查間距，太近的標籤往左退一格。
-  var lims = [[cfg.up, 'up', '目標上緣'], [cfg.mid, 'mid', '中線'], [cfg.lo, 'lo', '目標下緣']];
+  // 目標上下限、中線、90 日平均，全部虛線（平均用不同的虛線樣式）。
+  // 兩條線靠得太近時文字會疊住（實測目標下限 1,700 萬與 90 日平均 1,710 萬只差 10 萬），
+  // 所以依 y 排序後逐一檢查間距，太近的標籤往右退一格。
+  var lims = [[cfg.up, 'up', '目標上限'], [cfg.mid, 'mid', '中線'], [cfg.lo, 'lo', '目標下限']];
   if (cfg.avg) lims.push([mean, 'avg', '90 日平均']);
   lims = lims.filter(function (a) { return a[0] != null && a[0] >= lo && a[0] <= hi; })
     .map(function (a) { return { v: a[0], cls: a[1], lb: a[2], y: y(a[0]) }; })
@@ -382,11 +382,11 @@ function pvSpcSvg(data) {
   lims.forEach(function (o) {
     if (o.y - lastY < 13) slot++; else slot = 0;
     lastY = o.y;
-    var tx = W - PAD_R - 4 - slot * 118;
+    var tx = PAD_L + 6 + slot * 118;        // 數字靠左，與左側 Y 軸刻度同一側
     s += '<line class="pv-lim ' + o.cls + '" x1="' + PAD_L + '" y1="' + o.y.toFixed(1) +
       '" x2="' + (W - PAD_R) + '" y2="' + o.y.toFixed(1) + '"/>' +
       '<text class="pv-limtx ' + o.cls + '" x="' + tx + '" y="' + (o.y - 4).toFixed(1) +
-      '" text-anchor="end">' + o.lb + ' ' + _pvWan(o.v) + '</text>';
+      '" text-anchor="start">' + o.lb + ' ' + _pvWan(o.v) + '</text>';
   });
 
   // 折線逐段著色：達標的連續段藍（上升）／紅（下降），其餘黃
@@ -425,7 +425,7 @@ function pvBindSpcHover(data) {
     var v = Math.round(rows[k].v * tax);
     var prev = k > 0 ? Math.round(rows[k - 1].v * tax) : null;
     var dv = prev == null ? null : v - prev;
-    var pos = v > cfg.up ? '高於上緣' : (v < cfg.lo ? '低於下緣' : '區間內');
+    var pos = v > cfg.up ? '高於上限' : (v < cfg.lo ? '低於下限' : '區間內');
     tip.innerHTML = rows[k].d.slice(5).replace('-', '/') +
       '　總現值 <b>' + v.toLocaleString('zh-TW') + '</b>' +
       (dv == null ? '' : '　較前日 <b class="' + (dv >= 0 ? 'pv-c-up' : 'pv-c-dn') + '">' +
@@ -480,8 +480,8 @@ function pvRender() {
 
   var note = (_pvTab === 'spc')
     ? '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日的總現值，用來看資產波動。' +
-      '<b>目標上緣／下緣</b>是你自己設的資產水位（設定 → 退休現金流），不是從資料算出來的統計界線；' +
-      '<b>中線</b>是上下緣的中點，<b>90 日平均</b>是這段期間的實際平均，兩條不是同一回事。' +
+      '<b>目標上限／下限</b>是你自己設的資產水位（設定 → 退休現金流），不是從資料算出來的統計界線；' +
+      '<b>中線</b>是上下限的中點，<b>90 日平均</b>是這段期間的實際平均，兩條不是同一回事。' +
       '折線逐段著色：<span class="pv-c-up">藍＝連續上升達標</span>、' +
       '<span class="pv-c-dn">紅＝連續下降達標</span>、<span class="pv-c-na">黃＝未達設定天數</span>；' +
       '上方燈號亮幾格就是目前連續幾日，黃格是還沒走到的格數。連續天數以「每日較前一日」計。' +

@@ -31,7 +31,7 @@ function _rtNorm(d) {
            spcAvg: d ? d.spcAvg !== false : true };
 }
 
-// 總現值管制圖的參數。中線不另外存，一律取上下緣的中點。
+// 總現值管制圖的參數。中線不另外存，一律取上下限的中點。
 var RT_SPC_N = 5, RT_SPC_UP = 18000000, RT_SPC_LO = 17000000;
 function rtSpc() {
   var c = _rtCfg || {};
@@ -198,16 +198,16 @@ function renderRetire() {
       '<div class="set-field"><label>連續天數</label>' +
         '<input type="number" step="1" min="2" class="al-in" value="' + (_rtCfg.spcN == null ? '' : _rtCfg.spcN) + '"' +
         ' placeholder="' + RT_SPC_N + '" oninput="rtSet(\'spcN\',this.value)"><span class="set-unit">日</span></div>' +
-      '<div class="set-field"><label>目標上緣</label>' +
+      '<div class="set-field"><label>目標上限</label>' +
         '<input type="number" step="100000" class="al-in" value="' + (_rtCfg.spcUp == null ? '' : _rtCfg.spcUp) + '"' +
         ' placeholder="' + RT_SPC_UP + '" oninput="rtSet(\'spcUp\',this.value)"><span class="set-unit">元</span></div>' +
-      '<div class="set-field"><label>目標下緣</label>' +
+      '<div class="set-field"><label>目標下限</label>' +
         '<input type="number" step="100000" class="al-in" value="' + (_rtCfg.spcLo == null ? '' : _rtCfg.spcLo) + '"' +
         ' placeholder="' + RT_SPC_LO + '" oninput="rtSet(\'spcLo\',this.value)"><span class="set-unit">元</span></div>' +
       '<div class="set-field"><label>90 日平均線</label>' +
         '<label class="set-switch"><input type="checkbox"' + (_rtCfg.spcAvg !== false ? ' checked' : '') +
         ' onchange="rtSetBool(\'spcAvg\',this.checked)"><span>顯示</span></label></div>' +
-      '<div class="set-hint">中線不用填，一律取上下緣的中點。連續天數以「每日較前一日上升或下降」計，' +
+      '<div class="set-hint">中線不用填，一律取上下限的中點。連續天數以「每日較前一日上升或下降」計，' +
         '設 5 就是連續 5 個交易日同方向。改完這裡，走勢抽屜的管制圖會立刻重畫。</div>' +
       '<div id="rt-summary"></div>' +
       '<div class="set-hint">儲存位置：' + (_rtStore === 'firestore' ? 'Firestore（已登入）' : '本機瀏覽器' +
