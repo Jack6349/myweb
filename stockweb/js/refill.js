@@ -362,6 +362,7 @@ function renderRefill() {
         '<span class="rf-cost">均價 ' + avgTxt + '</span>' +
         '<span class="rf-wdiv ' + wdCls + '">含息 ' + wdTxt + '</span>' +
         '<span class="rf-wrate ' + wrCls + '">' + wrTxt + '</span>' +
+        '<span class="rf-amtc">' + _rfAmtCell(r.code) + '</span>' +
         '<span class="rf-rep"' + (mx ? ' title="近 ' + mx.n + ' 期加權：股利 ' + mx.d.toFixed(1) +
           '、利息 ' + mx.i.toFixed(1) + '、權利金 ' + mx.cc.toFixed(1) +
           '、賣股價差 ' + mx.c.toFixed(1) + '、平準金 ' + mx.e.toFixed(1) + '"' : '') + '>' +
@@ -387,6 +388,9 @@ function renderRefill() {
     '配息取自券商建倉明細的 <code>ex_dividends</code>，是<b>自買進以來的累計</b>，沒有日期可拆：' +
     '同一列左邊的填息率只算近 ' + RF_YEARS + ' 年，兩個欄位的時間區間不一樣。' +
     '出借中的權益補償是否計入這個欄位，券商沒有說明，尚未確認。</dd>' +
+    '<dt>配息趨勢</dt><dd>近 6 個月<b>每期平均</b>金額相對前 6 個月的變化。用每期平均而非區間總額，' +
+    '否則月配與季配比到的是一年配幾次。任一邊不足 1 期時改列逐期原始金額，不推估方向。' +
+    '滑鼠移上去看近 12 個月的逐期序列。這一欄只講金額變化，不講錢從哪來，要配合右邊的「可重複」一起看。</dd>' +
     '<dt>可重複配息</dt><dd><code>股利 ＋ 利息 ＋ 賣出選擇權權利金</code>，排除賣股價差與收益平準金。' +
     '前者只要策略照跑就會再發生；賣股價差要行情配合，平準金是把新申購者的本金發還。' +
     '逐檔取近 12 期線性遞減加權（最新一期最重），合計列以配息金額加權。來源：公開資訊觀測站。</dd>' +
@@ -415,6 +419,56 @@ function _rfRepAll(rows) {
     });
   });
   return tot ? (rep / tot * 100).toFixed(0) + '%' : '—';
+}
+
+// 配息金額趨勢：近 6 個月「每期平均」vs 前 6 個月「每期平均」。
+// 用每期平均而不是區間總額，因為月配與季配在同一個區間的期數不同，
+// 總額會把配息頻率混進來，比到的是一年配幾次而不是每次配多少。
+// 任一邊不足 1 期就不給百分比，改列原始序列（沿用 div-mix.js 的作法：
+// 幾個數字比一個箭頭清楚，而且不需要任何門檻）。
+function _rfAmtTrend(code) {
+  var list = (typeof dmRecs === 'function') ? dmRecs(code, 12) : null;
+  if (!list || !list.length) return null;
+  var d = new Date(Date.now() + 8 * 3600000);
+  d.setMonth(d.getMonth() - 6);
+  var mid = d.toISOString().slice(0, 10);
+  var now = [], prev = [], seq = [];
+  list.forEach(function (x) {
+    if (x.amt == null) return;
+    seq.push(x.amt);
+    (x.ex >= mid ? now : prev).push(x.amt);
+  });
+  seq.reverse();                                   // dmRecs 是新→舊，序列顯示要舊→新
+  if (!seq.length) return null;
+  var avg = function (a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; };
+  var out = { seq: seq, n: seq.length, min: Math.min.apply(null, seq), max: Math.max.apply(null, seq) };
+  if (now.length && prev.length) {
+    out.now = avg(now); out.prev = avg(prev);
+    out.pct = out.prev ? (out.now - out.prev) / out.prev * 100 : null;
+    out.nNow = now.length; out.nPrev = prev.length;
+  }
+  return out;
+}
+function _rfAmtCell(code) {
+  var t = _rfAmtTrend(code);
+  if (!t) return '<span class="flat">—</span>';
+  var fmt = function (v) { return v < 1 ? v.toFixed(3) : v.toFixed(2); };
+  var tip = '近 12 個月逐期每股配息（舊→新）：' + t.seq.map(fmt).join(' → ') +
+    (t.pct == null ? '' : '&#10;近半年每期平均 ' + fmt(t.now) + '（' + t.nNow + ' 期）' +
+      '、前半年 ' + fmt(t.prev) + '（' + t.nPrev + ' 期）');
+  var wrap = function (cls, txt) {
+    return '<span class="rf-amt ' + cls + '" title="' + tip + '">配息 ' + txt + '</span>';
+  };
+  if (t.pct == null) {
+    // 期數不夠分半年：不推估方向，只陳述看得到的事實
+    if (t.n === 1) return wrap('flat', '僅 1 期');
+    if (t.min === t.max) return wrap('flat', '持平');
+    return wrap(t.seq[t.seq.length - 1] >= t.seq[0] ? 'up' : 'down',
+      fmt(t.seq[0]) + '→' + fmt(t.seq[t.seq.length - 1]));
+  }
+  if (t.pct === 0) return wrap('flat', '持平');
+  return wrap(t.pct > 0 ? 'up' : 'down',
+    (t.pct > 0 ? '▲' : '▼') + Math.abs(t.pct).toFixed(0) + '%');
 }
 
 function _rfMd(iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; }
