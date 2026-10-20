@@ -1471,7 +1471,10 @@ td.cost-even::after  { background: var(--text3); }
 .dv-shell { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 18px; align-items: start; }
 .dv-shell.collapsed { grid-template-columns: 34px minmax(0, 1fr); gap: 10px; }
 .dv-shell.collapsed .dv-navitem, .dv-shell.collapsed .dv-navsep { display: none; }
+/* 外層 nav 放收合鈕與選單清單；按鈕在內層 #dv-items 裡，那一層也要是直欄 flex，
+   否則 button 會以 inline-block 橫排、排不下才換行。 */
 .dv-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 8px; }
+#dv-items { display: flex; flex-direction: column; gap: 2px; }
 .dv-colbtn { align-self: flex-end; background: var(--bg3); border: 1px solid var(--border);
   color: var(--text3); font-family: var(--font); font-size: 12px; width: 26px; height: 24px;
   border-radius: 6px; cursor: pointer; margin-bottom: 6px; }
@@ -1488,7 +1491,8 @@ td.cost-even::after  { background: var(--text3); }
 
 @media (max-width: 900px) {
   .dv-shell, .dv-shell.collapsed { grid-template-columns: 1fr; }
-  .dv-nav { flex-direction: row; flex-wrap: wrap; position: static; }
+  .dv-nav { position: static; }
+  #dv-items { flex-direction: row; flex-wrap: wrap; }
   .dv-navsep { display: none; }
   .dv-navitem { border-left: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
   .dv-navitem.on { border-left: 0; border-bottom-color: var(--accent); }

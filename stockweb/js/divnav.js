@@ -84,7 +84,7 @@ function _dvApply() {
       } else { cash.innerHTML = rtCashHtml(); }
     }
   }
-  var nav = document.getElementById('dv-nav');
+  var nav = document.getElementById('dv-items');
   if (nav) {
     [].slice.call(nav.querySelectorAll('.dv-navitem')).forEach(function (b) {
       b.classList.toggle('on', b.getAttribute('data-id') === _dvSel);
@@ -110,7 +110,7 @@ function dvCollapse() {
 }
 
 function dvBuild() {
-  var nav = document.getElementById('dv-nav');
+  var nav = document.getElementById('dv-items');
   if (!nav) return;
   nav.innerHTML = DV_MENU.map(function (m) {
     return (m.sep ? '<div class="dv-navsep"></div>' : '') +
