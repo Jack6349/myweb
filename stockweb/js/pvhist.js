@@ -483,6 +483,17 @@ function pvSpcSvg(data) {
     put(o.trade, 'trade');
     put(o.ex, 'ex');
   });
+  // 市場 N 日均線：單日市場效應濾掉噪音之後的方向。N 共用管制圖的「連續天數」，
+  // 兩邊意義一致（幾天算一個趨勢），少一個要維護的參數。
+  // 與直條共用同一個左軸，不另開第二條軸：實測 5 日均幅度 52 萬，只佔 ±91 萬的三成。
+  var mpts = [];
+  for (var q = cfg.n - 1; q < comp.length; q++) {
+    var acc = 0;
+    for (var w = 0; w < cfg.n; w++) acc += comp[q - w].mkt;
+    mpts.push(x(comp[q].i).toFixed(1) + ',' + (bZero - (acc / cfg.n) / span * (BAR_H / 2)).toFixed(1));
+  }
+  if (mpts.length > 1) s += '<polyline class="pv-mma" points="' + mpts.join(' ') + '"/>';
+
   s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + bZero.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + bZero.toFixed(1) + '"/>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bZero + 3.5).toFixed(1) + '" text-anchor="end">0</text>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bTopY + 9) + '" text-anchor="end">' + _pvWan(span) + '</text>' +
@@ -496,8 +507,24 @@ function pvSpcSvg(data) {
     n + ' 日　' + _pvLampsHtml(vals, cfg.n) +
     '　區間內 <b>' + inBand + '</b>/' + n + ' 日（' + (inBand / n * 100).toFixed(0) + '%）' +
     '　<span class="pv-lg2 mkt">市場</span><span class="pv-lg2 trade">買賣</span><span class="pv-lg2 ex">除息</span>' +
+    '<span class="pv-lg2 mma">市場 ' + cfg.n + ' 日均</span>' +
     '</span></div>';
   return head + s;
+}
+
+// 第 k 天往前 n 天的市場效應平均（含當天）。資料不足回「—」。
+// 與繪圖那一段同一套定義：市場 ＝ 當日變動 － 買賣淨額 ＋ 除息。
+function _pvMktMa(rows, k, n, tax) {
+  if (k < n) return '—';
+  var acc = 0;
+  for (var i = 0; i < n; i++) {
+    var j = k - i;
+    var dv = Math.round(rows[j].v * tax) - Math.round(rows[j - 1].v * tax);
+    acc += dv - (Math.round((rows[j].b || 0) * tax) - Math.round((rows[j].s || 0) * tax)) +
+      Math.round((rows[j].x || 0) * tax);
+  }
+  var v = Math.round(acc / n);
+  return (v > 0 ? '+' : (v === 0 ? '' : '')) + v.toLocaleString('zh-TW');
 }
 
 function pvBindSpcHover(data) {
@@ -507,7 +534,7 @@ function pvBindSpcHover(data) {
   var tax = (typeof _taxMode !== 'undefined' && _taxMode) ? 0.997735 : 1;
   var rows = data.days, n = rows.length;
   var PAD_L = 74, step = (1180 - PAD_L - 118) / n, base = tip.innerHTML;   // PAD_R 與 pvSpcSvg 一致
-  var cfg = (typeof rtSpc === 'function') ? rtSpc() : { lo: 17000000, up: 18000000 };
+  var cfg = (typeof rtSpc === 'function') ? rtSpc() : { lo: 17000000, up: 18000000, n: 5 };
   hit.addEventListener('mousemove', function (ev) {
     var vx = (typeof _chartVX === 'function') ? _chartVX(svg, ev.clientX) : null;
     if (vx == null) return;
@@ -537,7 +564,8 @@ function pvBindSpcHover(data) {
       (mkt == null ? '' :
         seg(mkt >= 0 ? 'mkt' : 'mktdn', '市場', sgn(mkt)) +
         seg('trade', '買賣', sgn(trade)) +
-        seg('ex', '除息', ex ? '-' + ex.toLocaleString('zh-TW') : '0'));
+        seg('ex', '除息', ex ? '-' + ex.toLocaleString('zh-TW') : '0') +
+        seg('mma', '市場 ' + cfg.n + ' 日均', _pvMktMa(rows, k, cfg.n, tax)));
   });
   hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
 }
@@ -598,6 +626,8 @@ function pvRender() {
       '三段相加等於上方折線的日變動。<span class="pv-c-up">市場正藍</span>／<span class="pv-c-dn">負紅</span>、' +
       '<span class="pv-c-tr">買賣灰</span>（中性，不是賺賠）、<span class="pv-c-na">除息黃</span>（不是市場造成的）。' +
       '近 90 天有 43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續紅段要先看直條是不是自己的動作造成的。' +
+      '直條上那條青色線是<b>市場 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向，' +
+      '與直條共用同一個左軸。它只平滑市場那一段，不含買賣與除息。' +
       '買賣一律以當日收盤計價（與總現值同一套，三段才加得回變動），當天買進後到收盤的漲跌會被歸進市場效應；' +
       '除息金額是<b>每股配息 × 當日持股</b>的推算，回答「價格為什麼掉」，不能拿去跟股利估算的本月發放對帳。</div>'
     : '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日。持股與成本由買賣台帳逐日重建' +
