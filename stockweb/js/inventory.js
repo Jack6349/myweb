@@ -309,9 +309,11 @@ function invValRow(p) {
     '<td class="num inv-trd">' + invTradeCell(code) + '</td>' +
     // 餘額是「股」，借出註記用「張」：與股利估算的持有張數同一種寫法。
     // 借出的股數本來就含在餘額裡（出借期間所有權仍是你的），這裡只是標出其中多少在外面。
-    '<td class="num">' + shares.toLocaleString('zh-TW') +
-      (p.lent && p.lentShares ? ' <span class="dexm-lent">(借出 ' +
-        (p.lentShares / 1000).toLocaleString('zh-TW') + ' 張)</span>' : '') + '</td>' +
+    // 註記放在數字「前面」：整格靠右對齊，註記擺後面會把股數往左推，有借出的列就跟其他列對不齊。
+    '<td class="num">' +
+      (p.lent && p.lentShares ? '<span class="dexm-lent">(借出 ' +
+        (p.lentShares / 1000).toLocaleString('zh-TW') + ' 張)</span> ' : '') +
+      shares.toLocaleString('zh-TW') + '</td>' +
     '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
