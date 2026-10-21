@@ -207,7 +207,7 @@ function renderRetire() {
 function rtSpcStatus() {
   if (!_rtCfg) return null;
   var c = rtSpc();
-  return c.n + ' 日　' + Math.round(c.lo / 10000).toLocaleString('zh-TW') + '～' +
+  return c.n + ' 日（含均線）　' + Math.round(c.lo / 10000).toLocaleString('zh-TW') + '～' +
     Math.round(c.up / 10000).toLocaleString('zh-TW') + ' 萬';
 }
 function renderRetireSpc() {
@@ -216,7 +216,7 @@ function renderRetireSpc() {
   el.innerHTML = '<div class="modal-loading">載入設定…</div>';
   rtLoad().then(function () {
     el.innerHTML =
-      '<div class="set-field"><label>連續天數</label>' +
+      '<div class="set-field"><label>連續天數 / 均線期數</label>' +
         '<input type="number" step="1" min="2" class="al-in" value="' + (_rtCfg.spcN == null ? '' : _rtCfg.spcN) + '"' +
         ' placeholder="' + RT_SPC_N + '" oninput="rtSet(\'spcN\',this.value)"><span class="set-unit">日</span></div>' +
       '<div class="set-field"><label>目標上限</label>' +
@@ -228,8 +228,10 @@ function renderRetireSpc() {
       '<div class="set-field"><label>90 日平均線</label>' +
         '<label class="set-switch"><input type="checkbox"' + (_rtCfg.spcAvg !== false ? ' checked' : '') +
         ' onchange="rtSetBool(\'spcAvg\',this.checked)"><span>顯示</span></label></div>' +
-      '<div class="set-hint">中線不用填，一律取上下限的中點。連續天數以「每日較前一日上升或下降」計，' +
-        '設 5 就是連續 5 個交易日同方向。改完這裡，走勢抽屜的管制圖會立刻重畫。</div>'
+      '<div class="set-hint">這個天數管<b>兩件事</b>：一是折線分段著色與上方燈號的「連續幾日同方向」' +
+        '（以每日較前一日上升或下降計，設 5 就是連續 5 個交易日同方向）；' +
+        '二是<b>市場效應均線</b>的期數（設 5 就是 5 日均）。兩者都是「幾天算一個趨勢」，共用一個數字。' +
+        '中線不用填，一律取上下限的中點。改完這裡，走勢抽屜的管制圖會立刻重畫。</div>'
       '';
   });
 }

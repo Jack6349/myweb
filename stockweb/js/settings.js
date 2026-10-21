@@ -47,7 +47,7 @@ var SET_SECTIONS = [
       render: function () { if (typeof renderRetire === 'function') renderRetire(); },
       status: function () { return (typeof rtStatus === 'function' && typeof _rtCfg !== 'undefined' && _rtCfg) ? rtStatus() : null; } },
     { key: 'retire-spc', title: '總現值管制圖', bodyId: 'params-spc-body',
-      desc: '連續天數、目標上下限、90 日平均線。走勢抽屜「管制圖」頁籤用的參數，改完立刻重畫',
+      desc: '連續天數（兼市場效應均線期數）、目標上下限、90 日平均線。走勢抽屜「管制圖」頁籤用的參數，改完立刻重畫',
       render: function () { if (typeof renderRetireSpc === 'function') renderRetireSpc(); },
       status: function () { return (typeof rtSpcStatus === 'function' && typeof _rtCfg !== 'undefined' && _rtCfg) ? rtSpcStatus() : null; } }
   ] },
