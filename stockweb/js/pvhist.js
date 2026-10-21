@@ -377,7 +377,10 @@ function pvSpcSvg(data) {
     : { n: 5, up: 18000000, lo: 17000000, mid: 17500000, avg: true };
   var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
 
-  var W = 1180, H = 510, PAD_L = 74, PAD_R = 118, PAD_T = 14, FOOT = 18;  // 右側留白放 90 日平均與線尾現值
+  var W = 1180, H = 510, PAD_L = 74, PAD_R = 184, PAD_T = 14, FOOT = 18;
+  // 右側 gutter 分兩欄：內欄放標註（目前／90 日平均），最右欄放相對刻度。
+  // 兩者原本都排在同一個 x，「距 1,500萬」會疊到「400萬」、「200萬」會疊到「90 日平均」。
+  var GUT_IN = W - PAD_R + 6, GUT_R = W - 8;
   var BAR_H = 92, GAP = 26;                      // 中段：逐日分解的堆疊直條
   var MA_H = 60, GAP2 = 20;                      // 下段：市場 N 日均獨立一列（疊在直條上讀不出來）
   var PH = H - PAD_T - FOOT - GAP - BAR_H - GAP2 - MA_H;
@@ -399,11 +402,9 @@ function pvSpcSvg(data) {
     var gv = hi - ax.u * g, gy = PAD_T + PH * g / ax.n;
     s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) + '"/>' +
       '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' + _pvWan(gv) + '</text>' +
-      '<text class="ck-axis pv-ax-rel" x="' + (W - PAD_R + 6) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="start">' +
-        _pvWan(gv - lo) + '</text>';
+      '<text class="ck-axis pv-ax-rel" x="' + GUT_R + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' +
+        _pvWan(gv - lo) + (g === ax.n ? '（基準 ' + _pvWan(lo) + '）' : '') + '</text>';
   }
-  // 基準值標出來：軸底只在資料跨過整數刻度時才跳一格，但跳了要看得見
-  s += '<text class="ck-axis pv-ax-rel" x="' + (W - PAD_R + 6) + '" y="' + (PAD_T - 3) + '" text-anchor="start">距 ' + _pvWan(lo) + '</text>';
   var prevMo = '';
   pts.forEach(function (o, k) {
     var mo = o.d.slice(0, 7);
@@ -466,7 +467,7 @@ function pvSpcSvg(data) {
   right.forEach(function (o) {
     var ty = Math.max(o.y + 4, usedY + 13);
     usedY = ty;
-    s += '<text class="pv-limtx ' + o.cls + '" x="' + (W - PAD_R + 6) + '" y="' + ty.toFixed(1) +
+    s += '<text class="pv-limtx ' + o.cls + '" x="' + GUT_IN + '" y="' + ty.toFixed(1) +
       '" text-anchor="start">' + o.lb + '</text>';
   });
 
@@ -527,7 +528,7 @@ function pvSpcSvg(data) {
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (mZero + 3.5).toFixed(1) + '" text-anchor="end">0</text>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (mTopY + 9) + '" text-anchor="end">' + _pvWan(mSpan) + '</text>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + mBotY + '" text-anchor="end">-' + _pvWan(mSpan) + '</text>' +
-    '<text class="ck-axis pv-ax-mma" x="' + (W - PAD_R + 6) + '" y="' + (mZero + 3.5).toFixed(1) + '" text-anchor="start">市場 ' + cfg.n + ' 日均</text>';
+    '<text class="ck-axis pv-ax-mma" x="' + GUT_IN + '" y="' + (mZero + 3.5).toFixed(1) + '" text-anchor="start">市場效應 ' + cfg.n + ' 日均</text>';
   if (mvals.length > 1) {
     s += '<polyline class="pv-mma" points="' + mvals.map(function (o) {
       return x(o.i).toFixed(1) + ',' + (mZero - o.v / mSpan * (MA_H / 2)).toFixed(1);
@@ -542,7 +543,7 @@ function pvSpcSvg(data) {
     n + ' 日　' + _pvLampsHtml(vals, cfg.n) +
     '　區間內 <b>' + inBand + '</b>/' + n + ' 日（' + (inBand / n * 100).toFixed(0) + '%）' +
     '　<span class="pv-lg2 mkt">市場</span><span class="pv-lg2 trade">買賣</span><span class="pv-lg2 ex">除息</span>' +
-    '<span class="pv-lg2 mma">市場 ' + cfg.n + ' 日均</span>' +
+    '<span class="pv-lg2 mma">市場效應 ' + cfg.n + ' 日均</span>' +
     '</span></div>';
   return head + s;
 }
@@ -568,7 +569,7 @@ function pvBindSpcHover(data) {
   if (!svg || !hit || !cross || !tip) return;
   var tax = (typeof _taxMode !== 'undefined' && _taxMode) ? 0.997735 : 1;
   var rows = data.days, n = rows.length;
-  var PAD_L = 74, step = (1180 - PAD_L - 118) / n, base = tip.innerHTML;   // PAD_R 與 pvSpcSvg 一致
+  var PAD_L = 74, step = (1180 - PAD_L - 184) / n, base = tip.innerHTML;   // PAD_R 與 pvSpcSvg 一致
   var cfg = (typeof rtSpc === 'function') ? rtSpc() : { lo: 17000000, up: 18000000, n: 5 };
   hit.addEventListener('mousemove', function (ev) {
     var vx = (typeof _chartVX === 'function') ? _chartVX(svg, ev.clientX) : null;
@@ -600,7 +601,7 @@ function pvBindSpcHover(data) {
         seg(mkt >= 0 ? 'mkt' : 'mktdn', '市場', sgn(mkt)) +
         seg('trade', '買賣', sgn(trade)) +
         seg('ex', '除息', ex ? '-' + ex.toLocaleString('zh-TW') : '0') +
-        seg('mma', '市場 ' + cfg.n + ' 日均', _pvMktMa(rows, k, cfg.n, tax)));
+        seg('mma', '市場效應 ' + cfg.n + ' 日均', _pvMktMa(rows, k, cfg.n, tax)));
   });
   hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
 }
@@ -661,7 +662,8 @@ function pvRender() {
       '三段相加等於上方折線的日變動。<span class="pv-c-up">市場正藍</span>／<span class="pv-c-dn">負紅</span>、' +
       '<span class="pv-c-tr">買賣灰</span>（中性，不是賺賠）、<span class="pv-c-na">除息黃</span>（不是市場造成的）。' +
       '近 90 天有 43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續紅段要先看直條是不是自己的動作造成的。' +
-      '最下面獨立一列是<b>市場 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向，' +
+      '最下面獨立一列是<b>市場效應 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向。' +
+      '它平均的是<b>每日市場效應</b>，與上方那條「90 日平均」不同——後者是總現值本身的平均，兩者不要混。' +
       '自己的縮放（疊在直條上會被藍條蓋住）。它只平滑市場那一段，不含買賣與除息。' +
       '上方折線的左軸是絕對金額、右軸是距軸底多少；軸底只在資料跨過整數刻度時才跳一格，基準值標在右軸最上面。' +
       '買賣一律以當日收盤計價（與總現值同一套，三段才加得回變動），當天買進後到收盤的漲跌會被歸進市場效應；' +
