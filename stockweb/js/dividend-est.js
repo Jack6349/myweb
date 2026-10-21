@@ -131,16 +131,40 @@ function _divInferStep(recs) {
 // 實際間隔多為 27–30 天（例：00988B 9/15→10/15、00918 9/18→10/15、00404A 9/16→10/13）。
 // 原本用「＋1 個月」：月初除息會被推到下個月（00981B 3/3 除息被算成 4 月發放，並與 3/19 那次撞在同月），
 // 月底除息還會產生 2026-02-31 這種不存在的日期。
-// 公告發放日落在週末時，銀行實際入庫順延到下一個工作日。
+// 辦公日曆（行政院人事行政總處／政府資料開放平臺 14718，由 workday.py 每年抓一次）。
+// 同時涵蓋國定假日、彈性放假，以及「補班的星期六」——只看星期幾這兩種都會算錯。
+var _wdOff = null, _wdYears = null;
+var _wdReady = fetch('data/workday.json', { cache: 'no-cache' })
+  .then(function (r) { return r.ok ? r.json() : null; })
+  .then(function (j) {
+    if (!j || !j.off) return;
+    _wdOff = {}; j.off.forEach(function (d) { _wdOff[d] = 1; });
+    _wdYears = j.years || null;
+  })
+  .catch(function () {});
+
+// 這一天放不放假。辦公日曆沒涵蓋到的年份回 null，由呼叫端退回只看週六日。
+function _divIsOff(iso) {
+  if (!_wdOff || !_wdYears) return null;
+  var y = +iso.slice(0, 4);
+  if (_wdYears.indexOf(y) < 0) return null;
+  return !!_wdOff[iso];
+}
+
+// 公告發放日落在非上班日時，銀行實際入庫順延到下一個上班日。
 // 實測兩筆：00981B 公告 10/17（週六）實際 10/19 入帳、00988B 公告 10/10（週六）實際 10/12。
-// 只處理週六日：國定假日與補假沒有可用的日曆資料，碰上那種情形會早一到兩天，
-// 日曆的說明有註明。全部走 UTC，避免時區讓日期跑掉。
+// 有辦公日曆就逐日往後找上班日（含國定假日與補班）；沒有涵蓋到的年份退回只跳過週六日。
+// 全部走 UTC，避免時區讓日期跑掉。
 function _divPayRoll(iso) {
   if (!iso) return iso;
-  var d = new Date(iso + 'T00:00:00Z'), g = d.getUTCDay();
-  if (g !== 0 && g !== 6) return iso;
-  d.setUTCDate(d.getUTCDate() + (g === 6 ? 2 : 1));
-  return d.toISOString().slice(0, 10);
+  var d = new Date(iso + 'T00:00:00Z');
+  for (var i = 0; i < 14; i++) {
+    var cur = d.toISOString().slice(0, 10), off = _divIsOff(cur);
+    if (off === null) { var g = d.getUTCDay(); off = (g === 0 || g === 6); }
+    if (!off) return cur;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return iso;                                  // 連 14 天都放假＝資料有問題，原值回去
 }
 
 function _divDerivePay(exIso) {
@@ -337,6 +361,8 @@ async function startDividendEst(force) {
   errEl.style.display = 'none';
   wrap.innerHTML = '<div class="modal-loading">讀取持股與配息資料…</div>';
 
+  // 辦公日曆要在算發放日之前載好，否則第一次算出來的還是「只跳過週六日」的舊規則
+  if (typeof _wdReady !== 'undefined') { try { await _wdReady; } catch (e) {} }
   // 持股/股數（沿用行情引擎的 _sharesMap；失敗容忍）
   try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) {}
   // ensureFeed 只在首次建立時讀庫存，之後直接沿用 → 盤中成交後張數會停在開頁時的值。
