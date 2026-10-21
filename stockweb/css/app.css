@@ -1522,6 +1522,8 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lg2.trade { color: #e8eef5; }
 .pv-lg2.ex { color: #e0b94a; }
 /* 市場 N 日均：青色，與市場直條的藍、買賣的白、除息的黃都分得開 */
-.pv-mma { fill: none; stroke: #5ad2e8; stroke-width: 1.8; stroke-linejoin: round; }
+.pv-mma { fill: none; stroke: #5ad2e8; stroke-width: 2; stroke-linejoin: round; }
 .pv-lg2.mma { color: #5ad2e8; }
 .pv-lg2.mma::before { content: '━ '; }
+.pv-ax-rel { fill: #9db0c4; }
+.pv-ax-mma { fill: #5ad2e8; font-size: 11px; }

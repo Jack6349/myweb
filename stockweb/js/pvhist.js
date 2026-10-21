@@ -244,7 +244,7 @@ function pvSvg(data) {
   pts.forEach(function (o, k) {
     var mo = o.d.slice(0, 7);
     if (mo !== prevMo) {
-      if (k > 0) s += '<line class="ck-sep" x1="' + (x(k) - step / 2).toFixed(1) + '" y1="' + PAD_T + '" x2="' + (x(k) - step / 2).toFixed(1) + '" y2="' + (PAD_T + PH + GAP + BAR_H) + '"/>';
+      if (k > 0) s += '<line class="ck-sep" x1="' + (x(k) - step / 2).toFixed(1) + '" y1="' + PAD_T + '" x2="' + (x(k) - step / 2).toFixed(1) + '" y2="' + (PAD_T + PH + GAP + BAR_H + GAP2 + MA_H) + '"/>';
       s += '<text class="ck-axis" x="' + x(k).toFixed(1) + '" y="' + (H - 3) + '" text-anchor="middle">' + o.d.slice(5).replace('-', '/') + '</text>';
       prevMo = mo;
     }
@@ -351,6 +351,22 @@ function _pvLampsHtml(vals, n) {
     '<span class="pv-lamptx ' + cls + '">' + txt + (r.len >= n ? '（達標）' : '') + '</span></span>';
 }
 
+// 整數刻度：從 10／20／25／50／100／200／250／500 萬裡挑一個，讓格線落在 3～6 條。
+// 不寫死 100 萬，資料範圍變了會自己換（現在幅度 297 萬會選 100 萬；縮到 100 萬會選 25 萬）。
+// 軸底與軸頂都對齊該刻度的整數倍，右軸的相對刻度才會是整數。
+function _pvNiceAxis(lo, hi) {
+  var steps = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];   // 單位：萬
+  var st = steps[steps.length - 1];
+  for (var i = 0; i < steps.length; i++) {
+    var k = Math.ceil(hi / 10000 / steps[i]) - Math.floor(lo / 10000 / steps[i]);
+    if (k >= 3 && k <= 6) { st = steps[i]; break; }
+  }
+  var u = st * 10000;
+  var base = Math.floor(lo / u) * u, top = Math.ceil(hi / u) * u;
+  if (top === base) top = base + u;
+  return { lo: base, hi: top, u: u, n: Math.round((top - base) / u) };
+}
+
 function pvSpcSvg(data) {
   var rows = (data && data.days) || [];
   if (rows.length < 2) return '<div class="modal-loading">資料不足</div>';
@@ -361,9 +377,10 @@ function pvSpcSvg(data) {
     : { n: 5, up: 18000000, lo: 17000000, mid: 17500000, avg: true };
   var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
 
-  var W = 1180, H = 430, PAD_L = 74, PAD_R = 118, PAD_T = 14, FOOT = 18;  // 右側留白放 90 日平均與線尾現值
-  var BAR_H = 92, GAP = 26;                      // 下方逐日分解的堆疊直條區
-  var PH = H - PAD_T - FOOT - GAP - BAR_H;
+  var W = 1180, H = 510, PAD_L = 74, PAD_R = 118, PAD_T = 14, FOOT = 18;  // 右側留白放 90 日平均與線尾現值
+  var BAR_H = 92, GAP = 26;                      // 中段：逐日分解的堆疊直條
+  var MA_H = 60, GAP2 = 20;                      // 下段：市場 N 日均獨立一列（疊在直條上讀不出來）
+  var PH = H - PAD_T - FOOT - GAP - BAR_H - GAP2 - MA_H;
   var n = pts.length, step = (W - PAD_L - PAD_R) / n;
   var x = function (k) { return PAD_L + step * (k + 0.5); };
 
@@ -372,15 +389,21 @@ function pvSpcSvg(data) {
     if (v < lo) lo = v;
     if (v > hi) hi = v;
   });
-  var pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  var ax = _pvNiceAxis(lo, hi);
+  lo = ax.lo; hi = ax.hi;
   var y = function (v) { return PAD_T + (hi - v) * PH / (hi - lo); };
 
   var s = '<svg class="chart-svg pv-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
-  for (var g = 0; g <= 4; g++) {
-    var gv = hi - (hi - lo) * g / 4, gy = PAD_T + PH * g / 4;
+  // 左軸＝絕對金額，右軸＝距軸底多少（相對刻度，兩邊都是整數且對齊同一條格線）
+  for (var g = 0; g <= ax.n; g++) {
+    var gv = hi - ax.u * g, gy = PAD_T + PH * g / ax.n;
     s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) + '"/>' +
-      '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' + _pvWan(gv) + '</text>';
+      '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' + _pvWan(gv) + '</text>' +
+      '<text class="ck-axis pv-ax-rel" x="' + (W - PAD_R + 6) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="start">' +
+        _pvWan(gv - lo) + '</text>';
   }
+  // 基準值標出來：軸底只在資料跨過整數刻度時才跳一格，但跳了要看得見
+  s += '<text class="ck-axis pv-ax-rel" x="' + (W - PAD_R + 6) + '" y="' + (PAD_T - 3) + '" text-anchor="start">距 ' + _pvWan(lo) + '</text>';
   var prevMo = '';
   pts.forEach(function (o, k) {
     var mo = o.d.slice(0, 7);
@@ -483,21 +506,33 @@ function pvSpcSvg(data) {
     put(o.trade, 'trade');
     put(o.ex, 'ex');
   });
-  // 市場 N 日均線：單日市場效應濾掉噪音之後的方向。N 共用管制圖的「連續天數」，
-  // 兩邊意義一致（幾天算一個趨勢），少一個要維護的參數。
-  // 與直條共用同一個左軸，不另開第二條軸：實測 5 日均幅度 52 萬，只佔 ±91 萬的三成。
-  var mpts = [];
-  for (var q = cfg.n - 1; q < comp.length; q++) {
-    var acc = 0;
-    for (var w = 0; w < cfg.n; w++) acc += comp[q - w].mkt;
-    mpts.push(x(comp[q].i).toFixed(1) + ',' + (bZero - (acc / cfg.n) / span * (BAR_H / 2)).toFixed(1));
-  }
-  if (mpts.length > 1) s += '<polyline class="pv-mma" points="' + mpts.join(' ') + '"/>';
-
   s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + bZero.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + bZero.toFixed(1) + '"/>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bZero + 3.5).toFixed(1) + '" text-anchor="end">0</text>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bTopY + 9) + '" text-anchor="end">' + _pvWan(span) + '</text>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bBotY) + '" text-anchor="end">-' + _pvWan(span) + '</text>';
+
+  // ── 市場 N 日均（獨立一列）──
+  // 單日市場效應的移動平均，把噪音濾掉看方向。N 共用管制圖的「連續天數」。
+  // 原本疊在直條上，青線被藍條蓋住讀不出來，所以拆成自己的一列、自己的縮放。
+  var mTopY = bBotY + GAP2, mBotY = mTopY + MA_H, mZero = mTopY + MA_H / 2;
+  var mvals = [];
+  for (var q = cfg.n - 1; q < comp.length; q++) {
+    var acc = 0;
+    for (var w = 0; w < cfg.n; w++) acc += comp[q - w].mkt;
+    mvals.push({ i: comp[q].i, v: acc / cfg.n });
+  }
+  var mSpan = 1;
+  mvals.forEach(function (o) { if (Math.abs(o.v) > mSpan) mSpan = Math.abs(o.v); });
+  s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + mZero.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + mZero.toFixed(1) + '"/>' +
+    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (mZero + 3.5).toFixed(1) + '" text-anchor="end">0</text>' +
+    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (mTopY + 9) + '" text-anchor="end">' + _pvWan(mSpan) + '</text>' +
+    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + mBotY + '" text-anchor="end">-' + _pvWan(mSpan) + '</text>' +
+    '<text class="ck-axis pv-ax-mma" x="' + (W - PAD_R + 6) + '" y="' + (mZero + 3.5).toFixed(1) + '" text-anchor="start">市場 ' + cfg.n + ' 日均</text>';
+  if (mvals.length > 1) {
+    s += '<polyline class="pv-mma" points="' + mvals.map(function (o) {
+      return x(o.i).toFixed(1) + ',' + (mZero - o.v / mSpan * (MA_H / 2)).toFixed(1);
+    }).join(' ') + '"/>';
+  }
 
   s += '<rect id="pvs-hit" x="' + PAD_L + '" y="' + PAD_T + '" width="' + (W - PAD_L - PAD_R) + '" height="' + PH + '" fill="transparent"/>' +
     '<line id="pvs-cross" class="ck-cross" x1="0" y1="' + PAD_T + '" x2="0" y2="' + (PAD_T + PH) + '" style="display:none"/></svg>';
@@ -626,8 +661,9 @@ function pvRender() {
       '三段相加等於上方折線的日變動。<span class="pv-c-up">市場正藍</span>／<span class="pv-c-dn">負紅</span>、' +
       '<span class="pv-c-tr">買賣灰</span>（中性，不是賺賠）、<span class="pv-c-na">除息黃</span>（不是市場造成的）。' +
       '近 90 天有 43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續紅段要先看直條是不是自己的動作造成的。' +
-      '直條上那條青色線是<b>市場 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向，' +
-      '與直條共用同一個左軸。它只平滑市場那一段，不含買賣與除息。' +
+      '最下面獨立一列是<b>市場 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向，' +
+      '自己的縮放（疊在直條上會被藍條蓋住）。它只平滑市場那一段，不含買賣與除息。' +
+      '上方折線的左軸是絕對金額、右軸是距軸底多少；軸底只在資料跨過整數刻度時才跳一格，基準值標在右軸最上面。' +
       '買賣一律以當日收盤計價（與總現值同一套，三段才加得回變動），當天買進後到收盤的漲跌會被歸進市場效應；' +
       '除息金額是<b>每股配息 × 當日持股</b>的推算，回答「價格為什麼掉」，不能拿去跟股利估算的本月發放對帳。</div>'
     : '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日。持股與成本由買賣台帳逐日重建' +
