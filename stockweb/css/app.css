@@ -1503,19 +1503,21 @@ td.cost-even::after  { background: var(--text3); }
   .dv-navitem.on { border-left: 0; border-bottom-color: var(--accent); }
 }
 /* 管制圖下方的逐日分解堆疊直條 */
-/* 買賣原本是 #8fa6c0，與市場的 #4da3ff 色相太近，堆在一起分不出段。
-   改用紫色，並把 90 日平均改歸中性參考線族，紫色在這張圖專給買賣。
+/* 買賣原本是 #8fa6c0，與市場的 #4da3ff 色相太近，堆在一起分不出段；改紫仍嫌暗。
+   改用白：無彩色與藍紅黃的色相距離最遠，深底上最亮，小直條也看得見，
+   語意上「不是市場造成的」用中性色也對。與目標上下限同色票，但那是上方窗格的
+   細虛線、這是下方窗格的實心直條，窗格與形狀都不同，不會混。
    另加一條與底色同色的細描邊，相鄰的段落才看得出界線。 */
 .pv-bseg { stroke: #16202e; stroke-width: .6; }
 .pv-bseg.mkt-up { fill: #4da3ff; }
 .pv-bseg.mkt-dn { fill: #ff5252; }
-.pv-bseg.trade  { fill: #b388d8; }
+.pv-bseg.trade  { fill: #e8eef5; }
 .pv-bseg.ex     { fill: #e0b94a; }
-.pv-c-tr { color: #b388d8; }
+.pv-c-tr { color: #e8eef5; }
 .pv-lg2 { font-size: 12px; margin-right: 10px; }
 .pv-lg2::before { content: '▌ '; }
 .pv-lg2.mkt { color: #4da3ff; }
 .pv-lg2.mktdn { color: #ff5252; }
 .pv-lg2 b { color: inherit; font-weight: 700; }
-.pv-lg2.trade { color: #b388d8; }
+.pv-lg2.trade { color: #e8eef5; }
 .pv-lg2.ex { color: #e0b94a; }
