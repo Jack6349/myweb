@@ -548,7 +548,7 @@ function _rfBuildMonthPay(codes, todayIso) {
     // 估算結果還沒好（直接進填息追蹤頁）→ 退回原本的推算，張數用目前持股
     codes.forEach(function (code) {
       ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).forEach(function (r) {
-        var pay = r.payDate || _divDerivePay(r.exDate);   // 與股利估算同一推算規則
+        var pay = _divPayRoll(r.payDate || _divDerivePay(r.exDate));   // 與股利估算同一推算規則（含週末順延）
         if (!pay || pay.slice(0, 7) !== ym) return;
         out.push({ code: code, payDate: pay, derived: !r.payDate, amount: r.amount, exDate: r.exDate });
       });
@@ -650,7 +650,9 @@ function rfPayCalHtml() {
     '<div class="rf-cal-wrap">' + _rfCalMonth(ym1, r1, todayIso) + _rfCalMonth(ym2, r2, todayIso) + '</div>' +
     '<div class="detail-note">依<b>發放日</b>排，金額為當日可領合計（含借券補償）。' +
       '滑鼠移到格子上看逐檔明細與補償拆分。實色＝已公告發放日，外框＝發放日為推估（除息月＋1）。' +
-      '七欄不砍週末：發放日會落在週六（本月 10-10、10-17）。' +
+      '公告發放日落在週末時已<b>順延到下一個工作日</b>：實測 00981B 公告 10/17（週六）' +
+      '實際 10/19 入帳、00988B 公告 10/10（週六）實際 10/12。只處理週六日，' +
+      '國定假日與補假沒有可用的日曆資料，碰上那種情形顯示的日期會早一到兩天。' +
       '多檔同日時格子顯示第一檔加「+N」，整年只有四天是多檔同日。</div>';
 }
 

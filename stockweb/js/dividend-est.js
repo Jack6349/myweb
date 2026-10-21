@@ -131,6 +131,18 @@ function _divInferStep(recs) {
 // 實際間隔多為 27–30 天（例：00988B 9/15→10/15、00918 9/18→10/15、00404A 9/16→10/13）。
 // 原本用「＋1 個月」：月初除息會被推到下個月（00981B 3/3 除息被算成 4 月發放，並與 3/19 那次撞在同月），
 // 月底除息還會產生 2026-02-31 這種不存在的日期。
+// 公告發放日落在週末時，銀行實際入庫順延到下一個工作日。
+// 實測兩筆：00981B 公告 10/17（週六）實際 10/19 入帳、00988B 公告 10/10（週六）實際 10/12。
+// 只處理週六日：國定假日與補假沒有可用的日曆資料，碰上那種情形會早一到兩天，
+// 日曆的說明有註明。全部走 UTC，避免時區讓日期跑掉。
+function _divPayRoll(iso) {
+  if (!iso) return iso;
+  var d = new Date(iso + 'T00:00:00Z'), g = d.getUTCDay();
+  if (g !== 0 && g !== 6) return iso;
+  d.setUTCDate(d.getUTCDate() + (g === 6 ? 2 : 1));
+  return d.toISOString().slice(0, 10);
+}
+
 function _divDerivePay(exIso) {
   if (!exIso) return null;
   return new Date(Date.parse(exIso) + 28 * 86400000).toISOString().slice(0, 10);
@@ -245,10 +257,11 @@ function computeEtfYear(recs, shares, todayIso, year, code, forceStep) {
       if (gd >= 7 && gd <= 60) { gapDays = gd; break; }
     }
   }
+  // 唯一的發放日出口：順延在這裡做一次，月份總覽／本月發放／發放日曆／現金流才會一致
   var payOf = function (r) {
-    if (r.payDate) return r.payDate;
-    if (gapDays == null || !r.exDate) return _divDerivePay(r.exDate);
-    return new Date(Date.parse(r.exDate) + gapDays * 86400000).toISOString().slice(0, 10);
+    if (r.payDate) return _divPayRoll(r.payDate);
+    if (gapDays == null || !r.exDate) return _divPayRoll(_divDerivePay(r.exDate));
+    return _divPayRoll(new Date(Date.parse(r.exDate) + gapDays * 86400000).toISOString().slice(0, 10));
   };
 
   // 一個發放月可能有兩次除息（00981B：3/3、3/19 兩次除息分別在 3、4 月發放；推算發放日若撞月不能互相覆蓋）
@@ -273,7 +286,7 @@ function computeEtfYear(recs, shares, todayIso, year, code, forceStep) {
     // 有去年同期：以「去年發放月 ＋12」投影（自然吻合不規則配息的實際月份）
     recs.forEach(function (r) {
       var pay = payOf(r); if (!pay || +pay.slice(0, 4) !== year - 1) return;
-      var projPay = _addMonths(pay, 12), pm = +projPay.slice(5, 7);
+      var projPay = _divPayRoll(_addMonths(pay, 12)), pm = +projPay.slice(5, 7);
       if (taken[pm] || pm <= lastActualM) return;
       byMonth[pm + '|proj'] = { month: pm, exDate: r.exDate ? _addMonths(r.exDate, 12) : null, payDate: projPay, derivedPay: !r.payDate, perShare: lastAmt, status: 'est' };
       taken[pm] = true;
@@ -289,7 +302,7 @@ function computeEtfYear(recs, shares, todayIso, year, code, forceStep) {
     var gap = Math.round((Date.parse(payOf(last)) - Date.parse(last.exDate)) / 86400000);
     for (var k = 1; k <= 24; k++) {
       var pex = _divClampIso(_addMonths(last.exDate, step * k));
-      var ppay = new Date(Date.parse(pex) + gap * 86400000).toISOString().slice(0, 10);
+      var ppay = _divPayRoll(new Date(Date.parse(pex) + gap * 86400000).toISOString().slice(0, 10));
       var yy = +ppay.slice(0, 4), mm = +ppay.slice(5, 7);
       if (yy > year) break;
       if (yy === year && !taken[mm] && mm > lastActualM) {
