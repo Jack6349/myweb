@@ -23,7 +23,7 @@
 
 var PV_SHOW = 90;              // 顯示的交易日數
 var PV_BACK_DAYS = 150;        // 往前抓幾個日曆天（要蓋過 90 個交易日）
-var PV_LS = 'pv_hist_v3';   // v3：成本改原始成本（還原配息），舊快取作廢
+var PV_LS = 'pv_hist_v4';   // v4：序列多了逐日買進／賣出／除息，舊快取作廢
 
 var _pvOpen = false, _pvData = null, _pvLoading = false, _pvErr = '';
 
@@ -97,6 +97,8 @@ async function pvBuild() {
   var today = new Date();
   var end = _pvYmd(today), begin = _pvYmd(new Date(today.getTime() - PV_BACK_DAYS * 86400000));
 
+  // 除息金額要用配息組成的除息日，先等它載完（_dmReady 由 div-mix.js 建立）
+  if (typeof _dmReady !== 'undefined') { try { await _dmReady; } catch (e) {} }
   var led = await _pvLedger(begin, end);
   var lots = led.lots;
   if (!lots.length) throw new Error('沒有建倉批次可用');
@@ -127,17 +129,37 @@ async function pvBuild() {
     fill[c] = row;
   });
 
+  // 除息日索引：date → [{code, amt}]（每股金額，乘當日持股才是對總現值的影響）
+  var mix = (typeof _dmMap !== 'undefined' && _dmMap) || {};
+  var exByDay = {};
+  Object.keys(mix).forEach(function (c) {
+    (mix[c] || []).forEach(function (e) {
+      if (!e.ex || e.amt == null) return;
+      (exByDay[e.ex] = exByDay[e.ex] || []).push({ code: c, amt: e.amt });
+    });
+  });
+
+  // 逐日分解：當日變動 ＝ 市場效應 ＋ 買進 － 賣出 － 除息。
+  // 買賣一律以當日收盤計價，與總現值同一套，三項才加得回變動；
+  // 代價是當天買進後到收盤的漲跌被歸進市場效應。
   var out = days.map(function (d) {
-    var val = 0, cost = 0, noPx = 0;
+    var val = 0, cost = 0, noPx = 0, buy = 0, sell = 0, exAmt = 0, shBy = {};
     lots.forEach(function (l) {
+      var px = fill[l.code][d];
+      if (l.buy === d) buy += (px || 0) * l.shares;
+      if (l.sell === d) sell += (px || 0) * l.shares;
       if (l.buy > d) return;
       if (l.sell && l.sell <= d) return;            // 賣出當天收盤已不持有
       cost += l.cost;
-      var c = fill[l.code][d];
-      if (c == null) { noPx++; return; }
-      val += c * l.shares;
+      shBy[l.code] = (shBy[l.code] || 0) + l.shares;
+      if (px == null) { noPx++; return; }
+      val += px * l.shares;
     });
-    return { d: d, v: Math.round(val), c: Math.round(cost), n: noPx };
+    (exByDay[d] || []).forEach(function (e) {
+      if (shBy[e.code]) exAmt += e.amt * shBy[e.code];
+    });
+    return { d: d, v: Math.round(val), c: Math.round(cost), n: noPx,
+             b: Math.round(buy), s: Math.round(sell), x: Math.round(exAmt) };
   });
 
   return { built: end, days: out, codes: codes.length, warn: led.warn.concat(bad.length ? ['無日 K：' + bad.join('、')] : []) };
@@ -339,8 +361,9 @@ function pvSpcSvg(data) {
     : { n: 5, up: 18000000, lo: 17000000, mid: 17500000, avg: true };
   var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
 
-  var W = 1180, H = 330, PAD_L = 74, PAD_R = 118, PAD_T = 14, FOOT = 18;  // 右側留白放 90 日平均與線尾現值
-  var PH = H - PAD_T - FOOT;
+  var W = 1180, H = 430, PAD_L = 74, PAD_R = 118, PAD_T = 14, FOOT = 18;  // 右側留白放 90 日平均與線尾現值
+  var BAR_H = 92, GAP = 26;                      // 下方逐日分解的堆疊直條區
+  var PH = H - PAD_T - FOOT - GAP - BAR_H;
   var n = pts.length, step = (W - PAD_L - PAD_R) / n;
   var x = function (k) { return PAD_L + step * (k + 0.5); };
 
@@ -363,7 +386,7 @@ function pvSpcSvg(data) {
     var mo = o.d.slice(0, 7);
     if (mo !== prevMo) {
       if (k > 0) s += '<line class="ck-sep" x1="' + (x(k) - step / 2).toFixed(1) + '" y1="' + PAD_T +
-        '" x2="' + (x(k) - step / 2).toFixed(1) + '" y2="' + (PAD_T + PH) + '"/>';
+        '" x2="' + (x(k) - step / 2).toFixed(1) + '" y2="' + (PAD_T + PH + GAP + BAR_H) + '"/>';
       s += '<text class="ck-axis" x="' + x(k).toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">' +
         o.d.slice(5).replace('-', '/') + '</text>';
       prevMo = mo;
@@ -424,6 +447,47 @@ function pvSpcSvg(data) {
       '" text-anchor="start">' + o.lb + '</text>';
   });
 
+  // ── 逐日分解（堆疊直條）──
+  // 當日變動 ＝ 市場效應 ＋ 買賣淨額 － 除息。三段相加等於上方折線的日變動。
+  // 顏色沿用這張圖的配色：市場正藍負紅、買賣灰（中性，不是賺賠）、除息黃（不是市場造成的）。
+  var bTopY = PAD_T + PH + GAP, bBotY = bTopY + BAR_H;
+  var comp = [];
+  for (var j = 1; j < n; j++) {
+    var dv = vals[j] - vals[j - 1];
+    var bq = Math.round((rows[j].b || 0) * tax), sq = Math.round((rows[j].s || 0) * tax);
+    var xq = Math.round((rows[j].x || 0) * tax);
+    var trade = bq - sq;                                  // 買賣淨額（正＝淨買進）
+    var mkt = dv - trade + xq;                            // 市場效應＝變動 － 買賣淨額 ＋ 除息
+    comp.push({ i: j, dv: dv, mkt: mkt, trade: trade, ex: -xq, b: bq, s: sq });
+  }
+  var span = 1;
+  comp.forEach(function (o) {
+    var pos = (o.mkt > 0 ? o.mkt : 0) + (o.trade > 0 ? o.trade : 0);
+    var neg = (o.mkt < 0 ? -o.mkt : 0) + (o.trade < 0 ? -o.trade : 0) + (-o.ex);
+    if (pos > span) span = pos;
+    if (neg > span) span = neg;
+  });
+  var bZero = bTopY + BAR_H / 2;
+  var bh = function (v) { return Math.abs(v) / span * (BAR_H / 2); };
+  var bw2 = Math.max(1, step * 0.6);
+  comp.forEach(function (o) {
+    var cx = x(o.i) - bw2 / 2, up = bZero, dn = bZero;
+    var put = function (v, cls) {
+      if (!v) return;
+      var h = bh(v);
+      if (h < 0.5) h = 0.5;
+      if (v > 0) { up -= h; s += '<rect class="pv-bseg ' + cls + '" x="' + cx.toFixed(1) + '" y="' + up.toFixed(1) + '" width="' + bw2.toFixed(1) + '" height="' + h.toFixed(1) + '"/>'; }
+      else { s += '<rect class="pv-bseg ' + cls + '" x="' + cx.toFixed(1) + '" y="' + dn.toFixed(1) + '" width="' + bw2.toFixed(1) + '" height="' + h.toFixed(1) + '"/>'; dn += h; }
+    };
+    put(o.mkt, o.mkt >= 0 ? 'mkt-up' : 'mkt-dn');
+    put(o.trade, 'trade');
+    put(o.ex, 'ex');
+  });
+  s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + bZero.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + bZero.toFixed(1) + '"/>' +
+    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bZero + 3.5).toFixed(1) + '" text-anchor="end">0</text>' +
+    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bTopY + 9) + '" text-anchor="end">' + _pvWan(span) + '</text>' +
+    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bBotY) + '" text-anchor="end">-' + _pvWan(span) + '</text>';
+
   s += '<rect id="pvs-hit" x="' + PAD_L + '" y="' + PAD_T + '" width="' + (W - PAD_L - PAD_R) + '" height="' + PH + '" fill="transparent"/>' +
     '<line id="pvs-cross" class="ck-cross" x1="0" y1="' + PAD_T + '" x2="0" y2="' + (PAD_T + PH) + '" style="display:none"/></svg>';
 
@@ -431,7 +495,7 @@ function pvSpcSvg(data) {
   var head = '<div class="chart-info"><span id="pvs-tip">' +
     n + ' 日　' + _pvLampsHtml(vals, cfg.n) +
     '　區間內 <b>' + inBand + '</b>/' + n + ' 日（' + (inBand / n * 100).toFixed(0) + '%）' +
-    '</span></div>';
+    '</span>　<span class="pv-lg2 mkt">市場</span><span class="pv-lg2 trade">買賣</span><span class="pv-lg2 ex">除息</span></div>';
   return head + s;
 }
 
@@ -455,11 +519,18 @@ function pvBindSpcHover(data) {
     var prev = k > 0 ? Math.round(rows[k - 1].v * tax) : null;
     var dv = prev == null ? null : v - prev;
     var pos = v > cfg.up ? '高於上限' : (v < cfg.lo ? '低於下限' : '區間內');
+    // 分解：當日變動 ＝ 市場 ＋ 買賣淨額 － 除息
+    var ex = Math.round((rows[k].x || 0) * tax);
+    var trade = Math.round((rows[k].b || 0) * tax) - Math.round((rows[k].s || 0) * tax);
+    var mkt = dv == null ? null : dv - trade + ex;
+    var sgn = function (x) { return (x >= 0 ? '+' : '') + x.toLocaleString('zh-TW'); };
     tip.innerHTML = rows[k].d.slice(5).replace('-', '/') +
       '　總現值 <b>' + v.toLocaleString('zh-TW') + '</b>' +
-      (dv == null ? '' : '　較前日 <b class="' + (dv >= 0 ? 'pv-c-up' : 'pv-c-dn') + '">' +
-        (dv >= 0 ? '+' : '') + dv.toLocaleString('zh-TW') + '</b>') +
-      '　' + pos;
+      (dv == null ? '' : '　較前日 <b class="' + (dv >= 0 ? 'pv-c-up' : 'pv-c-dn') + '">' + sgn(dv) + '</b>') +
+      '　' + pos +
+      (mkt == null ? '' : '　｜市場 <b class="' + (mkt >= 0 ? 'pv-c-up' : 'pv-c-dn') + '">' + sgn(mkt) + '</b>' +
+        (trade ? '　買賣 <b class="pv-c-tr">' + sgn(trade) + '</b>' : '') +
+        (ex ? '　除息 <b class="pv-c-na">-' + ex.toLocaleString('zh-TW') + '</b>' : ''));
   });
   hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
 }
@@ -516,7 +587,12 @@ function pvRender() {
       '上方燈號亮幾格就是目前連續幾日，黃格是還沒走到的格數。連續天數以「每日較前一日」計。' +
       '線尾的「目前」是這張圖建立當下的分 K 收盤，與頂欄的即時報價取樣時點不同，' +
       '盤中會有小幅落差（實測 11,262 元，0.065%），按 ↻ 重新計算即對齊。' +
-      '總現值下降不等於虧損：可能是市價跌、賣出部位，或除息，這張圖分不出來。</div>'
+      '下方堆疊直條把當日變動拆開：<code>當日變動 ＝ 市場效應 ＋ 買賣淨額 － 除息</code>，' +
+      '三段相加等於上方折線的日變動。<span class="pv-c-up">市場正藍</span>／<span class="pv-c-dn">負紅</span>、' +
+      '<span class="pv-c-tr">買賣灰</span>（中性，不是賺賠）、<span class="pv-c-na">除息黃</span>（不是市場造成的）。' +
+      '近 90 天有 43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續紅段要先看直條是不是自己的動作造成的。' +
+      '買賣一律以當日收盤計價（與總現值同一套，三段才加得回變動），當天買進後到收盤的漲跌會被歸進市場效應；' +
+      '除息金額是<b>每股配息 × 當日持股</b>的推算，回答「價格為什麼掉」，不能拿去跟股利估算的本月發放對帳。</div>'
     : '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日。持股與成本由買賣台帳逐日重建' +
       (_pvData ? '（' + _pvData.codes + ' 檔）' : '') + '，收盤價用 Shioaji 1 分 K 聚合、無成交日沿用前一日。' +
       '<code>資本損益 ＝ 現值 － 原始成本</code>，資本報酬率為其除以原始成本；' +

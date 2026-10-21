@@ -1502,3 +1502,14 @@ td.cost-even::after  { background: var(--text3); }
   .dv-navitem { border-left: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
   .dv-navitem.on { border-left: 0; border-bottom-color: var(--accent); }
 }
+/* 管制圖下方的逐日分解堆疊直條 */
+.pv-bseg.mkt-up { fill: #4da3ff; }
+.pv-bseg.mkt-dn { fill: #ff5252; }
+.pv-bseg.trade  { fill: #8fa6c0; }
+.pv-bseg.ex     { fill: #e0b94a; }
+.pv-c-tr { color: #8fa6c0; }
+.pv-lg2 { font-size: 12px; margin-right: 10px; }
+.pv-lg2::before { content: '▌ '; }
+.pv-lg2.mkt { color: #4da3ff; }
+.pv-lg2.trade { color: #8fa6c0; }
+.pv-lg2.ex { color: #e0b94a; }
