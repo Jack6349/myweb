@@ -1448,12 +1448,12 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lim { stroke-width: 1.2; stroke-dasharray: 6 4; fill: none; }
 .pv-lim.up, .pv-lim.lo { stroke: #e8eef5; stroke-width: 1.6; stroke-dasharray: 8 5; }
 .pv-lim.mid { stroke: #7b8ea4; stroke-dasharray: 2 5; }
-.pv-lim.avg { stroke: #b388d8; stroke-dasharray: 10 3 2 3; }
+.pv-lim.avg { stroke: #9db0c4; stroke-dasharray: 10 3 2 3; }
 .pv-band { fill: #ffffff; opacity: .04; }
 .pv-limtx { font-size: 11px; font-family: var(--font); }
 .pv-limtx.up, .pv-limtx.lo { fill: #e8eef5; }
 .pv-limtx.mid { fill: #7b8ea4; }
-.pv-limtx.avg { fill: #b388d8; }
+.pv-limtx.avg { fill: #9db0c4; }
 
 .pv-lamps { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .pv-lamp { width: 11px; height: 11px; border-radius: 50%; display: inline-block;
@@ -1503,15 +1503,19 @@ td.cost-even::after  { background: var(--text3); }
   .dv-navitem.on { border-left: 0; border-bottom-color: var(--accent); }
 }
 /* 管制圖下方的逐日分解堆疊直條 */
+/* 買賣原本是 #8fa6c0，與市場的 #4da3ff 色相太近，堆在一起分不出段。
+   改用紫色，並把 90 日平均改歸中性參考線族，紫色在這張圖專給買賣。
+   另加一條與底色同色的細描邊，相鄰的段落才看得出界線。 */
+.pv-bseg { stroke: #16202e; stroke-width: .6; }
 .pv-bseg.mkt-up { fill: #4da3ff; }
 .pv-bseg.mkt-dn { fill: #ff5252; }
-.pv-bseg.trade  { fill: #8fa6c0; }
+.pv-bseg.trade  { fill: #b388d8; }
 .pv-bseg.ex     { fill: #e0b94a; }
-.pv-c-tr { color: #8fa6c0; }
+.pv-c-tr { color: #b388d8; }
 .pv-lg2 { font-size: 12px; margin-right: 10px; }
 .pv-lg2::before { content: '▌ '; }
 .pv-lg2.mkt { color: #4da3ff; }
 .pv-lg2.mktdn { color: #ff5252; }
 .pv-lg2 b { color: inherit; font-weight: 700; }
-.pv-lg2.trade { color: #8fa6c0; }
+.pv-lg2.trade { color: #b388d8; }
 .pv-lg2.ex { color: #e0b94a; }
