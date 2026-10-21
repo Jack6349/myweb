@@ -1527,3 +1527,5 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lg2.mma::before { content: '━ '; }
 .pv-ax-rel { fill: #9db0c4; }
 .pv-ax-mma { fill: #5ad2e8; font-size: 11px; }
+/* 均線零線：就是右軸的 0，比一般格線亮一點好辨認 */
+.pv-mzero { stroke: #5ad2e8; stroke-width: 1; stroke-dasharray: 3 4; opacity: .5; }

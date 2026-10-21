@@ -244,7 +244,7 @@ function pvSvg(data) {
   pts.forEach(function (o, k) {
     var mo = o.d.slice(0, 7);
     if (mo !== prevMo) {
-      if (k > 0) s += '<line class="ck-sep" x1="' + (x(k) - step / 2).toFixed(1) + '" y1="' + PAD_T + '" x2="' + (x(k) - step / 2).toFixed(1) + '" y2="' + (PAD_T + PH + GAP + BAR_H + GAP2 + MA_H) + '"/>';
+      if (k > 0) s += '<line class="ck-sep" x1="' + (x(k) - step / 2).toFixed(1) + '" y1="' + PAD_T + '" x2="' + (x(k) - step / 2).toFixed(1) + '" y2="' + (PAD_T + PH + GAP + BAR_H) + '"/>';
       s += '<text class="ck-axis" x="' + x(k).toFixed(1) + '" y="' + (H - 3) + '" text-anchor="middle">' + o.d.slice(5).replace('-', '/') + '</text>';
       prevMo = mo;
     }
@@ -377,22 +377,49 @@ function pvSpcSvg(data) {
     : { n: 5, up: 18000000, lo: 17000000, mid: 17500000, avg: true };
   var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
 
-  var W = 1180, H = 510, PAD_L = 74, PAD_R = 184, PAD_T = 14, FOOT = 18;
+  var W = 1180, H = 450, PAD_L = 74, PAD_R = 184, PAD_T = 14, FOOT = 18;
   // 右側 gutter 分兩欄：內欄放標註（目前／90 日平均），最右欄放相對刻度。
   // 兩者原本都排在同一個 x，「距 1,500萬」會疊到「400萬」、「200萬」會疊到「90 日平均」。
   var GUT_IN = W - PAD_R + 6, GUT_R = W - 8;
-  var BAR_H = 92, GAP = 26;                      // 中段：逐日分解的堆疊直條
-  var MA_H = 60, GAP2 = 20;                      // 下段：市場 N 日均獨立一列（疊在直條上讀不出來）
-  var PH = H - PAD_T - FOOT - GAP - BAR_H - GAP2 - MA_H;
+  var BAR_H = 92, GAP = 26;                      // 下段：逐日分解的堆疊直條
+  var PH = H - PAD_T - FOOT - GAP - BAR_H;
   var n = pts.length, step = (W - PAD_L - PAD_R) / n;
   var x = function (k) { return PAD_L + step * (k + 0.5); };
+
+  // 逐日分解與均線要先算出來，軸的範圍才納得進均線，零線也才能釘在格線上。
+  // 當日變動 ＝ 市場效應 ＋ 買賣淨額 － 除息。
+  var comp = [];
+  for (var j = 1; j < n; j++) {
+    var dvj = vals[j] - vals[j - 1];
+    var bq = Math.round((rows[j].b || 0) * tax), sq = Math.round((rows[j].s || 0) * tax);
+    var xq = Math.round((rows[j].x || 0) * tax);
+    var tradej = bq - sq;
+    comp.push({ i: j, dv: dvj, mkt: dvj - tradej + xq, trade: tradej, ex: -xq, b: bq, s: sq });
+  }
+  var mvals = [];
+  for (var q = cfg.n - 1; q < comp.length; q++) {
+    var acc = 0;
+    for (var w = 0; w < cfg.n; w++) acc += comp[q - w].mkt;
+    mvals.push({ i: comp[q].i, v: acc / cfg.n });
+  }
+  var maLo = 0, maHi = 0;
+  mvals.forEach(function (o) { if (o.v < maLo) maLo = o.v; if (o.v > maHi) maHi = o.v; });
 
   var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
   [cfg.up, cfg.lo, cfg.mid].concat(cfg.avg ? [mean] : []).forEach(function (v) {
     if (v < lo) lo = v;
     if (v > hi) hi = v;
   });
-  var ax = _pvNiceAxis(lo, hi);
+  // 零線 ＝ 只看總現值與界線時算出來的軸底（目前 1,500 萬）。均線以它為 0，
+  // 用與左右軸相同的刻度，右軸因此同時是「總現值比零線高多少」與「均線的值」，
+  // 不需要第三條軸。實測零線放 1,600 萬時均線與總現值最近只差 2,793 元會重疊，
+  // 放 1,500 萬則最近 766,925，淨空夠。
+  var ax0 = _pvNiceAxis(lo, hi);
+  var zeroV = ax0.lo;
+  var ax = _pvNiceAxis(Math.min(lo, zeroV + maLo), Math.max(hi, zeroV + maHi));
+  zeroV = Math.round(zeroV / ax.u) * ax.u;               // 換刻度時重新貼齊格線
+  // 軸底至少比零線低一格，均線才有向下的空間；不夠就再往下延
+  while (ax.lo > zeroV - ax.u || ax.lo > zeroV + maLo) { ax.lo -= ax.u; ax.n++; }
   lo = ax.lo; hi = ax.hi;
   var y = function (v) { return PAD_T + (hi - v) * PH / (hi - lo); };
 
@@ -403,7 +430,8 @@ function pvSpcSvg(data) {
     s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) + '"/>' +
       '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' + _pvWan(gv) + '</text>' +
       '<text class="ck-axis pv-ax-rel" x="' + GUT_R + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' +
-        _pvWan(gv - lo) + (g === ax.n ? '（基準 ' + _pvWan(lo) + '）' : '') + '</text>';
+        (gv === zeroV ? '0萬（基準 ' + _pvWan(zeroV) + '）'
+                      : (gv > zeroV ? '+' : '-') + _pvWan(Math.abs(gv - zeroV))) + '</text>';
   }
   var prevMo = '';
   pts.forEach(function (o, k) {
@@ -444,6 +472,18 @@ function pvSpcSvg(data) {
       '" text-anchor="start">' + o.lb + ' ' + _pvWan(o.v) + '</text>';
   });
 
+  // 市場效應 N 日均：與上方折線同一個窗格、同一套刻度，零線釘在右軸的 0（zeroV）。
+  // 畫在總現值折線之前，交疊時讓總現值蓋在上面。
+  if (mvals.length > 1) {
+    s += '<line class="pv-mzero" x1="' + PAD_L + '" y1="' + y(zeroV).toFixed(1) +
+      '" x2="' + (W - PAD_R) + '" y2="' + y(zeroV).toFixed(1) + '"/>' +
+      '<polyline class="pv-mma" points="' + mvals.map(function (o) {
+        return x(o.i).toFixed(1) + ',' + y(zeroV + o.v).toFixed(1);
+      }).join(' ') + '"/>' +
+      '<text class="ck-axis pv-ax-mma" x="' + GUT_IN + '" y="' + (y(zeroV) + 3.5).toFixed(1) +
+      '" text-anchor="start">市場效應 ' + cfg.n + ' 日均</text>';
+  }
+
   // 折線逐段著色：達標的連續段藍（上升）／紅（下降），其餘黃
   var state = _pvRuns(vals, cfg.n);
   for (var i = 1; i < n; i++) {
@@ -475,15 +515,6 @@ function pvSpcSvg(data) {
   // 當日變動 ＝ 市場效應 ＋ 買賣淨額 － 除息。三段相加等於上方折線的日變動。
   // 顏色沿用這張圖的配色：市場正藍負紅、買賣灰（中性，不是賺賠）、除息黃（不是市場造成的）。
   var bTopY = PAD_T + PH + GAP, bBotY = bTopY + BAR_H;
-  var comp = [];
-  for (var j = 1; j < n; j++) {
-    var dv = vals[j] - vals[j - 1];
-    var bq = Math.round((rows[j].b || 0) * tax), sq = Math.round((rows[j].s || 0) * tax);
-    var xq = Math.round((rows[j].x || 0) * tax);
-    var trade = bq - sq;                                  // 買賣淨額（正＝淨買進）
-    var mkt = dv - trade + xq;                            // 市場效應＝變動 － 買賣淨額 ＋ 除息
-    comp.push({ i: j, dv: dv, mkt: mkt, trade: trade, ex: -xq, b: bq, s: sq });
-  }
   var span = 1;
   comp.forEach(function (o) {
     var pos = (o.mkt > 0 ? o.mkt : 0) + (o.trade > 0 ? o.trade : 0);
@@ -511,29 +542,6 @@ function pvSpcSvg(data) {
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bZero + 3.5).toFixed(1) + '" text-anchor="end">0</text>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bTopY + 9) + '" text-anchor="end">' + _pvWan(span) + '</text>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bBotY) + '" text-anchor="end">-' + _pvWan(span) + '</text>';
-
-  // ── 市場 N 日均（獨立一列）──
-  // 單日市場效應的移動平均，把噪音濾掉看方向。N 共用管制圖的「連續天數」。
-  // 原本疊在直條上，青線被藍條蓋住讀不出來，所以拆成自己的一列、自己的縮放。
-  var mTopY = bBotY + GAP2, mBotY = mTopY + MA_H, mZero = mTopY + MA_H / 2;
-  var mvals = [];
-  for (var q = cfg.n - 1; q < comp.length; q++) {
-    var acc = 0;
-    for (var w = 0; w < cfg.n; w++) acc += comp[q - w].mkt;
-    mvals.push({ i: comp[q].i, v: acc / cfg.n });
-  }
-  var mSpan = 1;
-  mvals.forEach(function (o) { if (Math.abs(o.v) > mSpan) mSpan = Math.abs(o.v); });
-  s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + mZero.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + mZero.toFixed(1) + '"/>' +
-    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (mZero + 3.5).toFixed(1) + '" text-anchor="end">0</text>' +
-    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (mTopY + 9) + '" text-anchor="end">' + _pvWan(mSpan) + '</text>' +
-    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + mBotY + '" text-anchor="end">-' + _pvWan(mSpan) + '</text>' +
-    '<text class="ck-axis pv-ax-mma" x="' + GUT_IN + '" y="' + (mZero + 3.5).toFixed(1) + '" text-anchor="start">市場效應 ' + cfg.n + ' 日均</text>';
-  if (mvals.length > 1) {
-    s += '<polyline class="pv-mma" points="' + mvals.map(function (o) {
-      return x(o.i).toFixed(1) + ',' + (mZero - o.v / mSpan * (MA_H / 2)).toFixed(1);
-    }).join(' ') + '"/>';
-  }
 
   s += '<rect id="pvs-hit" x="' + PAD_L + '" y="' + PAD_T + '" width="' + (W - PAD_L - PAD_R) + '" height="' + PH + '" fill="transparent"/>' +
     '<line id="pvs-cross" class="ck-cross" x1="0" y1="' + PAD_T + '" x2="0" y2="' + (PAD_T + PH) + '" style="display:none"/></svg>';
@@ -662,9 +670,10 @@ function pvRender() {
       '三段相加等於上方折線的日變動。<span class="pv-c-up">市場正藍</span>／<span class="pv-c-dn">負紅</span>、' +
       '<span class="pv-c-tr">買賣灰</span>（中性，不是賺賠）、<span class="pv-c-na">除息黃</span>（不是市場造成的）。' +
       '近 90 天有 43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續紅段要先看直條是不是自己的動作造成的。' +
-      '最下面獨立一列是<b>市場效應 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向。' +
-      '它平均的是<b>每日市場效應</b>，與上方那條「90 日平均」不同——後者是總現值本身的平均，兩者不要混。' +
-      '自己的縮放（疊在直條上會被藍條蓋住）。它只平滑市場那一段，不含買賣與除息。' +
+      '青色那條是<b>市場效應 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向。' +
+      '它與總現值同一個窗格、同一套刻度，零線就是右軸的 0，所以右軸同時是「總現值比零線高多少」與「均線的值」。' +
+      '它平均的是<b>每日市場效應</b>，與那條「90 日平均」不同：後者是總現值本身的平均，兩者不要混。' +
+      '它只平滑市場那一段，不含買賣與除息。' +
       '上方折線的左軸是絕對金額、右軸是距軸底多少；軸底只在資料跨過整數刻度時才跳一格，基準值標在右軸最上面。' +
       '買賣一律以當日收盤計價（與總現值同一套，三段才加得回變動），當天買進後到收盤的漲跌會被歸進市場效應；' +
       '除息金額是<b>每股配息 × 當日持股</b>的推算，回答「價格為什麼掉」，不能拿去跟股利估算的本月發放對帳。</div>'
