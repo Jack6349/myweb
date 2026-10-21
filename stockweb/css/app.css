@@ -1511,5 +1511,7 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lg2 { font-size: 12px; margin-right: 10px; }
 .pv-lg2::before { content: '▌ '; }
 .pv-lg2.mkt { color: #4da3ff; }
+.pv-lg2.mktdn { color: #ff5252; }
+.pv-lg2 b { color: inherit; font-weight: 700; }
 .pv-lg2.trade { color: #8fa6c0; }
 .pv-lg2.ex { color: #e0b94a; }

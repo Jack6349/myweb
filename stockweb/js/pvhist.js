@@ -495,7 +495,8 @@ function pvSpcSvg(data) {
   var head = '<div class="chart-info"><span id="pvs-tip">' +
     n + ' 日　' + _pvLampsHtml(vals, cfg.n) +
     '　區間內 <b>' + inBand + '</b>/' + n + ' 日（' + (inBand / n * 100).toFixed(0) + '%）' +
-    '</span>　<span class="pv-lg2 mkt">市場</span><span class="pv-lg2 trade">買賣</span><span class="pv-lg2 ex">除息</span></div>';
+    '　<span class="pv-lg2 mkt">市場</span><span class="pv-lg2 trade">買賣</span><span class="pv-lg2 ex">除息</span>' +
+    '</span></div>';
   return head + s;
 }
 
@@ -523,14 +524,20 @@ function pvBindSpcHover(data) {
     var ex = Math.round((rows[k].x || 0) * tax);
     var trade = Math.round((rows[k].b || 0) * tax) - Math.round((rows[k].s || 0) * tax);
     var mkt = dv == null ? null : dv - trade + ex;
-    var sgn = function (x) { return (x >= 0 ? '+' : '') + x.toLocaleString('zh-TW'); };
+    var sgn = function (x) { return x === 0 ? '0' : (x > 0 ? '+' : '') + x.toLocaleString('zh-TW'); };
+    // 三段一律用與圖例相同的〔圖標 類別 數據〕，沒有事件的那天顯示 0，
+    // 版面才不會因為當天有沒有買賣而跳動。市場的色塊跟著正負換，與直條同色。
+    var seg = function (cls, lb, txt) {
+      return '<span class="pv-lg2 ' + cls + '">' + lb + ' <b>' + txt + '</b></span>';
+    };
     tip.innerHTML = rows[k].d.slice(5).replace('-', '/') +
       '　總現值 <b>' + v.toLocaleString('zh-TW') + '</b>' +
       (dv == null ? '' : '　較前日 <b class="' + (dv >= 0 ? 'pv-c-up' : 'pv-c-dn') + '">' + sgn(dv) + '</b>') +
-      '　' + pos +
-      (mkt == null ? '' : '　｜市場 <b class="' + (mkt >= 0 ? 'pv-c-up' : 'pv-c-dn') + '">' + sgn(mkt) + '</b>' +
-        (trade ? '　買賣 <b class="pv-c-tr">' + sgn(trade) + '</b>' : '') +
-        (ex ? '　除息 <b class="pv-c-na">-' + ex.toLocaleString('zh-TW') + '</b>' : ''));
+      '　' + pos + '　' +
+      (mkt == null ? '' :
+        seg(mkt >= 0 ? 'mkt' : 'mktdn', '市場', sgn(mkt)) +
+        seg('trade', '買賣', sgn(trade)) +
+        seg('ex', '除息', ex ? '-' + ex.toLocaleString('zh-TW') : '0'));
   });
   hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
 }
