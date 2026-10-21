@@ -560,6 +560,100 @@ function _rfBuildMonthPay(codes, todayIso) {
   return out;
 }
 
+// ── 發放日曆（本月＋下月）──
+// 為什麼用月曆而不是清單：清單看不出「間隔」。實測 2026-10 的進帳是
+// 6→10→13→15→17 連續五筆，然後空 11 天到 28 號；那段空檔對調度現金有意義。
+// 七欄不砍週末：10 個發放日裡有 2 個落在週六（10-10、10-17），砍掉會漏兩成。
+// 格子約 84% 是空的（10 月 6/31 天、11 月 4/30 天），這是月曆換「看得出間隔」要付的。
+
+function _rfPayOfMonth(ym) {
+  var est = (typeof _divEstResult !== 'undefined' && _divEstResult && _divEstResult.stocks) || null;
+  var out = [];
+  if (!est) return out;
+  est.forEach(function (s) {
+    (s.res.months || []).forEach(function (m) {
+      if (!m.payDate || m.payDate.slice(0, 7) !== ym) return;
+      out.push({ code: s.code, payDate: m.payDate, amount: m.perShare, total: m.total || 0,
+                 status: m.status, shares: m.shares,
+                 lentTotal: m.lentTotal || 0, lentShares: m.lentShares || 0 });
+    });
+  });
+  out.sort(function (a, b) {
+    return a.payDate < b.payDate ? -1 : (a.payDate > b.payDate ? 1 : String(a.code).localeCompare(String(b.code)));
+  });
+  return out;
+}
+
+function _rfYmShift(ym, k) {
+  var y = +ym.slice(0, 4), m = +ym.slice(5, 7) + k;
+  y += Math.floor((m - 1) / 12); m = ((m - 1) % 12 + 12) % 12 + 1;
+  return y + '-' + (m < 10 ? '0' : '') + m;
+}
+
+// 一個月的格子。rows 是該月的發放，todayIso 用來分「已發放／待發放」
+function _rfCalMonth(ym, rows, todayIso) {
+  var y = +ym.slice(0, 4), mo = +ym.slice(5, 7);
+  var first = new Date(Date.UTC(y, mo - 1, 1));
+  var lead = first.getUTCDay();                               // 1 號是星期幾（0＝日）
+  var dim = new Date(Date.UTC(y, mo, 0)).getUTCDate();        // 當月天數
+  var byDay = {};
+  rows.forEach(function (r) { (byDay[+r.payDate.slice(8, 10)] = byDay[+r.payDate.slice(8, 10)] || []).push(r); });
+  var total = rows.reduce(function (a, r) { return a + (r.total || 0); }, 0);
+  var est = rows.some(function (r) { return r.status !== 'actual'; });
+
+  var W = ['日', '一', '二', '三', '四', '五', '六'];
+  var h = '<div class="rf-cal-mon">' +
+    '<div class="rf-cal-head"><span class="rf-cal-ym">' + y + ' 年 ' + mo + ' 月</span>' +
+    '<span class="rf-cal-tot">' + total.toLocaleString('zh-TW') + '</span>' +
+    (est ? '<span class="rf-cal-estflag">含預估</span>' : '') + '</div>' +
+    '<div class="rf-cal-grid">' +
+    W.map(function (w) { return '<div class="rf-cal-wd">' + w + '</div>'; }).join('');
+
+  var cells = lead + dim, weeks = Math.ceil(cells / 7);
+  for (var i = 0; i < weeks * 7; i++) {
+    var d = i - lead + 1;
+    if (d < 1 || d > dim) { h += '<div class="rf-cal-cell out"></div>'; continue; }
+    var list = byDay[d] || [];
+    var iso = ym + '-' + (d < 10 ? '0' : '') + d;
+    var sum = list.reduce(function (a, r) { return a + (r.total || 0); }, 0);
+    var paid = iso <= todayIso;
+    var anyEst = list.some(function (r) { return r.status !== 'actual'; });
+    var cls = 'rf-cal-cell' + (list.length ? (anyEst ? ' est' : ' act') : '') + (iso === todayIso ? ' today' : '');
+    var tip = list.map(function (r) {
+      return r.code + ' ' + (r.total || 0).toLocaleString('zh-TW') +
+        (r.lentTotal ? '（直接 ' + ((r.total || 0) - r.lentTotal).toLocaleString('zh-TW') +
+          ' ＋ 借券補償 ' + r.lentTotal.toLocaleString('zh-TW') + '）' : '') +
+        (r.status === 'actual' ? '' : '（預估）');
+    }).join('&#10;');
+    h += '<div class="' + cls + '"' + (tip ? ' title="' + tip + '"' : '') + '>' +
+      '<span class="rf-cal-d">' + d + '</span>' +
+      (list.length
+        ? '<span class="rf-cal-amt">' + sum.toLocaleString('zh-TW') + '</span>' +
+          '<span class="rf-cal-code">' + list[0].code + (list.length > 1 ? ' +' + (list.length - 1) : '') + '</span>'
+        : '') +
+      '</div>';
+  }
+  return h + '</div></div>';
+}
+
+function rfPayCalHtml() {
+  var todayIso = _divTwDate().iso, ym1 = todayIso.slice(0, 7), ym2 = _rfYmShift(ym1, 1);
+  var r1 = _rfPayOfMonth(ym1), r2 = _rfPayOfMonth(ym2);
+  if (!r1.length && !r2.length) return '';
+  var sum = function (a) { return a.reduce(function (x, r) { return x + (r.total || 0); }, 0); };
+  var t1 = sum(r1), t2 = sum(r2);
+  // 標題用子標題而非 .divest-sec-title：後者會被左選單的分組器切成獨立區塊，
+  // 但這張日曆是「本月發放」的一部分，要留在同一個區塊裡。
+  return '<div class="rf-cal-title">發放日曆' +
+      '<span class="divest-sec-sum">本月 ' + t1.toLocaleString('zh-TW') +
+      '　下月 ' + t2.toLocaleString('zh-TW') + '</span></div>' +
+    '<div class="rf-cal-wrap">' + _rfCalMonth(ym1, r1, todayIso) + _rfCalMonth(ym2, r2, todayIso) + '</div>' +
+    '<div class="detail-note">依<b>發放日</b>排，金額為當日可領合計（含借券補償）。' +
+      '滑鼠移到格子上看逐檔明細與補償拆分。實色＝已公告發放日，外框＝發放日為推估（除息月＋1）。' +
+      '七欄不砍週末：發放日會落在週六（本月 10-10、10-17）。' +
+      '多檔同日時格子顯示第一檔加「+N」，整年只有四天是多檔同日。</div>';
+}
+
 function _rfMonthPayHtml() {
   var rows = _rfPay || [];
   var ymLabel = (_rfResult ? _rfResult.day : _divTwDate().iso).slice(0, 7).replace('-', '/');

@@ -519,7 +519,10 @@ function renderDividendEst() {
   if (typeof _rfBuildMonthPay === 'function' && typeof _rfMonthPayHtml === 'function') {
     try {
       _rfPay = _rfBuildMonthPay(stocks.map(function (s) { return s.code; }), _divTwDate().iso);
-      html += _rfMonthPayHtml() + '<div class="divest-divider"></div>';
+      html += _rfMonthPayHtml();
+      // 發放日曆接在本月發放底下：同一組資料，清單看金額、日曆看間隔
+      if (typeof rfPayCalHtml === 'function') html += rfPayCalHtml();
+      html += '<div class="divest-divider"></div>';
     } catch (e) { console.warn('[本月發放]', e); }
   }
 

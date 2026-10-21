@@ -1529,3 +1529,27 @@ td.cost-even::after  { background: var(--text3); }
 .pv-ax-mma { fill: #5ad2e8; font-size: 11px; }
 /* 均線零線：就是右軸的 0，比一般格線亮一點好辨認 */
 .pv-mzero { stroke: #5ad2e8; stroke-width: 1; stroke-dasharray: 3 4; opacity: .5; }
+
+/* ── 發放日曆（本月＋下月，上下排）── */
+.rf-cal-wrap { display: flex; flex-direction: column; gap: 16px; max-width: 760px; }
+.rf-cal-mon { border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); padding: 10px 12px 12px; }
+.rf-cal-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.rf-cal-ym { font-size: 14px; font-weight: 600; color: var(--text); }
+.rf-cal-tot { font-size: 14px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
+.rf-cal-estflag { font-size: 11px; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 4px; padding: 0 5px; }
+.rf-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.rf-cal-wd { font-size: 11px; color: var(--text3); text-align: center; padding-bottom: 2px; }
+.rf-cal-cell { min-height: 46px; border-radius: 5px; padding: 3px 5px; background: var(--bg3);
+  display: flex; flex-direction: column; gap: 1px; }
+.rf-cal-cell.out { background: none; }
+.rf-cal-cell.today { outline: 1px solid var(--accent2); }
+/* 實色＝已公告發放日；外框＝發放日為推估 */
+.rf-cal-cell.act { background: color-mix(in srgb, var(--down) 22%, var(--bg3)); }
+.rf-cal-cell.est { background: var(--bg3); box-shadow: inset 0 0 0 1px var(--accent); }
+.rf-cal-d { font-size: 11px; color: var(--text3); }
+.rf-cal-amt { font-size: 13px; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums; line-height: 1.2; }
+.rf-cal-code { font-size: 10.5px; color: var(--text2); }
+.rf-cal-title { font-size: 14px; font-weight: 600; color: var(--accent2);
+  margin: 18px 0 8px; padding-top: 12px; border-top: 1px solid var(--border); }
