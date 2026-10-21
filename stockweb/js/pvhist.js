@@ -430,8 +430,7 @@ function pvSpcSvg(data) {
     s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) + '"/>' +
       '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' + _pvWan(gv) + '</text>' +
       '<text class="ck-axis pv-ax-rel" x="' + GUT_R + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' +
-        (gv === zeroV ? '0萬（基準 ' + _pvWan(zeroV) + '）'
-                      : (gv > zeroV ? '+' : '-') + _pvWan(Math.abs(gv - zeroV))) + '</text>';
+        (gv === zeroV ? '0萬' : (gv > zeroV ? '+' : '-') + _pvWan(Math.abs(gv - zeroV))) + '</text>';
   }
   var prevMo = '';
   pts.forEach(function (o, k) {
@@ -671,7 +670,8 @@ function pvRender() {
       '<span class="pv-c-tr">買賣灰</span>（中性，不是賺賠）、<span class="pv-c-na">除息黃</span>（不是市場造成的）。' +
       '近 90 天有 43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續紅段要先看直條是不是自己的動作造成的。' +
       '青色那條是<b>市場效應 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向。' +
-      '它與總現值同一個窗格、同一套刻度，零線就是右軸的 0，所以右軸同時是「總現值比零線高多少」與「均線的值」。' +
+      '它與總現值同一個窗格、同一套刻度，零線就是右軸的 0（左軸在同一列標的就是基準金額），' +
+      '所以右軸同時是「總現值比零線高多少」與「均線的值」。' +
       '它平均的是<b>每日市場效應</b>，與那條「90 日平均」不同：後者是總現值本身的平均，兩者不要混。' +
       '它只平滑市場那一段，不含買賣與除息。' +
       '上方折線的左軸是絕對金額、右軸是距軸底多少；軸底只在資料跨過整數刻度時才跳一格，基準值標在右軸最上面。' +
