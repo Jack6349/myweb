@@ -12,6 +12,42 @@ function _chartSavedTab() {
 }
 var _chartCache = {};   // code → { day, dts, close, vol, ref }
 
+// 日線頁籤的期間。來源分兩邊，因為兩邊的成本差了三個量級（實測 00918）：
+//   kbars 固定 1 分 K，前端聚合成日 K。一年 3.54MB／1.4 秒、五年 11.02MB／27.2 秒 — 彈窗裡不能接受。
+//   Yahoo 日 K（走 GAS 代理，與 refill.js 同一條路）一年 27KB、五年 102KB，耗時全部落在 1.2–2.3 秒，
+//   那是代理往返的固定成本，跟資料量無關。
+// 所以：近月、三月用本機 kbars（0.1 秒，比代理更快），而且兩者共用同一筆 240 日曆天的快取，
+// 切期間不重抓；六月以上走 Yahoo。
+// 實測對帳：兩邊收盤價一致（0050 10/20 107.25 對 107.25、10/22 107.10 對 107.10），
+// 但 Yahoo 有缺日（2026-10-21 三檔皆為 null），所以要濾空值。
+// 量的單位不同：Yahoo 是股、kbars 是張（實測比值 1001.8），載入時除 1000 歸一。
+// line：超過約 240 根時每根寬小於 3.3px，蠟燭的影線與實體已經分辨不出來，改畫收盤折線。
+var CHART_PERIODS = [
+  { k: '1mo', lb: '近月', src: 'kbars', show: 21, line: false },
+  { k: '3mo', lb: '三月', src: 'kbars', show: 64, line: false },
+  { k: '6mo', lb: '六月', src: 'yahoo', range: '1y', show: 126, line: false },
+  { k: '1y', lb: '一年', src: 'yahoo', range: '2y', show: 243, line: true },
+  { k: '5y', lb: '五年', src: 'yahoo', range: '5y', show: 99999, line: true }
+];
+var CHART_PER_LS = 'chart_period_v1', CHART_ADJ_LS = 'chart_adj_v1';
+var _chartPer = null;      // 目前期間的定義物件
+var _chartAdjOn = null;    // 是否還原權值（僅 Yahoo 期間有意義）
+
+function _chartPerDef(k) {
+  for (var i = 0; i < CHART_PERIODS.length; i++) if (CHART_PERIODS[i].k === k) return CHART_PERIODS[i];
+  return null;
+}
+function _chartSavedPer() {
+  try { var k = localStorage.getItem(CHART_PER_LS); if (_chartPerDef(k)) return _chartPerDef(k); } catch (e) {}
+  return _chartPerDef('3mo');
+}
+// 還原價預設開：六月以上的線每除一次息就往下跳一格，高配息 ETF 的長期線會被壓成沒漲。
+// 實測 00918：五年前收盤 15.00、還原後 9.75，差的就是這三年的配息。
+function _chartSavedAdj() {
+  try { var v = localStorage.getItem(CHART_ADJ_LS); if (v === '0') return false; if (v === '1') return true; } catch (e) {}
+  return true;
+}
+
 function openChartPop(code) {
   _chartCode = String(code);
   _chartTab = _chartSavedTab();
@@ -679,26 +715,27 @@ async function _chartRefreshToday() {
       document.getElementById('chart-area').innerHTML = _chart5dSvg(cc, code);
       _chartBindHover(cc);
     } else {
-      var cd = _chartCache[code + ':day'];
+      var per = _chartPer;
+      if (!per) return;
+      var cd = _chartCache[code + ':day:' + (per.src === 'kbars' ? 'kbars' : 'y' + per.range)];
       if (!cd) return;
-      var bar = { d: today, o: j.Open[0], h: j.High[0], l: j.Low[0], c: j.Close[j.Close.length - 1], v: 0 };
+      var bar = { d: today, o: j.Open[0], h: j.High[0], l: j.Low[0], c: j.Close[j.Close.length - 1], v: 0, ac: null };
       for (var i = 0; i < j.datetime.length; i++) {
         if (j.High[i] > bar.h) bar.h = j.High[i];
         if (j.Low[i] < bar.l) bar.l = j.Low[i];
         bar.v += j.Volume[i];
       }
-      var bars = cd.bars;
-      if (bars.length && bars[bars.length - 1].d === today) bars[bars.length - 1] = bar; else bars.push(bar);
-      document.getElementById('chart-area').innerHTML = _chartDaySvg(bars, code);
-      _chartBindDayHover(bars);
+      if (!document.getElementById('ckd-plot')) return;
+      _chartDayRender(_chartPutToday(cd.bars, bar), code, per);
     }
   } catch (e) { console.warn('[chart live]', e); }
 }
 
-// ── 頁籤二：日線（日 K＋MA5/20/60＋成交量）──
-// kbars 無週期參數（固定 1 分 K）→ 抓約 240 日曆天分 K 於前端聚合成日 K（實測 2.7MB/0.8 秒，本機 server）
-// 取 157 個交易日：顯示最近 90 根，前面 60+ 根供 MA60 暖身，確保每根顯示日的均線都有效
-var CHART_DAY_SHOW = 90;
+// ── 頁籤二：日線（日 K＋MA5/20/60＋成交量，期間可切）──
+// 這支只服務近月／三月：kbars 無週期參數（固定 1 分 K）→ 抓約 240 日曆天分 K 於前端聚合成日 K
+// （實測 2.7MB／0.8 秒，本機 server）。取得約 157 個交易日，兩個期間共用這一筆，
+// 顯示 21／64 根，前面剩下的都拿來給 MA60 暖身，確保每根顯示日的均線都有效。
+// 六月以上改走 _chartFetchYahoo，理由見 CHART_PERIODS 的註解。
 
 async function _chartFetchDay(code) {
   var today = new Date();
@@ -737,35 +774,163 @@ function _chartMA(bars, n) {
   return out;
 }
 
+// Yahoo 日 K（與 refill.js 同一條 GAS 代理路徑）。上市試 .TW、上櫃轉試 .TWO。
+// 回傳 [{d,o,h,l,c,v,ac}]：ac 是還原收盤，濾掉 close 為 null 的缺日，量除 1000 改成張。
+async function _chartFetchYahoo(code, range) {
+  var syms = /^\d/.test(String(code)) ? [code + '.TW', code + '.TWO'] : [code];
+  var err = null;
+  for (var i = 0; i < syms.length; i++) {
+    try {
+      var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(syms[i]) +
+        '?interval=1d&range=' + range;
+      var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var j = await r.json();
+      var res = j && j.chart && j.chart.result && j.chart.result[0];
+      var q = res && res.indicators && res.indicators.quote && res.indicators.quote[0];
+      if (!res || !res.timestamp || !q || !q.close) throw new Error('無日 K 資料');
+      var ac = ((res.indicators.adjclose && res.indicators.adjclose[0]) || {}).adjclose || null;
+      var out = [];
+      for (var k = 0; k < res.timestamp.length; k++) {
+        if (q.close[k] == null || q.open[k] == null) continue;    // Yahoo 缺日
+        out.push({ d: new Date(res.timestamp[k] * 1000).toISOString().slice(0, 10),
+                   o: q.open[k], h: q.high[k], l: q.low[k], c: q.close[k],
+                   v: (q.volume[k] || 0) / 1000, ac: ac ? ac[k] : null });
+      }
+      if (!out.length) throw new Error('無日 K 資料');
+      out.sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+      return out;
+    } catch (e) { err = e; }
+  }
+  throw err || new Error('無日 K 資料');
+}
+
+// 還原權值：Yahoo 只給還原收盤，所以拿每根的 adjclose/close 比例回乘開高低。
+// 最後一根的比例是 1（實測：末日收 34.56 與末日還原 34.56 相等），
+// 所以盤中那根直接拿未還原的現價接上去不會接錯。
+function _chartAdjBars(bars, on) {
+  if (!on) return bars;
+  return bars.map(function (b) {
+    if (b.ac == null || !b.c) return b;
+    var r = b.ac / b.c;
+    if (!(r > 0) || Math.abs(r - 1) < 1e-9) return b;
+    return { d: b.d, o: b.o * r, h: b.h * r, l: b.l * r, c: b.ac, v: b.v, ac: b.ac };
+  });
+}
+
+// 今天那一根一律用本機分 K 算，不用 Yahoo 的。
+// 實測同一時刻三個 range 的最後一根各給 107.25／107.20，本機 kbars 是 107.15 —— Yahoo 盤中的
+// 日 K 是它自己的快照，會落後也會互相不一致。還原比例在最後一根是 1，所以未還原的現價
+// 接在還原序列後面不會接錯（見 _chartAdjBars）。
+// 回傳 null 代表今天還沒有分 K（開盤前、假日），此時沿用來源給的最後一根。
+async function _chartTodayBar(code) {
+  var today = _chartYmd(new Date());
+  var r = await fetch(API + '/api/v1/data/kbars', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contract: { security_type: 'STK', exchange: (_contracts[code] || {}).exchange || 'TSE', code: code },
+      start: today, end: today
+    })
+  });
+  if (!r.ok) return null;
+  var j = await r.json();
+  if (!j || !j.datetime || !j.datetime.length) return null;
+  var bar = { d: today, o: j.Open[0], h: j.High[0], l: j.Low[0], c: j.Close[j.Close.length - 1], v: 0, ac: null };
+  for (var i = 0; i < j.datetime.length; i++) {
+    if (j.High[i] > bar.h) bar.h = j.High[i];
+    if (j.Low[i] < bar.l) bar.l = j.Low[i];
+    bar.v += j.Volume[i];
+  }
+  return bar;
+}
+
+// 把今天那一根併進序列（同日覆寫，否則接在後面）
+function _chartPutToday(bars, bar) {
+  if (!bar) return bars;
+  if (bars.length && bars[bars.length - 1].d === bar.d) bars[bars.length - 1] = bar;
+  else bars.push(bar);
+  return bars;
+}
+
+function chartSetPeriod(k) {
+  var def = _chartPerDef(k);
+  if (!def || !_chartCode) return;
+  _chartPer = def;
+  try { localStorage.setItem(CHART_PER_LS, k); } catch (e) {}
+  _chartLoadDay();
+}
+function chartToggleAdj() {
+  _chartAdjOn = !_chartAdjOn;
+  try { localStorage.setItem(CHART_ADJ_LS, _chartAdjOn ? '1' : '0'); } catch (e) {}
+  _chartLoadDay();
+}
+
+// 期間按鈕列。放在 #ckd-ctl，與圖區 #ckd-plot 分開，載入中按鈕不消失。
+function _chartPerBarHtml() {
+  var h = '<div class="ckd-perbar">' + CHART_PERIODS.map(function (p) {
+    return '<button class="ckd-per' + (p.k === _chartPer.k ? ' active' : '') +
+      '" onclick="chartSetPeriod(&quot;' + p.k + '&quot;)">' + p.lb + '</button>';
+  }).join('');
+  if (_chartPer.src === 'yahoo') {
+    h += '<button class="ckd-adj' + (_chartAdjOn ? ' active' : '') + '" onclick="chartToggleAdj()" ' +
+      'title="還原價：把除息落差加回歷史價，長期線才看得出總報酬；收盤價則是實際成交價">' +
+      (_chartAdjOn ? '還原價' : '收盤價') + '</button>';
+  }
+  return h + '</div>';
+}
+
 async function _chartLoadDay() {
   var area = document.getElementById('chart-area');
   var code = _chartCode;
-  area.innerHTML = '<div class="modal-loading">載入日 K 中…</div>';
+  if (!_chartPer) _chartPer = _chartSavedPer();
+  if (_chartAdjOn == null) _chartAdjOn = _chartSavedAdj();
+  var per = _chartPer;
+  if (!document.getElementById('ckd-plot')) {
+    area.innerHTML = '<div id="ckd-ctl"></div><div id="ckd-plot"></div>';
+  }
+  document.getElementById('ckd-ctl').innerHTML = _chartPerBarHtml();
+  var plot = document.getElementById('ckd-plot');
+  plot.innerHTML = '<div class="modal-loading">載入' + per.lb + '日 K 中…</div>';
   try {
     var today = _chartYmd(new Date());
-    var key = code + ':day';
+    // kbars 的兩個期間共用同一筆快取（240 日曆天、約 157 個交易日），切期間不重抓
+    var key = code + ':day:' + (per.src === 'kbars' ? 'kbars' : 'y' + per.range);
     var cc = _chartCache[key];
     if (!cc || cc.day !== today) {
-      var bars = await _chartFetchDay(code);
+      var bars;
+      if (per.src === 'kbars') {
+        bars = await _chartFetchDay(code);          // 已含今天
+      } else {
+        bars = await _chartFetchYahoo(code, per.range);
+        _chartPutToday(bars, await _chartTodayBar(code).catch(function () { return null; }));
+      }
       cc = _chartCache[key] = { day: today, bars: bars };
     }
-    if (_chartCode !== code || _chartTab !== 'day') return; // 期間已切走
-    area.innerHTML = _chartDaySvg(cc.bars, code);
-    _chartBindDayHover(cc.bars);
+    if (_chartCode !== code || _chartTab !== 'day' || _chartPer !== per) return;   // 期間已切走
+    _chartDayRender(cc.bars, code, per);
   } catch (e) {
-    area.innerHTML = '<div class="modal-loading">載入失敗：' + e.message + '</div>';
+    plot.innerHTML = '<div class="modal-loading">載入失敗：' + e.message + '</div>';
   }
 }
 
-// 日線 SVG：日 K 紅漲綠跌（實心）、MA5/20/60、下方成交量
-function _chartDaySvg(bars, code) {
+// 畫圖與綁互動的單一出口（載入、切期間、盤中更新都走這裡）
+function _chartDayRender(bars, code, per) {
+  var view = _chartAdjBars(bars, per.src === 'yahoo' && _chartAdjOn);
+  document.getElementById('ckd-plot').innerHTML = _chartDaySvg(view, code, per);
+  _chartBindDayHover(view, per);
+}
+
+// 日線 SVG：近月／三月／六月畫日 K（紅漲綠跌實心），一年／五年改畫收盤折線，
+// 都疊 MA5/20/60，下方成交量。per 帶入顯示根數、線圖與否、資料來源。
+function _chartDaySvg(bars, code, per) {
   var W = 860, H = 320, VH = 70, PAD_L = 58, PAD_R = 12, PAD_T = 12, GAP = 30;
   var PW = W - PAD_L - PAD_R, PH = H - VH - GAP - PAD_T;
   if (!bars.length) return '<div class="modal-loading">無資料</div>';
 
   var ma5 = _chartMA(bars, 5), ma20 = _chartMA(bars, 20), ma60 = _chartMA(bars, 60);
-  var s0 = Math.max(0, bars.length - CHART_DAY_SHOW);          // 顯示起點（前段供均線暖身）
+  var s0 = Math.max(0, bars.length - per.show);                // 顯示起點（前段供均線暖身）
   var view = bars.slice(s0), n = view.length;
+  var line = per.line;
 
   var lo = Infinity, hi = -Infinity;
   view.forEach(function (b) { if (b.l < lo) lo = b.l; if (b.h > hi) hi = b.h; });
@@ -777,7 +942,7 @@ function _chartDaySvg(bars, code) {
 
   var step = PW / n;
   var x = function (k) { return PAD_L + step * (k + 0.5); };
-  var y = function (p) { return PAD_T + (hi - p) * PH / (hi - lo); };
+  var y = function (p2) { return PAD_T + (hi - p2) * PH / (hi - lo); };
   var vy = function (v) { return PAD_T + PH + GAP + VH - v * VH / vmax; };
 
   var s = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
@@ -787,31 +952,40 @@ function _chartDaySvg(bars, code) {
     s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + yy.toFixed(1) + '"/>' +
       '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (yy + 3.5).toFixed(1) + '" text-anchor="end">' + pv.toFixed(2) + '</text>';
   }
-  // 月分隔線＋月份標籤
-  var prevMo = '';
+  // 時間分隔線＋標籤：根數多時每隔幾個月才標一次，否則五年會擠出六十個標籤
+  var lblEvery = n > 600 ? 12 : (n > 300 ? 3 : (n > 150 ? 2 : 1));
+  var prevMo = '', moIdx = -1;
   view.forEach(function (b, k) {
     var mo = b.d.slice(0, 7);
-    if (mo !== prevMo) {
-      if (k > 0) s += '<line class="ck-sep" x1="' + (x(k) - step / 2).toFixed(1) + '" y1="' + PAD_T + '" x2="' + (x(k) - step / 2).toFixed(1) + '" y2="' + (PAD_T + PH + GAP + VH) + '"/>';
-      s += '<text class="ck-axis" x="' + x(k).toFixed(1) + '" y="' + (H - 2) + '" text-anchor="middle">' + b.d.slice(5).replace('-', '/') + '</text>';
-      prevMo = mo;
-    }
+    if (mo === prevMo) return;
+    prevMo = mo; moIdx++;
+    if (moIdx % lblEvery) return;
+    if (k > 0) s += '<line class="ck-sep" x1="' + (x(k) - step / 2).toFixed(1) + '" y1="' + PAD_T + '" x2="' + (x(k) - step / 2).toFixed(1) + '" y2="' + (PAD_T + PH + GAP + VH) + '"/>';
+    var lb = lblEvery >= 12 ? b.d.slice(0, 4) : b.d.slice(2).replace(/-/g, '/').slice(0, 5);
+    s += '<text class="ck-axis" x="' + x(k).toFixed(1) + '" y="' + (H - 2) + '" text-anchor="middle">' + lb + '</text>';
   });
   // 成交量
-  var bw = Math.max(1, step * 0.62);
+  var bw = Math.max(0.6, step * 0.62);
   view.forEach(function (b, k) {
-    var up = b.c >= b.o;
+    var up = line ? (k > 0 ? b.c >= view[k - 1].c : true) : b.c >= b.o;
     s += '<rect class="ck-vol ' + (up ? 'up' : 'dn') + '" x="' + (x(k) - bw / 2).toFixed(1) + '" y="' + vy(b.v).toFixed(1) +
       '" width="' + bw.toFixed(1) + '" height="' + Math.max(0.6, b.v * VH / vmax).toFixed(1) + '"/>';
   });
-  // 日 K 棒：影線＋實體（紅漲綠跌；開＝收畫成一字線）
-  view.forEach(function (b, k) {
-    var up = b.c >= b.o, cls = up ? 'up' : 'dn', xx = x(k);
-    s += '<line class="ck-wick ' + cls + '" x1="' + xx.toFixed(1) + '" y1="' + y(b.h).toFixed(1) + '" x2="' + xx.toFixed(1) + '" y2="' + y(b.l).toFixed(1) + '"/>';
-    var yTop = y(Math.max(b.o, b.c)), hBody = Math.max(1, Math.abs(y(b.o) - y(b.c)));
-    s += '<rect class="ck-body ' + cls + '" x="' + (xx - bw / 2).toFixed(1) + '" y="' + yTop.toFixed(1) +
-      '" width="' + bw.toFixed(1) + '" height="' + hBody.toFixed(1) + '"/>';
-  });
+  if (line) {
+    // 收盤折線：根數多到蠟燭畫不出來時改用這個
+    var lp = [];
+    view.forEach(function (b, k) { lp.push(x(k).toFixed(1) + ',' + y(b.c).toFixed(1)); });
+    s += '<polyline class="ckd-line" points="' + lp.join(' ') + '"/>';
+  } else {
+    // 日 K 棒：影線＋實體（紅漲綠跌；開＝收畫成一字線）
+    view.forEach(function (b, k) {
+      var up = b.c >= b.o, cls = up ? 'up' : 'dn', xx = x(k);
+      s += '<line class="ck-wick ' + cls + '" x1="' + xx.toFixed(1) + '" y1="' + y(b.h).toFixed(1) + '" x2="' + xx.toFixed(1) + '" y2="' + y(b.l).toFixed(1) + '"/>';
+      var yTop = y(Math.max(b.o, b.c)), hBody = Math.max(1, Math.abs(y(b.o) - y(b.c)));
+      s += '<rect class="ck-body ' + cls + '" x="' + (xx - bw / 2).toFixed(1) + '" y="' + yTop.toFixed(1) +
+        '" width="' + bw.toFixed(1) + '" height="' + hBody.toFixed(1) + '"/>';
+    });
+  }
   // 均線
   [['ma5', ma5], ['ma20', ma20], ['ma60', ma60]].forEach(function (pair) {
     var pts = [];
@@ -833,19 +1007,25 @@ function _chartDaySvg(bars, code) {
   var chg = last.c - first.c, pct = first.c ? chg / first.c * 100 : 0;
   var cls2 = chg >= 0 ? 'up' : 'down';
   var maLbl = function (name, v, klass) { return '<span class="ck-legend ' + klass + '">' + name + ' ' + (v != null ? v.toFixed(2) : '—') + '</span>'; };
+  var adj = per.src === 'yahoo' && _chartAdjOn;
+  var note = per.src === 'kbars'
+    ? 'Shioaji 1 分 K 聚合為日 K，收盤價；最後一根盤中每分鐘更新。'
+    : 'Yahoo 日 K（' + (adj ? '還原價：除息落差已加回歷史價，看的是總報酬' : '收盤價：實際成交價，除息當天會往下跳') +
+      '），最後一根改用本機盤中現價。量已由股換算為張。';
   return '<div class="chart-info"><span id="ckd-tip">' +
-      n + ' 日 <b>' + first.c.toFixed(2) + '</b> → <b>' + last.c.toFixed(2) + '</b>　' +
+      per.lb + ' ' + n + ' 日 <b>' + first.c.toFixed(2) + '</b> → <b>' + last.c.toFixed(2) + '</b>　' +
       '<span class="' + cls2 + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '（' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%）</span>' +
     '</span>　' + maLbl('MA5', ma5[bars.length - 1], 'ma5') + maLbl('MA20', ma20[bars.length - 1], 'ma20') + maLbl('MA60', ma60[bars.length - 1], 'ma60') +
     '</div>' + s +
-    '<div class="detail-note">Shioaji 1 分 K 聚合為日 K（近 ' + n + ' 個交易日）；紅漲綠跌，均線 MA5/MA20/MA60。</div>';
+    '<div class="detail-note">' + note + ' 紅漲綠跌，均線 MA5／MA20／MA60。' +
+      (first.d ? '區間 ' + first.d + ' 起。' : '') + '</div>';
 }
 
-function _chartBindDayHover(bars) {
+function _chartBindDayHover(bars, per) {
   var svg = document.querySelector('#chart-area .chart-svg');
   var hit = document.getElementById('ckd-hit'), cross = document.getElementById('ckd-cross'), tip = document.getElementById('ckd-tip');
   if (!svg || !hit || !cross || !tip) return;
-  var s0 = Math.max(0, bars.length - CHART_DAY_SHOW), view = bars.slice(s0), n = view.length;
+  var s0 = Math.max(0, bars.length - per.show), view = bars.slice(s0), n = view.length;
   var PAD_L = 58, PW = 860 - 58 - 12, step = PW / n;
   var base = tip.innerHTML;
   hit.addEventListener('mousemove', function (ev) {
@@ -855,10 +1035,11 @@ function _chartBindDayHover(bars) {
     if (k < 0) k = 0; if (k > n - 1) k = n - 1;
     var xx = PAD_L + step * (k + 0.5);
     cross.setAttribute('x1', xx); cross.setAttribute('x2', xx); cross.style.display = '';
-    var b = view[k], up = b.c >= b.o, cls = up ? 'up' : 'down';
+    var b = view[k];
     var prev = k > 0 ? view[k - 1].c : b.o;
     var dc = b.c - prev, dp = prev ? dc / prev * 100 : 0;
-    tip.innerHTML = b.d.slice(5).replace('-', '/') +
+    var cls = dc >= 0 ? 'up' : 'down';
+    tip.innerHTML = b.d.replace(/-/g, '/') +
       '　開 <b>' + b.o.toFixed(2) + '</b> 高 <b>' + b.h.toFixed(2) + '</b> 低 <b>' + b.l.toFixed(2) + '</b> 收 <b class="' + cls + '">' + b.c.toFixed(2) + '</b>' +
       ' <span class="' + cls + '">(' + (dc >= 0 ? '+' : '') + dp.toFixed(2) + '%)</span>　量 <b>' + Math.round(b.v).toLocaleString('zh-TW') + '</b>';
   });

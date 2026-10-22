@@ -404,6 +404,16 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 /* ── 個股線圖彈窗 ── */
 .scard { cursor: pointer; }
 .chart-tabs { margin-bottom: 10px; }
+/* 日線頁籤的期間列：比頁籤小一號，不跟上面那排搶視覺重量。
+   還原／收盤的切換推到最右，它是資料口徑不是期間，混在一起會被當成第六個期間 */
+.ckd-perbar { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.ckd-per, .ckd-adj { background: transparent; border: 1px solid var(--border); color: var(--text2);
+  font-size: 12px; padding: 3px 12px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
+.ckd-per:hover, .ckd-adj:hover { background: var(--bg2); }
+.ckd-per.active { background: rgba(240,204,122,.14); border-color: rgba(240,204,122,.4);
+  color: var(--accent2); font-weight: 700; }
+.ckd-adj { margin-left: auto; }
+.ckd-adj.active { border-color: rgba(127,176,255,.45); color: #7fb0ff; font-weight: 700; }
 .chart-info { font-size: 13px; color: var(--text2); margin-bottom: 6px; min-height: 20px; font-variant-numeric: tabular-nums; }
 .chart-info b { color: var(--text); font-weight: 700; }
 .chart-svg { width: 100%; height: auto; display: block; }
@@ -421,6 +431,9 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ck-wick.up, .ck-body.up { stroke: var(--up); fill: var(--up); }
 .ck-wick.dn, .ck-body.dn { stroke: var(--down); fill: var(--down); }
 .ck-wick { stroke-width: 1; }
+/* 一年／五年的收盤折線：根數多到蠟燭畫不出來時改用這個。
+   不用五日線的暗橘，避免跟 MA5 的淺黃在同一張圖上混淆 */
+.ckd-line { fill: none; stroke: #dfe8f2; stroke-width: 1.2; stroke-linejoin: round; }
 .ck-ma { fill: none; stroke-width: 1.3; }
 .ck-ma.ma5 { stroke: #f0cc7a; }
 .ck-ma.ma20 { stroke: #7fb0ff; }
