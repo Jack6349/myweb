@@ -1354,9 +1354,12 @@ td.cost-even::after  { background: var(--text3); }
 .pv-line { fill: none; stroke-width: 1.6; }
 .pv-line.val { stroke: var(--accent2); }
 .pv-line.rate { stroke: #7fb0ff; }
-/* 原始成本：這條是基準線不是表現，所以用灰藍、比現值細一級，讓它退到背景。
-   不用紅綠（台股紅漲綠跌，會被讀成漲跌），也不用橘黃與藍（現值與報酬率已經用掉） */
-.pv-line.cost { stroke: #8fa3ba; stroke-width: 1.3; }
+/* 原始成本：比現值細一級，維持「基準線」的層級，但顏色必須離開灰藍系 ——
+   原本的 #8fa3ba 與 .ck-ref 完全同色、與 .ck-sep 和 --text2 同族，會被讀成裝飾線。
+   選亮粉紅而非橘：橘 #e8731e 色相約 25°，與總現值的 #f0cc7a（約 42°）只差 17°，
+   而這兩條正是最不能認錯的一組（投入的錢 vs 現在的錢）。
+   粉紅約 331°，離琥珀、離報酬率的藍 #7fb0ff（215°）、離長條的紅 #ff5252（0°）都夠遠 */
+.pv-line.cost { stroke: #ff7ab8; stroke-width: 1.3; }
 .pv-bar.up { fill: var(--up); opacity: .6; }
 .pv-bar.dn { fill: var(--down); opacity: .6; }
 .pv-ax-r { fill: #7fb0ff; }
@@ -1364,7 +1367,7 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lg::before { content: '━ '; }
 .pv-lg.val { color: var(--accent2); }
 .pv-lg.rate { color: #7fb0ff; }
-.pv-lg.cost { color: #8fa3ba; }
+.pv-lg.cost { color: #ff7ab8; }
 .pv-lg.bar { color: var(--up); }
 .pv-lg.bar::before { content: '▌ '; }
 
