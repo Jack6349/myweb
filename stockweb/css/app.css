@@ -55,6 +55,20 @@
   --z-gate: 100;     /* 登入遮罩 */
   --z-modal: 200;    /* 彈窗 */
   --z-toast: 300;    /* 通知（原本 9999，與彈窗之間沒有別的層） */
+
+  /* ── 圓角刻度 ──
+     2（髮絲條）／4（標籤、輸入框）／6（小按鈕、chip）／8（按鈕、提示卡）／
+     12（面板、卡片、抽屜、彈窗）／99（膠囊）／50%（圓點）。
+     原本 15 種單值（含 3,5,7,9,10,14,16,999），同一類元件各用各的。
+     方向性圓角（0 6px 6px 0 之類）照留，那是指定哪幾角的，不屬刻度。
+
+     ── 間距 ──
+     實際在用的是 2 的倍數為主：2/4/6/8/10/12/14/16/18/22/26/30。
+     另有 88 處奇數值（1,3,5,7,9px），絕大多數是 chip 與按鈕的垂直內距
+     （padding: 1px 6px、3px 8px、5px 10px…），那是為了讓標籤在文字行上
+     對齊才調出來的。把它們取整會改變高度與行內對齊，收益只有數字整齊，
+     所以保留原值，新增元件時請從上面那組偶數裡挑。
+     .sec-title 的 padding-left: 11px 是配 4px 左框湊成 15px，不要改。 */
   --font: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 
   /* ── 圖表色盤 ──
@@ -103,7 +117,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .login-box { text-align: center; padding: 40px; }
 .login-title { font-size: 28px; font-weight: 700; color: var(--accent2); }
 .login-sub { font-size: 14px; color: var(--text2); margin: 10px 0 28px; }
-.btn-login { background: rgba(240,204,122,.12); border: 1px solid rgba(240,204,122,.4); color: var(--accent2); font-size: 15px; padding: 12px 28px; border-radius: 10px; cursor: pointer; font-family: var(--font); }
+.btn-login { background: rgba(240,204,122,.12); border: 1px solid rgba(240,204,122,.4); color: var(--accent2); font-size: 15px; padding: 12px 28px; border-radius: 12px; cursor: pointer; font-family: var(--font); }
 .btn-login:hover { background: rgba(240,204,122,.2); }
 .login-msg { margin-top: 16px; font-size: 13px; color: var(--text2); white-space: pre-line; }
 
@@ -168,7 +182,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .sum-pair { white-space: nowrap; display: flex; align-items: baseline; gap: 8px; }
 .sum-plabel { font-size: 16px; color: var(--text2); font-weight: 600; }
 .sum-pval { font-size: 16px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
-.btn-toggle { background: rgba(138,180,212,.14); border: 1px solid rgba(138,180,212,.45); color: var(--accent3); font-size: 12px; font-weight: 600; padding: 4px 0; border-radius: 7px; cursor: pointer; font-family: var(--font); white-space: nowrap; width: 84px; text-align: center; box-sizing: border-box; flex-shrink: 0; }
+.btn-toggle { background: rgba(138,180,212,.14); border: 1px solid rgba(138,180,212,.45); color: var(--accent3); font-size: 12px; font-weight: 600; padding: 4px 0; border-radius: 6px; cursor: pointer; font-family: var(--font); white-space: nowrap; width: 84px; text-align: center; box-sizing: border-box; flex-shrink: 0; }
 .btn-toggle:hover { background: rgba(138,180,212,.26); }
 /* 交易紀錄頁沿用同款雙欄位總覽 */
 .tr-summary .sum-item { flex: 0 1 auto; }
@@ -389,7 +403,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 @media (max-width: 1100px) { .macro-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .macro-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .macro-bar:empty { display: none; }
-.macro-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; display: flex; align-items: baseline; gap: 8px; }
+.macro-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; display: flex; align-items: baseline; gap: 8px; }
 /* 非投債警示：⚠ 用文字字形（不加 VS16）才吃得到 CSS 顏色，emoji 形態會固定成彩色 */
 .macro-warn { font-size: 13px; line-height: 1; flex: none; }
 .macro-warn.warn { color: var(--accent2); }   /* 黃 */
@@ -406,11 +420,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .news-src { color: var(--accent2); font-size: 11.5px; white-space: nowrap; flex-shrink: 0; background: rgba(240,204,122,.08); border: 1px solid rgba(240,204,122,.25); padding: 1px 8px; border-radius: 6px; }
 .news-title { color: var(--text); text-decoration: none; line-height: 1.5; min-width: 0; }
 a.news-title:hover { color: var(--accent2); text-decoration: underline; }
-.news-prompt-ta { width: 100%; height: 50vh; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 12.5px; line-height: 1.6; padding: 12px; font-family: Consolas, monospace; resize: vertical; box-sizing: border-box; }
+.news-prompt-ta { width: 100%; height: 50vh; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-size: 12.5px; line-height: 1.6; padding: 12px; font-family: Consolas, monospace; resize: vertical; box-sizing: border-box; }
 
 /* ── 彈窗 ── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: var(--z-modal); display: flex; align-items: center; justify-content: center; padding: 24px; overflow: hidden; }
-.modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; max-width: 720px; width: 100%; max-height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; max-width: 720px; width: 100%; max-height: 100%; min-height: 0; display: flex; flex-direction: column; }
 .modal-head { flex-shrink: 0; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid var(--border); }
 .modal-title { font-size: 16px; font-weight: 700; color: var(--accent2); }
@@ -434,7 +448,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 /* 說明收合（note.js 自動包）：預設收起，只留一列「說明」 */
 .nbox { margin: 8px 0 14px; }
 .nbox > summary { cursor: pointer; display: inline-block; font-size: 12px; color: var(--text3);
-  border: 1px solid var(--border); border-radius: 999px; padding: 2px 12px 2px 8px; list-style: none; user-select: none; }
+  border: 1px solid var(--border); border-radius: 99px; padding: 2px 12px 2px 8px; list-style: none; user-select: none; }
 .nbox > summary::-webkit-details-marker { display: none; }
 .nbox > summary::before { content: '▸'; display: inline-block; width: 12px; }
 .nbox[open] > summary::before { content: '▾'; }
@@ -677,7 +691,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-score-big { font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
 .rs-vlabel { font-size: 11px; color: var(--text3); margin-bottom: 2px; }
 .rs-verdict-txt { font-size: 15px; }
-.rs-flag { font-size: 13px; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
+.rs-flag { font-size: 13px; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
 .rs-flag.on { background: color-mix(in srgb, var(--up) 12%, transparent); border-color: color-mix(in srgb, var(--up) 50%, transparent); color: var(--up); font-weight: 700; }
 .rs-table { width: 100%; border-collapse: collapse; font-size: 14px; max-width: 520px; }
 .rs-table th { text-align: left; color: var(--th); font-weight: 600; font-size: 11.5px; letter-spacing: .8px; padding: 9px 10px; border-bottom: 2px solid var(--border); background: var(--thbg); }
@@ -723,7 +737,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-x { background: transparent; border: none; color: var(--text3); font-size: 14px; cursor: pointer; padding: 0 0 0 2px; line-height: 1; }
 .swap-x:hover { color: var(--up); }
 .swap-sum { display: flex; flex-wrap: wrap; gap: 10px 26px; padding: 4px 2px 12px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
-.swap-sumbar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 22px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+.swap-sumbar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 22px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
 .swap-sumbar:empty { display: none; }
 .swap-months { font-size: 12px; }
 .swap-mrow { display: flex; align-items: center; gap: 10px; padding: 5px 2px; border-bottom: 1px solid var(--border); }
@@ -734,8 +748,8 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-marrow { color: var(--text3); flex-shrink: 0; }
 .swap-mdiff { width: 86px; text-align: right; flex-shrink: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .swap-track { flex: 1; min-width: 80px; display: flex; flex-direction: column; gap: 2px; }
-.swap-bar-b { height: 5px; border-radius: 3px; background: var(--text3); }
-.swap-bar-a { height: 5px; border-radius: 3px; background: var(--accent2); }
+.swap-bar-b { height: 5px; border-radius: 4px; background: var(--text3); }
+.swap-bar-a { height: 5px; border-radius: 4px; background: var(--accent2); }
 
 /* ── 加減碼報告：指標說明小字 + 債券型信用風險子模組 ── */
 .rs-idesc { font-size: 11.5px; color: var(--text2); margin-top: 3px; font-weight: 400; line-height: 1.5; white-space: normal; }
@@ -868,7 +882,7 @@ td.cost-even::after  { background: var(--text3); }
 .wt-search { position: relative; }
 .wt-inp { width: 380px; text-align: left; }
 .wt-sug { position: absolute; top: 100%; left: 0; z-index: var(--z-pop); width: 420px; max-height: 320px; overflow-y: auto;
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; margin-top: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; margin-top: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
 .wt-sug-item { display: grid; grid-template-columns: 76px 1fr auto; align-items: center; gap: 10px;
   padding: 7px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--border); }
 .wt-sug-item:last-child { border-bottom: none; }
@@ -893,7 +907,7 @@ td.cost-even::after  { background: var(--text3); }
 
 /* ── 股利統計表（股利估算頁最下方）：縱向個股、橫向 1–12 月＋總計 ── */
 /* 12 個月份欄會超出版面 → 表格自身橫向捲動；代號欄用 sticky 凍結在左側，捲動時仍看得到是哪一檔 */
-.dstat-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); }
+.dstat-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--bg2); }
 .dstat { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dstat th, .dstat td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
 .dstat thead th { background: var(--thbg); color: var(--th); font-weight: 600; letter-spacing: .6px; position: sticky; top: 0; z-index: var(--z-table); }
@@ -1028,7 +1042,7 @@ td.cost-even::after  { background: var(--text3); }
   font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
 .dw-btn.on { border-color: var(--accent); color: var(--accent2); }
 .dw { position: absolute; right: 28px; z-index: var(--z-drawer); width: min(1240px, calc(100vw - 56px));
-  background: var(--bg2); border: 1px solid var(--accent); border-radius: 10px;
+  background: var(--bg2); border: 1px solid var(--accent); border-radius: 12px;
   box-shadow: 0 14px 34px rgba(0,0,0,.55); padding: 12px 16px; }
 .dw[hidden] { display: none; }
 /* 與功能頁標題（.crumb）同字級 */
@@ -1100,7 +1114,7 @@ td.cost-even::after  { background: var(--text3); }
 .dm-freq { white-space: nowrap; }
 .dm-sel { background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 4px;
   font-size: 12px; padding: 2px 4px; font-family: var(--font); }
-.dm-src { display: inline-block; margin-left: 6px; font-size: 10px; padding: 0 5px; border-radius: 3px;
+.dm-src { display: inline-block; margin-left: 6px; font-size: 10px; padding: 0 5px; border-radius: 4px;
   border: 1px solid var(--border); color: var(--text2); }
 .dm-src-off { border-color: color-mix(in srgb, var(--down) 50%, transparent); color: var(--down); }        /* 官方 TWSE／TPEx */
 .dm-src-manual, .dm-src-code { border-color: rgba(240,204,122,.6); color: var(--accent2); }
@@ -1108,7 +1122,7 @@ td.cost-even::after  { background: var(--text3); }
 .dm-src-guess { border-color: color-mix(in srgb, var(--up) 60%, transparent); color: var(--up); }
 /* 費率輸入：number 型別的上下箭頭會吃掉寬度把 0.035 截斷 → 隱藏箭頭、加寬；% 緊貼數字、級距標記固定佔位 */
 .dm-feewrap { display: inline-flex; align-items: baseline; justify-content: flex-end; white-space: nowrap; }
-.dm-fee { width: 4.2em; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 3px;
+.dm-fee { width: 4.2em; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 4px;
   text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; padding: 1px 2px; font-family: var(--font);
   -moz-appearance: textfield; appearance: textfield; }
 .dm-fee::-webkit-outer-spin-button, .dm-fee::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -1198,7 +1212,7 @@ td.cost-even::after  { background: var(--text3); }
 .es-info { font-size: 12px; color: var(--text2); margin-left: 6px; }
 .es-table td, .es-table th { padding-left: 6px; padding-right: 6px; white-space: nowrap; }
 .es-table td { font-size: 13px; }
-.es-tag { display: inline-block; margin-left: 4px; font-size: 10px; padding: 0 4px; border-radius: 3px; vertical-align: 1px; }
+.es-tag { display: inline-block; margin-left: 4px; font-size: 10px; padding: 0 4px; border-radius: 4px; vertical-align: 1px; }
 .es-held { background: color-mix(in srgb, var(--up) 18%, transparent); color: var(--up); }
 .es-watch { background: rgba(90,169,255,.18); color: var(--accent3); }
 .es-wcell { text-align: center; }
@@ -1225,7 +1239,7 @@ td.cost-even::after  { background: var(--text3); }
 
 /* ══════════ 下單（order.js）══════════ */
 /* 底色沿用券商 App：買進暗紅、賣出暗綠，一眼分辨方向 */
-.ord-cf .ord-cf-box { border-radius: 14px; padding: 22px 26px; min-width: 300px; max-width: 92vw;
+.ord-cf .ord-cf-box { border-radius: 12px; padding: 22px 26px; min-width: 300px; max-width: 92vw;
   border: 1px solid var(--border); text-align: center; }
 .ord-cf.ord-buy .ord-cf-box { background: var(--ord-buy-box); border-color: var(--ord-buy-line); }
 .ord-cf.ord-sell .ord-cf-box { background: var(--ord-sell-box); border-color: var(--ord-sell-line); }
@@ -1242,7 +1256,7 @@ td.cost-even::after  { background: var(--text3); }
 .ord-b:hover { filter: brightness(1.15); }
 
 .ord-box { width: 100%; max-width: 460px; max-height: 100%; display: flex; flex-direction: column;
-  border-radius: 14px; border: 1px solid var(--border); overflow: hidden; }
+  border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
 .ord-box.ord-buy { background: var(--ord-buy-bg); }
 .ord-box.ord-sell { background: var(--ord-sell-bg); }
 .ord-head { display: flex; align-items: center; justify-content: space-between;
@@ -1290,7 +1304,7 @@ td.cost-even::after  { background: var(--text3); }
   border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
 .ord-pend-btn:disabled { opacity: .35; cursor: default; }
 .ord-pend-btn.on { background: var(--accent2); border-color: var(--accent2); color: var(--on-light); font-weight: 700; }
-.ord-pend-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+.ord-pend-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
   width: 100%; max-width: 860px; max-height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .ord-pend-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px;
   border-bottom: 1px solid var(--border); font-size: 15px; font-weight: 700; color: var(--accent2); }
@@ -1303,7 +1317,7 @@ td.cost-even::after  { background: var(--text3); }
 .ord-pend-tb .num { text-align: right; font-variant-numeric: tabular-nums; }
 .ord-pend-act { white-space: nowrap; }
 .ord-pend-act button { background: var(--ord-btn-bg); color: var(--text2); border: 1px solid var(--border);
-  border-radius: 5px; padding: 3px 8px; font-size: 12px; margin-right: 4px; cursor: pointer; }
+  border-radius: 6px; padding: 3px 8px; font-size: 12px; margin-right: 4px; cursor: pointer; }
 .ord-pend-act button:disabled { opacity: .35; cursor: not-allowed; }
 
 /* 交易欄：今日進出。亮＝已成交、暗＝還掛著；上標為在途量 */
@@ -1636,13 +1650,13 @@ td.cost-even::after  { background: var(--text3); }
   border-radius: 4px; padding: 0 5px; }
 .rf-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .rf-cal-wd { font-size: 11px; color: var(--text3); text-align: center; padding-bottom: 2px; }
-.rf-cal-cell { min-height: 46px; border-radius: 5px; padding: 3px 5px; background: var(--bg3);
+.rf-cal-cell { min-height: 46px; border-radius: 6px; padding: 3px 5px; background: var(--bg3);
   display: flex; flex-direction: column; gap: 1px; }
 .rf-cal-cell.out { background: none; }
 /* 今天只標日期數字，不用外框：外框已經是「發放日為推估」的意思，
    兩者都用橘色系會被讀成「有框卻沒內容＝壞掉」 */
 .rf-cal-cell.today .rf-cal-d { color: var(--bg); background: var(--accent2);
-  border-radius: 9px; padding: 0 6px; font-weight: 700; align-self: flex-start; }
+  border-radius: 8px; padding: 0 6px; font-weight: 700; align-self: flex-start; }
 /* 實色＝已公告發放日；外框＝發放日為推估 */
 .rf-cal-cell.act { background: color-mix(in srgb, var(--down) 22%, var(--bg3)); }
 .rf-cal-cell.est { background: var(--bg3); box-shadow: inset 0 0 0 1px var(--accent); }
