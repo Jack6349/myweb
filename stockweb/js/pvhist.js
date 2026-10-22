@@ -210,9 +210,13 @@ function pvSvg(data) {
   var n = pts.length, step = (W - PAD_L - PAD_R) / n;
   var x = function (k) { return PAD_L + step * (k + 0.5); };
 
+  // 左軸要同時容得下總現值與原始成本。實測 90 天：現值 1,540–1,813 萬、成本 1,111–1,371 萬，
+  // 軸高因此從 317 萬變成 815 萬，現值的 273 萬波動由 205px 壓到 80px。
+  // 壓縮是把兩條線放在同一把尺上的必然代價 —— 分開兩把尺就看不出「現在的錢比投入的錢多多少」。
   var vlo = Infinity, vhi = -Infinity, rlo = Infinity, rhi = -Infinity, plo = Infinity, phi = -Infinity;
   pts.forEach(function (o) {
     if (o.v < vlo) vlo = o.v; if (o.v > vhi) vhi = o.v;
+    if (o.c) { if (o.c < vlo) vlo = o.c; if (o.c > vhi) vhi = o.c; }
     if (o.rate != null) { if (o.rate < rlo) rlo = o.rate; if (o.rate > rhi) rhi = o.rate; }
     if (o.p != null) { if (o.p < plo) plo = o.p; if (o.p > phi) phi = o.p; }
   });
@@ -266,6 +270,16 @@ function pvSvg(data) {
     lv.push(x(k).toFixed(1) + ',' + yv(o.v).toFixed(1));
     if (o.rate != null) lr.push(x(k).toFixed(1) + ',' + yr(o.rate).toFixed(1));
   });
+  // 原始成本是階梯不是曲線：實測 90 天裡 54 天完全沒動，只在有買賣的 35 天跳。
+  // 用一般折線會在兩個交易日之間拉出斜坡，看起來像成本每天慢慢爬，那是假的。
+  // 垂直段落在成本真正改變的那一天。
+  var lc = [];
+  pts.forEach(function (o, k) {
+    if (!o.c) return;
+    if (k > 0 && pts[k - 1].c && pts[k - 1].c !== o.c) lc.push(x(k).toFixed(1) + ',' + yv(pts[k - 1].c).toFixed(1));
+    lc.push(x(k).toFixed(1) + ',' + yv(o.c).toFixed(1));
+  });
+  if (lc.length > 1) s += '<polyline class="pv-line cost" points="' + lc.join(' ') + '"/>';
   s += '<polyline class="pv-line val" points="' + lv.join(' ') + '"/>';
   if (lr.length > 1) s += '<polyline class="pv-line rate" points="' + lr.join(' ') + '"/>';
   s += '<rect id="pv-hit" x="' + PAD_L + '" y="' + PAD_T + '" width="' + (W - PAD_L - PAD_R) + '" height="' + (PH + GAP + BAR_H) + '" fill="transparent"/>' +
@@ -276,7 +290,8 @@ function pvSvg(data) {
   var head = '<div class="chart-info"><span id="pv-tip">' +
     n + ' 日　總現值 <b>' + a.v.toLocaleString('zh-TW') + '</b> → <b>' + z.v.toLocaleString('zh-TW') + '</b>　' +
     '<span class="' + cls + '">' + (dv >= 0 ? '+' : '') + dv.toLocaleString('zh-TW') + '</span>' +
-    '</span>　<span class="pv-lg val">總現值</span><span class="pv-lg rate">資本報酬率</span><span class="pv-lg bar">資本損益</span></div>';
+    '</span>　<span class="pv-lg val">總現值</span><span class="pv-lg cost">原始成本</span>' +
+    '<span class="pv-lg rate">資本報酬率</span><span class="pv-lg bar">資本損益</span></div>';
   return head + s;
 }
 
@@ -299,6 +314,7 @@ function pvBindHover(data) {
     var c2 = p == null ? '' : (p >= 0 ? 'up' : 'down');
     tip.innerHTML = r.d.slice(5).replace('-', '/') +
       '　總現值 <b>' + v.toLocaleString('zh-TW') + '</b>' +
+      '　原始成本 <b>' + (r.c ? r.c.toLocaleString('zh-TW') : '—') + '</b>' +
       '　資本損益 <b class="' + c2 + '">' + (p == null ? '—' : (p >= 0 ? '+' : '') + p.toLocaleString('zh-TW')) + '</b>' +
       '　資本報酬率 <b class="' + c2 + '">' + (rate == null ? '—' : (rate > 0 ? '+' : '') + rate.toFixed(2) + '%') + '</b>';
   });

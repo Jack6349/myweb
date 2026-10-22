@@ -1354,6 +1354,9 @@ td.cost-even::after  { background: var(--text3); }
 .pv-line { fill: none; stroke-width: 1.6; }
 .pv-line.val { stroke: var(--accent2); }
 .pv-line.rate { stroke: #7fb0ff; }
+/* 原始成本：這條是基準線不是表現，所以用灰藍、比現值細一級，讓它退到背景。
+   不用紅綠（台股紅漲綠跌，會被讀成漲跌），也不用橘黃與藍（現值與報酬率已經用掉） */
+.pv-line.cost { stroke: #8fa3ba; stroke-width: 1.3; }
 .pv-bar.up { fill: var(--up); opacity: .6; }
 .pv-bar.dn { fill: var(--down); opacity: .6; }
 .pv-ax-r { fill: #7fb0ff; }
@@ -1361,6 +1364,7 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lg::before { content: '━ '; }
 .pv-lg.val { color: var(--accent2); }
 .pv-lg.rate { color: #7fb0ff; }
+.pv-lg.cost { color: #8fa3ba; }
 .pv-lg.bar { color: var(--up); }
 .pv-lg.bar::before { content: '▌ '; }
 
