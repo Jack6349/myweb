@@ -178,8 +178,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 /* 每行固定 5 檔；15 檔內一頁完整顯示，超過才捲動 */
 .stream-grid { display: block; }
 .scard-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px 12px; }
+/* 響應式斷點只有三個：1100 / 900 / 680。原本有九個（1200,1180,1100,960,900,880,860,700,680），
+   每個元件在不同寬度各自重排，拉動視窗時版面會零散地抖九次。合併後整頁一起換。
+   合併方向都是「提早換成較少欄」或差距在 60px 內，不會讓任何格子比原本更窄。 */
 @media (max-width: 1100px) { .scard-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-width: 880px) { .scard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .scard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .scard-divider { border-top: 1px solid var(--border-strong); margin: 18px 0 0; }
 .scard { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 9px 14px; position: relative; width: 95%; justify-self: center; overflow: hidden; }
 /* 漲跌停：卡片下半部（總量/昨收/時間帶）填滿紅(漲停)/綠(跌停)，字色自動對比 */
@@ -418,7 +421,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 
 /* ── 交易資訊（三框） ── */
 .tx-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); gap: 12px; margin-bottom: 12px; }
-@media (max-width: 960px) { .tx-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .tx-grid { grid-template-columns: 1fr; } }
 .tx-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
 .tx-grid .tx-box { margin-bottom: 0; }
 .tx-box-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -538,7 +541,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .modal-box.chart-wide .chart-svg { max-height: 46vh; }
 .modal-box.chart-wide .iq-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .modal-box.chart-wide .detail-note { margin-top: 8px; }
-@media (max-width: 1180px) { .modal-box.chart-wide .iq-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .modal-box.chart-wide .iq-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-height: 760px) { .modal-box.chart-wide .chart-svg { max-height: 40vh; } }
 
 /* 即時行情（當日走勢） */
@@ -559,7 +562,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .iq-k { font-size: 12px; color: var(--text2); }
 .iq-v { font-size: 14px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .iq-v.y { color: var(--accent2); }
-@media (max-width: 700px) { .iq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .iq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* 買賣五檔 */
 .bid-head { display: flex; gap: 18px; align-items: center; font-size: 13px; color: var(--text2); margin-bottom: 10px; font-variant-numeric: tabular-nums; }
@@ -985,7 +988,7 @@ td.cost-even::after  { background: var(--text3); }
 
 /* 新上市 ETF：收益分配欄位較少，三欄就夠；條款全文預設收起 */
 .en-kv-div { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
-@media (max-width: 860px) { .en-kv-div { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+@media (max-width: 900px) { .en-kv-div { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
 .en-std { margin-top: 8px; }
 .en-std > summary { cursor: pointer; color: var(--text2); font-size: 12px; list-style: none; }
 .en-std > summary::-webkit-details-marker { display: none; }
@@ -1415,8 +1418,8 @@ td.cost-even::after  { background: var(--text3); }
 /* 四欄固定：11–12 個欄位就是 3 行。auto-fill 在寬螢幕會排到五六欄，每格被拉得很開，右邊還會被長值（ETF規模）撐出捲軸。
    minmax(0,1fr) 是關鍵：1fr 的最小尺寸是內容寬度，不歸零就壓不下去。 */
 .en-kv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px 18px; margin-top: 2px; }
-@media (max-width: 1200px) { .en-kv { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 860px)  { .en-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .en-kv { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px)  { .en-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .en-kv .en-k { display: inline-block; width: 86px; color: var(--text2); font-size: 12px; }
 .en-kv .en-v { font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .en-pair { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
