@@ -1259,9 +1259,12 @@ function _chartBindHover(d) {
 
 // 五日線 SVG：上價格折線（日分隔線＋昨收虛線）、下成交量長條
 function _chart5dSvg(d, code) {
-  var W = 860, H = 300, VH = 90, PAD_L = 58, PAD_R = 12, PAD_T = 12, GAP = 26;
+  // FOOT 是日期標籤專用的一條。與日線區同一個毛病：原本標在 H-2，
+  // 而量區的底就是 H，字會壓在量柱上。
+  var W = 860, H = 300, VH = 90, PAD_L = 58, PAD_R = 12, PAD_T = 12, GAP = 26, FOOT = 16;
   var PW = W - PAD_L - PAD_R;              // 繪圖區寬
-  var PH = H - VH - GAP - PAD_T;           // 價格區高
+  var PH = H - VH - GAP - PAD_T - FOOT;    // 價格區高
+  var VB = PAD_T + PH + GAP + VH;          // 量區底線，也是圖面的下界
   var n = d.close.length;
   if (!n) return '<div class="modal-loading">無資料</div>';
 
@@ -1275,7 +1278,7 @@ function _chart5dSvg(d, code) {
 
   var x = function (i) { return PAD_L + (n === 1 ? PW / 2 : i * PW / (n - 1)); };
   var y = function (p) { return PAD_T + (hi - p) * PH / (hi - lo); };
-  var vy = function (v) { return PAD_T + PH + GAP + VH - v * VH / vmax; };
+  var vy = function (v) { return VB - v * VH / vmax; };
 
   // 日界線位置與標籤
   var dayStart = [], prevDay = '';
@@ -1299,9 +1302,9 @@ function _chart5dSvg(d, code) {
   // 日分隔線＋日期標籤
   dayStart.forEach(function (ds, k) {
     var xx = x(ds.i);
-    if (k > 0) s += '<line class="ck-sep" x1="' + xx.toFixed(1) + '" y1="' + PAD_T + '" x2="' + xx.toFixed(1) + '" y2="' + (PAD_T + PH + GAP + VH) + '"/>';
+    if (k > 0) s += '<line class="ck-sep" x1="' + xx.toFixed(1) + '" y1="' + PAD_T + '" x2="' + xx.toFixed(1) + '" y2="' + VB + '"/>';
     var mid = x(k + 1 < dayStart.length ? (ds.i + dayStart[k + 1].i) / 2 : (ds.i + n - 1) / 2);
-    s += '<text class="ck-axis" x="' + mid.toFixed(1) + '" y="' + (H - 2) + '" text-anchor="middle">' + ds.day.slice(5).replace('-', '/') + '</text>';
+    s += '<text class="ck-axis" x="' + mid.toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">' + ds.day.slice(5).replace('-', '/') + '</text>';
   });
 
   // 成交量長條（依該分鐘漲跌上色：與前一分鐘比）
@@ -1321,14 +1324,32 @@ function _chart5dSvg(d, code) {
   s += '<polygon class="ck5-fill" points="' + x(0).toFixed(1) + ',' + baseY + ' ' + pts.join(' ') + ' ' + x(n - 1).toFixed(1) + ',' + baseY + '"/>';
   s += '<polyline class="ck5-line" points="' + pts.join(' ') + '"/>';
 
+  // 五日區間的最高與最低。標的是「哪一分鐘」，所以圓點落在那一根分 K 上，
+  // 不是日 K 的高低。水平位置夾在繪圖區內，免得落在端點時標籤被切掉；
+  // 低點離價格區底不到 14px 時改標在上方（軸只留 8% 邊距，常常放不下）。
+  var iHi = 0, iLo = 0;
+  for (var m5 = 1; m5 < n; m5++) {
+    if (d.close[m5] > d.close[iHi]) iHi = m5;
+    if (d.close[m5] < d.close[iLo]) iLo = m5;
+  }
+  var mk5 = function (i, dir) {
+    var v = d.close[i], px = x(i);
+    var tx = Math.min(Math.max(px, PAD_L + 20), W - PAD_R - 20);
+    var ty = (dir === 'dn' && y(v) + 14 <= PAD_T + PH - 2) ? y(v) + 14 : Math.max(y(v) - 7, PAD_T + 9);
+    s += '<circle class="ckd-dot" cx="' + px.toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="2.4"/>' +
+      '<text class="ckd-mk" x="' + tx.toFixed(1) + '" y="' + ty.toFixed(1) + '" text-anchor="middle">' + v.toFixed(2) + '</text>';
+  };
+  mk5(iHi, 'up');
+  if (iLo !== iHi) mk5(iLo, 'dn');
+
   // 量區頂線
   s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + (PAD_T + PH + GAP) + '" x2="' + (W - PAD_R) + '" y2="' + (PAD_T + PH + GAP) + '"/>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (PAD_T + PH + GAP + 10) + '" text-anchor="end">' + vmax.toLocaleString('zh-TW') + '</text>' +
-    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (PAD_T + PH + GAP + VH) + '" text-anchor="end">量</text>';
+    '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + VB + '" text-anchor="end">量</text>';
 
   // 互動：滑鼠移動顯示該分鐘價量
   s += '<rect id="ck-hit" x="' + PAD_L + '" y="' + PAD_T + '" width="' + PW + '" height="' + (PH + GAP + VH) + '" fill="transparent"/>' +
-    '<line id="ck-cross" class="ck-cross" x1="0" y1="' + PAD_T + '" x2="0" y2="' + (PAD_T + PH + GAP + VH) + '" style="display:none"/>' +
+    '<line id="ck-cross" class="ck-cross" x1="0" y1="' + PAD_T + '" x2="0" y2="' + VB + '" style="display:none"/>' +
     '</svg>';
 
   var last = d.close[n - 1], first = d.close[0];
@@ -1338,5 +1359,7 @@ function _chart5dSvg(d, code) {
       '五日區間 <b>' + first.toFixed(2) + '</b> → <b>' + last.toFixed(2) + '</b>　' +
       '<span class="' + cls + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '（' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%）</span>' +
     '</span></div>' + s +
-    '<div class="detail-note">Shioaji 1 分 K，近 5 個交易日串接；虛線為昨收。量長條顏色依該分鐘較前一分鐘漲跌。</div>';
+    '<div class="detail-note">Shioaji 1 分 K，近 5 個交易日串接；虛線為昨收。' +
+      '圖上標出五日區間的最高與最低（標的是那一分鐘的收盤，不是日 K 的高低）。' +
+      '量長條顏色依該分鐘較前一分鐘漲跌。</div>';
 }
