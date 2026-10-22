@@ -381,7 +381,7 @@ function renderRefill() {
   if (_rfResult.noDiv.length) {
     html += '<div class="rf-nodiv">尚未開始除息（未抓取價格）：' + _rfResult.noDiv.join('、') + '</div>';
   }
-  html += '<div class="tx-note nb"><dl>' +
+  html += '<div class="detail-note nb"><dl>' +
     '<dt>填息</dt><dd><code>基準價 ＝ 除息日前一交易日收盤</code>，除息後首次<code>收盤 ≥ 基準價</code>即填息，天數以交易日計。</dd>' +
     '<dt>成本均價</dt><dd><code>原始成本 ÷ 股數</code>，含手續費與銀行認購成本補正，與持股庫存同一個值。' +
     '券商記錄的成本已被扣掉累積配息，這裡加回還原成當初實際付出的錢。</dd>' +
@@ -709,7 +709,7 @@ function _rfMonthPayHtml() {
     }
   });
   h += '</tbody></table></div>' +
-    '<div class="rf-cal-note"><dl>' +
+    '<div class="detail-note"><dl>' +
     '<dt>月殖利率</dt><dd><code>配息金額 ÷ 現價</code></dd>' +
     '<dt>成本月殖利率</dt><dd><code>配息金額 ÷ 持有成本</code>；月配標的即單月報酬率，年化約 ×12。</dd>' +
     '<dt>持有(張)</dt><dd>除息日當時可領的張數，不是目前持股：除息日當天（含）之後買進的領不到，' +
@@ -762,7 +762,7 @@ function _rfCalHtml() {
     '</tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="rf-cal-note"><dl>' +
+    '<div class="detail-note"><dl>' +
     '<dt>預估可領</dt><dd><code>預估配息 × 持有股數</code>，未扣二代健保與稅。</dd>' +
     '<dt>除息日與發放日</dt><dd>上市＝e添富、上櫃＝TPEx 除權息預告表，每日更新一次。</dd>' +
     '<dt>金額</dt><dd>官方常只先申報日期、金額掛「待公告」，此時取 Yahoo 台股（每日），來源標「＋Yahoo預告」；' +

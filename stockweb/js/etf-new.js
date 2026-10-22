@@ -111,8 +111,7 @@ function _enSorted(list) {
 function _enTh(key, label, cls) {
   var on = _enSort === key + 'Asc' || _enSort === key + 'Desc';
   var ind = on ? (_enSort === key + 'Asc' ? '▲' : '▼') : '↕';
-  return '<th class="sort-th' + (cls ? ' ' + cls : '') + (on ? ' on' : '') +
-    '" onclick="enSortCol(\'' + key + '\')" title="點擊排序">' + label +
+  return '<th class="sort-th' + (cls ? ' ' + cls : '') + (on ? ' on' : '') + '" onclick="enSortCol(\'' + key + '\')" title="點擊排序">' + label +
     '<span class="sort-ind">' + ind + '</span></th>';
 }
 
@@ -222,7 +221,7 @@ function renderEtfNew() {
     (d.pendingNote || '募集中清單尚無可靠來源') +
     '，這一區先留空。找到來源後會補上，欄位與上表相同。') + '</div>';
 
-  h += '<div class="rf-cal-note"><dl>' +
+  h += '<div class="detail-note"><dl>' +
     '<dt>清單</dt><dd>證交所 ISIN 公開資訊的 ETF 分類，上市日在近 ' + d.windowDays +
       ' 天內。已核准、還沒掛牌的也會列出，標「待掛牌」。</dd>' +
     '<dt>投資特色</dt><dd>MoneyDJ 的「投資策略」整段原文，未經改寫。</dd>' +

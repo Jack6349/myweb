@@ -283,7 +283,7 @@ function _sdTopHtml(f) {
 
 function _sdPageNote(f) {
   var last = f.dates.length - 1;
-  return '<div class="cs-note"><dl>' +
+  return '<div class="detail-note"><dl>' +
     '<dt>這一頁要回答兩個問題</dt><dd>一、它有沒有照公開說明書做；二、它在你的組合裡扮演的角色還成不成立。' +
     '兩件事要分開：集中、換股是它寫明的策略，不是走樣；' +
     '你的配置假設成不成立，是你這邊的問題，跟它做得對不對無關。</dd>' +

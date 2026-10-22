@@ -647,7 +647,7 @@ function renderDividendEst() {
   _divRoll = roll;                                   // 供 retire.js 的現金流對照取用
   html += _divStatTableHtml(roll.stocks, money, '月份總覽（本月起 12 個月，依發放月）', roll.labels);
 
-  html += '<div class="divest-note"><dl>' +
+  html += '<div class="detail-note"><dl>' +
     '<dt>歸月方式</dt><dd>依<b>發放月</b>歸戶當月收入，缺發放日時以「除息月＋1」推導。' +
     '<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（看發放日是否已過）。</dd>' +
     '<dt>可領張數</dt><dd><code>除息日當天（含）之後買進的批次不計</code>，依建倉明細判定。' +
@@ -748,7 +748,7 @@ function _divHistDraw(el, code) {
   var endIso = y + '-' + ('0' + m).slice(-2) + '-31';
   var all = _divHistRecs(code);
   var ev = all.filter(function (r) { return r.exDate >= startIso && r.exDate <= endIso && r.amount > 0; });
-  if (!ev.length) { el.innerHTML = '<div class="divest-hist-note">兩年內尚無已公布金額的除息紀錄</div>'; return; }
+  if (!ev.length) { el.innerHTML = '<div class="detail-note nb-keep">兩年內尚無已公布金額的除息紀錄</div>'; return; }
 
   // 上市 ETF 要等 Yahoo 補完早期紀錄，才能判斷「區間前真的沒有紀錄」；補抓中或補抓失敗時不下「未滿兩年」的結論
   var fromEtf = (typeof _divByCode !== 'undefined') && _divByCode && _divByCode[code] && _divByCode[code].length;
@@ -836,7 +836,7 @@ function _divHistDraw(el, code) {
   el.innerHTML = '<div class="divest-hist-title">歷年配息　<span>' + span + '・' + n + ' 次' +
       (histComplete && all[0].exDate >= startIso ? '（上市未滿兩年，自首次除息起）' : '') + '</span></div>' +   // 區間前完全沒有紀錄才算；半年配剛好落在區間外不算
     '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" class="divest-hist-svg">' + lg + g + '</svg>' +
-    (note ? '<div class="divest-hist-note">' + note + '</div>' : '');
+    (note ? '<div class="detail-note nb-keep">' + note + '</div>' : '');
 }
 
 // 出借中股數（股）：從 _positions 的 lentShares 取（與持股庫存「借出」欄同一來源）。
@@ -889,7 +889,7 @@ function _divExMonthHtml(stocks, money, md) {
   list.sort(function (a, b) { return a.exDate < b.exDate ? -1 : (a.exDate > b.exDate ? 1 : 0); });
 
   var h = '<div class="divest-sec-title">本月除息個股</div>';
-  if (!list.length) return h + '<div class="divest-note nb-keep">本月無除息個股。</div>';
+  if (!list.length) return h + '<div class="detail-note nb-keep">本月無除息個股。</div>';
 
   h += '<div class="dstat-wrap dexm-wrap"><table class="dstat dexm"><thead><tr>' +
     '<th class="dstat-code">代號</th><th class="num">現價</th>' +

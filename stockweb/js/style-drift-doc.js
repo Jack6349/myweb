@@ -279,12 +279,12 @@ function sdOptionsHtml(f) {
       ? '它唯一可驗證的那一條是「追求長期優於台股大盤」。以你的建倉成本算，目前落後 ' +
         Math.abs(my).toFixed(2) + ' 個百分點。'
       : '它唯一可驗證的那一條，目前這段沒做到。') + '</div>';
-    h += '<div class="sd-onote">基金自己的成績是另一個數字：掛牌 ' + ex.from + ' 至 ' + ex.to +
+    h += '<div class="detail-note">基金自己的成績是另一個數字：掛牌 ' + ex.from + ' 至 ' + ex.to +
       ' 共 ' + ex.days + ' 個交易日，' + (ex.fund >= 0 ? '+' : '') + ex.fund.toFixed(2) + '%，' +
       ex.label + ' ' + (ex.bm >= 0 ? '+' : '') + ex.bm.toFixed(2) + '%，落後 ' +
       Math.abs(ex.ex).toFixed(2) + ' 個百分點' +
       (my != null ? '；差距來自進場時點，不是算法' : '') + '。</div>';
-    h += '<div class="sd-onote">說明書寫的是「長期」，' + ex.days +
+    h += '<div class="detail-note">說明書寫的是「長期」，' + ex.days +
       ' 個交易日判斷不了，但這是它存在的全部時間。' +
       '集中度上升、換股頻繁都是它寫明的做法（聚焦龍頭、依市況動態調整），不構成警訊。</div>';
   } else {
@@ -406,7 +406,7 @@ function sdActiveHtml() {
         pp((tg - tb) / tc * 100) + ' pp</td><td></td><td></td></tr></tfoot>';
   }
   h += '</table></div>';
-  h += '<div class="sd-onote">「我的超額」是你的成績，「自掛牌超額」是這檔基金的成績，' +
+  h += '<div class="detail-note">「我的超額」是你的成績，「自掛牌超額」是這檔基金的成績，' +
     '兩者差距來自進場時點。已領股利計入我的報酬；同期大盤未扣交易成本與稅。' +
     (skipped ? '　有 ' + skipped + ' 批買進日晚於大盤最後收盤日（' +
       a.bmSeries.dates[a.bmSeries.dates.length - 1] + '），兩邊都未計入。' : '') + '</div>';
@@ -453,5 +453,5 @@ function sdPeersHtml() {
       '<td class="num">' + (r.fut > 0 ? r.fut.toFixed(1) + '%' : dim('—')) + '</td>' +
       '<td style="font-size:12px">' + r.names.join('、') + '</td></tr>';
   });
-  return h + '</tbody></table></div><div class="sd-onote">' + p.note + '</div>';
+  return h + '</tbody></table></div><div class="detail-note">' + p.note + '</div>';
 }

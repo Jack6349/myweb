@@ -295,7 +295,7 @@ async function startSignals() {
     unscored.forEach(function (x) { cards.push(x.html); });
   }
   wrap.innerHTML = cards.join('') +
-    '<div class="sig-note"><dl>' +
+    '<div class="detail-note"><dl>' +
     '<dt>隔夜美股</dt><dd><code>成分股隔夜漲跌 × 匯率</code>，推估純美股 ETF 今日開盤方向。</dd>' +
     '<dt>ADR 隔夜</dt><dd>台股成分股在美股掛牌的 ADR 隔夜漲跌，與台股高連動。</dd>' +
     '<dt>L2 折溢價</dt><dd>大幅折價（市價 &lt; 淨值）＝可能被錯殺；大幅溢價＝追價過熱。</dd>' +

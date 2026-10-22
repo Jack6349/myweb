@@ -368,7 +368,7 @@ function renderConsistency() {
       '<span class="cs-title">' + r.title + '</span>' +
       '<span class="cs-detail">' + r.detail + '</span></div>';
   });
-  h += '<div class="cs-note"><dl>' +
+  h += '<div class="detail-note"><dl>' +
     '<dt>比對內容</dt><dd>只看各項資料的方向是否一致，不推論股債後續走勢。</dd>' +
     '<dt>方向不一致</dt><dd>訊號互相牴觸，是需要進一步查證的地方，本身不是買賣訊號。</dd>' +
     '</dl></div>';
@@ -580,7 +580,7 @@ function renderMacroBar() {
   var hits = _macroSnap.filter(function (m) { return m.alert; });
   var foot = '';
   if (hits.length) {
-    foot = '<div class="macro-alert-note">' +
+    foot = '<div class="detail-note nb-keep">' +
       hits.map(function (m) {
         var a = m.alert, c = a.cfg;
         return '<span class="macro-warn ' + a.level + '">⚠</span>' + m.name + ' ' +
@@ -589,7 +589,7 @@ function renderMacroBar() {
           (a.level === 'alarm' ? c.alarm : c.warn) + ' ' + c.unit + '）';
       }).join('　') +
       // 警示本文一直顯示，只有下面這段說明收合
-      '<div class="cs-note"><dl>' +
+      '<div class="detail-note"><dl>' +
       '<dt>適用對象</dt><dd>' + ALERT_FOR + '持股，其他類型不適用。</dd>' +
       '<dt>幅度</dt><dd>台股 ' + (_twLastClose || '—') + ' 收盤後<b>累計</b>，不是單日。</dd>' +
       '<dt>門檻</dt><dd>近 2 年美股日變動的第 90（黃）與 97.5（紅）百分位，黃色一年約 24 次、紅色約 5～6 次。</dd>' +

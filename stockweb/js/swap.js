@@ -447,7 +447,7 @@ function _swapSellHtml() {
   // 「可賣」只在有出借／匯撥中的檔才有意義（可賣＝持有－出借中）；都沒出借時整欄與「持有」相同 → 不顯示
   var anyLent = (typeof _positions !== 'undefined' && _positions || []).some(function (p) { return p.lent && p.lentShares > 0; });
   var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">賣出</span>' +
-    '<span class="swap-hint">輸入張數或按「全部」；零股可輸入小數（0.5＝500 股）</span></div>' +
+    '<span class="detail-note nb-keep">輸入張數或按「全部」；零股可輸入小數（0.5＝500 股）</span></div>' +
     '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
     '<th>代號</th><th>名稱</th><th class="num">現價</th>' +
     '<th class="num" title="最近一次配息 × 配息期數 ÷ 現價（月配12、季配4、半年2、年配1）">預估殖利率</th>' +
@@ -486,7 +486,7 @@ function _swapSellHtml() {
 
 function _swapBuyHtml() {
   var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">買入</span>' +
-    '<span class="swap-hint">現有持股與指定代碼可同時買進</span></div>';
+    '<span class="detail-note nb-keep">現有持股與指定代碼可同時買進</span></div>';
 
   // 現有持股（勾選）
   h += '<div class="swap-sec-lb">現有持股</div><div class="swap-picks">';
@@ -713,8 +713,8 @@ function _swapQualHtml(c) {
     '<td class="num"><span class="swap-dim">—</span></td></tr>';
 
   h += '</tbody></table></div>' +
-    (loading ? '<div class="swap-qual-note">折溢價與成交量載入中…</div>' : '') +
-    '<div class="swap-qual-note"><dl>' +
+    (loading ? '<div class="detail-note">折溢價與成交量載入中…</div>' : '') +
+    '<div class="detail-note"><dl>' +
     '<dt>殖利率差</dt><dd>換股的收益來源。</dd>' +
     '<dt>折溢價差</dt><dd><code>賣出腳溢價 − 買進腳溢價</code>，是立即成本：賣得比淨值便宜、買得比淨值貴都侵蝕收益。</dd>' +
     '<dt>成交量</dt><dd>偏低時分批進出可降低滑價。</dd>' +
@@ -731,7 +731,7 @@ function _swapResultHtml(c) {
     return '<div class="tx-box"><div class="modal-loading">在「賣出」區輸入張數後即可看到試算結果。</div></div>';
   }
   var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">試算結果</span>' +
-    '<span class="swap-hint">' + _swapYmLabel(c.startYm) + ' ～ ' + _swapYmLabel(c.startYm + SWAP_N - 1) + '（未來 12 個月）</span></div>' +
+    '<span class="detail-note nb-keep">' + _swapYmLabel(c.startYm) + ' ～ ' + _swapYmLabel(c.startYm + SWAP_N - 1) + '（未來 12 個月）</span></div>' +
     '<div class="swap-sum">' + _swapSumPairs(c) + '</div>';
 
   h += _swapQualHtml(c);
@@ -776,7 +776,7 @@ function _swapResultHtml(c) {
     h += '</tbody></table></div>';
   }
 
-  h += '<div class="tx-note nb"><dl>' +
+  h += '<div class="detail-note nb"><dl>' +
     '<dt>期間</dt><dd>下個月起 12 個月。配息推估沿用股利估算頁規則：已公告用實際金額，未公告以「去年同月＋12」投影、金額取最近一次。</dd>' +
     '<dt>已除息未發放</dt><dd>仍歸原持有人，該期一律以<b>換股前股數</b>計：賣出仍領得到、新買進領不到。</dd>' +
     '<dt>費用</dt><dd>賣出 ' + (SWAP_SELL_FEE * 100).toFixed(4) + '%（手續費＋交易稅）、買入 ' + (SWAP_BUY_FEE * 100).toFixed(4) + '%。</dd>' +

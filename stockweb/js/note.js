@@ -7,11 +7,11 @@
 // 只收「解釋性」的說明。狀態訊息（例如「兩年內尚無已公布金額的除息紀錄」「3 檔」）
 // 必須一直看得到，不在名單內；解釋性的說明若用了那幾個共用 class，另外加 nb 標記。
 
-var NOTE_SEL = [
-  '.detail-note', '.rs-note', '.divest-note', '.sig-note',
-  '.swap-qual-note', '.rf-cal-note', '.cs-note',
-  '.nb'
-].join(',');
+// 說明類 class 已收斂成 .detail-note 一個。原本有 12 個同義 class，這份名單只列到其中
+// 6 個，另外 6 個（tx-note、swap-hint、divest-hist-note、sd-onote、macro-alert-note、
+// ord-pend-note）其實一直沒被收合。合併後一律適用，其中屬於狀態訊息或操作指示的
+// 11 處已另外標上 nb-keep。.nb 是借用別的 class 排版、但內容是解釋的那些。
+var NOTE_SEL = ['.detail-note', '.nb'].join(',');
 
 function _noteWrap(el) {
   if (!el || el.getAttribute('data-nbox') || el.closest('.nbox')) return;

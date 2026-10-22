@@ -302,7 +302,7 @@ function _ordPendHtml() {
       '</td></tr>';
   });
   return h + '</tbody></table>' +
-    '<div class="ord-pend-note">改價／改量／刪單尚未啟用：這三個動作會真的送出到券商，' +
+    '<div class="detail-note nb-keep">改價／改量／刪單尚未啟用：這三個動作會真的送出到券商，' +
     '要等 Shioaji 切到模擬模式驗證過再開。目前只讀取與顯示。<br>' +
     '「可改量」＝委託量 − 已成交 − 已刪除，只有這個數量能改或刪。</div>';
 }

@@ -89,8 +89,7 @@ function _chartRenderShell() {
       [['intra', '日均'], ['bid', '五檔'], ['d5', '五日線']]
         .concat(CHART_PERIODS.map(function (p) { return [p.k, p.lb]; }))
         .map(function (a) {
-          return '<button id="chart-tab-' + a[0] + '" class="tx-subtab' +
-            (_chartIsPer(a[0]) ? ' tx-sub-per' : '') + '" onclick="chartShowTab(&quot;' + a[0] + '&quot;)">' +
+          return '<button id="chart-tab-' + a[0] + '" class="tx-subtab' + (_chartIsPer(a[0]) ? ' tx-sub-per' : '') + '" onclick="chartShowTab(&quot;' + a[0] + '&quot;)">' +
             a[1] + '</button>';
         }).join('') +
     '</div><div id="chart-area"></div>';
@@ -623,14 +622,7 @@ function _bidAskHtml(b, code) {
     // 點價下單：買方欄預設買進、賣方欄預設賣出，另一邊在確認框一鍵切換
     var tap = (typeof ordFromLadder === 'function')
       ? ' bid-tap" onclick="ordFromLadder(\'' + code + '\',' + p + ',\'' + side + '\')" title="點選下單"' : '"';
-    return '<td class="num bid-px ' + side + ' ' + cls + tap + '>' + txt + '</td>';
-  };
-
-  // 內外盤比 Bar（移到最上方、加高，兩側放張數與百分比）
-  var sumB = 0, sumA = 0;
-  bv.forEach(function (v) { sumB += v; }); av.forEach(function (v) { sumA += v; });
-  var tot = sumB + sumA || 1, pB = sumB / tot * 100, pA = sumA / tot * 100;
-  var ratio = '<div class="bid-ratio">' +
+    return '<td class="num bid-px ' + side + ' ' + cls + tap + '>' + txt + '</td>'; }; // 內外盤比 Bar（移到最上方、加高，兩側放張數與百分比） var sumB = 0, sumA = 0; bv.forEach(function (v) { sumB += v; }); av.forEach(function (v) { sumA += v; }); var tot = sumB + sumA || 1, pB = sumB / tot * 100, pA = sumA / tot * 100; var ratio = '<div class="bid-ratio">' +
     '<span class="bid-ratio-lbl">委買</span>' +
     '<span class="bid-ratio-side left"><b class="y">' + sumB.toLocaleString('zh-TW') + '</b>（' + pB.toFixed(1) + '%）</span>' +
     '<span class="bid-ratio-bar"><i class="bid" style="width:' + pB.toFixed(1) + '%"></i><i class="ask" style="width:' + pA.toFixed(1) + '%"></i></span>' +

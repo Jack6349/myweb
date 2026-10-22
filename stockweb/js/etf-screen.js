@@ -518,7 +518,7 @@ function renderEtfScreen() {
     if (open) h += '<tr class="es-drow"><td colspan="' + ES_COLS.length + '" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="divest-note"><dl>' +
+    '<div class="detail-note"><dl>' +
     '<dt>綜合分</dt><dd>各指標在同類中的<b>百分位</b>加權：' +
     '<code>一年含息 25 ＋ 近12月殖利率 25 ＋ 填息率 20 ＋ 一年價格 15 ＋ 規模 10 ＋ 內扣費用 5</code>。' +
     '填息率與費用只對前 ' + ES_TOP1 + ' 名計算。</dd>' +
@@ -555,7 +555,7 @@ function renderEtfScreen() {
       if (open) h += '<tr class="es-drow"><td colspan="' + ES_NCOLS.length + '" class="es-dslot" data-code="' + r.code + '"></td></tr>';
     });
     h += '</tbody></table></div>' +
-      '<div class="divest-note"><dl>' +
+      '<div class="detail-note"><dl>' +
       '<dt>為何分開列</dt><dd>上市未滿一年，缺一年期報酬與填息紀錄，與老牌 ETF 混排不可比。</dd>' +
       '<dt>看哪個欄位</dt><dd>殖利率看「預估年配」；近 12 月配會因配息次數不足而偏低。點列展開配息明細。</dd>' +
       '</dl></div>';
@@ -764,7 +764,7 @@ function _esRecTable(code, recs, base, bars) {
   var today = _divTwDate().iso;
   var d24 = _esIso(Date.parse(today) - 730 * 86400000);
   var list = recs.filter(function (r) { return r.exDate >= d24; });
-  if (!list.length) return '<div class="divest-hist-note">近 2 年無配息紀錄</div>';
+  if (!list.length) return '<div class="detail-note nb-keep">近 2 年無配息紀錄</div>';
   var step = null;
   try { step = _divInferStep(recs.map(function (r) { return Object.assign({ code: code }, r); })); } catch (e) {}
   var perYear = step ? 12 / step : null;
@@ -792,5 +792,5 @@ function _esRecTable(code, recs, base, bars) {
       '<td class="num">' + (yA != null ? yA.toFixed(2) + '%' : dim('—')) + '</td><td>' + st + '</td></tr>';
   });
   return h + '</tbody></table>' +
-    '<div class="divest-hist-note">年配息 ' + (perYear ? perYear + ' 次' : '—') + '；殖利率以除息前收盤計（官方除權息結果表，近 12 個月內才有）；填息以一年日線判定。</div>';
+    '<div class="detail-note nb-keep">年配息 ' + (perYear ? perYear + ' 次' : '—') + '；殖利率以除息前收盤計（官方除權息結果表，近 12 個月內才有）；填息以一年日線判定。</div>';
 }

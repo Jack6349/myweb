@@ -332,8 +332,7 @@ function swCandTable(list, base, title, empty) {
       '<td>' + e.code + (e.name ? '<div class="rs-b-name">' + e.name + '</div>' : '') + '</td>' +
       '<td class="num">' + e.mkt.toFixed(2) + '%</td>' +
       '<td class="num"><b>' + (e.real == null ? '—' : e.real.toFixed(2) + '%') + '</b>' +
-      (e.realLast == null ? '' : '<div class="rs-b-sub' +
-        (e.real != null && Math.abs(e.realLast - e.real) >= 1 ? ' rs-b-gapbig' : '') + '">' +
+      (e.realLast == null ? '' : '<div class="rs-b-sub' + (e.real != null && Math.abs(e.realLast - e.real) >= 1 ? ' rs-b-gapbig' : '') + '">' +
         e.realLast.toFixed(2) + '%</div>') + '</td>' +
       (base ? '<td class="num"><b>' + (e.real == null ? '—' :
         ((e.real - base.real >= 0 ? '+' : '') + (e.real - base.real).toFixed(2) + ' pp')) +
@@ -423,7 +422,7 @@ function swDel(c) {
 function swAllHtml() {
   swResetCache();
   return swBlockB() + swBlockC() + swBlockD() +
-    '<div class="rs-note"><dl>' +
+    '<div class="detail-note"><dl>' +
     '<dt>排序基準</dt><dd><code>真實市價殖利率 ＝ 年化配息金額 ÷ 現價 ×（股利＋利息占比）</code><br>' +
     '用市價不用成本：換股當下賣出拿到的是市價、成本基準隨即重設，舊成本是沉沒成本。' +
     '驗算 322 張 00981B 換 00989B，月配實際增加 5,410 元，市價推得 5,446 對得上、成本推得 6,462 高估 19%。' +

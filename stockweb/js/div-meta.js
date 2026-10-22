@@ -374,7 +374,7 @@ function renderDivMeta() {
       '</tr>';
   });
   h += '</tbody></table></div>' +
-    '<div class="divest-note"><dl>' +
+    '<div class="detail-note"><dl>' +
     '<dt>燈號</dt><dd><span class="dm-lv dm-lv-red"></span> 頻率靠推定，需確認　' +
     '<span class="dm-lv dm-lv-yellow"></span> 由除息紀錄推算　' +
     '<span class="dm-lv dm-lv-green"></span> 官方或手動　<span class="dm-lv dm-lv-gray"></span> 不配息</dd>' +

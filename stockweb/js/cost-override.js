@@ -166,7 +166,7 @@ async function renderCostOverride(rescan) {
   var todoRows = Object.keys(agg).map(function (k) { return agg[k]; });
 
   if (_coScan.err) {
-    html += '<div class="tx-note up">掃描失敗：' + _coScan.err + '（需要券商連線；連線後按「重新掃描」）</div>';
+    html += '<div class="detail-note nb-keep up">掃描失敗：' + _coScan.err + '（需要券商連線；連線後按「重新掃描」）</div>';
   } else if (todoRows.length) {
     html += '<div class="params-co-sub">偵測到券商端成本為 0 的批次（尚未設定）</div><div class="inv-table-wrap"><table class="inv-table"><thead><tr>' +
       '<th>代號 / 名稱</th><th>入帳日</th><th class="num">張數</th><th class="num">每股認購價</th><th style="text-align:center">動作</th></tr></thead><tbody>';
@@ -178,7 +178,7 @@ async function renderCostOverride(rescan) {
     });
     html += '</tbody></table></div>';
   } else {
-    html += '<div class="tx-note">目前建倉明細中沒有未設定的零成本批次。</div>';
+    html += '<div class="detail-note nb-keep">目前建倉明細中沒有未設定的零成本批次。</div>';
   }
   el.innerHTML = html;
 }

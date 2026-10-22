@@ -244,7 +244,7 @@ async function startRiskReport(force) {
   });
   html += '</tbody></table>';
   // 對照與免責（股票區塊）
-  html += '<div class="rs-note"><dl>' +
+  html += '<div class="detail-note"><dl>' +
     '<dt>動作對照</dt><dd>🟢 0–3 正常加碼｜🟡 4–7 暫停加碼、觀察｜🔴 8 分以上啟動核心減倉評估。' +
     '股債同向重挫直接跳紅燈。</dd>' +
     '<dt>得分色</dt><dd><span style="color:var(--down)">0 低</span>／' +
@@ -308,7 +308,7 @@ function _rsCatBlockHtml() {
     '<td class="num">' + money(tc) + '</td><td class="num">100.0%</td>' +
     '<td class="num">' + money(tv) + '</td><td class="num">100.0%</td>' +
     pnlTd(tv - tc, tc) + '</tr></tfoot></table></div>';
-  h += '<div class="rs-note"><dl>' +
+  h += '<div class="detail-note"><dl>' +
     '<dt>\u5206\u985e\u4f9d\u64da</dt><dd>\u4ee3\u78bc\u5c3e\u78bc\uff08A\uff1d\u4e3b\u52d5\u80a1\u7968\u3001B\uff1d\u88ab\u52d5\u50b5\u5238\u3001D\uff1d\u4e3b\u52d5\u50b5\u5238\u3001L/R\uff1d\u69d3\u687f\u53cd\u5411\uff09\u52a0\u4e0a\u5408\u7d04\u540d\u7a31\u95dc\u9375\u5b57\u3002' +
     '\u65b0\u8cb7\u9032\u7684 ETF \u82e5\u6b78\u985e\u4e0d\u5c0d\u8acb\u544a\u8a34\u6211\u3002</dd>' +
     '<dt>\u5176\u4ed6</dt><dd>\u540d\u7a31\u622a\u65b7\u81f3 8 \u5b57\u3002\u91d1\u984d\u672a\u6263\u7a05\u8cbb\u3002</dd>' +
@@ -439,7 +439,7 @@ async function _rsCoreTableHtml(light) {
   });
   h += '</tbody></table></div>';
 
-  h += '<div class="rs-note"><dl>' +
+  h += '<div class="detail-note"><dl>' +
     '<dt>大盤敏感度</dt><dd>近 120 個交易日日報酬對台股大盤的迴歸斜率。1.0＝與大盤同步，' +
     '0.6＝大盤跌 10% 時約跌 6%。要減倉時先減高的那檔。</dd>' +
     '<dt>回檔加碼提示</dt><dd>距近一年高點回檔 8% 以上才出現。</dd>' +
@@ -591,9 +591,7 @@ async function _rsBondTableHtml() {
     h += '<tr><td>' + x.code + (x.name ? '<div class="rs-b-name">' + x.name + '</div>' : '') + '</td>' +
       '<td class="num">' + pct(x.yld) + '</td>' +
       '<td class="num"><b>' + pct(x.real) + '</b>' +
-      (x.realLast == null ? '' : '<div class="rs-b-sub' +
-        (x.real != null && Math.abs(x.realLast - x.real) >= 1 ? ' rs-b-gapbig' : '') +
-        '" title="最新一期 ' + x.last.ex + '：本業占比 ' + x.last.core.toFixed(1) + '%' +
+      (x.realLast == null ? '' : '<div class="rs-b-sub' + (x.real != null && Math.abs(x.realLast - x.real) >= 1 ? ' rs-b-gapbig' : '') + '" title="最新一期 ' + x.last.ex + '：本業占比 ' + x.last.core.toFixed(1) + '%' +
         (x.real == null ? '' : '&#10;與加權值相差 ' + (x.realLast - x.real >= 0 ? '+' : '') +
           (x.realLast - x.real).toFixed(2) + ' pp') + '">' + pct(x.realLast) + '</div>') + '</td>' +
       '<td class="num"' + (tip ? ' title="每期平準金占比：&#10;' + tip + '"' : '') + '>' +
@@ -620,7 +618,7 @@ async function _rsBondTableHtml() {
   h += '</tbody></table></div>';
 
   var noLiq = rows.some(function (x) { return x.liq == null; });
-  h += '<div class="rs-note"><dl>' +
+  h += '<div class="detail-note"><dl>' +
     '<dt>真實配息率</dt><dd><code>帳面年化配息率 ×（股利＋利息占比）</code>' +
     '＝扣掉收益平準金與資本利得後的部分。</dd>' +
     '<dt>換股候選</dt><dd>真實配息率最低的那一檔；標籤數字＝與最高者的差（pp）。不設門檻判定多少算大。</dd>' +
@@ -872,7 +870,7 @@ async function _rsSatTableHtml() {
   h += '</tbody></table></div>';
 
   var thin = rows.filter(function (x) { return x.mix && x.n < 3; }).map(function (x) { return x.code; });
-  h += '<div class="rs-note"><dl>' +
+  h += '<div class="detail-note"><dl>' +
     '<dt>綜合分</dt><dd><code>成長 50% ＋ 月收入 50%</code>，各維度依組內<b>名次</b>計分' +
     '（第一名 100、最後一名 0，同名次同分），不受單一極端值影響。</dd>' +
     '<dt>換股候選</dt><dd><b>兩項都吊車尾</b>才標記；只有一項墊底可能只是風格差異。' +
