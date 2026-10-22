@@ -23,6 +23,14 @@
      刻意不用綠色：綠在本站是「跌／虧損」的固定語意（--down），總結行用綠會被誤讀成數值方向。 */
   --sum: #a5e9f7;
   --thbg: #1b2736;    /* 表頭帶狀底色 */
+  --thbg2: #222f40;   /* 表頭帶狀底之上，偶數欄再深一階（dstat 的欄位對照） */
+  --border-strong: #435a78;  /* 區塊分隔用的粗框。原本只以 var(--border-strong, #435a78)
+                                的退路形式存在、從未定義，等於一直在用退路值。 */
+  --on-light: #121212; /* 淺底上的深字（原本 #111／#1a1a1a／#000 三個寫法） */
+  --accent3: #5aa9ff;  /* UI 強調藍：選中態、關注、委託通知。
+                          原本有 #5aa9ff／#8fd0ff／#8ab4d4／#7fb0ff 四個寫法。 */
+  --warn: #ff9f43;     /* 注意：除息將至、成交失敗。原本 #ff9f43／#ff8a3d／#ff9e2c 三個。 */
+  --caution: #f5d87a;  /* 提醒，比 --warn 弱：風險標記、成本提示。原本 #f5d87a／#ffe066。 */
   --font: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 
   /* ── 圖表色盤 ──
@@ -57,7 +65,7 @@
   --ord-flip: #3d4757;      /* 改買改賣 */
   --ord-seg-bg: #e8edf3;    /* 整股／零股切換：淺底深字，與周圍反相 */
   --ord-seg-fg: #1f4e8c;
-  --ord-on-light: #121212;  /* 淺底上的字（原本 #111 與 #1a1a1a 兩個寫法） */
+
   /* 買賣色：目前與全站「紅漲綠跌」同色不同義（這裡紅＝買、綠＝賣），
      待一致性檢查第 1 項統一。先收進名字，屆時只要改這 8 行。 */
   --ord-buy: #d0202e;  --ord-buy-bg: #3a1014;  --ord-buy-box: #4a1418;  --ord-buy-line: #7a2630;
@@ -135,7 +143,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .sum-pair { white-space: nowrap; display: flex; align-items: baseline; gap: 8px; }
 .sum-plabel { font-size: 16px; color: var(--text2); font-weight: 600; }
 .sum-pval { font-size: 16px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
-.btn-toggle { background: rgba(138,180,212,.14); border: 1px solid rgba(138,180,212,.45); color: #8ab4d4; font-size: 12px; font-weight: 600; padding: 4px 0; border-radius: 7px; cursor: pointer; font-family: var(--font); white-space: nowrap; width: 84px; text-align: center; box-sizing: border-box; flex-shrink: 0; }
+.btn-toggle { background: rgba(138,180,212,.14); border: 1px solid rgba(138,180,212,.45); color: var(--accent3); font-size: 12px; font-weight: 600; padding: 4px 0; border-radius: 7px; cursor: pointer; font-family: var(--font); white-space: nowrap; width: 84px; text-align: center; box-sizing: border-box; flex-shrink: 0; }
 .btn-toggle:hover { background: rgba(138,180,212,.26); }
 /* 交易紀錄頁沿用同款雙欄位總覽 */
 .tr-summary .sum-item { flex: 0 1 auto; }
@@ -147,7 +155,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .scard-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 12px; }
 @media (max-width: 1100px) { .scard-grid { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 880px) { .scard-grid { grid-template-columns: repeat(3, 1fr); } }
-.scard-divider { border-top: 1px solid var(--border-strong, #435a78); margin: 18px 0 0; }
+.scard-divider { border-top: 1px solid var(--border-strong); margin: 18px 0 0; }
 .scard { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 9px 14px; position: relative; width: 95%; justify-self: center; overflow: hidden; }
 /* 漲跌停：卡片下半部（總量/昨收/時間帶）填滿紅(漲停)/綠(跌停)，字色自動對比 */
 .scard.lim-up .scard-sub, .scard.lim-down .scard-sub { margin: 6px -14px -9px; padding: 6px 14px; border-top: none; }
@@ -201,7 +209,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .tc-holders { white-space: normal; }
 .tc-holder { display: inline-grid; grid-template-columns: 44px 46px; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; vertical-align: top; }
 .tc-holder .tc-c { color: var(--accent2); }
-.tc-holder .tc-w { color: #ff9e2c; text-align: right; }
+.tc-holder .tc-w { color: var(--warn); text-align: right; }
 .tc-sep { color: var(--text3); margin: 0 5px; }
 /* 固定佈局：前 6 欄定寬，持有明細取剩餘寬並換行，避免最後一欄撐出橫向捲軸 */
 .tc-table { table-layout: fixed; }
@@ -237,7 +245,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 /* 注意股圓形標記：每檔固定識別色（紅→紫），On 亮/Off 暗 */
 .live-dot-cell { width: 20px; padding-left: 4px !important; padding-right: 2px !important; text-align: center; }
 .live-dot { width: 13px; height: 13px; border-radius: 50%; border: none; padding: 0; cursor: pointer; vertical-align: middle;
-  background: var(--dot, #888); opacity: .12; filter: brightness(.7); transition: opacity .15s, filter .15s, box-shadow .15s; }
+  background: var(--dot, var(--text3)); opacity: .12; filter: brightness(.7); transition: opacity .15s, filter .15s, box-shadow .15s; }
 .live-dot:hover { opacity: .55; filter: brightness(.9); }
 .live-dot.on { opacity: 1; filter: brightness(1.15); box-shadow: 0 0 0 2px rgba(255,255,255,.4), 0 0 9px var(--dot); }
 
@@ -294,7 +302,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .digest-head:hover { color: var(--text); }
 .digest-caret { color: var(--text3); font-size: 10px; flex-shrink: 0; }
 .digest-body { margin-top: 4px; }
-.dg-risk { color: #f5d87a; font-weight: 700; }
+.dg-risk { color: var(--caution); font-weight: 700; }
 /* 低接＝買進動作＝紅、停利＝賣出動作＝綠（台股慣例買紅賣綠，券商下單畫面亦同）。
    原本相反：低接吃 --down、停利吃 --up。 */
 .dg-sell { color: var(--down); font-weight: 700; }
@@ -303,7 +311,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .digest-lean { font-size: 12px; font-weight: 700; padding: 1px 9px; border-radius: 6px; flex-shrink: 0; white-space: nowrap; }
 .digest-lean.buy { color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); border: 1px solid color-mix(in srgb, var(--up) 30%, transparent); }
 .digest-lean.sell { color: var(--down); background: color-mix(in srgb, var(--down) 12%, transparent); border: 1px solid color-mix(in srgb, var(--down) 30%, transparent); }
-.digest-lean.risk { color: #f5d87a; background: rgba(240,204,122,.1); border: 1px solid rgba(240,204,122,.3); }
+.digest-lean.risk { color: var(--caution); background: rgba(240,204,122,.1); border: 1px solid rgba(240,204,122,.3); }
 .digest-code { font-weight: 700; color: var(--accent2); flex-shrink: 0; }
 .digest-name { color: var(--text2); flex-shrink: 0; }
 .digest-reasons { color: var(--text2); font-size: 12px; min-width: 0; }
@@ -333,7 +341,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .sig-tdrow > span:first-child { color: var(--text2); flex: 0 0 96px; }
 .sig-tdcur { font-weight: 700; flex: 0 0 78px; white-space: nowrap; }
 .sig-tdrow > span:last-child { margin-left: auto; font-size: 11px; white-space: nowrap; }
-.sig-warn { color: #f5d87a; }
+.sig-warn { color: var(--caution); }
 /* 算不出籌碼分數的那一組：用橫線隔開，讀的人才不會以為它們排在最後是因為最差 */
 .sig-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px;
   font-size: 12px; color: var(--text3); white-space: nowrap; }
@@ -448,7 +456,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .sbl-dim { color: var(--text3); }
 .sbl-table b { font-weight: 700; }
 .sbl-table th.sbl-my { color: var(--accent2); }
-.sbl-table th.sbl-calc { color: #8fd0ff; }
+.sbl-table th.sbl-calc { color: var(--accent3); }
 .sbl-table td.sbl-calc { background: rgba(143,208,255,.05); }
 .sbl-sep { color: var(--text3); margin: 0 4px; }
 
@@ -463,7 +471,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ckd-adj { background: transparent; border: 1px solid var(--border); color: var(--text2);
   font-size: 12px; padding: 3px 12px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
 .ckd-adj:hover { background: var(--bg2); }
-.ckd-adj.active { border-color: rgba(127,176,255,.45); color: #7fb0ff; font-weight: 700; }
+.ckd-adj.active { border-color: rgba(90,169,255,.45); color: var(--accent3); font-weight: 700; }
 .chart-info { font-size: 13px; color: var(--text2); margin-bottom: 6px; min-height: 20px; font-variant-numeric: tabular-nums; }
 .chart-info b { color: var(--text); font-weight: 700; }
 .chart-svg { width: 100%; height: auto; display: block; }
@@ -584,7 +592,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .sbl-total td { font-weight: 700; border-bottom: none; padding-top: 10px; color: var(--accent2); }
 
 /* ── 成份股彈窗標籤＋參數設定 ── */
-.const-cov { color: #ffe066; font-weight: 700; }
+.const-cov { color: var(--caution); font-weight: 700; }
 .params-src { font-size: 12px; color: var(--text2); margin-left: 8px; }
 .params-import-btn:disabled { opacity: .4; cursor: not-allowed; }
 
@@ -600,9 +608,9 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-sp { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .divest-sp-lb { font-size: 11px; color: var(--text2); font-weight: 600; }
 .divest-sp-v { font-size: 16px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
-.divest-divider { border-top: 2px solid #435a78; margin: 14px 0 4px; }
+.divest-divider { border-top: 2px solid var(--border-strong); margin: 14px 0 4px; }
 .divest-stocks { }
-.divest-stock { border-bottom: 1.5px solid #3f5673; }
+.divest-stock { border-bottom: 1.5px solid var(--border); }
 .divest-stock:last-child { border-bottom: none; }
 .divest-shead { display: flex; justify-content: space-between; align-items: center; padding: 10px 2px; cursor: pointer; }
 .divest-scode { font-size: 14px; font-weight: 700; }
@@ -612,7 +620,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-yield b { color: var(--accent2); font-weight: 700; }
 .divest-smeta { font-size: 12px; color: var(--text3); white-space: nowrap; }
 .divest-chev { color: var(--text3); margin-left: 4px; }
-.divest-detail { padding: 2px 0 10px 8px; border-left: 2px solid #435a78; margin: 0 0 8px 4px; font-size: 12px; }
+.divest-detail { padding: 2px 0 10px 8px; border-left: 2px solid var(--border-strong); margin: 0 0 8px 4px; font-size: 12px; }
 .divest-drow { display: flex; gap: 10px; padding: 2px 0; color: var(--text2); font-variant-numeric: tabular-nums; }
 .divest-dm { width: 34px; }
 .divest-dex { width: 48px; }
@@ -721,7 +729,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-b-name { font-size: 11px; font-weight: 400; color: var(--text2); }
 /* 表頭副標：標明這一欄的基準是市價還是成本，兩者不可混著讀 */
 .rs-b-sub { font-size: 10px; font-weight: 400; color: var(--text3); letter-spacing: .5px; }
-.rs-b-swap { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--accent2); color: #000; font-weight: 700; }
+.rs-b-swap { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--accent2); color: var(--on-light); font-weight: 700; }
 .rs-b-next { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--accent2); color: var(--accent2); margin-left: 4px; white-space: nowrap; }
 .rs-b-pend { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--text3); margin-left: 4px; }
 /* 換股評估 B／C／D */
@@ -870,18 +878,18 @@ td.cost-even::after  { background: var(--text3); }
    thead/tfoot 用「不透明」色而非半透明：表頭是 sticky，半透明會讓捲動中的資料列透出來。
    四條規則的選擇器結構刻意一致，避免優先權互相蓋掉。 */
 .dstat tbody td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: rgba(255,255,255,.045); }
-.dstat thead th:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: #222f40; }
-.dstat tfoot td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: #222f40; }
+.dstat thead th:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: var(--thbg2); }
+.dstat tfoot td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: var(--thbg2); }
 .dstat tbody tr:hover td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: rgba(255,255,255,.075); }
 /* 代號欄凍結：header 需更高層級才不會被 tbody 的 sticky 蓋住 */
 .dstat .dstat-code { position: sticky; left: 0; background: var(--bg2); text-align: left; font-weight: 600; }
 .dstat thead .dstat-code { background: var(--bg3); z-index: 3; }
-.dstat tbody tr:hover .dstat-code { background: #1e2a3a; }
-.dstat .dstat-tot { font-weight: 700; color: var(--accent2); border-left: 1px solid var(--border-strong, #435a78); }
+.dstat tbody tr:hover .dstat-code { background: var(--bg3); }
+.dstat .dstat-tot { font-weight: 700; color: var(--accent2); border-left: 1px solid var(--border-strong); }
 /* 金額配色與月份總覽一致：綠＝已發放、黃＝預估 */
 .dstat td.dv-act { color: var(--down); }
 .dstat td.dv-est { color: var(--accent2); }
-.dstat tfoot td { background: var(--bg3); font-weight: 700; border-bottom: none; border-top: 1px solid var(--border-strong, #435a78); }
+.dstat tfoot td { background: var(--bg3); font-weight: 700; border-bottom: none; border-top: 1px solid var(--border-strong); }
 .dstat tfoot .dstat-code { background: var(--bg3); }
 
 /* ── 本月除息個股（股利估算頁最上方）── */
@@ -1025,8 +1033,8 @@ td.cost-even::after  { background: var(--text3); }
 .cat-item { display: inline-flex; align-items: baseline; gap: 5px; }
 .cat-name { color: var(--text); font-weight: 700; font-size: 1em; display: inline-flex; align-items: baseline; gap: 3px; }
 .cat-n { color: var(--text3); font-size: .8em; font-weight: 400; }
-.cat-cost { color: #f5d87a; font-weight: 700; letter-spacing: -.5px; }   /* 與頂欄「總付出成本」同色 */
-.cat-cp   { color: #f5d87a; opacity: .65; font-size: .75em; }
+.cat-cost { color: var(--caution); font-weight: 700; letter-spacing: -.5px; }   /* 與頂欄「總付出成本」同色 */
+.cat-cp   { color: var(--caution); opacity: .65; font-size: .75em; }
 .cat-val  { font-weight: 700; letter-spacing: -.5px; }                   /* 色走 inline style：現值＞成本紅、＜綠 */
 .cat-vp   { opacity: .7; font-size: .75em; }
 
@@ -1092,12 +1100,12 @@ td.cost-even::after  { background: var(--text3); }
 
 /* ── 持股庫存：最近一次除息日 ── */
 .inv-ex-past { color: var(--text3); }        /* 已過（含今天）：當天買進領不到 */
-.inv-ex-soon { color: #ff9f43; font-weight: 700; }   /* 本月尚未除息：亮橘，要留意 */
+.inv-ex-soon { color: var(--warn); font-weight: 700; }   /* 本月尚未除息：亮橘，要留意 */
 .inv-ex-next { color: var(--text); }         /* 本月之後才除息 */
 .inv-ex-none { color: var(--text3); }
 .inv-ex-est { color: var(--text3); font-size: 10px; margin-right: 1px; }   /* 預估除息日標記（放日期前，日期右緣才對齊） */
 /* 兩天內就要除息：★ 閃爍提醒（系統設定為減少動態時不閃） */
-.inv-ex-star { color: #ff9f43; margin-right: 2px; animation: exblink 1.1s ease-in-out infinite; }
+.inv-ex-star { color: var(--warn); margin-right: 2px; animation: exblink 1.1s ease-in-out infinite; }
 @keyframes exblink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .inv-ex-star { animation: none; } }
 
@@ -1135,17 +1143,17 @@ td.cost-even::after  { background: var(--text3); }
 .ft-sell .ft-tag { color: var(--down); }
 .ft-code { font-weight: 700; color: var(--text); }
 .ft-name { color: var(--text2); font-size: .85em; }
-.ft-qty { color: #f5d87a; font-weight: 600; }
+.ft-qty { color: var(--caution); font-weight: 600; }
 .ft-time { color: var(--text3); font-size: .8em; }
 .fill-toast.ft-out { opacity: 0; transform: translateY(-8px); }
 /* 委託成功／取消／失敗：色邊與標籤改用中性色，和成交（紅買綠賣）區分 */
-.fill-toast.ft-order  { border-left-color: #5aa9ff; }
-.fill-toast.ft-order .ft-tag { color: #5aa9ff; }
+.fill-toast.ft-order  { border-left-color: var(--accent3); }
+.fill-toast.ft-order .ft-tag { color: var(--accent3); }
 .fill-toast.ft-cancel { border-left-color: var(--text3); }
 .fill-toast.ft-cancel .ft-tag { color: var(--text2); }
 .fill-toast.ft-cancel .ft-qty { color: var(--text2); }
-.fill-toast.ft-fail   { border-left-color: #ff8a3d; }
-.fill-toast.ft-fail .ft-tag { color: #ff8a3d; }
+.fill-toast.ft-fail   { border-left-color: var(--warn); }
+.fill-toast.ft-fail .ft-tag { color: var(--warn); }
 @keyframes ft-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 
 /* 委託列表「現價」：平盤黃；價格變動時底色閃一下 */
@@ -1158,7 +1166,7 @@ td.cost-even::after  { background: var(--text3); }
 .tx-pnl .tx-flat { color: var(--accent2); }
 #tx-pnl-sum .tx-flat { color: var(--accent2); }
 .tx-gap { display: inline-block; width: 10px; }   /* 委託／成交欄：數量與價格之間的間距（取代 @） */
-.dexm .dexm-diff { color: #8ab4d4; }   /* 本月除息：目前持有 ≠ 除息張數（除息後有買賣） */
+.dexm .dexm-diff { color: var(--text2); }   /* 本月除息：目前持有 ≠ 除息張數（除息後有買賣） */
 /* 關注股票 → ETF 評比 */
 .es-bar { flex-wrap: wrap; gap: 6px; }
 .es-info { font-size: 12px; color: var(--text2); margin-left: 6px; }
@@ -1166,10 +1174,10 @@ td.cost-even::after  { background: var(--text3); }
 .es-table td { font-size: 13px; }
 .es-tag { display: inline-block; margin-left: 4px; font-size: 10px; padding: 0 4px; border-radius: 3px; vertical-align: 1px; }
 .es-held { background: color-mix(in srgb, var(--up) 18%, transparent); color: var(--up); }
-.es-watch { background: rgba(90,169,255,.18); color: #5aa9ff; }
+.es-watch { background: rgba(90,169,255,.18); color: var(--accent3); }
 .es-wcell { text-align: center; }
 .es-wbtn { white-space: nowrap; min-width: 64px; }
-.es-wbtn.on { color: #5aa9ff; border-color: rgba(90,169,255,.5); }
+.es-wbtn.on { color: var(--accent3); border-color: rgba(90,169,255,.5); }
 .wt-table .es-wm { font-size: 12.5px; white-space: nowrap; }
 /* ETF 評比／關注股票：點列展開明細 */
 .es-row { cursor: pointer; }
@@ -1217,7 +1225,7 @@ td.cost-even::after  { background: var(--text3); }
 .ord-body { padding: 10px 16px 14px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .ord-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
 .ord-lb { width: 44px; flex: none; font-size: 14px; color: var(--text); }
-.ord-code { background: #fff; color: var(--ord-on-light); font-weight: 700; border-radius: 6px; padding: 4px 14px; font-size: 16px; }
+.ord-code { background: #fff; color: var(--on-light); font-weight: 700; border-radius: 6px; padding: 4px 14px; font-size: 16px; }
 .ord-nm { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 唯一選項不做成可點的按鈕：看起來能按卻按不動更糟 */
 .ord-seg { background: var(--ord-seg-bg); color: var(--ord-seg-fg); font-weight: 700; border-radius: 6px;
@@ -1225,7 +1233,7 @@ td.cost-even::after  { background: var(--text3); }
 .ord-pick { display: flex; gap: 4px; margin-left: auto; }
 .ord-pk { background: var(--ord-btn-bg); color: var(--text2); border: 1px solid var(--border); border-radius: 6px;
   padding: 4px 8px; font-size: 12px; cursor: pointer; }
-.ord-pk.on { background: var(--accent2); border-color: var(--accent2); color: var(--ord-on-light); font-weight: 700; }
+.ord-pk.on { background: var(--accent2); border-color: var(--accent2); color: var(--on-light); font-weight: 700; }
 .ord-side { border-radius: 6px; padding: 6px 22px; font-size: 15px; font-weight: 700; color: #fff; }
 .ord-side.buy { background: var(--ord-buy); }
 .ord-side.sell { background: var(--ord-sell); }
@@ -1233,7 +1241,7 @@ td.cost-even::after  { background: var(--text3); }
 .ord-unit { margin-left: auto; font-size: 11px; color: var(--text2); text-align: right; line-height: 1.3; }
 .ord-in { width: 96px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
   color: #fff; font-size: 16px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
-.ord-pm { flex: 1; background: var(--ord-seg-bg); color: var(--ord-on-light); border: none; border-radius: 6px;
+.ord-pm { flex: 1; background: var(--ord-seg-bg); color: var(--on-light); border: none; border-radius: 6px;
   font-size: 18px; font-weight: 700; padding: 5px 0; cursor: pointer; }
 .ord-pm:hover { filter: brightness(.92); }
 .ord-amt { margin-top: 8px; font-size: 13px; color: var(--text); }
@@ -1255,7 +1263,7 @@ td.cost-even::after  { background: var(--text3); }
 .ord-pend-btn { margin-left: auto; margin-right: 10px; background: var(--ord-btn-bg); color: var(--text2);
   border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
 .ord-pend-btn:disabled { opacity: .35; cursor: default; }
-.ord-pend-btn.on { background: var(--accent2); border-color: var(--accent2); color: var(--ord-on-light); font-weight: 700; }
+.ord-pend-btn.on { background: var(--accent2); border-color: var(--accent2); color: var(--on-light); font-weight: 700; }
 .ord-pend-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
   width: 100%; max-width: 860px; max-height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .ord-pend-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px;
