@@ -45,6 +45,21 @@ var CHART_PERIODS = [
 var CHART_Y_RANGE = '5y';          // 一次抓滿的長度
 var CHART_DK_LS = 'chart_dayk_v1:';   // 瀏覽器快取的 key 前綴（後面接代碼）
 var _chartDaySrc = '';             // 這次的日 K 從哪一層來的，顯示在說明列
+// 五個期間預設畫走勢（收盤折線＋漸層填滿＋下方量），與券商看盤軟體一致；
+// 日 K 是同一個期間的另一種畫法，用右上角的按鈕切換，不另外佔一個頁籤。
+// 一年／五年沒有這個按鈕：243 根以上每根寬不到 3.3px，蠟燭的影線與實體分辨不出來。
+var CHART_MODE_LS = 'chart_daymode_v1';
+var _chartDayMode = null;          // 'trend' | 'k'
+function _chartSavedMode() {
+  try { var m = localStorage.getItem(CHART_MODE_LS); if (m === 'k' || m === 'trend') return m; } catch (e) {}
+  return 'trend';
+}
+function _chartModeOf(per) { return per.line ? 'trend' : (_chartDayMode || 'trend'); }
+function chartToggleMode() {
+  _chartDayMode = (_chartDayMode === 'k') ? 'trend' : 'k';
+  try { localStorage.setItem(CHART_MODE_LS, _chartDayMode); } catch (e) {}
+  _chartLoadDay();
+}
 var CHART_PER_LS = 'chart_period_v1', CHART_ADJ_LS = 'chart_adj_v1';
 var _chartPer = null;      // 目前期間的定義物件
 var _chartAdjOn = null;    // 是否還原權值（僅 Yahoo 期間有意義）
@@ -1011,11 +1026,19 @@ function chartToggleAdj() {
 // 圖上方的控制列：期間已經在頁籤列，這裡只剩還原／收盤的切換。
 // 放在 #ckd-ctl、與圖區 #ckd-plot 分開，載入中不會消失。
 function _chartPerBarHtml() {
-  if (_chartPer.src !== 'yahoo') return '';
-  return '<div class="ckd-perbar">' +
-    '<button class="ckd-adj' + (_chartAdjOn ? ' active' : '') + '" onclick="chartToggleAdj()" ' +
-    'title="還原價：把除息落差加回歷史價，長期線才看得出總報酬；收盤價則是實際成交價">' +
-    (_chartAdjOn ? '還原價' : '收盤價') + '</button></div>';
+  var h = '';
+  if (_chartPer.src === 'yahoo') {
+    h += '<button class="ckd-adj' + (_chartAdjOn ? ' active' : '') + '" onclick="chartToggleAdj()" ' +
+      'title="還原價：把除息落差加回歷史價，長期線才看得出總報酬；收盤價則是實際成交價">' +
+      (_chartAdjOn ? '還原價' : '收盤價') + '</button>';
+  }
+  // 一年／五年不給日 K：根數太多，蠟燭畫出來只是一片色塊
+  if (!_chartPer.line) {
+    h += '<button class="ckd-adj' + (_chartModeOf(_chartPer) === 'k' ? ' active' : '') +
+      '" onclick="chartToggleMode()" title="切換走勢（收盤折線）與日 K（開高低收蠟燭＋均線）">' +
+      (_chartModeOf(_chartPer) === 'k' ? '日 K' : '走勢') + '</button>';
+  }
+  return h ? '<div class="ckd-perbar">' + h + '</div>' : '';
 }
 
 async function _chartLoadDay() {
@@ -1023,6 +1046,7 @@ async function _chartLoadDay() {
   var code = _chartCode;
   if (!_chartPer) _chartPer = _chartIsPer(_chartTab) || _chartSavedPer();
   if (_chartAdjOn == null) _chartAdjOn = _chartSavedAdj();
+  if (_chartDayMode == null) _chartDayMode = _chartSavedMode();
   var per = _chartPer;
   if (!document.getElementById('ckd-plot')) {
     area.innerHTML = '<div id="ckd-ctl"></div><div id="ckd-plot"></div>';
@@ -1061,23 +1085,31 @@ function _chartDayRender(bars, code, per) {
   _chartBindDayHover(view, per);
 }
 
-// 日線 SVG：近月／三月／六月畫日 K（紅漲綠跌實心），一年／五年改畫收盤折線，
-// 都疊 MA5/20/60，下方成交量。per 帶入顯示根數、線圖與否、資料來源。
+// 日線區的兩種畫法，同一組資料、同一組座標：
+//   走勢（預設）＝收盤折線＋橘色漸層填滿＋下方成交量，與五日線同一套視覺語彙。
+//   日 K      ＝開高低收蠟燭（紅漲綠跌實心）＋MA5/20/60。
+// 一年／五年只有走勢：243 根以上每根寬不到 3.3px，蠟燭畫出來分不出影線與實體。
 function _chartDaySvg(bars, code, per) {
   var W = 860, H = 320, VH = 70, PAD_L = 58, PAD_R = 12, PAD_T = 12, GAP = 30;
   var PW = W - PAD_L - PAD_R, PH = H - VH - GAP - PAD_T;
   if (!bars.length) return '<div class="modal-loading">無資料</div>';
+  var kmode = _chartModeOf(per) === 'k';
 
   var ma5 = _chartMA(bars, 5), ma20 = _chartMA(bars, 20), ma60 = _chartMA(bars, 60);
   var s0 = Math.max(0, bars.length - per.show);                // 顯示起點（前段供均線暖身）
   var view = bars.slice(s0), n = view.length;
-  var line = per.line;
 
+  // 走勢只畫收盤，軸就只收斂到收盤的範圍，線才撐得開；日 K 要含影線與均線
   var lo = Infinity, hi = -Infinity;
-  view.forEach(function (b) { if (b.l < lo) lo = b.l; if (b.h > hi) hi = b.h; });
-  [ma5, ma20, ma60].forEach(function (m) {
-    for (var i = s0; i < bars.length; i++) { if (m[i] == null) continue; if (m[i] < lo) lo = m[i]; if (m[i] > hi) hi = m[i]; }
+  view.forEach(function (b) {
+    if (kmode) { if (b.l < lo) lo = b.l; if (b.h > hi) hi = b.h; }
+    else { if (b.c < lo) lo = b.c; if (b.c > hi) hi = b.c; }
   });
+  if (kmode) {
+    [ma5, ma20, ma60].forEach(function (m) {
+      for (var i = s0; i < bars.length; i++) { if (m[i] == null) continue; if (m[i] < lo) lo = m[i]; if (m[i] > hi) hi = m[i]; }
+    });
+  }
   var pad = (hi - lo) * 0.06 || 1; lo -= pad; hi += pad;
   var vmax = 1; view.forEach(function (b) { if (b.v > vmax) vmax = b.v; });
 
@@ -1086,7 +1118,10 @@ function _chartDaySvg(bars, code, per) {
   var y = function (p2) { return PAD_T + (hi - p2) * PH / (hi - lo); };
   var vy = function (v) { return PAD_T + PH + GAP + VH - v * VH / vmax; };
 
-  var s = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
+  var s = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">' +
+    '<defs><linearGradient id="ckdgrad" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#e8731e" stop-opacity="0.55"/>' +
+      '<stop offset="1" stop-color="#e8731e" stop-opacity="0.03"/></linearGradient></defs>';
   // 價格格線＋Y 軸
   for (var g = 0; g <= 4; g++) {
     var pv = hi - (hi - lo) * g / 4, yy = y(pv);
@@ -1108,15 +1143,17 @@ function _chartDaySvg(bars, code, per) {
   // 成交量
   var bw = Math.max(0.6, step * 0.62);
   view.forEach(function (b, k) {
-    var up = line ? (k > 0 ? b.c >= view[k - 1].c : true) : b.c >= b.o;
+    var up = kmode ? b.c >= b.o : (k > 0 ? b.c >= view[k - 1].c : true);
     s += '<rect class="ck-vol ' + (up ? 'up' : 'dn') + '" x="' + (x(k) - bw / 2).toFixed(1) + '" y="' + vy(b.v).toFixed(1) +
       '" width="' + bw.toFixed(1) + '" height="' + Math.max(0.6, b.v * VH / vmax).toFixed(1) + '"/>';
   });
-  if (line) {
-    // 收盤折線：根數多到蠟燭畫不出來時改用這個
+  if (!kmode) {
+    // 走勢：收盤折線＋自線往下填至價格區底（上濃下淡），與五日線同一套
     var lp = [];
     view.forEach(function (b, k) { lp.push(x(k).toFixed(1) + ',' + y(b.c).toFixed(1)); });
-    s += '<polyline class="ckd-line" points="' + lp.join(' ') + '"/>';
+    var baseY = (PAD_T + PH).toFixed(1);
+    s += '<polygon class="ckd-fill" points="' + x(0).toFixed(1) + ',' + baseY + ' ' + lp.join(' ') + ' ' + x(n - 1).toFixed(1) + ',' + baseY + '"/>' +
+      '<polyline class="ckd-trend" points="' + lp.join(' ') + '"/>';
   } else {
     // 日 K 棒：影線＋實體（紅漲綠跌；開＝收畫成一字線）
     view.forEach(function (b, k) {
@@ -1126,16 +1163,16 @@ function _chartDaySvg(bars, code, per) {
       s += '<rect class="ck-body ' + cls + '" x="' + (xx - bw / 2).toFixed(1) + '" y="' + yTop.toFixed(1) +
         '" width="' + bw.toFixed(1) + '" height="' + hBody.toFixed(1) + '"/>';
     });
+    // 均線只在日 K 畫：走勢圖要的是乾淨的一條線
+    [['ma5', ma5], ['ma20', ma20], ['ma60', ma60]].forEach(function (pair) {
+      var pts = [];
+      for (var k = 0; k < n; k++) {
+        var v = pair[1][s0 + k];
+        if (v != null) pts.push(x(k).toFixed(1) + ',' + y(v).toFixed(1));
+      }
+      if (pts.length > 1) s += '<polyline class="ck-ma ' + pair[0] + '" points="' + pts.join(' ') + '"/>';
+    });
   }
-  // 均線
-  [['ma5', ma5], ['ma20', ma20], ['ma60', ma60]].forEach(function (pair) {
-    var pts = [];
-    for (var k = 0; k < n; k++) {
-      var v = pair[1][s0 + k];
-      if (v != null) pts.push(x(k).toFixed(1) + ',' + y(v).toFixed(1));
-    }
-    if (pts.length > 1) s += '<polyline class="ck-ma ' + pair[0] + '" points="' + pts.join(' ') + '"/>';
-  });
   // 量區頂線與刻度
   s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + (PAD_T + PH + GAP) + '" x2="' + (W - PAD_R) + '" y2="' + (PAD_T + PH + GAP) + '"/>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (PAD_T + PH + GAP + 10) + '" text-anchor="end">' + Math.round(vmax).toLocaleString('zh-TW') + '</text>' +
@@ -1153,13 +1190,15 @@ function _chartDaySvg(bars, code, per) {
     ? 'Shioaji 1 分 K 聚合為日 K，收盤價；最後一根盤中每分鐘更新。'
     : '日 K（' + (adj ? '還原價：除息落差已加回歷史價，看的是總報酬' : '收盤價：實際成交價，除息當天會往下跳') +
       '），最後一根改用本機盤中現價。量已由股換算為張。來源：' + (_chartDaySrc || 'Yahoo') + '。';
+  note += kmode ? ' 紅漲綠跌，均線 MA5／MA20／MA60。'
+                : ' 走勢圖畫收盤，量長條顏色依當日較前一日漲跌。'
+                  + (per.line ? '一年與五年不提供日 K：根數超過 240 時每根寬不到 3.3px，蠟燭分辨不出影線與實體。' : '');
   return '<div class="chart-info"><span id="ckd-tip">' +
       per.lb + ' ' + n + ' 日 <b>' + first.c.toFixed(2) + '</b> → <b>' + last.c.toFixed(2) + '</b>　' +
       '<span class="' + cls2 + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '（' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%）</span>' +
-    '</span>　' + maLbl('MA5', ma5[bars.length - 1], 'ma5') + maLbl('MA20', ma20[bars.length - 1], 'ma20') + maLbl('MA60', ma60[bars.length - 1], 'ma60') +
+    '</span>　' + (kmode ? maLbl('MA5', ma5[bars.length - 1], 'ma5') + maLbl('MA20', ma20[bars.length - 1], 'ma20') + maLbl('MA60', ma60[bars.length - 1], 'ma60') : '') +
     '</div>' + s +
-    '<div class="detail-note">' + note + ' 紅漲綠跌，均線 MA5／MA20／MA60。' +
-      (first.d ? '區間 ' + first.d + ' 起。' : '') + '</div>';
+    '<div class="detail-note">' + note + (first.d ? ' 區間 ' + first.d + ' 起。' : '') + '</div>';
 }
 
 function _chartBindDayHover(bars, per) {
@@ -1180,8 +1219,11 @@ function _chartBindDayHover(bars, per) {
     var prev = k > 0 ? view[k - 1].c : b.o;
     var dc = b.c - prev, dp = prev ? dc / prev * 100 : 0;
     var cls = dc >= 0 ? 'up' : 'down';
-    tip.innerHTML = b.d.replace(/-/g, '/') +
-      '　開 <b>' + b.o.toFixed(2) + '</b> 高 <b>' + b.h.toFixed(2) + '</b> 低 <b>' + b.l.toFixed(2) + '</b> 收 <b class="' + cls + '">' + b.c.toFixed(2) + '</b>' +
+    var ohl = (_chartModeOf(per) === 'k')
+      ? '　開 <b>' + b.o.toFixed(2) + '</b> 高 <b>' + b.h.toFixed(2) + '</b> 低 <b>' + b.l.toFixed(2) + '</b> 收 '
+      : '　收 ';
+    tip.innerHTML = b.d.replace(/-/g, '/') + ohl +
+      '<b class="' + cls + '">' + b.c.toFixed(2) + '</b>' +
       ' <span class="' + cls + '">(' + (dc >= 0 ? '+' : '') + dp.toFixed(2) + '%)</span>　量 <b>' + Math.round(b.v).toLocaleString('zh-TW') + '</b>';
   });
   hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
