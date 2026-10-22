@@ -31,6 +31,30 @@
                           原本有 #5aa9ff／#8fd0ff／#8ab4d4／#7fb0ff 四個寫法。 */
   --warn: #ff9f43;     /* 注意：除息將至、成交失敗。原本 #ff9f43／#ff8a3d／#ff9e2c 三個。 */
   --caution: #f5d87a;  /* 提醒，比 --warn 弱：風險標記、成本提示。原本 #f5d87a／#ffe066。 */
+
+  /* ── 版面骨架高度 ──
+     sticky 的偏移原本用手算的常數寫死（top: 104px ＝ 54 ＋ 估的 50），
+     但導覽列實際是 65px（padding 8+8 ＋ 按鈕 33 ＋ 框線 1），
+     所以頁內浮動列捲動時上緣有 15px 滑進導覽列底下。改成由這兩個值推算。
+     .nav-bar 同時用它當 height，變數才是唯一來源，不會再各算各的。 */
+  --h-topbar: 54px;
+  --h-navbar: 65px;
+  --h-chrome: 119px;   /* topbar ＋ navbar，sticky 偏移用 */
+
+  /* ── 堆疊層級 ──
+     原本 11 個匿名數字（2,3,5,8,9,10,20,30,100,200,9999），新增浮動元素時只能用猜的。
+     值大致沿用（renumber 會動到驗不完的堆疊關係），但排成有名字的順序。 */
+  --z-table: 2;      /* 表格內 sticky 儲存格 */
+  --z-table-tl: 3;   /* 表格內兩向 sticky 的交角，要壓過同列表頭 */
+  --z-thead: 5;      /* 表格 sticky 表頭 */
+  --z-pagebar: 8;    /* 頁內浮動列 */
+  --z-nav: 9;        /* 全站導覽列 */
+  --z-topbar: 10;    /* 全站頂欄 */
+  --z-pop: 20;       /* 輸入建議等小浮層 */
+  --z-drawer: 30;    /* 抽屜 */
+  --z-gate: 100;     /* 登入遮罩 */
+  --z-modal: 200;    /* 彈窗 */
+  --z-toast: 300;    /* 通知（原本 9999，與彈窗之間沒有別的層） */
   --font: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 
   /* ── 圖表色盤 ──
@@ -75,7 +99,7 @@
 body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
 
 /* ── 登入閘門 ── */
-.login-gate { position: fixed; inset: 0; background: var(--bg); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.login-gate { position: fixed; inset: 0; background: var(--bg); z-index: var(--z-gate); display: flex; align-items: center; justify-content: center; }
 .login-box { text-align: center; padding: 40px; }
 .login-title { font-size: 28px; font-weight: 700; color: var(--accent2); }
 .login-sub { font-size: 14px; color: var(--text2); margin: 10px 0 28px; }
@@ -84,7 +108,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .login-msg { margin-top: 16px; font-size: 13px; color: var(--text2); white-space: pre-line; }
 
 /* ── 頂欄 ── */
-.topbar { display: flex; align-items: center; justify-content: space-between; height: 54px; padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--bg2); position: sticky; top: 0; z-index: 10; }
+.topbar { display: flex; align-items: center; justify-content: space-between; height: var(--h-topbar); padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--bg2); position: sticky; top: 0; z-index: var(--z-topbar); }
 .topbar-title { font-size: 20px; font-weight: 700; letter-spacing: .5px; }
 .topbar-web { color: var(--accent); font-size: 14px; vertical-align: 2px; }
 .topbar-home { color: inherit; text-decoration: none; cursor: pointer; }
@@ -116,7 +140,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .main-area { max-width: 1800px; margin: 0 auto; padding: 14px 28px 10px; }
 
 /* 功能導覽列：固定於頂欄下方，直接切換各功能頁 */
-.nav-bar { position: sticky; top: 54px; z-index: 9; display: flex; gap: 6px; padding: 8px 28px; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.nav-bar { position: sticky; top: var(--h-topbar); z-index: var(--z-nav); height: var(--h-navbar);
+  box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 8px 28px; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; }
 .nav-bar button { background: var(--bg3); border: 1px solid var(--border); color: var(--text2); font-size: 13px; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-family: var(--font); white-space: nowrap; flex-shrink: 0; }
 .nav-bar button:hover { color: var(--text); border-color: var(--text3); }
 .nav-bar button.active { border-color: var(--accent); color: var(--accent2); background: rgba(240,204,122,.1); }
@@ -138,7 +163,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .stream-error code { background: var(--bg3); padding: 2px 8px; border-radius: 6px; color: var(--accent2); font-size: 13px; }
 
 /* 總覽合計（表格式：明細/總庫存/總現值/總付出成本/損益試算/獲利率/漲跌幅%） */
-.stream-summary { background: var(--bg2); border-bottom: 1px solid var(--border); margin: -14px calc(50% - 50vw) 10px; padding: 8px calc(50vw - 50%); overflow-x: auto; position: sticky; top: 104px; z-index: 8; }
+.stream-summary { background: var(--bg2); border-bottom: 1px solid var(--border); margin: -14px calc(50% - 50vw) 10px; padding: 8px calc(50vw - 50%); overflow-x: auto; position: sticky; top: var(--h-chrome); z-index: var(--z-pagebar); }
 .sum-line { display: flex; align-items: center; gap: 8px 26px; flex-wrap: wrap; }
 .sum-pair { white-space: nowrap; display: flex; align-items: baseline; gap: 8px; }
 .sum-plabel { font-size: 16px; color: var(--text2); font-weight: 600; }
@@ -152,9 +177,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
 /* 每行固定 5 檔；15 檔內一頁完整顯示，超過才捲動 */
 .stream-grid { display: block; }
-.scard-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 12px; }
-@media (max-width: 1100px) { .scard-grid { grid-template-columns: repeat(4, 1fr); } }
-@media (max-width: 880px) { .scard-grid { grid-template-columns: repeat(3, 1fr); } }
+.scard-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px 12px; }
+@media (max-width: 1100px) { .scard-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 880px) { .scard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .scard-divider { border-top: 1px solid var(--border-strong); margin: 18px 0 0; }
 .scard { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 9px 14px; position: relative; width: 95%; justify-self: center; overflow: hidden; }
 /* 漲跌停：卡片下半部（總量/昨收/時間帶）填滿紅(漲停)/綠(跌停)，字色自動對比 */
@@ -181,7 +206,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 /* 自身垂直+水平捲動容器；標題列 sticky top:0 相對本容器，不與頂欄打架 */
 .inv-table-wrap { overflow: auto; max-height: calc(100vh - 150px); }
 .inv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.inv-table th { text-align: left; color: var(--th); font-weight: 600; font-size: 11.5px; letter-spacing: .8px; padding: 9px 8px; border-bottom: 2px solid var(--border); white-space: nowrap; position: sticky; top: 0; z-index: 5; background: var(--thbg); }
+.inv-table th { text-align: left; color: var(--th); font-weight: 600; font-size: 11.5px; letter-spacing: .8px; padding: 9px 8px; border-bottom: 2px solid var(--border); white-space: nowrap; position: sticky; top: 0; z-index: var(--z-thead); background: var(--thbg); }
 .inv-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 /* 數字欄一律等寬字，同一欄上下才對得齊（原本只有部分表格設了 tabular-nums） */
 .num, .inv-table .num, td.num, th.num { font-variant-numeric: tabular-nums; }
@@ -267,7 +292,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .modal-body:has(.detail-scroll) { display: flex; flex-direction: column; }
 .modal-body:has(.detail-scroll) .detail-scroll { flex: 1 1 auto; min-height: 0; max-height: none; }
 .modal-body:has(.detail-scroll) > .detail-note { flex-shrink: 0; }
-.detail-table thead th { position: sticky; top: 0; z-index: 5; background: var(--thbg); box-shadow: inset 0 -1px 0 var(--border); }
+.detail-table thead th { position: sticky; top: 0; z-index: var(--z-thead); background: var(--thbg); box-shadow: inset 0 -1px 0 var(--border); }
 .detail-table td, .subdetail-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .detail-table .num, .subdetail-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .detail-table tfoot td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none; }
@@ -354,12 +379,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 /* ── 新聞情勢 ── */
 .macro-bar { margin-bottom: 14px; }
 /* 卡片格線移至內層 .macro-row，外層留給「最新報價時間」那行 */
-.macro-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.macro-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .macro-asof { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
 .macro-asof b { color: var(--accent2); font-weight: 700; }
 .macro-dim { color: var(--text3); }
-@media (max-width: 1100px) { .macro-row { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 680px) { .macro-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1100px) { .macro-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .macro-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .macro-bar:empty { display: none; }
 .macro-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; display: flex; align-items: baseline; gap: 8px; }
 /* 非投債警示：⚠ 用文字字形（不加 VS16）才吃得到 CSS 顏色，emoji 形態會固定成彩色 */
@@ -381,7 +406,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .news-prompt-ta { width: 100%; height: 50vh; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 12.5px; line-height: 1.6; padding: 12px; font-family: Consolas, monospace; resize: vertical; box-sizing: border-box; }
 
 /* ── 彈窗 ── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: hidden; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: var(--z-modal); display: flex; align-items: center; justify-content: center; padding: 24px; overflow: hidden; }
 .modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; max-width: 720px; width: 100%; max-height: 100%; min-height: 0; display: flex; flex-direction: column; }
 .modal-head { flex-shrink: 0; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid var(--border); }
@@ -511,9 +536,9 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .modal-box.chart-wide { max-width: 1120px; max-height: 94vh; }
 .modal-box.chart-wide .modal-body { padding: 12px 18px; overflow-y: auto; }
 .modal-box.chart-wide .chart-svg { max-height: 46vh; }
-.modal-box.chart-wide .iq-grid { grid-template-columns: repeat(5, 1fr); }
+.modal-box.chart-wide .iq-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .modal-box.chart-wide .detail-note { margin-top: 8px; }
-@media (max-width: 1180px) { .modal-box.chart-wide .iq-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1180px) { .modal-box.chart-wide .iq-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-height: 760px) { .modal-box.chart-wide .chart-svg { max-height: 40vh; } }
 
 /* 即時行情（當日走勢） */
@@ -529,12 +554,12 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ck-ax-dn { fill: var(--down); }
 .ck-ax-ref { fill: var(--accent2); }
 .ck-legend.vwap { color: var(--ck-vwap); }
-.iq-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 12px; }
+.iq-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 12px; }
 .iq-cell { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--bg2); padding: 7px 12px; }
 .iq-k { font-size: 12px; color: var(--text2); }
 .iq-v { font-size: 14px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .iq-v.y { color: var(--accent2); }
-@media (max-width: 700px) { .iq-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 700px) { .iq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* 買賣五檔 */
 .bid-head { display: flex; gap: 18px; align-items: center; font-size: 13px; color: var(--text2); margin-bottom: 10px; font-variant-numeric: tabular-nums; }
@@ -663,8 +688,6 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 /* ── 換股試算（股利估算子頁籤） ── */
 #divest-tab-est .divest-topbar { margin-top: 0; }
 /* 股利估算子頁籤：固定於頂欄(54)＋導覽列(50)下方，捲動時不跟著跑；滿版底色遮住下方捲過的內容 */
-#divest-view .tx-subtabs { position: sticky; top: 104px; z-index: 8; background: var(--bg);
-  margin: -14px calc(50% - 50vw) 12px; padding: 14px calc(50vw - 50%) 8px; }
 .swap-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .swap-tw { max-height: none; }
 .swap-table { font-size: 13px; }
@@ -841,7 +864,7 @@ td.cost-even::after  { background: var(--text3); }
 .wt-toolbar { align-items: flex-start; }
 .wt-search { position: relative; }
 .wt-inp { width: 380px; text-align: left; }
-.wt-sug { position: absolute; top: 100%; left: 0; z-index: 20; width: 420px; max-height: 320px; overflow-y: auto;
+.wt-sug { position: absolute; top: 100%; left: 0; z-index: var(--z-pop); width: 420px; max-height: 320px; overflow-y: auto;
   background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; margin-top: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
 .wt-sug-item { display: grid; grid-template-columns: 76px 1fr auto; align-items: center; gap: 10px;
   padding: 7px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--border); }
@@ -870,7 +893,7 @@ td.cost-even::after  { background: var(--text3); }
 .dstat-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); }
 .dstat { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dstat th, .dstat td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
-.dstat thead th { background: var(--thbg); color: var(--th); font-weight: 600; letter-spacing: .6px; position: sticky; top: 0; z-index: 2; }
+.dstat thead th { background: var(--thbg); color: var(--th); font-weight: 600; letter-spacing: .6px; position: sticky; top: 0; z-index: var(--z-table); }
 .dstat td.num, .dstat th.num { text-align: right; }
 .dstat tbody tr:hover td { background: rgba(255,255,255,.03); }
 /* 單數月份欄（1/3/5/7/9/11）加淺色底，方便橫向數月份。
@@ -883,7 +906,7 @@ td.cost-even::after  { background: var(--text3); }
 .dstat tbody tr:hover td:nth-child(even):not(.dstat-code):not(.dstat-tot) { background: rgba(255,255,255,.075); }
 /* 代號欄凍結：header 需更高層級才不會被 tbody 的 sticky 蓋住 */
 .dstat .dstat-code { position: sticky; left: 0; background: var(--bg2); text-align: left; font-weight: 600; }
-.dstat thead .dstat-code { background: var(--bg3); z-index: 3; }
+.dstat thead .dstat-code { background: var(--bg3); z-index: var(--z-table-tl); }
 .dstat tbody tr:hover .dstat-code { background: var(--bg3); }
 .dstat .dstat-tot { font-weight: 700; color: var(--accent2); border-left: 1px solid var(--border-strong); }
 /* 金額配色與月份總覽一致：綠＝已發放、黃＝預估 */
@@ -1001,7 +1024,7 @@ td.cost-even::after  { background: var(--text3); }
 .dw-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
   font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-family: var(--font); }
 .dw-btn.on { border-color: var(--accent); color: var(--accent2); }
-.dw { position: absolute; right: 28px; z-index: 30; width: min(1240px, calc(100vw - 56px));
+.dw { position: absolute; right: 28px; z-index: var(--z-drawer); width: min(1240px, calc(100vw - 56px));
   background: var(--bg2); border: 1px solid var(--accent); border-radius: 10px;
   box-shadow: 0 14px 34px rgba(0,0,0,.55); padding: 12px 16px; }
 .dw[hidden] { display: none; }
@@ -1039,10 +1062,10 @@ td.cost-even::after  { background: var(--text3); }
 .cat-vp   { opacity: .7; font-size: .75em; }
 
 /* 展開：4 欄 × 2 列 */
-.cat-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 18px; }
+.cat-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 18px; }
 .cat-sep { grid-column: 1 / -1; height: 0; border-top: 1px solid var(--border); }   /* 上下兩排之間的橫線，跨滿四欄 */
 /* 欄寬不能用 auto：各格內容寬度不同（例 +172.0% 比 +0.9% 寬）會把金額欄推歪，上下兩排格子對不齊。
-   → 百分比欄固定寬、金額欄吃剩餘空間並靠右；各格等寬（repeat(4,1fr)），所有格子的兩欄右緣就在同一條線上。 */
+   → 百分比欄固定寬、金額欄吃剩餘空間並靠右；各格等寬（repeat(4, minmax(0, 1fr))），所有格子的兩欄右緣就在同一條線上。 */
 .cat-cell { display: grid; grid-template-columns: auto minmax(0, 1fr) 4.6rem; column-gap: 8px; row-gap: 2px;
   align-items: baseline; padding-left: 10px; border-left: 2px solid var(--border); }
 .cat-cell-tot { border-left-color: var(--accent2); }
@@ -1130,7 +1153,7 @@ td.cost-even::after  { background: var(--text3); }
 .dm-next-inp { width: 150px; margin-left: 6px; font-size: 12px; padding: 1px 4px; }
 
 /* ── 成交提示（全站，顯示 5 秒）── 置頂置中，蓋在 Header 上方；多筆往下疊 */
-#fill-toasts { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9999;
+#fill-toasts { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: var(--z-toast);
   display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
 .fill-toast { pointer-events: auto; cursor: pointer; display: flex; align-items: baseline; gap: 10px;
   padding: 9px 16px; border-radius: 8px; background: var(--bg2); border: 1px solid var(--border);
@@ -1608,7 +1631,7 @@ td.cost-even::after  { background: var(--text3); }
 .rf-cal-tot { font-size: 14px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
 .rf-cal-estflag { font-size: 11px; color: var(--accent); border: 1px solid var(--accent);
   border-radius: 4px; padding: 0 5px; }
-.rf-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.rf-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .rf-cal-wd { font-size: 11px; color: var(--text3); text-align: center; padding-bottom: 2px; }
 .rf-cal-cell { min-height: 46px; border-radius: 5px; padding: 3px 5px; background: var(--bg3);
   display: flex; flex-direction: column; gap: 1px; }
