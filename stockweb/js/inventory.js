@@ -123,7 +123,7 @@ function _invTrdSide(e, side) {
   var sign = side === 'buy' ? '+' : '−';
   var unit = e.lot === 'Common' ? '張' : '股';
   var n = function (v) { return v.toLocaleString('zh-TW'); };
-  var cls = 'trd-' + side;                              // buy 紅 / sell 綠
+  var cls = 'trd-' + side;                              // 顏色只分已成交／在途，買賣看 ＋−
   // 有成交 → 主數字用成交量（亮）；在途掛上標（暗）。沒成交 → 整個用暗色顯示在途量
   // 失效的量用灰色另標，不能跟在途同色，否則看起來還掛著
   var dead = e.dead ? '<span class="trd-dead" title="收盤失效">' + n(e.dead) + '</span>' : '';

@@ -1283,10 +1283,13 @@ td.cost-even::after  { background: var(--text3); }
 /* 交易欄：今日進出。亮＝已成交、暗＝還掛著；上標為在途量 */
 .inv-trd { white-space: nowrap; line-height: 1.35; }
 .trd-box { display: inline-block; }
-.trd-buy  { color: #8a3a3f; }          /* 暗紅：委託中 */
-.trd-sell { color: #1f6b3c; }          /* 暗綠：委託中 */
-.trd-buy.on  { color: var(--up); font-weight: 700; }    /* 亮紅：已成交 */
-.trd-sell.on { color: var(--down); font-weight: 700; }  /* 亮綠：已成交 */
+/* 買賣不用顏色區分：數字前面已經有 ＋（買）／−（賣），顏色沒有多給資訊，
+   而同一列右邊就是損益的紅綠，紅＝買與紅＝漲會撞在一起（一致性檢查第 1 項）。
+   顏色改成表達「這筆到哪了」，三階都要分得開：
+   已成交亮、在途中、失效暗並加刪除線（失效不能跟在途同色，否則看起來還掛著）。
+   下單彈窗維持紅綠：那是獨立視窗，大面積底色是「我在下買單」的即時提示。 */
+.trd-buy, .trd-sell       { color: var(--text2); }                        /* 在途 */
+.trd-buy.on, .trd-sell.on { color: var(--text); font-weight: 700; }       /* 已成交 */
 .trd-u { font-style: normal; font-size: 10px; opacity: .75; margin-left: 1px; }
 /* 上標用 sup 會撐高行距，改用 vertical-align 自行抬起 */
 .inv-trd sup { font-size: 10px; font-weight: 400; vertical-align: super; line-height: 0; margin-left: 2px; }
