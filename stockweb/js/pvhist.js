@@ -649,6 +649,8 @@ function pvReload() { _pvData = null; try { localStorage.removeItem(PV_LS); } ca
 // 走勢＝紅綠（全站慣例）；管制圖＝藍紅黃（只在那張圖內有意義），兩套刻意不同。
 var _pvTab = 'trend';
 function pvTab(t) { _pvTab = t; pvRender(); }
+// 登入後 retire.js 會把設定標記為待重讀，管制圖開著時要跟著重畫，否則停在未登入時的值
+window.addEventListener('owner-ready', function () { if (_pvOpen && _pvTab === 'spc') pvRender(); });
 
 function pvRender() {
   var el = document.getElementById('pv');
@@ -663,6 +665,14 @@ function pvRender() {
   if (_pvLoading) body = '<div class="modal-loading">重建買賣台帳與日收盤中…（首次約 3～5 秒）</div>';
   else if (_pvErr) body = '<div class="modal-loading">載入失敗：' + _pvErr + '</div>';
   else if (!_pvData) body = '<div class="modal-loading">載入中…</div>';
+  // 管制圖的連續天數與目標上下限來自退休現金流設定。那份設定是延遲載入的，
+  // 不先等它就會拿到 rtSpc() 的預設值，畫出來與設定不符（實測設 3 日卻畫成 5 日）。
+  // rtLoad() 結束時一定會把 _rtLoaded 設為 true，所以這裡不會無限重繪。
+  else if (_pvTab === 'spc' && typeof rtReady === 'function' && typeof _rtLoaded !== 'undefined' && !_rtLoaded) {
+    body = '<div class="modal-loading">載入管制圖參數中…</div>';
+    rtReady().then(function () { if (_pvOpen && _pvTab === 'spc') pvRender(); },
+                   function () { if (_pvOpen && _pvTab === 'spc') pvRender(); });
+  }
   else body = (_pvTab === 'spc') ? pvSpcSvg(_pvData) : pvSvg(_pvData);
 
   var warn = (_pvData && _pvData.warn && _pvData.warn.length)

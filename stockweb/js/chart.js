@@ -6,9 +6,19 @@
 var _chartCode = null;
 var _chartTab = 'd5';
 var CHART_TAB_LS = 'chart_tab_v1';
+// 頁籤代碼：intra／bid／d5，再加上 CHART_PERIODS 的五個期間代碼（1mo…5y）。
+// 期間不另外分一層：日 K 的五個期間就是五個頁籤，不必先點「日線」再點期間。
+function _chartIsPer(t) { return _chartPerDef(t || ''); }
 function _chartSavedTab() {
-  try { var t = localStorage.getItem(CHART_TAB_LS); if (/^(intra|bid|d5|day)$/.test(t || '')) return t; } catch (e) {}
+  try {
+    var t = localStorage.getItem(CHART_TAB_LS);
+    if (/^(intra|bid|d5)$/.test(t || '') || _chartIsPer(t)) return t;
+    if (t === 'day') return '3mo';        // 舊版記憶的「日線」對應到預設期間
+  } catch (e) {}
   return 'intra';
+}
+function _chartTabList() {
+  return ['intra', 'bid', 'd5'].concat(CHART_PERIODS.map(function (p) { return p.k; }));
 }
 var _chartCache = {};   // code → { day, dts, close, vol, ref }
 
@@ -72,24 +82,30 @@ function openChartPop(code) {
 function _chartRenderShell() {
   document.getElementById('detail-body').innerHTML =
     '<div class="tx-subtabs chart-tabs">' +
-      '<button id="chart-tab-intra" class="tx-subtab active" onclick="chartShowTab(\'intra\')">即時行情</button>' +
-      '<button id="chart-tab-bid" class="tx-subtab" onclick="chartShowTab(\'bid\')">五檔</button>' +
-      '<button id="chart-tab-d5" class="tx-subtab" onclick="chartShowTab(\'d5\')">五日線</button>' +
-      '<button id="chart-tab-day" class="tx-subtab" onclick="chartShowTab(\'day\')">日線</button>' +
+      [['intra', '即時行情'], ['bid', '五檔'], ['d5', '五日線']]
+        .concat(CHART_PERIODS.map(function (p) { return [p.k, p.lb]; }))
+        .map(function (a) {
+          return '<button id="chart-tab-' + a[0] + '" class="tx-subtab' +
+            (_chartIsPer(a[0]) ? ' tx-sub-per' : '') + '" onclick="chartShowTab(&quot;' + a[0] + '&quot;)">' +
+            a[1] + '</button>';
+        }).join('') +
     '</div><div id="chart-area"></div>';
 }
 
 function chartShowTab(tab) {
+  var per = _chartIsPer(tab);
   _chartTab = tab;
   try { localStorage.setItem(CHART_TAB_LS, tab); } catch (e) {}
-  ['intra', 'bid', 'd5', 'day'].forEach(function (t) {
-    document.getElementById('chart-tab-' + t).classList.toggle('active', t === tab);
+  _chartTabList().forEach(function (t) {
+    var el = document.getElementById('chart-tab-' + t);
+    if (el) el.classList.toggle('active', t === tab);
   });
   if (tab !== 'bid') _chartStopBidAsk();     // 離開五檔頁籤即退訂，省行情訂閱額度
   _chartEnsureLiveTimer();
   if (tab === 'intra') return _chartLoadIntra();
   if (tab === 'bid') return _chartLoadBidAsk();
   if (tab === 'd5') return _chartLoad5d();
+  _chartPer = per;
   return _chartLoadDay();
 }
 
@@ -656,7 +672,7 @@ function _chartEnsureLiveTimer() {
     // 即時行情：每 12 秒更新價格線/報價面板（僅當日分 K，輕量）；內外盤較重，每 5 次(60s)才更新
     if (_chartTab === 'intra') return _chartLoadIntraLive(_chartTick % 5 === 0);
     // 五日線/日線：資料每分鐘才增一根，每 5 次(60s)更新即可
-    if ((_chartTab === 'd5' || _chartTab === 'day') && _chartTick % 5 === 0) _chartRefreshToday();
+    if ((_chartTab === 'd5' || _chartIsPer(_chartTab)) && _chartTick % 5 === 0) _chartRefreshToday();
   }, 12000);
 }
 function _chartStopLiveTimer() {
@@ -983,11 +999,8 @@ function _chartPutToday(bars, bar) {
 }
 
 function chartSetPeriod(k) {
-  var def = _chartPerDef(k);
-  if (!def || !_chartCode) return;
-  _chartPer = def;
-  try { localStorage.setItem(CHART_PER_LS, k); } catch (e) {}
-  _chartLoadDay();
+  if (!_chartPerDef(k) || !_chartCode) return;
+  chartShowTab(k);          // 期間就是頁籤，走同一個入口
 }
 function chartToggleAdj() {
   _chartAdjOn = !_chartAdjOn;
@@ -995,24 +1008,20 @@ function chartToggleAdj() {
   _chartLoadDay();
 }
 
-// 期間按鈕列。放在 #ckd-ctl，與圖區 #ckd-plot 分開，載入中按鈕不消失。
+// 圖上方的控制列：期間已經在頁籤列，這裡只剩還原／收盤的切換。
+// 放在 #ckd-ctl、與圖區 #ckd-plot 分開，載入中不會消失。
 function _chartPerBarHtml() {
-  var h = '<div class="ckd-perbar">' + CHART_PERIODS.map(function (p) {
-    return '<button class="ckd-per' + (p.k === _chartPer.k ? ' active' : '') +
-      '" onclick="chartSetPeriod(&quot;' + p.k + '&quot;)">' + p.lb + '</button>';
-  }).join('');
-  if (_chartPer.src === 'yahoo') {
-    h += '<button class="ckd-adj' + (_chartAdjOn ? ' active' : '') + '" onclick="chartToggleAdj()" ' +
-      'title="還原價：把除息落差加回歷史價，長期線才看得出總報酬；收盤價則是實際成交價">' +
-      (_chartAdjOn ? '還原價' : '收盤價') + '</button>';
-  }
-  return h + '</div>';
+  if (_chartPer.src !== 'yahoo') return '';
+  return '<div class="ckd-perbar">' +
+    '<button class="ckd-adj' + (_chartAdjOn ? ' active' : '') + '" onclick="chartToggleAdj()" ' +
+    'title="還原價：把除息落差加回歷史價，長期線才看得出總報酬；收盤價則是實際成交價">' +
+    (_chartAdjOn ? '還原價' : '收盤價') + '</button></div>';
 }
 
 async function _chartLoadDay() {
   var area = document.getElementById('chart-area');
   var code = _chartCode;
-  if (!_chartPer) _chartPer = _chartSavedPer();
+  if (!_chartPer) _chartPer = _chartIsPer(_chartTab) || _chartSavedPer();
   if (_chartAdjOn == null) _chartAdjOn = _chartSavedAdj();
   var per = _chartPer;
   if (!document.getElementById('ckd-plot')) {
@@ -1038,7 +1047,7 @@ async function _chartLoadDay() {
       cc = _chartCache[key] = { day: today, bars: bars, src: src };
     }
     _chartDaySrc = cc.src || '';
-    if (_chartCode !== code || _chartTab !== 'day' || _chartPer !== per) return;   // 期間已切走
+    if (_chartCode !== code || !_chartIsPer(_chartTab) || _chartPer !== per) return;   // 期間已切走
     _chartDayRender(cc.bars, code, per);
   } catch (e) {
     plot.innerHTML = '<div class="modal-loading">載入失敗：' + e.message + '</div>';

@@ -65,7 +65,22 @@ async function rtLoad(force) {
   _rtLoaded = true;
   return _rtCfg;
 }
-window.addEventListener('owner-ready', function () { _rtLoaded = false; });
+window.addEventListener('owner-ready', function () { _rtLoaded = false; _rtReadyP = null; });
+
+// 需要設定值的頁面自己等這個，不要直接讀 _rtCfg。
+// 為什麼要有：rtLoad() 原本只有設定頁與股利估算的現金流會呼叫，管制圖沒有，
+// 所以在設定頁開過之前 _rtCfg 是 null，rtSpc() 回的是 RT_SPC_N 等預設值
+// （實測：連續天數設 3 日，但先開管制圖畫出來的是 5 日，先開設定頁再開才對）。
+// 可重入：同時有多個呼叫者時共用同一個載入，不會打兩次 Firestore。
+var _rtReadyP = null;
+function rtReady() {
+  if (_rtLoaded) return Promise.resolve(_rtCfg);
+  if (!_rtReadyP) {
+    _rtReadyP = rtLoad().then(function (c) { _rtReadyP = null; return c; },
+                              function (e) { _rtReadyP = null; throw e; });
+  }
+  return _rtReadyP;
+}
 
 async function _rtSave() {
   if (_rtCloud()) {
