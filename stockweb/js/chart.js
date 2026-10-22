@@ -22,13 +22,19 @@ var _chartCache = {};   // code → { day, dts, close, vol, ref }
 // 但 Yahoo 有缺日（2026-10-21 三檔皆為 null），所以要濾空值。
 // 量的單位不同：Yahoo 是股、kbars 是張（實測比值 1001.8），載入時除 1000 歸一。
 // line：超過約 240 根時每根寬小於 3.3px，蠟燭的影線與實體已經分辨不出來，改畫收盤折線。
+// 六月／一年／五年共用同一條五年序列，切期間只是切片，不重抓。
+// 為什麼不各抓各的長度：成本幾乎全在代理往返，不在資料量（1mo 3.3KB／2.05 秒
+// 對 5y 102KB／2.03 秒），所以一次抓滿、三個期間共用，比抓三次短的划算。
 var CHART_PERIODS = [
   { k: '1mo', lb: '近月', src: 'kbars', show: 21, line: false },
   { k: '3mo', lb: '三月', src: 'kbars', show: 64, line: false },
-  { k: '6mo', lb: '六月', src: 'yahoo', range: '1y', show: 126, line: false },
-  { k: '1y', lb: '一年', src: 'yahoo', range: '2y', show: 243, line: true },
-  { k: '5y', lb: '五年', src: 'yahoo', range: '5y', show: 99999, line: true }
+  { k: '6mo', lb: '六月', src: 'yahoo', show: 126, line: false },
+  { k: '1y', lb: '一年', src: 'yahoo', show: 243, line: true },
+  { k: '5y', lb: '五年', src: 'yahoo', show: 99999, line: true }
 ];
+var CHART_Y_RANGE = '5y';          // 一次抓滿的長度
+var CHART_DK_LS = 'chart_dayk_v1:';   // 瀏覽器快取的 key 前綴（後面接代碼）
+var _chartDaySrc = '';             // 這次的日 K 從哪一層來的，顯示在說明列
 var CHART_PER_LS = 'chart_period_v1', CHART_ADJ_LS = 'chart_adj_v1';
 var _chartPer = null;      // 目前期間的定義物件
 var _chartAdjOn = null;    // 是否還原權值（僅 Yahoo 期間有意義）
@@ -717,7 +723,7 @@ async function _chartRefreshToday() {
     } else {
       var per = _chartPer;
       if (!per) return;
-      var cd = _chartCache[code + ':day:' + (per.src === 'kbars' ? 'kbars' : 'y' + per.range)];
+      var cd = _chartCache[code + ':day:' + per.src];
       if (!cd) return;
       var bar = { d: today, o: j.Open[0], h: j.High[0], l: j.Low[0], c: j.Close[j.Close.length - 1], v: 0, ac: null };
       for (var i = 0; i < j.datetime.length; i++) {
@@ -803,6 +809,130 @@ async function _chartFetchYahoo(code, range) {
     } catch (e) { err = e; }
   }
   throw err || new Error('無日 K 資料');
+}
+
+// ── 日 K 的三層來源 ──
+// 排程產出的本機靜態檔 → 瀏覽器快取 → Yahoo。
+// 會分三層是因為代理很不穩：同一條 GAS 代理實測從 2.0 秒到 23.8 秒都有，
+// 而且跟資料量無關（1mo 3.3KB 要 2.05 秒、5y 102KB 要 2.03 秒），瓶頸是往返本身。
+// 所以真正的解不是「少抓一點」，是「盡量不要抓」。
+
+// 緊湊格式：價格乘 100 存整數、日期去掉分隔符。
+// 實測 0050 五年 1,213 根，原樣 159 KB → 壓縮後 48 KB。
+function _chartDkPack(code, bars, src) {
+  var r2 = function (x) { return Math.round(x * 100); };
+  return { v: 1, code: code, src: src, saved: _chartYmd(new Date()),
+    d: bars.map(function (b) { return b.d.replace(/-/g, ''); }),
+    o: bars.map(function (b) { return r2(b.o); }), h: bars.map(function (b) { return r2(b.h); }),
+    l: bars.map(function (b) { return r2(b.l); }), c: bars.map(function (b) { return r2(b.c); }),
+    a: bars.map(function (b) { return b.ac == null ? 0 : r2(b.ac); }),
+    n: bars.map(function (b) { return Math.round(b.v); }) };
+}
+function _chartDkUnpack(o) {
+  if (!o || o.v !== 1 || !o.d || !o.d.length) return null;
+  var out = [];
+  for (var i = 0; i < o.d.length; i++) {
+    out.push({ d: o.d[i].slice(0, 4) + '-' + o.d[i].slice(4, 6) + '-' + o.d[i].slice(6),
+      o: o.o[i] / 100, h: o.h[i] / 100, l: o.l[i] / 100, c: o.c[i] / 100,
+      v: o.n[i], ac: o.a[i] ? o.a[i] / 100 : null });
+  }
+  return out;
+}
+function _chartDkRead(code) {
+  try { return _chartDkUnpack(JSON.parse(localStorage.getItem(CHART_DK_LS + code) || 'null')); }
+  catch (e) { return null; }
+}
+function _chartDkWrite(code, bars, src) {
+  if (!bars || !bars.length) return false;
+  var txt = JSON.stringify(_chartDkPack(code, bars, src));
+  try { localStorage.setItem(CHART_DK_LS + code, txt); return true; } catch (e) {}
+  // 配額滿了：只丟自己存的日 K，從最早存的那筆開始丟，不碰其他功能的 key
+  var keys = [];
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (k && k.indexOf(CHART_DK_LS) === 0 && k !== CHART_DK_LS + code) keys.push(k);
+  }
+  keys.sort(function (a, b) {
+    var sa = '', sb = '';
+    try { sa = (JSON.parse(localStorage.getItem(a)) || {}).saved || ''; } catch (e) {}
+    try { sb = (JSON.parse(localStorage.getItem(b)) || {}).saved || ''; } catch (e) {}
+    return sa < sb ? -1 : 1;
+  });
+  while (keys.length) {
+    try { localStorage.removeItem(keys.shift()); localStorage.setItem(CHART_DK_LS + code, txt); return true; }
+    catch (e2) {}
+  }
+  return false;
+}
+
+// 上一個交易日。歷史只要補到這天就夠了 —— 今天那一根本來就會被本機分 K 蓋掉。
+// 不能直接用辦公日曆判斷：補班的星期六是上班日，但股市不開。
+// 所以先排掉週六日，再用辦公日曆排掉國定假日；日曆沒涵蓋到的年份就只排週末。
+// 颱風假不在辦公日曆裡，碰上時序列會被當成差一天，只多付一次便宜的補丁。
+function _chartPrevTradeDay() {
+  var base = (typeof _divTwDate === 'function') ? _divTwDate().iso : _chartYmd(new Date());
+  var d = new Date(base + 'T00:00:00Z');
+  for (var i = 0; i < 20; i++) {
+    d.setUTCDate(d.getUTCDate() - 1);
+    var g = d.getUTCDay();
+    if (g === 0 || g === 6) continue;
+    var iso = d.toISOString().slice(0, 10);
+    if ((typeof _divIsOff === 'function' ? _divIsOff(iso) : null) === true) continue;
+    return iso;
+  }
+  return null;
+}
+function _chartDkFresh(bars, prev) {
+  return !!(bars && bars.length && (!prev || bars[bars.length - 1].d >= prev));
+}
+
+// 排程（daily-k.py）產出的本機靜態檔。沒有就回 null，不當成錯誤。
+async function _chartFetchStatic(code) {
+  try {
+    var r = await fetch('data/dayk/' + encodeURIComponent(code) + '.json', { cache: 'no-cache' });
+    if (!r.ok) return null;
+    return _chartDkUnpack(await r.json());
+  } catch (e) { return null; }
+}
+
+// 補丁：只抓最近三個月接到舊序列後面。
+// 用三月不用一月，是因為成本一樣（都是一次往返），但連假或缺日時重疊的餘裕比較大。
+// 重疊日比對是必要的：Yahoo 在除息當天會把整條歷史的 adjclose 重算一次，
+// 只接新資料的話舊段會停在除息前的版本，還原線會在接縫處跳一階。
+// 偵測到重算、或久到沒有重疊，就回 null 要求整條重抓。
+async function _chartTopUp(code, bars) {
+  var patch = await _chartFetchYahoo(code, '3mo');
+  if (!patch.length) return null;
+  var byD = {};
+  bars.forEach(function (b) { byD[b.d] = b; });
+  var ovOld = null, ovNew = null;
+  for (var i = 0; i < patch.length; i++) {
+    if (byD[patch[i].d]) { ovOld = byD[patch[i].d]; ovNew = patch[i]; break; }
+  }
+  if (!ovOld) return null;
+  if (ovOld.ac != null && ovNew.ac != null && Math.abs(ovOld.ac - ovNew.ac) > 0.005) return null;
+  var cut = patch[0].d;
+  return bars.filter(function (b) { return b.d < cut; }).concat(patch);
+}
+
+// 單一出口：決定這條五年序列從哪裡來
+async function _chartDaySeries(code) {
+  var prev = _chartPrevTradeDay();
+  var st = await _chartFetchStatic(code);
+  if (_chartDkFresh(st, prev)) { _chartDaySrc = '本機排程檔'; _chartDkWrite(code, st, 'static'); return st; }
+  var ls = _chartDkRead(code);
+  if (_chartDkFresh(ls, prev)) { _chartDaySrc = '瀏覽器快取'; return ls; }
+
+  var base = null;
+  if (st && st.length && ls && ls.length) base = st[st.length - 1].d >= ls[ls.length - 1].d ? st : ls;
+  else base = (st && st.length) ? st : ls;
+
+  var bars = null;
+  if (base && base.length) { try { bars = await _chartTopUp(code, base); } catch (e) {} }
+  if (_chartDkFresh(bars, prev)) { _chartDaySrc = '快取＋Yahoo 補丁'; }
+  else { bars = await _chartFetchYahoo(code, CHART_Y_RANGE); _chartDaySrc = 'Yahoo 整條'; }
+  _chartDkWrite(code, bars, 'yahoo');
+  return bars;
 }
 
 // 還原權值：Yahoo 只給還原收盤，所以拿每根的 adjclose/close 比例回乘開高低。
@@ -894,18 +1024,20 @@ async function _chartLoadDay() {
   try {
     var today = _chartYmd(new Date());
     // kbars 的兩個期間共用同一筆快取（240 日曆天、約 157 個交易日），切期間不重抓
-    var key = code + ':day:' + (per.src === 'kbars' ? 'kbars' : 'y' + per.range);
+    var key = code + ':day:' + per.src;          // Yahoo 的三個期間共用同一條序列
     var cc = _chartCache[key];
     if (!cc || cc.day !== today) {
-      var bars;
+      var bars, src = '';
       if (per.src === 'kbars') {
         bars = await _chartFetchDay(code);          // 已含今天
       } else {
-        bars = await _chartFetchYahoo(code, per.range);
+        bars = await _chartDaySeries(code);
+        src = _chartDaySrc;
         _chartPutToday(bars, await _chartTodayBar(code).catch(function () { return null; }));
       }
-      cc = _chartCache[key] = { day: today, bars: bars };
+      cc = _chartCache[key] = { day: today, bars: bars, src: src };
     }
+    _chartDaySrc = cc.src || '';
     if (_chartCode !== code || _chartTab !== 'day' || _chartPer !== per) return;   // 期間已切走
     _chartDayRender(cc.bars, code, per);
   } catch (e) {
@@ -1010,8 +1142,8 @@ function _chartDaySvg(bars, code, per) {
   var adj = per.src === 'yahoo' && _chartAdjOn;
   var note = per.src === 'kbars'
     ? 'Shioaji 1 分 K 聚合為日 K，收盤價；最後一根盤中每分鐘更新。'
-    : 'Yahoo 日 K（' + (adj ? '還原價：除息落差已加回歷史價，看的是總報酬' : '收盤價：實際成交價，除息當天會往下跳') +
-      '），最後一根改用本機盤中現價。量已由股換算為張。';
+    : '日 K（' + (adj ? '還原價：除息落差已加回歷史價，看的是總報酬' : '收盤價：實際成交價，除息當天會往下跳') +
+      '），最後一根改用本機盤中現價。量已由股換算為張。來源：' + (_chartDaySrc || 'Yahoo') + '。';
   return '<div class="chart-info"><span id="ckd-tip">' +
       per.lb + ' ' + n + ' 日 <b>' + first.c.toFixed(2) + '</b> → <b>' + last.c.toFixed(2) + '</b>　' +
       '<span class="' + cls2 + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '（' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%）</span>' +

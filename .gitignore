@@ -2,3 +2,8 @@ _docs/
 
 # wrangler 本機快取（含 Cloudflare 帳號 ID 與 email），不可推上公開 repo
 .wrangler/
+
+# 個股日 K 快取（daily-k.py 每日重產）。
+# 與 etf-nav.json 那些不同：那些是網頁自己抓不到的來源，這個純粹是延遲快取，
+# 網頁在檔案不存在時會自己退回瀏覽器快取與 Yahoo，所以不值得為它每天提交 213 KB。
+stockweb/data/dayk/
