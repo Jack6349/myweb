@@ -908,11 +908,11 @@ async function startStream() {
   var holdCodes = (_positions || []).map(function (p) { return String(p.code); }).sort(byCode);
   others.sort(byCode);
   var card = function (code) { return '<div class="scard" id="scard-' + code + '" title="點看線圖" onclick="openChartPop(\'' + code + '\')"></div>'; };
-  var html = '<div class="scard-sec-title">現有持股（' + holdCodes.length + '）</div>' +
+  var html = '<div class="sub-title">現有持股（' + holdCodes.length + '）</div>' +
     '<div class="scard-grid">' + holdCodes.map(card).join('') + '</div>';
   if (others.length) {
     html += '<div class="scard-divider"></div>' +
-      '<div class="scard-sec-title">其他主要成分股（' + others.length + '，依曝險）</div>' +
+      '<div class="sub-title">其他主要成分股（' + others.length + '，依曝險）</div>' +
       '<div class="scard-grid">' + others.map(card).join('') + '</div>';
   }
   grid.innerHTML = html;

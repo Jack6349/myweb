@@ -319,7 +319,7 @@ function renderRefill() {
   html += _rfPendingHtml(rows);
 
   // 逐檔
-  html += '<div class="divest-sec-title">逐檔填息（近 ' + RF_YEARS + ' 年，點列展開歷次）</div><div class="rf-list">';
+  html += '<div class="sec-title">逐檔填息（近 ' + RF_YEARS + ' 年，點列展開歷次）</div><div class="rf-list">';
   // 成本均價（對原始成本）／含息損益／含息獲利率：整支沿用持股庫存的 invMetrics，
   // 兩頁同一個數字不會各算各的。逐檔填息每一列都是現有持股，成本一定查得到；
   // 走 Firestore 後備來源（id 為 null）時沒有建倉明細，配息加不出來 → 顯示「—」。
@@ -498,7 +498,7 @@ function _rfPendingHtml(rows) {
   });
   list.sort(function (a, b) { return a.gap - b.gap || (a.ex < b.ex ? -1 : 1); });
 
-  var h = '<div class="divest-sec-title">未填息個股' + (list.length ? '<span class="rf-cmnote">' + list.length + ' 筆</span>' : '') + '</div>';
+  var h = '<div class="sec-title">未填息個股' + (list.length ? '<span class="rf-cmnote">' + list.length + ' 筆</span>' : '') + '</div>';
   if (!list.length) return h + '<div class="rf-cal-empty">目前無未填息個股。</div>';
   h += '<div class="inv-table-wrap"><table class="inv-table swap-table rf-pend"><thead><tr>' +
     '<th>代號</th><th>名稱</th><th>除息日</th><th class="num">配息</th><th class="num">基準價</th>' +
@@ -642,9 +642,9 @@ function rfPayCalHtml() {
   if (!r1.length && !r2.length) return '';
   var sum = function (a) { return a.reduce(function (x, r) { return x + (r.total || 0); }, 0); };
   var t1 = sum(r1), t2 = sum(r2);
-  // 標題用子標題而非 .divest-sec-title：後者會被左選單的分組器切成獨立區塊，
+  // 標題用自己的 class 而非 .sec-title：後者會被左選單的分組器切成獨立區塊，
   // 但這張日曆是「本月發放」的一部分，要留在同一個區塊裡。
-  return '<div class="rf-cal-title">發放日曆' +
+  return '<div class="rf-cal-title sub-title">發放日曆' +
       '<span class="divest-sec-sum">本月 ' + t1.toLocaleString('zh-TW') +
       '　下月 ' + t2.toLocaleString('zh-TW') + '</span></div>' +
     '<div class="rf-cal-wrap">' + _rfCalMonth(ym1, r1, todayIso) + _rfCalMonth(ym2, r2, todayIso) + '</div>' +
@@ -662,7 +662,7 @@ function _rfMonthPayHtml() {
   var rows = _rfPay || [];
   var ymLabel = (_rfResult ? _rfResult.day : _divTwDate().iso).slice(0, 7).replace('-', '/');
   var title = function (sumHtml) {
-    return '<div class="divest-sec-title">本月發放（' + ymLabel + '）' + (sumHtml || '') + '</div>';
+    return '<div class="sec-title">本月發放（' + ymLabel + '）' + (sumHtml || '') + '</div>';
   };
   if (!rows.length) return title() + '<div class="rf-cal-empty">本月無配息發放。</div>';
 
@@ -725,7 +725,7 @@ function _rfMonthPayHtml() {
 // 除息日曆：未來已公告的除息日；缺金額或發放日的列附手動補登輸入框（貼上整行自動解析）
 function _rfCalHtml() {
   var cal = _rfCal || [];
-  var h = '<div class="divest-sec-title">除息日曆（未來已公告）' +
+  var h = '<div class="sec-title">除息日曆（未來已公告）' +
     (_rfNote ? '<span class="rf-cmnote">' + _rfNote + '</span>' : '') + '</div>';
   if (!cal.length) {
     return h + '<div class="rf-cal-empty">目前無已公告的未來除息日（上市查 e添富、上櫃查 TPEx 預告表、金額另查 Yahoo）。</div>';

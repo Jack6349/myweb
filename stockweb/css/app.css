@@ -109,7 +109,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .scard-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 12px; }
 @media (max-width: 1100px) { .scard-grid { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 880px) { .scard-grid { grid-template-columns: repeat(3, 1fr); } }
-.scard-sec-title { font-size: 13px; font-weight: 700; color: var(--accent2); margin: 4px 0 8px; }
 .scard-divider { border-top: 1px solid var(--border-strong, #435a78); margin: 18px 0 0; }
 .scard { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 9px 14px; position: relative; width: 95%; justify-self: center; overflow: hidden; }
 /* 漲跌停：卡片下半部（總量/昨收/時間帶）填滿紅(漲停)/綠(跌停)，字色自動對比 */
@@ -232,6 +231,19 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
    在每個頁面離內容的距離都不一樣。一律收斂到這一條。
    欄位層級的小提示（.set-hint 12px）與行內標註（.sd-chint、.rf-cmnote）不屬於這一族，另留。 */
 .detail-note { font-size: 13px; color: var(--note); margin-top: 10px; line-height: 1.8; }
+
+/* T1 區塊主標：全站唯一。原本 divest-sec-title 與 rs-sec-title 的定義逐字相同，
+   set-sectitle（16px/600）與 sd-title（15px）則是同一個層級的另外兩種寫法。 */
+.sec-title { font-size: 18px; font-weight: 700; color: var(--accent2); margin: 22px 0 12px;
+  letter-spacing: .5px; padding-left: 11px; border-left: 4px solid var(--accent); }
+/* T2 子標題：原本 fred-title、tick-title、divest-hist-title 三個已經逐字相同，
+   另外四個（tx-box-title 14px/accent2、sd-ctitle 13px、scard-sec-title 13px、
+   es-dtitle 12px/text2）是同一層級用了不同字級與顏色。
+   顏色用 --sub 而非 --accent2：與 T1 拉開，才看得出主從。 */
+.sub-title { font-size: 14px; font-weight: 700; color: var(--sub); letter-spacing: .3px;
+  margin: 0 0 6px; }
+/* 子標題裡的括號補充（原 .divest-hist-title span），退一階 */
+.sub-title > span { color: var(--text3); font-weight: 400; }
 .subdetail-table { background: var(--bg); margin: 4px 0; }
 .subdetail-table th { font-size: 11px; color: var(--th); }
 .tr-detail td { padding: 0 !important; background: var(--bg2); }
@@ -339,7 +351,6 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
 .tx-grid .tx-box { margin-bottom: 0; }
 .tx-box-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.tx-box-title { font-size: 14px; font-weight: 700; color: var(--accent2); }
 .tx-refresh { padding: 4px 12px; font-size: 12px; }
 .tx-settle-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tx-settle-table td { padding: 6px 2px; border-bottom: 1px solid var(--border); }
@@ -550,7 +561,6 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-sp { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .divest-sp-lb { font-size: 11px; color: var(--text2); font-weight: 600; }
 .divest-sp-v { font-size: 16px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
-.divest-sec-title { font-size: 18px; font-weight: 700; color: var(--accent2); margin: 22px 0 12px; letter-spacing: .5px; padding-left: 11px; border-left: 4px solid var(--accent); line-height: 1.45; }
 .divest-divider { border-top: 2px solid #435a78; margin: 14px 0 4px; }
 .divest-stocks { }
 .divest-stock { border-bottom: 1.5px solid #3f5673; }
@@ -594,7 +604,6 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .rs-verdict-txt { font-size: 15px; }
 .rs-flag { font-size: 13px; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
 .rs-flag.on { background: color-mix(in srgb, var(--up) 12%, transparent); border-color: color-mix(in srgb, var(--up) 50%, transparent); color: var(--up); font-weight: 700; }
-.rs-sec-title { font-size: 18px; font-weight: 700; color: var(--accent2); margin: 22px 0 12px; letter-spacing: .5px; padding-left: 11px; border-left: 4px solid var(--accent); line-height: 1.45; }
 .rs-table { width: 100%; border-collapse: collapse; font-size: 14px; max-width: 520px; }
 .rs-table th { text-align: left; color: var(--th); font-weight: 600; font-size: 11.5px; letter-spacing: .8px; padding: 9px 10px; border-bottom: 2px solid var(--border); background: var(--thbg); }
 .rs-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
@@ -877,7 +886,6 @@ td.cost-even::after  { background: var(--text3); }
 /* 新聞情勢：美國總經（FRED 月頻資料，各項資料月份不同故逐項標月） */
 .fred-bar:empty { display: none; }
 .fred-bar { margin: 8px 0 4px; }
-.fred-title { font-size: 14px; font-weight: 700; color: var(--sub); letter-spacing: .3px; margin-bottom: 6px; }
 .fred-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .fred-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
   padding: 6px 12px; display: flex; align-items: baseline; gap: 8px; }
@@ -919,7 +927,6 @@ td.cost-even::after  { background: var(--text3); }
 .macro-fx .fx-v { font-size: 14px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
 
 /* 線圖五檔頁籤：逐筆成交（最近 N 筆，最新在上） */
-.tick-title { font-size: 14px; font-weight: 700; color: var(--sub); margin: 20px 0 7px; letter-spacing: .3px; }
 .tick-dim { font-size: 11px; color: var(--text3); font-weight: 400; }
 .tick-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .tick-table th, .tick-table td { padding: 4px 10px; border-bottom: 1px solid rgba(255,255,255,.06); }
@@ -936,7 +943,7 @@ td.cost-even::after  { background: var(--text3); }
    改為橫向分欄後總高降至約 600px，彈窗不再出現捲軸。 */
 .bid-cols { display: grid; grid-template-columns: 6fr 4fr; gap: 16px; align-items: start; }
 .bid-cols .bid-col-r { min-width: 0; }              /* 讓表格可在欄內收縮，不撐破格線 */
-.bid-cols .tick-title { margin-top: 0; }            /* 與左欄頂端對齊 */
+.bid-cols .sub-title { margin-top: 0; }            /* 與左欄頂端對齊 */
 /* 窄螢幕回到上下排，避免兩欄都被擠扁 */
 @media (max-width: 900px) { .bid-cols { grid-template-columns: 1fr; } }
 
@@ -1003,8 +1010,7 @@ td.cost-even::after  { background: var(--text3); }
 
 /* ── 股利估算：歷年配息圖（個股明細展開後）── */
 .divest-hist { margin: 10px 0 2px; max-width: 100%; }   /* 寬度＝明細區塊寬，與下方月份總覽表同寬，不會超出 */
-.divest-hist-title { font-size: 14px; color: var(--sub); font-weight: 700; letter-spacing: .3px; margin-bottom: 4px; }
-.divest-hist-title span { color: var(--text3); font-weight: 400; }
+.sub-title > span { color: var(--text3); font-weight: 400; }
 .divest-hist-svg { display: block; font-variant-numeric: tabular-nums; }
 .divest-hist-svg .dh-ax { font-size: 10px; fill: var(--text3); }
 .divest-hist-svg .dh-val { font-size: 11px; font-weight: 700; }
@@ -1132,7 +1138,6 @@ td.cost-even::after  { background: var(--text3); }
 .es-drow > td { padding: 0 !important; background: var(--bg); }
 .es-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 12px 14px; white-space: normal; cursor: default;
   position: sticky; left: 0; box-sizing: border-box; }   /* 寬度由 JS 設為可視寬度，左右捲動時留在畫面內 */
-.es-dtitle { font-size: 12px; font-weight: 600; color: var(--text2); margin: 2px 0 6px; }
 .es-dl .divest-hist { min-height: 220px; }
 .es-evt-t { font-size: 12.5px; }
 .es-psvg { display: block; }
@@ -1246,7 +1251,6 @@ td.cost-even::after  { background: var(--text3); }
 .sd-fbtn { padding: 4px 10px; font-size: 12px; border: 1px solid var(--border);
   background: var(--bg2); color: var(--text2); border-radius: 4px; cursor: pointer; }
 .sd-fbtn.on { background: var(--accent2); color: #fff; border-color: var(--accent2); }
-.sd-title { font-size: 15px; font-weight: 700; margin: 4px 0 10px; }
 /* 指標卡本身就是圖表的切換鈕：點哪一張，下面就畫哪一條 */
 .sd-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 8px; margin-bottom: 14px; }
@@ -1259,7 +1263,6 @@ td.cost-even::after  { background: var(--text3); }
 .sd-cd { font-size: 11px; color: var(--text3); margin-top: 5px; font-variant-numeric: tabular-nums; }
 .sd-cr { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; }
 .sd-chart { margin-bottom: 14px; overflow-x: auto; }
-.sd-ctitle { font-size: 13px; font-weight: 700; margin: 10px 0 6px; }
 .sd-chint { font-weight: 400; font-size: 11px; color: var(--text3); margin-left: 8px; }
 /* 指標六欄說明：預設展開，因為它就是這一頁的重點；佔位太大時可以收起來 */
 .sd-doc { border: 1px solid var(--border); background: var(--bg2); padding: 8px 12px; margin: 10px 0 14px; }
@@ -1391,8 +1394,7 @@ td.cost-even::after  { background: var(--text3); }
 .set-navn { font-size: 11px; color: var(--text3); }
 
 .set-pane { min-width: 0; }
-.set-sectitle { font-size: 16px; font-weight: 600; color: var(--accent2); margin: 4px 0 10px; }
-.set-sectitle:not(:first-child) { margin-top: 22px; }
+#set-pane .sec-title:first-child { margin-top: 4px; }
 
 .set-row { border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); margin-bottom: 8px; }
 .set-head { display: flex; align-items: center; gap: 16px; padding: 12px 14px; }
@@ -1572,5 +1574,4 @@ td.cost-even::after  { background: var(--text3); }
 .rf-cal-amt { font-size: 13px; font-weight: 700; color: var(--text);
   font-variant-numeric: tabular-nums; line-height: 1.2; }
 .rf-cal-code { font-size: 10.5px; color: var(--text2); }
-.rf-cal-title { font-size: 14px; font-weight: 600; color: var(--accent2);
-  margin: 18px 0 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+.rf-cal-title { margin: 18px 0 8px; padding-top: 12px; border-top: 1px solid var(--border); }

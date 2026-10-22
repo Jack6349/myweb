@@ -237,7 +237,7 @@ async function startRiskReport(force) {
         ' < 漲幅 ' + RS_FLAG.yieldUp + '%') +
     '</div>';
   // 指標明細（股票型系統性風險；每列附說明小字）
-  html += '<div class="rs-sec-title">股票型系統性風險 · 指標明細</div><table class="rs-table"><thead><tr><th>指標</th><th class="num">數值</th><th class="num">得分</th></tr></thead><tbody>';
+  html += '<div class="sec-title">股票型系統性風險 · 指標明細</div><table class="rs-table"><thead><tr><th>指標</th><th class="num">數值</th><th class="num">得分</th></tr></thead><tbody>';
   rows.forEach(function (r) {
     html += '<tr><td>' + r.k + (r.desc ? '<div class="rs-idesc">' + r.desc + '</div>' : '') + '</td><td class="num">' + r.val + '</td>' +
       '<td class="num" style="color:' + _rsColor(r.score) + ';font-weight:700">' + (r.score == null ? '—' : r.score) + '</td></tr>';
@@ -292,7 +292,7 @@ function _rsCatBlockHtml() {
     return '<td class="num" style="color:' + c + '">' + (v >= 0 ? '+' : '') + money(v) + '</td>' +
       '<td class="num" style="color:' + c + '">' + (base ? (v / base * 100 >= 0 ? '+' : '') + (v / base * 100).toFixed(1) + '%' : '\u2014') + '</td>';
   };
-  var h = '<div class="rs-sec-title">\u6301\u80a1\u914d\u7f6e\u7d50\u69cb\uff08\u4f9d\u5206\u985e\uff09</div>' +
+  var h = '<div class="sec-title">\u6301\u80a1\u914d\u7f6e\u7d50\u69cb\uff08\u4f9d\u5206\u985e\uff09</div>' +
     '<div class="rs-cat-wrap"><table class="rs-table rs-cat-table"><thead><tr><th>\u5206\u985e</th><th class="num">\u6a94\u6578</th>' +
     '<th class="num">\u4ed8\u51fa\u6210\u672c</th><th class="num">\u6210\u672c\u5360\u6bd4</th>' +
     '<th class="num">\u73fe\u503c</th><th class="num">\u73fe\u503c\u5360\u6bd4</th>' +
@@ -377,7 +377,7 @@ function _rsBeta(bars, mkt, n) {
 async function _rsCoreTableHtml(light) {
   var held = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
   var codes = RS_CORE.filter(function (c) { return held[c] > 0; });
-  var head = '<div class="rs-sec-title">表一 · 核心持股（只在系統性風險時減倉）</div>';
+  var head = '<div class="sec-title">表一 · 核心持股（只在系統性風險時減倉）</div>';
   if (!codes.length) {
     return head + '<div class="rs-bond-verdict" style="border-color:var(--text3);color:var(--text3)">目前未持有核心標的（' + RS_CORE.join('／') + '）</div>';
   }
@@ -505,7 +505,7 @@ function _rsNorm(vals, v) {
 
 async function _rsBondTableHtml() {
   var codes = _rsBondHoldings();
-  var head = '<div class="rs-sec-title">表二 · 非投等債（每月基本收入）</div>';
+  var head = '<div class="sec-title">表二 · 非投等債（每月基本收入）</div>';
   if (!codes.length) {
     return head + '<div class="rs-bond-verdict" style="border-color:var(--text3);color:var(--text3)">目前未持有非投等債 ETF</div>';
   }
@@ -756,7 +756,7 @@ function _rsHoldRet(code) {
 
 async function _rsSatTableHtml() {
   var codes = _rsSatHoldings();
-  var head = '<div class="rs-sec-title">表三 · 衛星配置（增加資產與月收入）</div>';
+  var head = '<div class="sec-title">表三 · 衛星配置（增加資產與月收入）</div>';
   if (!codes.length) {
     return head + '<div class="rs-bond-verdict" style="border-color:var(--text3);color:var(--text3)">目前未持有衛星部位</div>';
   }

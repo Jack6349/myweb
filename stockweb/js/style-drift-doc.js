@@ -376,7 +376,7 @@ function sdActiveHtml() {
     rows.push(e);
   });
 
-  var h = '<div class="sd-ctitle">五檔主動式 ETF 對' + a.market + '的超額報酬' +
+  var h = '<div class="sub-title">五檔主動式 ETF 對' + a.market + '的超額報酬' +
     '<span class="sd-chint">左：以你的建倉成本，每批各自對照同一天進場的大盤，成本加權｜' +
     '右：這檔自己的成績，自掛牌起、還原市價</span></div>';
   h += '<div class="inv-table-wrap"><table class="inv-table swap-table"><thead><tr>' +
@@ -436,7 +436,7 @@ function sdMyExcess(code) {
 function sdPeersHtml() {
   var p = _sdData && _sdData.peers;
   if (!p || !p.rows || !p.rows.length) return '';
-  var h = '<div class="sd-ctitle">五檔的持股集中度並排' +
+  var h = '<div class="sub-title">五檔的持股集中度並排' +
     '<span class="sd-chint">全持股權重；台積電與台股期貨單獨列出</span></div>';
   h += '<div class="inv-table-wrap"><table class="inv-table swap-table"><thead><tr>' +
     '<th>代號</th><th>資料日</th><th class="num">檔數</th><th class="num">前五大</th>' +

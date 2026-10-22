@@ -446,7 +446,7 @@ function _swapSellHtml() {
   var codes = _swapCodes();
   // 「可賣」只在有出借／匯撥中的檔才有意義（可賣＝持有－出借中）；都沒出借時整欄與「持有」相同 → 不顯示
   var anyLent = (typeof _positions !== 'undefined' && _positions || []).some(function (p) { return p.lent && p.lentShares > 0; });
-  var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">賣出</span>' +
+  var h = '<div class="tx-box"><div class="tx-box-head"><span class="sub-title">賣出</span>' +
     '<span class="detail-note nb-keep">輸入張數或按「全部」；零股可輸入小數（0.5＝500 股）</span></div>' +
     '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
     '<th>代號</th><th>名稱</th><th class="num">現價</th>' +
@@ -485,7 +485,7 @@ function _swapSellHtml() {
 }
 
 function _swapBuyHtml() {
-  var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">買入</span>' +
+  var h = '<div class="tx-box"><div class="tx-box-head"><span class="sub-title">買入</span>' +
     '<span class="detail-note nb-keep">現有持股與指定代碼可同時買進</span></div>';
 
   // 現有持股（勾選）
@@ -680,7 +680,7 @@ function _swapQualHtml(c) {
   };
   var nm = function (code) { return _swapName(code) || ''; };
 
-  var h = '<div class="divest-sec-title">換手品質（賣出 vs 買入）</div>' +
+  var h = '<div class="sec-title">換手品質（賣出 vs 買入）</div>' +
     '<div class="inv-table-wrap"><table class="inv-table swap-table swap-qual"><thead><tr>' +
     '<th>項目</th><th class="num">' + s.code + ' <span class="swap-dim">' + nm(s.code) + '</span>（賣）</th>' +
     '<th class="num">' + b.code + ' <span class="swap-dim">' + nm(b.code) + '</span>（買）</th>' +
@@ -730,7 +730,7 @@ function _swapResultHtml(c) {
   if (!c.sellRows.length) {
     return '<div class="tx-box"><div class="modal-loading">在「賣出」區輸入張數後即可看到試算結果。</div></div>';
   }
-  var h = '<div class="tx-box"><div class="tx-box-head"><span class="tx-box-title">試算結果</span>' +
+  var h = '<div class="tx-box"><div class="tx-box-head"><span class="sub-title">試算結果</span>' +
     '<span class="detail-note nb-keep">' + _swapYmLabel(c.startYm) + ' ～ ' + _swapYmLabel(c.startYm + SWAP_N - 1) + '（未來 12 個月）</span></div>' +
     '<div class="swap-sum">' + _swapSumPairs(c) + '</div>';
 
@@ -739,7 +739,7 @@ function _swapResultHtml(c) {
   // 月度對照
   var maxV = 1;
   for (var i = 0; i < SWAP_N; i++) maxV = Math.max(maxV, c.before[i], c.after[i]);
-  h += '<div class="divest-sec-title">每月股利對照</div><div class="swap-months">';
+  h += '<div class="sec-title">每月股利對照</div><div class="swap-months">';
   for (var m = 0; m < SWAP_N; m++) {
     var b = c.before[m], a = c.after[m], d = a - b;
     h += '<div class="swap-mrow">' +
@@ -757,7 +757,7 @@ function _swapResultHtml(c) {
   // 逐檔明細（僅列股數有變動者）
   var chg = c.perCode.filter(function (r) { return r.oldSh !== r.newSh; });
   if (chg.length) {
-    h += '<div class="divest-divider"></div><div class="divest-sec-title">逐檔明細</div>' +
+    h += '<div class="divest-divider"></div><div class="sec-title">逐檔明細</div>' +
       '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
       '<th>代號</th><th>名稱</th><th class="num">股數（前）</th><th class="num">股數（後）</th>' +
       '<th class="num">年配息（前）</th><th class="num">年配息（後）</th><th class="num">增減</th></tr></thead><tbody>';

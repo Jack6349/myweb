@@ -193,7 +193,7 @@ function renderEtfNew() {
     d.listed.length + ' 檔｜資料 ' + (d.at || '').slice(0, 16).replace('T', ' ') +
     '｜清單 ' + (d.src && d.src.list) + '、明細 ' + (d.src && d.src.detail) + '</span></div>';
 
-  h += '<div class="divest-sec-title">已上市上櫃</div>';
+  h += '<div class="sec-title">已上市上櫃</div>';
   h += '<div class="inv-table-wrap en-wrap"><table class="inv-table en-table"><thead><tr>' +
     '<th class="num">關注</th>' + _enTh('code', '代號') + '<th>名稱</th>' +
     _enTh('px', '現價', 'num') + _enTh('chg', '今日漲跌', 'num') +
@@ -216,7 +216,7 @@ function renderEtfNew() {
   });
   h += '</tbody></table></div>';
 
-  h += '<div class="divest-sec-title">募集中</div>';
+  h += '<div class="sec-title">募集中</div>';
   h += '<div class="rf-cal-empty">' + (d.pending && d.pending.length ? '' :
     (d.pendingNote || '募集中清單尚無可靠來源') +
     '，這一區先留空。找到來源後會補上，欄位與上表相同。') + '</div>';

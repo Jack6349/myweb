@@ -142,7 +142,7 @@ function renderStyleDrift() {
         c + ' ' + _sdData.funds[c].name + '</button>';
     }).join('') + '</div>';
   }
-  h += '<div class="sd-title">' + _sdFund + '　' + f.name +
+  h += '<div class="sec-title">' + _sdFund + '　' + f.name +
     '<span class="sd-views">' +
       '<button class="sd-vbtn' + (_sdView === 'exec' ? ' on' : '') + '" onclick="sdSetView(\'exec\')">決策</button>' +
       '<button class="sd-vbtn' + (_sdView === 'ana' ? ' on' : '') + '" onclick="sdSetView(\'ana\')">分析</button>' +
@@ -258,7 +258,7 @@ function _sdChart(f, key) {
   g = '<title>' + m.t + '　' + dates[firstI] + ' ' + ys[firstI].toFixed(m.dp) + m.u + ' → ' +
       dates[lastI] + ' ' + ys[lastI].toFixed(m.dp) + m.u + '</title>' + g;
 
-  return '<div class="sd-chart"><div class="sd-ctitle">' + m.t +
+  return '<div class="sd-chart"><div class="sub-title">' + m.t +
     '<span class="sd-chint">' + m.hint + '；虛線為這檔自己歷史的 P25／P50／P75</span></div>' +
     '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" class="divest-hist-svg">' + g + '</svg></div>';
 }
@@ -268,7 +268,7 @@ function _sdTopHtml(f) {
   if (!f.top || !f.top.length) return '';
   var sum = 0;
   f.top.forEach(function (x) { sum += x.w; });
-  var h = '<div class="sd-ctitle">最新前 ' + f.top.length + ' 大持股　<span class="sd-chint">' +
+  var h = '<div class="sub-title">最新前 ' + f.top.length + ' 大持股　<span class="sd-chint">' +
     f.dates[f.dates.length - 1] + '　合計 ' + sum.toFixed(2) + '%</span></div>';
   h += '<div class="inv-table-wrap"><table class="inv-table swap-table"><thead><tr>' +
     '<th>#</th><th>代號</th><th>名稱</th><th class="num">權重</th></tr></thead><tbody>';

@@ -253,7 +253,7 @@ function swSwapGain(a, b, shares) {
 
 function swBlockB() {
   var codes = (typeof _rsBondHoldings === 'function') ? _rsBondHoldings() : [];
-  var head = '<div class="rs-sec-title">換股評估 B · 持股互換</div>';
+  var head = '<div class="sec-title">換股評估 B · 持股互換</div>';
   if (codes.length < 2) {
     return head + '<div class="sw-none">持有的非投等債少於兩檔，無從互相比較。</div>';
   }
@@ -307,7 +307,7 @@ function swBlockB() {
 
 // ══════════ 區塊 C／D 共用的候選表 ══════════
 function swCandTable(list, base, title, empty) {
-  var h = '<div class="rs-sec-title">' + title + '</div>';
+  var h = '<div class="sec-title">' + title + '</div>';
   if (!list.length) return h + '<div class="sw-none">' + empty + '</div>';
   h += '<div class="inv-table-wrap"><table class="inv-table sw-table"><thead><tr>' +
     '<th>代號</th>' +

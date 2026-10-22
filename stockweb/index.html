@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=253">
+<link rel="stylesheet" href="css/app.css?v=255">
 </head>
 <body>
 
@@ -287,18 +287,18 @@
     <div id="tx-tab-account">
     <div class="tx-grid">
       <div class="tx-box">
-        <div class="tx-box-head"><span class="tx-box-title">台幣交割</span>
+        <div class="tx-box-head"><span class="sub-title">台幣交割</span>
           <button class="btn-query tx-refresh" onclick="refreshTxinfo()">↻ 刷新</button></div>
         <div id="tx-settle-body"></div>
       </div>
       <div class="tx-box">
-        <div class="tx-box-head"><span class="tx-box-title">今日委託與成交</span>
+        <div class="tx-box-head"><span class="sub-title">今日委託與成交</span>
           <span id="tx-order-sum" class="tx-order-sum"></span></div>
         <div id="tx-order-body"></div>
       </div>
     </div>
     <div class="tx-box">
-      <div class="tx-box-head"><span class="tx-box-title">交易紀錄（已實現損益）</span></div>
+      <div class="tx-box-head"><span class="sub-title">交易紀錄（已實現損益）</span></div>
       <div class="tr-toolbar">
         <label>起始<input type="date" id="tr-begin"></label>
         <label>結束<input type="date" id="tr-end"></label>
@@ -311,7 +311,7 @@
     <!-- 出借行情（TWSE 借券成交費率＋借券賣出餘額，盤後資料） -->
     <div id="tx-tab-sbl" style="display:none">
       <div class="tx-box">
-        <div class="tx-box-head"><span class="tx-box-title">出借行情（持股 × TWSE 借券資料）</span>
+        <div class="tx-box-head"><span class="sub-title">出借行情（持股 × TWSE 借券資料）</span>
           <span id="sbl-date" class="sbl-date"></span></div>
         <div class="sbl-toolbar">提醒門檻：加權費率 ≥
           <input id="sbl-fee-min" class="sbl-inp" type="number" step="0.1" min="0" onchange="sblThrChanged()"> % 且 期間成交 ≥
@@ -419,7 +419,7 @@
 <script src="js/note.js?v=5"></script>
 <script src="js/broker.js?v=22"></script>
 <script src="js/fill-toast.js?v=6"></script>
-<script src="js/stream.js?v=91"></script>
+<script src="js/stream.js?v=92"></script>
 <script src="js/nav-usage.js?v=2"></script>
 <script src="js/daily-refresh.js?v=1"></script>
 <script src="js/category.js?v=2"></script>
@@ -432,27 +432,27 @@
 <script src="js/cost-override.js?v=2"></script>
 <script src="js/lent-log.js?v=1"></script>
 <script src="js/params.js?v=5"></script>
-<script src="js/settings.js?v=4"></script>
+<script src="js/settings.js?v=5"></script>
 <script src="js/retire.js?v=8"></script>
 <script src="js/topconst.js?v=8"></script>
-<script src="js/style-drift.js?v=19"></script>
-<script src="js/style-drift-doc.js?v=18"></script>
+<script src="js/style-drift.js?v=20"></script>
+<script src="js/style-drift-doc.js?v=19"></script>
 <script src="js/watch.js?v=22"></script>
-<script src="js/etf-screen.js?v=22"></script>
-<script src="js/etf-new.js?v=2"></script>
-<script src="js/chart.js?v=34"></script>
+<script src="js/etf-screen.js?v=23"></script>
+<script src="js/etf-new.js?v=3"></script>
+<script src="js/chart.js?v=35"></script>
 <script src="js/pvhist.js?v=20"></script>
 <script src="js/order.js?v=4"></script>
 <script src="js/div-mix.js?v=6"></script>
 <script src="js/div-meta.js?v=13"></script>
-<script src="js/dividend-est.js?v=69"></script>
-<script src="js/divnav.js?v=2"></script>
-<script src="js/swap.js?v=36"></script>
-<script src="js/refill.js?v=37"></script>
+<script src="js/dividend-est.js?v=70"></script>
+<script src="js/divnav.js?v=3"></script>
+<script src="js/swap.js?v=37"></script>
+<script src="js/refill.js?v=39"></script>
 <script src="js/nav-premium.js?v=9"></script>
-<script src="js/swap-scan.js?v=5"></script>
-<script src="js/risk-score.js?v=37"></script>
-<script src="js/news.js?v=46"></script>
+<script src="js/swap-scan.js?v=6"></script>
+<script src="js/risk-score.js?v=38"></script>
+<script src="js/news.js?v=47"></script>
 <script src="js/trend.js?v=33"></script>
 <script src="js/signals.js?v=29"></script>
 <script src="js/alerts.js?v=42"></script>

@@ -529,7 +529,7 @@ function _tickRender() {
 
 // tick_type：1＝外盤（買方成交，紅）、2＝內盤（賣方成交，綠）、0/其他＝無法判定
 function _tickHtml() {
-  var h = '<div class="tick-title">逐筆成交 <span class="tick-dim">最近 ' + TICK_N +
+  var h = '<div class="sub-title">逐筆成交 <span class="tick-dim">最近 ' + TICK_N +
     ' 筆　紅＝外盤（買方主動）、綠＝內盤（賣方主動）</span></div>';
   if (_tickHistLoading && !_ticks.length) return h + '<div class="modal-loading">載入逐筆成交…</div>';
   if (!_ticks.length) return h + '<div class="modal-loading">今日尚無成交紀錄</div>';

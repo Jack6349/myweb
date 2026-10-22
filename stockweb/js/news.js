@@ -267,7 +267,7 @@ function renderFredBar() {
       '<span class="fred-val ' + cls + '">' + arrow + val + '</span>' +
       '<span class="fred-prev">前值 ' + pv + '</span></div>';
   });
-  el.innerHTML = '<div class="fred-title">美國總經（FRED，各項資料月份不同）</div>' +
+  el.innerHTML = '<div class="sub-title">美國總經（FRED，各項資料月份不同）</div>' +
     '<div class="fred-row">' + rows.join('') + '</div>';
 }
 
@@ -361,7 +361,7 @@ function renderConsistency() {
   if (!el) return;
   if (!_consist.length) { el.innerHTML = ''; return; }
   var n = _consist.filter(function (r) { return r.level === 'diverge'; }).length;
-  var h = '<div class="fred-title">訊號一致性　' +
+  var h = '<div class="sub-title">訊號一致性　' +
     (n ? '<b class="cs-n">' + n + ' 項方向不一致</b>' : '各項方向一致') + '</div>';
   _consist.forEach(function (r) {
     h += '<div class="cs-row"><span class="cs-dot">' + (r.level === 'diverge' ? '🔶' : '🟢') + '</span>' +

@@ -539,7 +539,7 @@ function renderEtfScreen() {
       var c = typeof va === 'string' ? va.localeCompare(vb, undefined, { numeric: true }) : va - vb;
       return nasc ? c : -c;
     });
-    h += '<div class="divest-sec-title es-new-title">新上市 ETF（上市未滿一年，不列入排名）<span class="rf-cmnote">' + fresh.length + ' 檔</span></div>' +
+    h += '<div class="sec-title es-new-title">新上市 ETF（上市未滿一年，不列入排名）<span class="rf-cmnote">' + fresh.length + ' 檔</span></div>' +
       '<div class="inv-table-wrap"><table class="inv-table es-table es-new"><thead><tr>' + ES_NCOLS.map(function (c) {
         var sortable = c[0] !== 'watch';
         var on = sortable && _esNewSort.replace(/(Asc|Desc)$/, '') === c[0];
@@ -718,8 +718,8 @@ function esMountDetail(slot, keep) {
   if (keep && keep.getAttribute('data-code') === code) { slot.appendChild(keep); _esFitDetail(slot, keep); return; }
   slot.innerHTML = '<div class="es-detail" data-code="' + code + '">' +
     '<div class="es-dhead"><span class="es-dcode">' + code + '</span><span class="es-dname">' + _esNameOf(code) + '</span></div>' +
-    '<div class="es-dl"><div class="es-dtitle">配息走勢（近 2 年）</div><div class="divest-hist" data-code="' + code + '"><div class="modal-loading">讀取配息紀錄…</div></div></div>' +
-    '<div class="es-dr"><div class="es-dtitle">配息紀錄（近 2 年，新→舊）</div><div class="es-evt"><div class="modal-loading">讀取配息紀錄…</div></div></div>' +
+    '<div class="es-dl"><div class="sub-title">配息走勢（近 2 年）</div><div class="divest-hist" data-code="' + code + '"><div class="modal-loading">讀取配息紀錄…</div></div></div>' +
+    '<div class="es-dr"><div class="sub-title">配息紀錄（近 2 年，新→舊）</div><div class="es-evt"><div class="modal-loading">讀取配息紀錄…</div></div></div>' +
   '</div>';
   _esFitDetail(slot, slot.firstChild);
   _esLoadDetail(slot.firstChild, code);

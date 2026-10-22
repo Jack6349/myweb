@@ -205,7 +205,7 @@ function setRender() {
   secs.forEach(function (s) {
     var rows = s.rows.filter(function (r) { return _setMatch(s, r); });
     if (!rows.length) return;
-    html += '<div class="set-sectitle">' + s.title + '</div>';
+    html += '<div class="sec-title">' + s.title + '</div>';
     rows.forEach(function (r) {
       var st = (r.status && r.status()) || '';
       var right = r.inline ? r.inline()

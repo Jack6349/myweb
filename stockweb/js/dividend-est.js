@@ -571,7 +571,7 @@ function renderDividendEst() {
   html += '<div class="divest-divider"></div>' + _rfCalHtml();
 
   // ── 個股明細（可折疊）──
-  html += '<div class="divest-divider"></div><div class="divest-sec-title">個股明細</div><div class="divest-stocks">';
+  html += '<div class="divest-divider"></div><div class="sec-title">個股明細</div><div class="divest-stocks">';
   stocks.forEach(function (s) {
     var open = !!_divEstOpen[s.code];
     var det = '<div class="divest-drow divest-dhead">' +
@@ -833,7 +833,7 @@ function _divHistDraw(el, code) {
     : (!bars.length ? '收盤價暫時抓不到（Yahoo／GAS），僅顯示除息金額。' : '');
   if (_divHistYfBusy[code]) note = (note ? note + '　' : '') + '較早的除息紀錄補抓中…';
   var span = ev[0].exDate.slice(0, 7).replace('-', '/') + '–' + ev[ev.length - 1].exDate.slice(0, 7).replace('-', '/');
-  el.innerHTML = '<div class="divest-hist-title">歷年配息　<span>' + span + '・' + n + ' 次' +
+  el.innerHTML = '<div class="sub-title">歷年配息　<span>' + span + '・' + n + ' 次' +
       (histComplete && all[0].exDate >= startIso ? '（上市未滿兩年，自首次除息起）' : '') + '</span></div>' +   // 區間前完全沒有紀錄才算；半年配剛好落在區間外不算
     '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" class="divest-hist-svg">' + lg + g + '</svg>' +
     (note ? '<div class="detail-note nb-keep">' + note + '</div>' : '');
@@ -888,7 +888,7 @@ function _divExMonthHtml(stocks, money, md) {
   });
   list.sort(function (a, b) { return a.exDate < b.exDate ? -1 : (a.exDate > b.exDate ? 1 : 0); });
 
-  var h = '<div class="divest-sec-title">本月除息個股</div>';
+  var h = '<div class="sec-title">本月除息個股</div>';
   if (!list.length) return h + '<div class="detail-note nb-keep">本月無除息個股。</div>';
 
   h += '<div class="dstat-wrap dexm-wrap"><table class="dstat dexm"><thead><tr>' +
@@ -1005,7 +1005,7 @@ function _divStatTableHtml(stocks, money, title, labels) {
     return _divStatSort === key + 'Asc' ? '▲' : (_divStatSort === key + 'Desc' ? '▼' : '↕');
   };
   var sorted = function (key) { return _divStatSort.indexOf(key) === 0 ? ' sorted' : ''; };
-  var h = '<div class="divest-divider"></div><div class="divest-sec-title">' + (title || '月份總覽（依發放月）') + '</div>' +
+  var h = '<div class="divest-divider"></div><div class="sec-title">' + (title || '月份總覽（依發放月）') + '</div>' +
     '<div class="dstat-wrap"><table class="dstat">' +
     '<thead><tr><th class="dstat-code sort-th' + sorted('code') + '" onclick="divStatSort(\'code\')" title="點擊排序">代號<span class="sort-ind">' + arrow('code') + '</span></th>';
   for (var mo = 1; mo <= 12; mo++) h += '<th class="num">' + (labels ? labels[mo - 1] : mo + '月') + '</th>';

@@ -4,7 +4,7 @@
 // 總高 1969px，要找某個區塊得一路捲。改成左側選單，一次只顯示一個區塊。
 //
 // 做法刻意不動 renderDividendEst／renderRefill 的內部：它們輸出的是
-// 「.divest-sec-title ＋ 內容 ＋ .divest-divider」平鋪的結構，渲染完之後再把
+// 「.sec-title ＋ 內容 ＋ .divest-divider」平鋪的結構，渲染完之後再把
 // 每個標題到下一個標題之間包成一組，選單只負責顯示選中的那一組。
 // 兩個 wrap 各掛一個 MutationObserver，非同步重繪完會自動重新分組並套回目前選擇。
 //
@@ -42,10 +42,10 @@ function _dvItem(id) {
 function _dvSectionize(wrap) {
   if (!wrap || wrap.getAttribute('data-dv') === '1') return;
   var kids = [].slice.call(wrap.children);
-  if (!kids.some(function (k) { return k.classList && k.classList.contains('divest-sec-title'); })) return;
+  if (!kids.some(function (k) { return k.classList && k.classList.contains('sec-title'); })) return;
   var frag = document.createDocumentFragment(), cur = null;
   kids.forEach(function (k) {
-    if (k.classList && k.classList.contains('divest-sec-title')) {
+    if (k.classList && k.classList.contains('sec-title')) {
       cur = document.createElement('div');
       cur.className = 'dv-sec';
       cur.setAttribute('data-sec', k.textContent.trim());
