@@ -24,6 +24,29 @@
   --sum: #a5e9f7;
   --thbg: #1b2736;    /* 表頭帶狀底色 */
   --font: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+
+  /* ── 圖表色盤 ──
+     SVG 的線條色本來就得是字面值，但原本散在 40 幾條規則裡，同一個角色
+     在不同圖上用不同色（例如軸標的漲跌色曾經是 #ff8080／#5fe08f，
+     與全站的 --up／--down 不同），所以收進這裡，一個角色一個名字。
+     漲跌一律沿用 --up／--down，不另立。 */
+  --ck-grid: #3d5470;     /* 水平格線 */
+  --ck-sep: #56708f;      /* 時間分隔線 */
+  --ck-axis: #c2d2e2;     /* 軸刻度文字 */
+  --ck-ref: #8fa3ba;      /* 參考線（昨收） */
+  --ck-line: #e8731e;     /* 走勢線與其漸層填滿、標價圓點 */
+  --ck-mark: #eef4fa;     /* 走勢圖的高／低／最後一筆標價 */
+  --ck-ma20: #7fb0ff;     /* MA20（MA5 用 --accent2） */
+  --ck-ma60: #d08fe8;     /* MA60 */
+  --ck-vwap: #e2e8f0;     /* 日均的均價線 */
+  --ck-ivol: #6aa9e8;     /* 內外盤量 */
+  --pv-rate: #7fb0ff;     /* 總現值走勢：資本報酬率 */
+  --pv-cost: #ff7ab8;     /* 總現值走勢：原始成本階梯線 */
+  /* 管制圖專用色盤：藍＝連續上升達標、紅（--up）＝連續下降、黃＝未達標、
+     白（--text）＝買賣、青＝市場效應均線。這一套只在管制圖內有意義。 */
+  --spc-up: #4da3ff;
+  --spc-na: #e0b94a;
+  --spc-mma: #5ad2e8;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
@@ -429,14 +452,15 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .chart-info { font-size: 13px; color: var(--text2); margin-bottom: 6px; min-height: 20px; font-variant-numeric: tabular-nums; }
 .chart-info b { color: var(--text); font-weight: 700; }
 .chart-svg { width: 100%; height: auto; display: block; }
-.ck-grid { stroke: #3d5470; stroke-width: 1; }
-.ck-sep { stroke: #56708f; stroke-width: 1; stroke-dasharray: 4 3; }
-.ck-ref { stroke: #8fa3ba; stroke-width: 1; stroke-dasharray: 5 4; }
+.ck-grid { stroke: var(--ck-grid); stroke-width: 1; }
+.ck-sep { stroke: var(--ck-sep); stroke-width: 1; stroke-dasharray: 4 3; }
+.ck-ref { stroke: var(--ck-ref); stroke-width: 1; stroke-dasharray: 5 4; }
 .ck-cross { stroke: var(--accent2); stroke-width: 1; stroke-dasharray: 4 3; pointer-events: none; }
-.ck-axis { fill: #c2d2e2; font-size: 11px; font-family: var(--font); }
+.ck-axis { fill: var(--ck-axis); font-size: 11px; font-family: var(--font); }
 /* 五日線：暗橘線＋由上而下漸層填滿 */
-.ck5-line { fill: none; stroke: #e8731e; stroke-width: 1.4; }
+.ck5-line { fill: none; stroke: var(--ck-line); stroke-width: 1.4; }
 .ck5-fill { fill: url(#ck5grad); stroke: none; }
+#ck5grad stop, #ckdgrad stop { stop-color: var(--ck-line); }
 .ck-vol.up { fill: var(--up); opacity: .55; }
 .ck-vol.dn { fill: var(--down); opacity: .55; }
 /* 日 K 棒與均線 */
@@ -445,21 +469,21 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ck-wick { stroke-width: 1; }
 /* 走勢圖：與五日線同一套視覺語彙（暗橘線＋由上而下漸層填滿），
    五個期間預設都用這個，日 K 是切換後才出現的另一種畫法 */
-.ckd-trend { fill: none; stroke: #e8731e; stroke-width: 1.4; stroke-linejoin: round; }
+.ckd-trend { fill: none; stroke: var(--ck-line); stroke-width: 1.4; stroke-linejoin: round; }
 .ckd-fill { fill: url(#ckdgrad); stroke: none; }
 /* 走勢圖的高／低／最後一筆標價：比軸刻度亮一級，數字本身才是重點；
    paint-order 讓描邊畫在字後面，壓在橘色填滿上也讀得到 */
-.ckd-mk { fill: #eef4fa; font-size: 11.5px; font-weight: 700; font-family: var(--font);
+.ckd-mk { fill: var(--ck-mark); font-size: 11.5px; font-weight: 700; font-family: var(--font);
   paint-order: stroke; stroke: var(--bg); stroke-width: 2.5px; stroke-linejoin: round; }
-.ckd-dot { fill: #e8731e; stroke: var(--bg); stroke-width: 1; }
+.ckd-dot { fill: var(--ck-line); stroke: var(--bg); stroke-width: 1; }
 .ck-ma { fill: none; stroke-width: 1.3; }
 .ck-ma.ma5 { stroke: var(--accent2); }
-.ck-ma.ma20 { stroke: #7fb0ff; }
-.ck-ma.ma60 { stroke: #d08fe8; }
+.ck-ma.ma20 { stroke: var(--ck-ma20); }
+.ck-ma.ma60 { stroke: var(--ck-ma60); }
 .ck-legend { font-size: 12px; margin-left: 10px; font-weight: 700; }
 .ck-legend.ma5 { color: var(--accent2); }
-.ck-legend.ma20 { color: #7fb0ff; }
-.ck-legend.ma60 { color: #d08fe8; }
+.ck-legend.ma20 { color: var(--ck-ma20); }
+.ck-legend.ma60 { color: var(--ck-ma60); }
 /* 線圖彈窗：加大版面，讓圖＋報價面板一次看完不用捲動 */
 .modal-box.chart-wide { max-width: 1120px; max-height: 94vh; }
 .modal-box.chart-wide .modal-body { padding: 12px 18px; overflow-y: auto; }
@@ -476,12 +500,12 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ck-fill.up { fill: color-mix(in srgb, var(--up) 16%, transparent); stroke: none; }
 .ck-fill.dn { fill: color-mix(in srgb, var(--down) 16%, transparent); stroke: none; }
 .ck-fill { stroke: none; }
-.ck-vwap { fill: none; stroke: #e2e8f0; stroke-width: 1.2; }
-.ck-ivol { fill: #6aa9e8; opacity: .75; }
-.ck-ax-up { fill: #ff8080; }
-.ck-ax-dn { fill: #5fe08f; }
+.ck-vwap { fill: none; stroke: var(--ck-vwap); stroke-width: 1.2; }
+.ck-ivol { fill: var(--ck-ivol); opacity: .75; }
+.ck-ax-up { fill: var(--up); }
+.ck-ax-dn { fill: var(--down); }
 .ck-ax-ref { fill: var(--accent2); }
-.ck-legend.vwap { color: #e2e8f0; }
+.ck-legend.vwap { color: var(--ck-vwap); }
 .iq-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 12px; }
 .iq-cell { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--bg2); padding: 7px 12px; }
 .iq-k { font-size: 12px; color: var(--text2); }
@@ -1354,21 +1378,21 @@ td.cost-even::after  { background: var(--text3); }
 .pv-svg { max-height: 52vh; }
 .pv-line { fill: none; stroke-width: 1.6; }
 .pv-line.val { stroke: var(--accent2); }
-.pv-line.rate { stroke: #7fb0ff; }
+.pv-line.rate { stroke: var(--pv-rate); }
 /* 原始成本：比現值細一級，維持「基準線」的層級，但顏色必須離開灰藍系 ——
    原本的 #8fa3ba 與 .ck-ref 完全同色、與 .ck-sep 和 --text2 同族，會被讀成裝飾線。
    選亮粉紅而非橘：橘 #e8731e 色相約 25°，與總現值的 var(--accent2)（約 42°）只差 17°，
    而這兩條正是最不能認錯的一組（投入的錢 vs 現在的錢）。
    粉紅約 331°，離琥珀、離報酬率的藍 #7fb0ff（215°）、離長條的紅 var(--up)（0°）都夠遠 */
-.pv-line.cost { stroke: #ff7ab8; stroke-width: 1.3; }
+.pv-line.cost { stroke: var(--pv-cost); stroke-width: 1.3; }
 .pv-bar.up { fill: var(--up); opacity: .6; }
 .pv-bar.dn { fill: var(--down); opacity: .6; }
-.pv-ax-r { fill: #7fb0ff; }
+.pv-ax-r { fill: var(--pv-rate); }
 .pv-lg { font-size: 12px; margin-right: 12px; }
 .pv-lg::before { content: '━ '; }
 .pv-lg.val { color: var(--accent2); }
-.pv-lg.rate { color: #7fb0ff; }
-.pv-lg.cost { color: #ff7ab8; }
+.pv-lg.rate { color: var(--pv-rate); }
+.pv-lg.cost { color: var(--pv-cost); }
 .pv-lg.bar { color: var(--up); }
 .pv-lg.bar::before { content: '▌ '; }
 
@@ -1456,12 +1480,12 @@ td.cost-even::after  { background: var(--text3); }
 .pv-tab.on { border-color: var(--accent); color: var(--accent2); background: var(--bg2); }
 
 .pv-seg { stroke-width: 2; fill: none; }
-.pv-seg.up { stroke: #4da3ff; }
+.pv-seg.up { stroke: var(--spc-up); }
 .pv-seg.dn { stroke: var(--up); }
-.pv-seg.na { stroke: #e0b94a; }
-.pv-c-up { color: #4da3ff; }
+.pv-seg.na { stroke: var(--spc-na); }
+.pv-c-up { color: var(--spc-up); }
 .pv-c-dn { color: var(--up); }
-.pv-c-na { color: #e0b94a; }
+.pv-c-na { color: var(--spc-na); }
 
 /* 上下限是參考框架不是資料，用中性亮灰白：這張圖的藍紅黃紫都已有語意，
    青色色相太靠近上升段的藍，掃一眼會混。中線同色系暗一階，當從屬。 */
@@ -1478,19 +1502,19 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lamps { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .pv-lamp { width: 11px; height: 11px; border-radius: 50%; display: inline-block;
   border: 1px solid rgba(0,0,0,.35); }
-.pv-lamp.up { background: #4da3ff; }
+.pv-lamp.up { background: var(--spc-up); }
 .pv-lamp.dn { background: var(--up); }
-.pv-lamp.na { background: #e0b94a; opacity: .45; }
+.pv-lamp.na { background: var(--spc-na); opacity: .45; }
 .pv-lamptx { font-size: 12px; margin-left: 4px; }
 .set-sub { font-size: 13px; font-weight: 600; color: var(--text2); margin: 16px 0 2px;
   border-top: 1px solid var(--border); padding-top: 12px; }
-.pv-dot.up { fill: #4da3ff; }
+.pv-dot.up { fill: var(--spc-up); }
 .pv-dot.dn { fill: var(--up); }
-.pv-dot.na { fill: #e0b94a; }
+.pv-dot.na { fill: var(--spc-na); }
 .pv-limtx.now { font-weight: 700; }
-.pv-limtx.now.up { fill: #4da3ff; }
+.pv-limtx.now.up { fill: var(--spc-up); }
 .pv-limtx.now.dn { fill: var(--up); }
-.pv-limtx.now.na { fill: #e0b94a; }
+.pv-limtx.now.na { fill: var(--spc-na); }
 
 /* ── 股利估算：左側選單 ── */
 .dv-shell { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 18px; align-items: start; }
@@ -1523,32 +1547,32 @@ td.cost-even::after  { background: var(--text3); }
   .dv-navitem.on { border-left: 0; border-bottom-color: var(--accent); }
 }
 /* 管制圖下方的逐日分解堆疊直條 */
-/* 買賣原本是 #8fa6c0，與市場的 #4da3ff 色相太近，堆在一起分不出段；改紫仍嫌暗。
+/* 買賣原本是 #8fa6c0，與市場的 var(--spc-up) 色相太近，堆在一起分不出段；改紫仍嫌暗。
    改用白：無彩色與藍紅黃的色相距離最遠，深底上最亮，小直條也看得見，
    語意上「不是市場造成的」用中性色也對。與目標上下限同色票，但那是上方窗格的
    細虛線、這是下方窗格的實心直條，窗格與形狀都不同，不會混。
    另加一條與底色同色的細描邊，相鄰的段落才看得出界線。 */
 .pv-bseg { stroke: var(--bg2); stroke-width: .6; }
-.pv-bseg.mkt-up { fill: #4da3ff; }
+.pv-bseg.mkt-up { fill: var(--spc-up); }
 .pv-bseg.mkt-dn { fill: var(--up); }
 .pv-bseg.trade  { fill: var(--text); }
-.pv-bseg.ex     { fill: #e0b94a; }
+.pv-bseg.ex     { fill: var(--spc-na); }
 .pv-c-tr { color: var(--text); }
 .pv-lg2 { font-size: 12px; margin-right: 10px; }
 .pv-lg2::before { content: '▌ '; }
-.pv-lg2.mkt { color: #4da3ff; }
+.pv-lg2.mkt { color: var(--spc-up); }
 .pv-lg2.mktdn { color: var(--up); }
 .pv-lg2 b { color: inherit; font-weight: 700; }
 .pv-lg2.trade { color: var(--text); }
-.pv-lg2.ex { color: #e0b94a; }
+.pv-lg2.ex { color: var(--spc-na); }
 /* 市場 N 日均：青色，與市場直條的藍、買賣的白、除息的黃都分得開 */
-.pv-mma { fill: none; stroke: #5ad2e8; stroke-width: 2; stroke-linejoin: round; }
-.pv-lg2.mma { color: #5ad2e8; }
+.pv-mma { fill: none; stroke: var(--spc-mma); stroke-width: 2; stroke-linejoin: round; }
+.pv-lg2.mma { color: var(--spc-mma); }
 .pv-lg2.mma::before { content: '━ '; }
 .pv-ax-rel { fill: var(--text2); }
-.pv-ax-mma { fill: #5ad2e8; font-size: 11px; }
+.pv-ax-mma { fill: var(--spc-mma); font-size: 11px; }
 /* 均線零線：就是右軸的 0，比一般格線亮一點好辨認 */
-.pv-mzero { stroke: #5ad2e8; stroke-width: 1; stroke-dasharray: 3 4; opacity: .5; }
+.pv-mzero { stroke: var(--spc-mma); stroke-width: 1; stroke-dasharray: 3 4; opacity: .5; }
 
 /* ── 發放日曆（本月＋下月，上下排）── */
 .rf-cal-wrap { display: flex; flex-direction: column; gap: 16px; max-width: 760px; }

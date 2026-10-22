@@ -1095,8 +1095,8 @@ function _chartDaySvg(bars, code, per) {
 
   var s = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">' +
     '<defs><linearGradient id="ckdgrad" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0" stop-color="#e8731e" stop-opacity="0.55"/>' +
-      '<stop offset="1" stop-color="#e8731e" stop-opacity="0.03"/></linearGradient></defs>';
+      '<stop offset="0" stop-opacity="0.55"/>' +
+      '<stop offset="1" stop-opacity="0.03"/></linearGradient></defs>';
   // 價格格線＋Y 軸
   for (var g = 0; g <= 4; g++) {
     var pv = hi - (hi - lo) * g / 4, yy = y(pv);
@@ -1278,8 +1278,8 @@ function _chart5dSvg(d, code) {
 
   var s = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">' +
     '<defs><linearGradient id="ck5grad" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0" stop-color="#e8731e" stop-opacity="0.55"/>' +
-      '<stop offset="1" stop-color="#e8731e" stop-opacity="0.03"/></linearGradient></defs>';
+      '<stop offset="0" stop-opacity="0.55"/>' +
+      '<stop offset="1" stop-opacity="0.03"/></linearGradient></defs>';
 
   // 價格區水平格線＋Y 軸標籤（5 等分）
   for (var g = 0; g <= 4; g++) {
