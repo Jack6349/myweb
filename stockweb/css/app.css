@@ -434,6 +434,11 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
    五個期間預設都用這個，日 K 是切換後才出現的另一種畫法 */
 .ckd-trend { fill: none; stroke: #e8731e; stroke-width: 1.4; stroke-linejoin: round; }
 .ckd-fill { fill: url(#ckdgrad); stroke: none; }
+/* 走勢圖的高／低／最後一筆標價：比軸刻度亮一級，數字本身才是重點；
+   paint-order 讓描邊畫在字後面，壓在橘色填滿上也讀得到 */
+.ckd-mk { fill: #eef4fa; font-size: 11.5px; font-weight: 700; font-family: var(--font);
+  paint-order: stroke; stroke: #0e1621; stroke-width: 2.5px; stroke-linejoin: round; }
+.ckd-dot { fill: #e8731e; stroke: #0e1621; stroke-width: 1; }
 .ck-ma { fill: none; stroke-width: 1.3; }
 .ck-ma.ma5 { stroke: #f0cc7a; }
 .ck-ma.ma20 { stroke: #7fb0ff; }
