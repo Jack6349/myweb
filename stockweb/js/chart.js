@@ -1332,15 +1332,18 @@ function _chart5dSvg(d, code) {
     if (d.close[m5] > d.close[iHi]) iHi = m5;
     if (d.close[m5] < d.close[iLo]) iLo = m5;
   }
-  var mk5 = function (i, dir) {
+  var mk5 = function (i, dir, anchor) {
     var v = d.close[i], px = x(i);
-    var tx = Math.min(Math.max(px, PAD_L + 20), W - PAD_R - 20);
+    var tx = anchor === 'end' ? (W - PAD_R) : Math.min(Math.max(px, PAD_L + 20), W - PAD_R - 20);
     var ty = (dir === 'dn' && y(v) + 14 <= PAD_T + PH - 2) ? y(v) + 14 : Math.max(y(v) - 7, PAD_T + 9);
     s += '<circle class="ckd-dot" cx="' + px.toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="2.4"/>' +
-      '<text class="ckd-mk" x="' + tx.toFixed(1) + '" y="' + ty.toFixed(1) + '" text-anchor="middle">' + v.toFixed(2) + '</text>';
+      '<text class="ckd-mk" x="' + tx.toFixed(1) + '" y="' + ty.toFixed(1) + '" text-anchor="' + (anchor || 'middle') + '">' +
+      v.toFixed(2) + '</text>';
   };
   mk5(iHi, 'up');
   if (iLo !== iHi) mk5(iLo, 'dn');
+  // 最後一筆靠右對齊；它本身就是高點或低點時不重複標
+  if (n - 1 !== iHi && n - 1 !== iLo) mk5(n - 1, 'up', 'end');
 
   // 量區頂線
   s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + (PAD_T + PH + GAP) + '" x2="' + (W - PAD_R) + '" y2="' + (PAD_T + PH + GAP) + '"/>' +
@@ -1360,6 +1363,6 @@ function _chart5dSvg(d, code) {
       '<span class="' + cls + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '（' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%）</span>' +
     '</span></div>' + s +
     '<div class="detail-note">Shioaji 1 分 K，近 5 個交易日串接；虛線為昨收。' +
-      '圖上標出五日區間的最高與最低（標的是那一分鐘的收盤，不是日 K 的高低）。' +
+      '圖上標出五日區間的最高、最低與最後一筆（標的是那一分鐘的收盤，不是日 K 的高低）。' +
       '量長條顏色依該分鐘較前一分鐘漲跌。</div>';
 }
