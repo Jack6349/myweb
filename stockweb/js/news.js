@@ -600,14 +600,65 @@ function renderMacroBar() {
   el.innerHTML = head + '<div class="macro-row">' + cells.join('') + '</div>' + foot;
 }
 
-async function fetchFeed(feed) {
-  var r = await fetch(NEWS_GAS_URL + '?rss=' + encodeURIComponent(feed.url));
-  if (!r.ok) throw new Error(feed.name + ' HTTP ' + r.status);
-  var j = await r.json();
-  if (j.stat !== 'OK') throw new Error(feed.name + ' ' + (j.error || j.stat));
-  return (j.items || []).map(function (it) {
-    return { source: feed.name, title: (it.title || '').trim(), link: it.link || '', time: new Date(it.pubDate) };
+// 來源的 RSS 不保證是合法 XML。實測 2026-10-23 鉅亨台股第 584 行：
+//   caption="過去70年間S&P 500指數於歷次期中選舉後一年的報酬均為正…"
+// 「S&P」的 & 沒有跳脫，整份裡這樣的裸 & 有 8 處（還包括 &nbsp;，那也不是
+// XML 認得的實體，XML 只認 amp/lt/gt/quot/apos）。GAS 端用 XmlService.parse
+// 嚴格解析，碰到就整個來源失敗，畫面顯示一長串 SAXParseException。
+// 這是對方的問題，但不該讓整個來源消失，所以把不合法的 & 補成 &amp; 之後自己解析。
+function _newsFixXml(txt) {
+  return txt.replace(/&nbsp;/g, ' ')
+            .replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)/g, '&amp;');
+}
+
+// 取 <item> 的直接子元素。不用 querySelector('link')：RSS 常同時有 <link> 與
+// <atom:link>，在 XML 模式下前綴的比對行為各家不一，直接看 localName 才準。
+function _newsField(item, tag) {
+  for (var i = 0; i < item.children.length; i++) {
+    var c = item.children[i];
+    if (!c.prefix && (c.localName || c.nodeName) === tag) return (c.textContent || '').trim();
+  }
+  return '';
+}
+
+async function _fetchFeedRaw(feed) {
+  var r = await fetch(NEWS_GAS_URL + '?urltext=' + encodeURIComponent(feed.url));
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  var doc = new DOMParser().parseFromString(_newsFixXml(await r.text()), 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('XML 修補後仍無法解析');
+  var items = doc.getElementsByTagName('item');
+  if (!items.length) throw new Error('XML 內沒有 item');
+  return [].map.call(items, function (it) {
+    return { source: feed.name, title: _newsField(it, 'title'), link: _newsField(it, 'link'),
+             time: new Date(_newsField(it, 'pubDate')) };
   });
+}
+
+async function fetchFeed(feed) {
+  try {
+    var r = await fetch(NEWS_GAS_URL + '?rss=' + encodeURIComponent(feed.url));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var j = await r.json();
+    if (j.stat !== 'OK') throw new Error(j.error || j.stat);
+    return (j.items || []).map(function (it) {
+      return { source: feed.name, title: (it.title || '').trim(), link: it.link || '', time: new Date(it.pubDate) };
+    });
+  } catch (e) {
+    // 代理端解析失敗 → 自己抓原文、補跳脫再解析。兩邊都失敗才算這個來源掛掉。
+    try {
+      return await _fetchFeedRaw(feed);
+    } catch (e2) {
+      throw new Error(feed.name + '：' + _newsErrShort(e.message) + '（退路也失敗：' + _newsErrShort(e2.message) + '）');
+    }
+  }
+}
+
+// SAXParseException 那串有兩百多字，整串塞進頁首會把其他資訊擠掉，只留關鍵。
+function _newsErrShort(m) {
+  m = String(m || '').replace(/\s+/g, ' ').trim();
+  var x = m.match(/lineNumber:\s*(\d+).*?columnNumber:\s*(\d+);\s*(.*)$/);
+  if (x) return 'XML 第 ' + x[1] + ' 行第 ' + x[2] + ' 字：' + x[3].slice(0, 60);
+  return m.length > 90 ? m.slice(0, 90) + '…' : m;
 }
 
 async function loadNews() {
@@ -622,7 +673,7 @@ async function loadNews() {
   var items = [], errs = [];
   results.forEach(function (res, i) {
     if (res.status === 'fulfilled') items = items.concat(res.value);
-    else errs.push(NEWS_FEEDS[i].name + '：' + res.reason.message);
+    else errs.push(res.reason.message);
   });
 
   var cutoff = Date.now() - NEWS_HOURS * 3600000;
