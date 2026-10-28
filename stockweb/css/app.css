@@ -192,6 +192,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .stream-summary { background: var(--bg2); border-bottom: 1px solid var(--border); margin: -14px calc(50% - 50vw) 10px; padding: 8px calc(50vw - 50%); overflow-x: auto; position: sticky; top: var(--h-chrome); z-index: var(--z-pagebar); }
 .sum-line { display: flex; align-items: center; gap: 8px 26px; flex-wrap: wrap; }
 .sum-pair { white-space: nowrap; display: flex; align-items: baseline; gap: 8px; }
+/* 到價紅點：日圓網銀優惠賣出價 ≤ 設定門檻時亮起。用 --up 是因為這裡的紅
+   不是漲跌而是「注意」，與全站紅漲綠跌無關；放在數字前面，不佔一整欄 */
+.fx-hit { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--up); margin-right: 5px; vertical-align: middle; }
 .sum-plabel { font-size: 14px; color: var(--text2); font-weight: 600; }
 .sum-pval { font-size: 14px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
 .btn-toggle { background: rgba(138,180,212,.14); border: 1px solid rgba(138,180,212,.45); color: var(--accent3); font-size: 12px; font-weight: 600; padding: 4px 0; border-radius: 6px; cursor: pointer; font-family: var(--font); white-space: nowrap; width: 84px; text-align: center; box-sizing: border-box; flex-shrink: 0; }

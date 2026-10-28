@@ -620,7 +620,8 @@ function renderSummary(targetId) {
     sumPair('點選加權漲跌' + (pickN ? '(' + pickN + ')' : ''),
       pickWtot > 0 ? fmtPct(pickWsum / pickWtot) : '—',
       pickWtot > 0 ? cls2var[colorClass(pickWsum / pickWtot)] : 'var(--text3)') +
-  '</div>';
+    fxJpyPairHtml() +
+    '</div>';
 }
 
 // 標籤＋數值一組，合計列與抽屜「部位」共用

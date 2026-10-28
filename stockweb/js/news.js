@@ -509,6 +509,51 @@ function _esunJpyCellHtml() {
     (jp.prefSell != null ? jp.prefSell.toFixed(4) : '—') + '</span></span></div>';
 }
 
+// ── 日圓買入提醒 ──
+// 門檻比的是「網銀優惠賣出」：那是線上換匯時你買日圓實際付的價格，
+// 不是即期中間價，也不是銀行跟你買的「買入」。數字愈低愈划算，所以是 ≤ 門檻才提醒。
+// 只設一個門檻（只買不賣，不需要上下限）。純數字設定，照 sbl 那組的做法存 localStorage。
+var FX_JPY_KEY = 'fx_jpy_alert_v1';
+function fxJpyThr() {
+  var v = parseFloat(localStorage.getItem(FX_JPY_KEY));
+  return isNaN(v) ? null : v;
+}
+function fxJpySet(v) {
+  var n = parseFloat(v);
+  try {
+    if (v === '' || v == null || isNaN(n)) localStorage.removeItem(FX_JPY_KEY);
+    else localStorage.setItem(FX_JPY_KEY, n);
+  } catch (e) {}
+  if (typeof renderSummary === 'function') renderSummary();
+}
+// 目前牌告的網銀優惠賣出價；沒抓到回 null
+function fxJpySell() {
+  var jp = _esun && _esun.rates && _esun.rates['日圓'];
+  return (jp && jp.prefSell != null) ? jp.prefSell : null;
+}
+function fxJpyHit() {
+  var t = fxJpyThr(), v = fxJpySell();
+  return (t != null && v != null && v <= t);
+}
+
+// 持股庫存合計列的日圓格。資料沿用既有的玉山牌告（10 分鐘快取），不另外抓。
+// 抓不到牌告就整格不出現 —— 顯示「—」只會佔位置，沒有資訊。
+function fxJpyPairHtml() {
+  var v = fxJpySell();
+  if (v == null) {
+    if (typeof loadEsunFx === 'function') loadEsunFx();   // 還沒抓就順手觸發，下次重繪就有
+    return '';
+  }
+  var t = fxJpyThr(), hit = fxJpyHit();
+  var dot = hit ? '<span class="fx-hit" title="已達門檻"></span>' : '';
+  var tip = '玉山網銀／App 優惠賣出，線上換匯時你買日圓付的價格'
+    + (t != null ? '｜門檻 ' + t.toFixed(4) + (hit ? '（已達）' : '（未達）') : '｜未設門檻，可在設定 → 匯率提醒填');
+  return '<span class="sum-pair" title="' + tip + '">' +
+    '<span class="sum-plabel">日圓網銀優惠</span>' +
+    '<span class="sum-pval"' + (hit ? ' style="color:var(--accent2)"' : '') + '>' +
+    dot + v.toFixed(4) + '</span></span>';
+}
+
 // 牌告一天變動多次，抽屜又有 10 分鐘快取 → 給一個手動重抓的入口
 async function esunReload(btn) {
   if (btn) { btn.disabled = true; btn.textContent = '…'; }

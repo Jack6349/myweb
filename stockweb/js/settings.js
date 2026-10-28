@@ -56,6 +56,12 @@ var SET_SECTIONS = [
       desc: '停利價、停利率、停損價、停損率、買進價。比對的是含息獲利率（價差＋已落袋配息 ÷ 原始成本）。'
           + '那一頁同時顯示現價與含息獲利率，是工作畫面，設定就在那裡改' }
   ] },
+  { id: 'fx', title: '匯率提醒', rows: [
+    { key: 'fx-jpy', title: '日圓買入門檻', inline: _setFxJpyHtml,
+      desc: '比的是玉山網銀／App 優惠「賣出」價 —— 線上換匯時你買日圓實際付的價格，'
+          + '不是即期中間價。數字愈低愈划算，所以是「≤ 門檻」才提醒。'
+          + '達標時持股庫存的合計列會在匯率前亮紅點。留白＝不提醒' }
+  ] },
   { id: 'sbl', title: '借券', rows: [
     { key: 'sbl-thr', title: '出借篩選門檻', inline: _setSblHtml,
       desc: '費率下限、閒置天數、量能下限。改完借券頁的提醒與試算會跟著重算' }
@@ -125,6 +131,14 @@ function setTaxMode(on) {
   if (typeof _taxMode !== 'undefined' && !!_taxMode !== !!on && typeof toggleTaxMode === 'function') toggleTaxMode();
   setRender();
 }
+function _setFxJpyHtml() {
+  var t = (typeof fxJpyThr === 'function') ? fxJpyThr() : null;
+  var cur = (typeof fxJpySell === 'function') ? fxJpySell() : null;
+  return '<span class="set-inline"><input id="fx-jpy-thr" type="number" step="0.0001" class="al-in" ' +
+    'value="' + (t == null ? '' : t) + '" oninput="fxJpySet(this.value)"><span class="set-unit">TWD/JPY</span></span>' +
+    '<span class="set-lb">目前 ' + (cur == null ? '—' : cur.toFixed(4)) + '</span>';
+}
+
 function _setSblHtml() {
   var t = (typeof _sblThr === 'function') ? _sblThr() : { fee: 0.5, vol: 10, idle: 6 };
   var f = function (id, v, step, unit) {
