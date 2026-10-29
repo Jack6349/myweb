@@ -718,6 +718,7 @@ function closeDetailModal() {
   if (typeof closeConstPop === 'function') closeConstPop(); // 成份股彈窗收尾（還原輪詢頻率）
   // 線圖彈窗收尾：停止延遲渲染、關閉盤中自動更新、退訂五檔（歸還訂閱額度）
   if (typeof _chartCode !== 'undefined') _chartCode = null;
+  if (typeof _chartNavOff === 'function') _chartNavOff();   // 解除鍵盤左右鍵翻檔
   if (typeof _chartStopBidAsk === 'function') _chartStopBidAsk();
   if (typeof _chartStopLiveTimer === 'function') _chartStopLiveTimer();
 }

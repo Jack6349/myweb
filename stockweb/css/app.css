@@ -455,6 +455,12 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .modal-head { flex-shrink: 0; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid var(--border); }
 .modal-title { font-size: 14px; font-weight: 700; color: var(--accent2); }
+/* 線圖標題列的翻檔箭頭。只有線圖彈窗會用到：其他彈窗設 textContent 就自動清掉 */
+.modal-title { display: flex; align-items: center; gap: 8px; }
+.chart-nav { background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text2); font-size: 15px; line-height: 1; padding: 2px 7px; cursor: pointer; }
+.chart-nav:hover { border-color: var(--border-strong); color: var(--accent2); }
+.chart-navi { color: var(--text3); font-size: 11.5px; font-weight: 400; }
 .modal-close { background: none; border: none; color: var(--text2); font-size: 24px; cursor: pointer; line-height: 1; }
 .modal-close:hover { color: var(--text); }
 .modal-body { padding: 16px 22px; overflow-y: auto; min-height: 0; flex: 1 1 auto; }

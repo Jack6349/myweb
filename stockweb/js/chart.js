@@ -68,12 +68,79 @@ function _chartSavedAdj() {
   return true;
 }
 
+// ── 同清單翻檔（標題列的 ← →，或鍵盤左右鍵）──
+// 順序取自畫面上的表格列順序，不是資料層：排序邏輯每一頁都不同（持股庫存是
+// _invSort，注意股、換股、補倉各有各的），但畫出來的列順序一定就是目前排序。
+// 限定「同一張表、同一欄」：持有 ETF 的連結（topconst）跟代號連結在同一張表的
+// 不同欄，不限欄就會把它們混進翻檔順序裡。
+var _chartNav = null;        // { list: [代碼…], i: 目前位置 }
+
+function _chartNavScan(code) {
+  var ev = window.event, el = ev && ev.target;
+  if (!el || !el.closest) return null;
+  var td = el.closest('td'), tb = el.closest('table'), links;
+  if (td && tb) {
+    links = [].filter.call(tb.querySelectorAll('td[onclick*=openChartPop], td [onclick*=openChartPop]'),
+      function (a) { var c = a.closest('td'); return c && c.cellIndex === td.cellIndex; });
+  } else {
+    // 卡片式版面（即時行情）沒有表格，退回同一個父容器
+    var host = el.closest('[onclick*=openChartPop]');
+    host = host && host.parentElement;
+    if (!host) return null;
+    links = [].slice.call(host.querySelectorAll('[onclick*=openChartPop]'));
+  }
+  var out = [];
+  links.forEach(function (a) {
+    var m = /openChartPop\(\s*['"]([^'"]+)['"]/.exec(a.getAttribute('onclick') || '');
+    if (m && out.indexOf(m[1]) < 0) out.push(m[1]);
+  });
+  var i = out.indexOf(String(code));
+  return (out.length > 1 && i >= 0) ? { list: out, i: i } : null;
+}
+
+// 標題寫成 innerHTML 而不是另外加節點到 .modal-head：其他彈窗（建倉明細、成份股、
+// 成分股趨勢…）都是對同一個 span 設 textContent，會自動把箭頭沖掉，不必各自清理。
+function _chartTitle() {
+  var c = _contracts[_chartCode],
+      t = _chartCode + ' ' + ((c && c.name) || '') + ' — 線圖',
+      el = document.getElementById('detail-title');
+  if (!_chartNav) { el.textContent = t; return; }
+  el.innerHTML = '<button class="chart-nav" title="上一檔（←）" onclick="chartNavGo(-1)">‹</button>' +
+    '<span class="chart-navt">' + t + '</span>' +
+    '<button class="chart-nav" title="下一檔（→）" onclick="chartNavGo(1)">›</button>' +
+    '<span class="chart-navi">' + (_chartNav.i + 1) + ' / ' + _chartNav.list.length + '</span>';
+}
+
+// 翻檔：頁籤（含期間）原樣保留，只換標的。首尾循環。
+var _chartNavT = null;
+function chartNavGo(d) {
+  if (!_chartNav) return;
+  var n = _chartNav.list.length;
+  _chartNav.i = ((_chartNav.i + d) % n + n) % n;
+  _chartCode = _chartNav.list[_chartNav.i];
+  _chartTitle();
+  _chartStopBidAsk();          // 先退訂舊代碼的五檔，否則訂閱額度被佔著
+  // 五檔頁籤連按會一路送訂閱／退訂，給它一點緩衝；其他頁籤只是讀資料，立即切換
+  clearTimeout(_chartNavT);
+  if (_chartTab === 'bid') _chartNavT = setTimeout(function () { chartShowTab(_chartTab); }, 250);
+  else chartShowTab(_chartTab);
+}
+
+function _chartNavKey(e) {
+  if (!_chartNav || !_chartCode) return;
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  var t = e.target;
+  if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;   // 不搶輸入框的游標移動
+  e.preventDefault();
+  chartNavGo(e.key === 'ArrowRight' ? 1 : -1);
+}
+
 function openChartPop(code) {
   _chartCode = String(code);
   _chartTab = _chartSavedTab();
-  var c = _contracts[_chartCode];
-  document.getElementById('detail-title').textContent =
-    _chartCode + ' ' + ((c && c.name) || '') + ' — 線圖';
+  _chartNav = _chartNavScan(_chartCode);
+  _chartTitle();
+  document.addEventListener('keydown', _chartNavKey);   // 同一個函式重複註冊不會疊加
   var modal = document.getElementById('detail-modal');
   modal.style.display = 'flex';
   // 線圖用加大版面（其他彈窗維持原尺寸）：關閉時由 closeDetailModal 還原
@@ -81,6 +148,12 @@ function openChartPop(code) {
   if (box) box.classList.add('chart-wide');
   _chartRenderShell();
   chartShowTab(_chartTab);   // 上次看的頁籤（五檔頁籤會照常訂閱，關窗即退訂）
+}
+
+function _chartNavOff() {
+  document.removeEventListener('keydown', _chartNavKey);
+  clearTimeout(_chartNavT);
+  _chartNav = null;
 }
 
 function _chartRenderShell() {
