@@ -225,7 +225,7 @@ function renderWatch() {
     wrap.innerHTML = h;
     return;
   }
-  h += '<div class="inv-table-wrap"><table class="inv-table wt-table"><thead><tr>' +
+  h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
     '<th></th><th></th>' + _wtTh('code', '代號') + '<th>名稱</th>' + _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num') +
     '<th class="num">成份股漲跌</th>' + (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
   var ncol = 8 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);
@@ -373,7 +373,7 @@ function wtShowTab(tab) {
   if (tab === 'new') { if (typeof startEtfNew === 'function') startEtfNew(false); }
   else if (tab === 'screen') { if (typeof startEtfScreen === 'function') { renderEtfScreen(); startEtfScreen(false); } }
   else if (tab === 'bond') { _wtBondLoad(); renderWatchBond(); }
-  else if (tab === 'act') { _wtActLoadCache(); renderWatchAct(); }
+  else if (tab === 'act') { _wtActLoadCache(); renderWatchAct(); wtActRefreshPx(); }
   else renderWatch();
 }
 
@@ -491,6 +491,10 @@ function _wtActLoadCache() {
   } catch (e) {}
   return _wtAct;
 }
+// 回傳 { cl: 收盤序列, live: Yahoo 的即時價或 null }
+// 當天那根日 K 的 close 常常是 null（實測 2026-10-30 00981A：10/28、10/29 有值，
+// 10/30 是 null），濾掉空值就會退回前一日收盤，畫面上的現價因此慢一個交易日。
+// 同一個回應的 meta.regularMarketPrice 是對的（26.66，與券商快照一致），順手帶回來當備援。
 async function _wtActFetch(code) {
   var syms = [code + '.TW', code + '.TWO'];
   for (var i = 0; i < syms.length; i++) {
@@ -502,30 +506,85 @@ async function _wtActFetch(code) {
       if (!res) continue;
       var cl = ((res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close) || [])
         .filter(function (x) { return x != null; });
-      if (cl.length >= 5) return cl;
+      if (cl.length >= 5) return { cl: cl, live: (res.meta && res.meta.regularMarketPrice) || null };
     } catch (e) {}
   }
   return null;
 }
+
+// 現價與衍生欄位分開：歷史收盤（c0／c1／c3）當天只抓一次，現價可以單獨刷新後重算。
+// 報酬的終點一律用現價，不是 Yahoo 序列的最後一筆，否則會出現現價是今天、報酬是昨天。
+function _wtActDerive(r) {
+  var px = r.px;
+  if (!(px > 0)) { r.r1 = r.r3 = r.rAll = r.y1 = r.yEst = null; return r; }
+  var g = function (base) { return base > 0 ? (px - base) / base * 100 : null; };
+  r.r1 = g(r.c1); r.r3 = g(r.c3); r.rAll = g(r.c0);
+  r.y1 = r.amount ? r.amount / px * 100 : null;
+  r.yEst = (r.amount && r.freq) ? r.amount * r.freq / px * 100 : null;
+  return r;
+}
+
+// 現價：券商快照（本機、零 GAS），與關注清單、債券 ETF、ETF 評比同一個來源。
+// 抓不到就退回 Yahoo 的即時價，再退回序列最後一筆收盤。
+async function _wtActPx(codes, fallback) {
+  var px = {};
+  try {
+    for (var i = 0; i < codes.length; i++) {
+      if (!_contracts[codes[i]]) { try { _contracts[codes[i]] = await fetchContract(codes[i]); } catch (e) {} }
+    }
+    var cons = codes.map(function (c) { return _contracts[c]; }).filter(Boolean);
+    if (cons.length) {
+      var snaps = await fetchSnapshots(cons);
+      snaps.forEach(function (s) {
+        if (s.close != null && s.close > 0) {
+          px[String(s.code)] = s.close;
+          _rows[s.code] = { close: s.close, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) };
+        }
+      });
+    }
+  } catch (e) { console.warn('[watch act px]', e); }
+  codes.forEach(function (c) { if (px[c] == null && fallback && fallback[c] > 0) px[c] = fallback[c]; });
+  return px;
+}
+
+// 回到頁籤時只刷現價（本機快照，不碰 Yahoo）：歷史收盤仍用當天的快取
+async function wtActRefreshPx() {
+  if (!_wtAct || !_wtAct.rows.length || _wtBusy) return;
+  var fb = {}, codes = _wtAct.rows.map(function (r) { fb[r.code] = r.pxFb || r.px; return r.code; });
+  var px = await _wtActPx(codes, fb);
+  _wtAct.rows.forEach(function (r) { if (px[r.code] > 0) { r.px = px[r.code]; _wtActDerive(r); } });
+  _wtAct.pxAt = new Date().toISOString();
+  try { localStorage.setItem(WT_ACT_LS, JSON.stringify(_wtAct)); } catch (e) {}
+  renderWatchAct();
+}
 async function wtLoadAct(force) {
   if (_wtBusy) return;
-  if (!force && _wtActLoadCache()) { renderWatchAct(); return; }
+  if (!force && _wtActLoadCache()) { renderWatchAct(); wtActRefreshPx(); return; }
   _wtBusy = true;
   var pool = _wtActPool(), info = document.getElementById('wt-act-info'), rows = [];
+  var ym = _divTwDate().iso.slice(0, 7), dcache = _wtDivCache(), fb = {};
   for (var b = 0; b < pool.length; b += WT_BATCH) {
     var batch = pool.slice(b, b + WT_BATCH);
     if (info) info.textContent = '取得日K ' + Math.min(b + WT_BATCH, pool.length) + '/' + pool.length + '…';
     var got = await Promise.all(batch.map(function (x) { return _wtActFetch(x.c); }));
-    got.forEach(function (cl, k) {
-      if (!cl) return;
-      var n = cl.length, last = cl[n - 1];
-      var ret = function (d) { return n > d ? (last - cl[n - 1 - d]) / cl[n - 1 - d] * 100 : null; };
-      rows.push({ code: batch[k].c, name: batch[k].n, px: last, days: n,
-        r1: ret(20), r3: ret(60), rAll: cl[0] ? (last - cl[0]) / cl[0] * 100 : null });
+    var dv = await Promise.all(batch.map(function (x) { return _wtDivOf(x.c, ym, dcache); }));
+    got.forEach(function (o, k) {
+      if (!o) return;
+      var cl = o.cl, n = cl.length, d = dv[k] || {};
+      fb[batch[k].c] = o.live || cl[n - 1];
+      // 錨點：20／60 個交易日前與第一筆。現價另外取，報酬在 _wtActDerive 算
+      rows.push({ code: batch[k].c, name: batch[k].n, days: n,
+        px: o.live || cl[n - 1], pxFb: o.live || cl[n - 1],
+        c0: cl[0], c1: n > 20 ? cl[n - 1 - 20] : null, c3: n > 60 ? cl[n - 1 - 60] : null,
+        amount: d.none ? null : (d.amount != null ? d.amount : null),
+        freq: d.none ? null : (d.freq || null), exDate: d.none ? null : (d.exDate || null) });
     });
   }
+  var px = await _wtActPx(rows.map(function (r) { return r.code; }), fb);
+  rows.forEach(function (r) { if (px[r.code] > 0) r.px = px[r.code]; _wtActDerive(r); });
   rows.sort(function (a, b2) { return (b2.rAll == null ? -1e9 : b2.rAll) - (a.rAll == null ? -1e9 : a.rAll); });
-  _wtAct = { day: _divTwDate().iso, at: new Date().toISOString(), rows: rows, pool: pool.length };
+  _wtAct = { day: _divTwDate().iso, at: new Date().toISOString(), pxAt: new Date().toISOString(),
+             rows: rows, pool: pool.length };
   try { localStorage.setItem(WT_ACT_LS, JSON.stringify(_wtAct)); } catch (e) {}
   _wtBusy = false;
   renderWatchAct();
@@ -599,7 +658,7 @@ function renderWatchBond() {
     h += '<div class="modal-loading">' + (d ? '沒有年殖利率 ≥ ' + d.th + '% 的標的，可調低門檻後重新篩選。' : '尚未篩選。') + '</div>';
     wrap.innerHTML = h; return;
   }
-  h += '<div class="inv-table-wrap"><table class="inv-table wt-table"><thead><tr>' +
+  h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
     '<th></th>' + _wtSortTh(_wtBondSort, 'wtBondSort', 'code', '代號') + '<th>名稱</th>' +
     _wtSortTh(_wtBondSort, 'wtBondSort', 'px', '現價', 'num') + _wtSortTh(_wtBondSort, 'wtBondSort', 'amount', '每股金額', 'num') +
     _wtSortTh(_wtBondSort, 'wtBondSort', 'mY', '月配', 'num', '月殖利率：每股金額 ÷ 現價') + _wtSortTh(_wtBondSort, 'wtBondSort', 'yY', '預估年配', 'num', '預估年殖利率：最近一次配息 × 配息期數 ÷ 現價') +
@@ -646,7 +705,7 @@ function wtBondRowClick(ev, code) {
 }
 
 // ── 渲染：主動式 ETF ──
-var _wtActSort = _wtLoadSort(WT_ASORT_LS, 'rAllDesc', /^(code|px|r1|r3|rAll|days)(Asc|Desc)$/);
+var _wtActSort = _wtLoadSort(WT_ASORT_LS, 'rAllDesc', /^(code|px|y1|yEst|r1|r3|rAll|days)(Asc|Desc)$/);
 function wtActSort(k) {
   _wtActSort = _wtNextSort(_wtActSort, k);
   try { localStorage.setItem(WT_ASORT_LS, _wtActSort); } catch (e) {}
@@ -667,8 +726,17 @@ function renderWatchAct() {
 
   var sh = function (k, label, cls, tip) { return _wtSortTh(_wtActSort, 'wtActSort', k, label, cls == null ? 'num' : cls, tip); };
   var pct = function (v) { return v == null ? '<span class="flat">—</span>' : '<span class="' + colorClass(v) + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%</span>'; };
-  h += '<div class="inv-table-wrap"><table class="inv-table wt-table"><thead><tr>' +
+  // 殖利率不套漲跌色：它不是漲跌，正負沒有意義，與 ETF 評比、新上市 ETF 的呈現一致
+  var yld = function (v) { return v == null ? '<span class="flat">—</span>' : v.toFixed(2) + '%'; };
+  // 沒有配息紀錄的那幾檔要說明是「查不到」，不是「配 0」
+  var dtip = function (r) {
+    if (r.amount == null) return ' title="查無配息紀錄（未配息或資料未揭露）"';
+    return ' title="最近一次 ' + r.exDate + ' 每股 ' + r.amount + ' 元，年 ' + r.freq + ' 次"';
+  };
+  h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
     '<th></th>' + sh('code', '代號', '') + '<th>名稱</th>' + sh('px', '現價') +
+    sh('y1', '單次配', 'num', '單次殖利率：最近一次配息 ÷ 現價') +
+    sh('yEst', '預估年配', 'num', '預估年殖利率：最近一次配息 × 年配息次數 ÷ 現價') +
     sh('r1', '近1月') + sh('r3', '近3月') + sh('rAll', '成立以來') +
     sh('days', '資料天數', 'num', 'Yahoo 可取得的交易日數，越短代表上市越新') + '</tr></thead><tbody>';
   _wtSortRows(d.rows, _wtActSort).forEach(function (r) {
@@ -679,16 +747,22 @@ function renderWatchAct() {
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-name">' + r.name + '</td>' +
       '<td class="num">' + (r.px != null ? r.px.toFixed(2) : '—') + '</td>' +
+      '<td class="num"' + dtip(r) + '>' + yld(r.y1) + '</td>' +
+      '<td class="num"' + dtip(r) + '>' + yld(r.yEst) + '</td>' +
       '<td class="num">' + pct(r.r1) + '</td>' +
       '<td class="num">' + pct(r.r3) + '</td>' +
       '<td class="num"><b>' + pct(r.rAll) + '</b></td>' +
       '<td class="num' + (r.days < 60 ? ' swap-warn' : '') + '">' + r.days + '</td>' +
     '</tr>';
-    if (open) h += '<tr class="es-drow"><td colspan="8" class="es-dslot" data-code="' + r.code + '"></td></tr>';
+    if (open) h += '<tr class="es-drow"><td colspan="10" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
     '<div class="detail-note"><dl>' +
-    '<dt>報酬</dt><dd>以 Yahoo 日收盤價計。主動式 ETF 多未配息或配息少，<code>價格報酬 ≈ 總報酬</code>。</dd>' +
+    '<dt>現價</dt><dd>券商即時快照，與關注清單、債券 ETF、ETF 評比同一個來源，盤中回到本頁籤會自動刷新。' +
+    'Yahoo 當天那根日 K 的收盤常常是空值，只靠它會慢一個交易日。</dd>' +
+    '<dt>單次配／預估年配</dt><dd>最近一次配息 ÷ 現價，以及再乘上年配息次數。欄位定義與 ETF 評比、新上市 ETF 相同。' +
+    '滑過數字可看除息日與每股金額。顯示「—」代表查無配息紀錄（未配息或資料未揭露）。</dd>' +
+    '<dt>報酬</dt><dd>起點用 Yahoo 日收盤價，終點用現價。主動式 ETF 多未配息或配息少，<code>價格報酬 ≈ 總報酬</code>。</dd>' +
     '<dt>務必同時看「資料天數」</dt><dd>多為新上市，49 天的報酬與 194 天的報酬不可直接比較。' +
     '天數不足者近1月／近3月顯示「—」。</dd>' +
     '<dt>排序與快取</dt><dd>預設依成立以來由高至低，點欄位可改、再點反向，排序會記住。' +

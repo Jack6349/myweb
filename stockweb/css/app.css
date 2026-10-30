@@ -930,6 +930,10 @@ td.cost-even::after  { background: var(--text3); }
 .wt-sug-a { font-size: 11px; color: var(--text3); white-space: nowrap; }
 .wt-note { font-size: 12px; color: var(--accent2); margin-bottom: 8px; }
 .wt-table { max-width: 1000px; }
+/* 表格容器跟著表格一樣寬。原本容器撐滿整個版面（1729px）而表格只有 1000px，
+   內層捲軸就停在離表格 700px 的最右邊，看起來像頁面憑空多長出一條捲軸。
+   高度上限留著：表頭要 sticky 得有內層捲動區，32 列捲起來才看得到欄位名。 */
+.wt-wrap { max-width: 1000px; }
 
 /* 關注股票：頁籤內工具列 */
 .wt-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text2); margin-bottom: 10px; }
