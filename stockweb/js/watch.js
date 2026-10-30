@@ -609,6 +609,14 @@ async function wtAddPicked() {
   await startWatch();
 }
 
+// 時間戳顯示：快取存的是 toISOString()，那是 UTC，直接切字串會比台灣時間少 8 小時
+// （實測 2026-10-31 01:42 存檔，畫面寫成 2026-10-30 17:42）。顯示前加回時差。
+function _wtAtTw(iso) {
+  var t = Date.parse(iso);
+  if (isNaN(t)) return String(iso || '').replace('T', ' ').slice(0, 16);
+  return new Date(t + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 16);
+}
+
 // ── 債券 ETF／主動式 ETF 排序（狀態存本機，重新整理後維持）──
 var WT_BSORT_LS = 'watch_bond_sort_v1', WT_ASORT_LS = 'watch_act_sort_v1';
 function _wtLoadSort(ls, def, re) {
@@ -649,7 +657,7 @@ function renderWatchBond() {
     '" onchange="wtBondThChanged(this)"> %' +
     '<button class="btn-query" onclick="wtScanBond()">↻ 重新篩選</button>' +
     '<span id="wt-bond-info" class="wt-dim">' +
-      (d ? '上次篩選 ' + String(d.at).replace('T', ' ').slice(0, 16) + '（門檻 ' + d.th + '%｜掃 ' + d.scanned + ' 檔、取得 ' + d.got + ' 檔、通過 ' + d.rows.length + ' 檔）'
+      (d ? '上次篩選 ' + _wtAtTw(d.at) + '（門檻 ' + d.th + '%｜掃 ' + d.scanned + ' 檔、取得 ' + d.got + ' 檔、通過 ' + d.rows.length + ' 檔）'
          : '尚未篩選，按「重新篩選」開始（約 ' + _wtBondPool().length + ' 檔，數秒）') + '</span>' +
     '<span id="wt-pick-info" class="wt-dim"></span>' +
     '<button class="btn-query" onclick="wtAddPicked()">＋ 加入關注</button></div>';
@@ -718,7 +726,7 @@ function renderWatchAct() {
   var have = {}; _wtLoad().forEach(function (c) { have[c] = true; });
   var h = '<div class="wt-bar"><button class="btn-query" onclick="wtLoadAct(true)">↻ 重新計算</button>' +
     '<span id="wt-act-info" class="wt-dim">' +
-      (d ? d.rows.length + ' / ' + d.pool + ' 檔有資料｜更新 ' + String(d.at).replace('T', ' ').slice(0, 16) + '（每日快取）'
+      (d ? d.rows.length + ' / ' + d.pool + ' 檔有資料｜更新 ' + _wtAtTw(d.at) + '（每日快取）'
          : '尚未載入，按「重新計算」開始（' + _wtActPool().length + ' 檔，約 10 秒）') + '</span>' +
     '<span id="wt-pick-info" class="wt-dim"></span>' +
     '<button class="btn-query" onclick="wtAddPicked()">＋ 加入關注</button></div>';
