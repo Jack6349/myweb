@@ -930,10 +930,15 @@ td.cost-even::after  { background: var(--text3); }
 .wt-sug-a { font-size: 11px; color: var(--text3); white-space: nowrap; }
 .wt-note { font-size: 12px; color: var(--accent2); margin-bottom: 8px; }
 .wt-table { max-width: 1000px; }
-/* 表格容器跟著表格一樣寬。原本容器撐滿整個版面（1729px）而表格只有 1000px，
-   內層捲軸就停在離表格 700px 的最右邊，看起來像頁面憑空多長出一條捲軸。
-   高度上限留著：表頭要 sticky 得有內層捲動區，32 列捲起來才看得到欄位名。 */
-.wt-wrap { max-width: 1000px; }
+/* 這三張表（關注清單、債券 ETF、主動式 ETF）不要內層捲軸。
+   容器撐滿版面時捲軸停在離表格 700px 的地方，像頁面多長出一條；把容器縮到表格寬度，
+   捲軸就貼到表格右緣、切在欄位旁邊，更難看。兩種都不對，所以整條拿掉：
+   解掉高度上限，改用頁面本身的捲軸。
+   overflow 一併改成 visible，否則 sticky 表頭會以這個容器為準，而它已經不垂直捲動，
+   表頭就完全不黏了。代價是視窗窄於表格時由頁面橫向捲動，不是容器自己捲。
+   表頭改黏在 --h-chrome（頂欄 54 ＋ 導覽列 65），正好停在導覽列下緣。 */
+.wt-wrap { max-width: 1000px; max-height: none; overflow: visible; }
+.wt-wrap .inv-table th { top: var(--h-chrome); }
 
 /* 關注股票：頁籤內工具列 */
 .wt-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text2); margin-bottom: 10px; }

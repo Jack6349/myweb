@@ -483,11 +483,14 @@ async function wtScanBond() {
 }
 
 // ── 主動式 ETF 報酬（Yahoo 日K；每日快取）──
+// 快取版本。v2 之後每一列存的是錨點收盤（c0／c1／c3）與配息，報酬和殖利率由現價當場算；
+// v1 存的是算好的報酬、沒有錨點，直接拿來重算會整排變成「—」。版本不符就當作沒有快取。
+var WT_ACT_V = 2;
 function _wtActLoadCache() {
   if (_wtAct) return _wtAct;
   try {
     var c = JSON.parse(localStorage.getItem(WT_ACT_LS) || 'null');
-    if (c && c.day === _divTwDate().iso) _wtAct = c;
+    if (c && c.v === WT_ACT_V && c.day === _divTwDate().iso) _wtAct = c;
   } catch (e) {}
   return _wtAct;
 }
@@ -549,7 +552,7 @@ async function _wtActPx(codes, fallback) {
 
 // 回到頁籤時只刷現價（本機快照，不碰 Yahoo）：歷史收盤仍用當天的快取
 async function wtActRefreshPx() {
-  if (!_wtAct || !_wtAct.rows.length || _wtBusy) return;
+  if (!_wtAct || _wtAct.v !== WT_ACT_V || !_wtAct.rows.length || _wtBusy) return;
   var fb = {}, codes = _wtAct.rows.map(function (r) { fb[r.code] = r.pxFb || r.px; return r.code; });
   var px = await _wtActPx(codes, fb);
   _wtAct.rows.forEach(function (r) { if (px[r.code] > 0) { r.px = px[r.code]; _wtActDerive(r); } });
@@ -583,8 +586,8 @@ async function wtLoadAct(force) {
   var px = await _wtActPx(rows.map(function (r) { return r.code; }), fb);
   rows.forEach(function (r) { if (px[r.code] > 0) r.px = px[r.code]; _wtActDerive(r); });
   rows.sort(function (a, b2) { return (b2.rAll == null ? -1e9 : b2.rAll) - (a.rAll == null ? -1e9 : a.rAll); });
-  _wtAct = { day: _divTwDate().iso, at: new Date().toISOString(), pxAt: new Date().toISOString(),
-             rows: rows, pool: pool.length };
+  _wtAct = { v: WT_ACT_V, day: _divTwDate().iso, at: new Date().toISOString(),
+             pxAt: new Date().toISOString(), rows: rows, pool: pool.length };
   try { localStorage.setItem(WT_ACT_LS, JSON.stringify(_wtAct)); } catch (e) {}
   _wtBusy = false;
   renderWatchAct();
