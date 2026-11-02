@@ -90,10 +90,16 @@ function _liveBuyCell(code) {
 
 // 差價：現價 － 最後買入價。買得比現價低＝這批賺，台股慣例用紅；買得比現價高＝這批套牢，用綠。
 // 看的是「最後那一批」的處境，不是整體成本，所以會和含息獲利率不同向。
+// 排序和顯示共用同一個值，不在兩邊各算一次
+function _liveDiffVal(code, price) {
+  var b = _liveLastBuy(code);
+  if (!b || b.px == null || price == null) return null;
+  return price - b.px;
+}
 function _liveDiffCell(code, price) {
   var b = _liveLastBuy(code);
-  if (!b || b.px == null || price == null) return '<td class="num"><span class="flat">—</span></td>';
-  var d = price - b.px;
+  var d = _liveDiffVal(code, price);
+  if (d == null) return '<td class="num"><span class="flat">—</span></td>';
   return '<td class="num ' + colorClass(d) + '" title="現價 ' + price.toFixed(2) + ' － 最後買入 ' + b.px.toFixed(2) + '">' +
     (d > 0 ? '+' : '') + d.toFixed(2) + '</td>';
 }
@@ -132,15 +138,17 @@ function liveSorted() {
     case 'pnlAsc':   arr.sort(function (a, b) { return num(liveCalc(a).profit) - num(liveCalc(b).profit); }); break;
     case 'prateDesc': arr.sort(function (a, b) { return num(liveCalc(b).prate) - num(liveCalc(a).prate); }); break;
     case 'prateAsc':  arr.sort(function (a, b) { return num(liveCalc(a).prate) - num(liveCalc(b).prate); }); break;
+    case 'diffDesc': arr.sort(function (a, b) { return num(_liveDiffVal(String(b.code), liveCalc(b).price)) - num(_liveDiffVal(String(a.code), liveCalc(a).price)); }); break;
+    case 'diffAsc':  arr.sort(function (a, b) { return num(_liveDiffVal(String(a.code), liveCalc(a).price)) - num(_liveDiffVal(String(b.code), liveCalc(b).price)); }); break;
   }
   return arr;
 }
 
 // 整欄表頭可點排序（與持股庫存一致）：單一箭頭指示狀態，點擊區＝整格
-function _liveSortTh(label, key, numCls) {
+function _liveSortTh(label, key, numCls, tip) {
   var on = _liveSort === key + 'Asc' || _liveSort === key + 'Desc';
   var arrow = _liveSort === key + 'Asc' ? '▲' : (_liveSort === key + 'Desc' ? '▼' : '↕');
-  return '<th class="' + (numCls ? 'num ' : '') + 'sort-th' + (on ? ' sorted' : '') + '" onclick="liveSortCol(\'' + key + '\')" title="點擊排序">' +
+  return '<th class="' + (numCls ? 'num ' : '') + 'sort-th' + (on ? ' sorted' : '') + '" onclick="liveSortCol(\'' + key + '\')" title="' + (tip ? tip + '（點擊排序）' : '點擊排序') + '">' +
     label + '<span class="sort-ind">' + arrow + '</span></th>';
 }
 function liveHead() {
@@ -149,7 +157,7 @@ function liveHead() {
     '<th class="num">餘額</th><th class="num">成本均價</th>' +
     '<th class="num lb-cell" title="建倉明細裡日期最新的那一批：(買進日) 每股買價">最後買入</th>' +
     '<th class="num">現價</th>' +
-    '<th class="num" title="現價 － 最後買入價。紅＝那一批買得比現價便宜，綠＝買得比現價貴">差價</th>' +
+    _liveSortTh('差價', 'diff', true, '現價 － 最後買入價。紅＝那一批買得比現價便宜，綠＝買得比現價貴') +
     '<th class="num">漲跌</th>' +
     _liveSortTh('漲跌幅', 'chg', true) +
     '<th class="num">現值</th>' +
