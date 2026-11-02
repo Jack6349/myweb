@@ -1,5 +1,5 @@
 // 股利總管 Web — 即時持股（單欄精簡表＋每列當日分時走勢小圖，盤中逐筆即時更新）
-// 欄位：代號｜餘額(股)｜成本均價｜最後買入｜現價｜漲跌幅｜現值｜含息損益｜含息獲利率｜走勢
+// 欄位：代號｜餘額(股)｜成本均價｜最後買入｜現價｜差價｜漲跌幅｜現值｜含息損益｜含息獲利率｜走勢
 // （無明細鈕、無名稱）
 // 成本一律用原始成本（券商的成本已扣掉累積配息），與持股庫存同一套；
 // 顯示的損益與獲利率都含息，與停損停利的觸發基準一致
@@ -88,6 +88,16 @@ function _liveBuyCell(code) {
     '<span class="lb-px">' + b.px.toFixed(2) + '</span></td>';
 }
 
+// 差價：現價 － 最後買入價。買得比現價低＝這批賺，台股慣例用紅；買得比現價高＝這批套牢，用綠。
+// 看的是「最後那一批」的處境，不是整體成本，所以會和含息獲利率不同向。
+function _liveDiffCell(code, price) {
+  var b = _liveLastBuy(code);
+  if (!b || b.px == null || price == null) return '<td class="num"><span class="flat">—</span></td>';
+  var d = price - b.px;
+  return '<td class="num ' + colorClass(d) + '" title="現價 ' + price.toFixed(2) + ' － 最後買入 ' + b.px.toFixed(2) + '">' +
+    (d > 0 ? '+' : '') + d.toFixed(2) + '</td>';
+}
+
 function liveRowHtml(p) {
   var v = liveCalc(p);
   var pcls = v.profit == null ? 'flat' : colorClass(v.profit);
@@ -101,6 +111,7 @@ function liveRowHtml(p) {
     costCellHtml(v.avg, v.price) +
     _liveBuyCell(v.code) +
     '<td class="num ' + ccls + '">' + (v.price != null ? v.price.toFixed(2) : '—') + '</td>' +
+    _liveDiffCell(v.code, v.price) +
     '<td class="num ' + ccls + '">' + (v.chgAmt == null ? '—' : fmtChg(v.chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (v.chg == null ? '—' : fmtPct(v.chg)) + '</td>' +
     '<td class="num">' + (v.val != null ? Math.round(v.val).toLocaleString('zh-TW') : '—') + '</td>' +
@@ -138,6 +149,7 @@ function liveHead() {
     '<th class="num">餘額</th><th class="num">成本均價</th>' +
     '<th class="num lb-cell" title="建倉明細裡日期最新的那一批：(買進日) 每股買價">最後買入</th>' +
     '<th class="num">現價</th>' +
+    '<th class="num" title="現價 － 最後買入價。紅＝那一批買得比現價便宜，綠＝買得比現價貴">差價</th>' +
     '<th class="num">漲跌</th>' +
     _liveSortTh('漲跌幅', 'chg', true) +
     '<th class="num">現值</th>' +
