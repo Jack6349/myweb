@@ -100,11 +100,12 @@
   --ck-ivol: #6aa9e8;     /* 內外盤量 */
   --pv-rate: #7fb0ff;     /* 總現值走勢：資本報酬率 */
   --pv-cost: #ff7ab8;     /* 總現值走勢：原始成本階梯線 */
-  /* 管制圖專用色盤：藍＝連續上升達標、紅（--up）＝連續下降、黃＝未達標、
-     白（--text）＝買賣、青＝市場效應均線。這一套只在管制圖內有意義。 */
-  --spc-up: #4da3ff;
+  /* 管制圖兩套色彼此獨立，載體不同所以不會混：
+     〈線圖＝股市〉紅漲綠跌，跟全站慣例同一套，黃（--spc-na）＝未形成連續趨勢。
+     〈燈號＝安燈〉綠＝上升正常、紅＝下降警示、黃＝無連續，是趨勢訊號不是漲跌。
+     燈號綠與 --down 同色值但語意不同，名稱分開才改得動其中一邊。 */
   --spc-na: #e0b94a;
-  --spc-mma: #5ad2e8;
+  --andon-ok: #26d962;
 
   /* ── 下單介面 ──
      這一頁刻意比站內其他地方高對比（白底代碼、實心按鈕、彩色面板），
@@ -1590,8 +1591,10 @@ td.cost-even::after  { background: var(--text3); }
 .rf-amt.down { color: var(--down); }
 
 /* ── 總現值抽屜：管制圖頁籤 ── */
-/* 這一頁的配色只在這張圖內有意義：藍＝連續上升達標、紅＝連續下降達標、黃＝未達標準。
-   與走勢頁籤的紅綠（全站慣例）刻意不同，兩者不互相參照。 */
+/* 這一頁有兩套色，載體不同所以不會混：
+   線圖與所有金額＝紅漲綠跌（全站慣例），黃＝未形成連續趨勢；
+   圓點燈號＝安燈三色（綠正常、紅警示、黃空位），講的是趨勢訊號不是漲跌。
+   兩者由同一個連續段計算驅動，所以燈號與折線末段必然相反。 */
 .pv-tabs { float: right; display: inline-flex; gap: 4px; }
 .pv-tab { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
   font-family: var(--font); font-size: 12px; padding: 3px 12px; border-radius: 6px; cursor: pointer; }
@@ -1599,12 +1602,17 @@ td.cost-even::after  { background: var(--text3); }
 .pv-tab.on { border-color: var(--accent); color: var(--accent2); background: var(--bg2); }
 
 .pv-seg { stroke-width: 2; fill: none; }
-.pv-seg.up { stroke: var(--spc-up); }
-.pv-seg.dn { stroke: var(--up); }
+.pv-seg.up { stroke: var(--up); }
+.pv-seg.dn { stroke: var(--down); }
 .pv-seg.na { stroke: var(--spc-na); }
-.pv-c-up { color: var(--spc-up); }
-.pv-c-dn { color: var(--up); }
+.pv-c-up { color: var(--up); }
+.pv-c-dn { color: var(--down); }
 .pv-c-na { color: var(--spc-na); }
+/* 「較前日」是 <b>，會被 .chart-info b 的白吃掉（它比 .pv-c-up 多一個元素選擇器），
+   要同樣加上 .chart-info 才拿得回來。這是金額，跟全站一樣紅漲綠跌。 */
+.chart-info b.pv-c-up { color: var(--up); }
+.chart-info b.pv-c-dn { color: var(--down); }
+.chart-info b.pv-c-na { color: var(--spc-na); }
 
 /* 上下限是參考框架不是資料，用中性亮灰白：這張圖的藍紅黃紫都已有語意，
    青色色相太靠近上升段的藍，掃一眼會混。中線同色系暗一階，當從屬。 */
@@ -1621,18 +1629,23 @@ td.cost-even::after  { background: var(--text3); }
 .pv-lamps { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .pv-lamp { width: 11px; height: 11px; border-radius: 50%; display: inline-block;
   border: 1px solid rgba(0,0,0,.35); }
-.pv-lamp.up { background: var(--spc-up); }
+.pv-lamp.up { background: var(--andon-ok); }
 .pv-lamp.dn { background: var(--up); }
 .pv-lamp.na { background: var(--spc-na); opacity: .45; }
 .pv-lamptx { font-size: 12px; margin-left: 4px; }
+/* 燈號旁的文字跟燈號走，不跟折線：沒這三條會落到全站的 .up/.down，
+   變成「燈是綠的、字是紅的」 */
+.pv-lamptx.up { color: var(--andon-ok); }
+.pv-lamptx.dn { color: var(--up); }
+.pv-lamptx.na { color: var(--spc-na); }
 .set-sub { font-size: 13px; font-weight: 600; color: var(--text2); margin: 16px 0 2px;
   border-top: 1px solid var(--border); padding-top: 12px; }
-.pv-dot.up { fill: var(--spc-up); }
-.pv-dot.dn { fill: var(--up); }
+.pv-dot.up { fill: var(--up); }
+.pv-dot.dn { fill: var(--down); }
 .pv-dot.na { fill: var(--spc-na); }
 .pv-limtx.now { font-weight: 700; }
-.pv-limtx.now.up { fill: var(--spc-up); }
-.pv-limtx.now.dn { fill: var(--up); }
+.pv-limtx.now.up { fill: var(--up); }
+.pv-limtx.now.dn { fill: var(--down); }
 .pv-limtx.now.na { fill: var(--spc-na); }
 
 /* ── 股利估算：左側選單 ── */
@@ -1666,32 +1679,46 @@ td.cost-even::after  { background: var(--text3); }
   .dv-navitem.on { border-left: 0; border-bottom-color: var(--accent); }
 }
 /* 管制圖下方的逐日分解堆疊直條 */
-/* 買賣原本是 #8fa6c0，與市場的 var(--spc-up) 色相太近，堆在一起分不出段；改紫仍嫌暗。
+/* 買賣原本是 #8fa6c0，與市場的藍色相太近，堆在一起分不出段；改紫仍嫌暗。
    改用白：無彩色與藍紅黃的色相距離最遠，深底上最亮，小直條也看得見，
    語意上「不是市場造成的」用中性色也對。與目標上下限同色票，但那是上方窗格的
    細虛線、這是下方窗格的實心直條，窗格與形狀都不同，不會混。
    另加一條與底色同色的細描邊，相鄰的段落才看得出界線。 */
 .pv-bseg { stroke: var(--bg2); stroke-width: .6; }
-.pv-bseg.mkt-up { fill: var(--spc-up); }
-.pv-bseg.mkt-dn { fill: var(--up); }
+.pv-bseg.mkt-up { fill: var(--up); }
+.pv-bseg.mkt-dn { fill: var(--down); }
 .pv-bseg.trade  { fill: var(--text); }
 .pv-bseg.ex     { fill: var(--spc-na); }
 .pv-c-tr { color: var(--text); }
 .pv-lg2 { font-size: 12px; margin-right: 10px; }
 .pv-lg2::before { content: '▌ '; }
-.pv-lg2.mkt { color: var(--spc-up); }
-.pv-lg2.mktdn { color: var(--up); }
+.pv-lg2.mkt { color: var(--up); }
+.pv-lg2.mktdn { color: var(--down); }
 .pv-lg2 b { color: inherit; font-weight: 700; }
+/* 圖例的「市場」與「市場效應均」本身沒有正負，給兩個色塊表示它會隨正負換色 */
+/* class 不能叫 nb：note.js 把 .nb 當成說明區塊，會把圖例收進「說明」折疊裡 */
+.pv-lg2.duo { color: var(--text2); }
+.pv-lg2.duo::before { content: none; }
+.pv-sw { margin-right: 1px; }
+.pv-sw.up { color: var(--up); }
+.pv-sw.dn { color: var(--down); margin-right: 4px; }
 .pv-lg2.trade { color: var(--text); }
 .pv-lg2.ex { color: var(--spc-na); }
-/* 市場 N 日均：青色，與市場直條的藍、買賣的白、除息的黃都分得開 */
-.pv-mma { fill: none; stroke: var(--spc-mma); stroke-width: 2; stroke-linejoin: round; }
-.pv-lg2.mma { color: var(--spc-mma); }
+/* 均線在提示列裡會顯示當下的值，跟圖上同一套隨正負換色；資料不足時轉灰 */
 .pv-lg2.mma::before { content: '━ '; }
+.pv-lg2.mma.up { color: var(--up); }
+.pv-lg2.mma.dn { color: var(--down); }
+.pv-lg2.mma.na { color: var(--text3); }
+/* 市場 N 日均：跟總現值折線同一套紅漲綠跌，也同一個窗格，
+   所以改用虛線區分：實線是總現值本身，虛線是市場效應均。
+   顏色只負責講漲跌，誰是誰由線型講。 */
+.pv-mma { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-dasharray: 7 3; }
+.pv-mma.up { stroke: var(--up); }
+.pv-mma.dn { stroke: var(--down); }
 .pv-ax-rel { fill: var(--text2); }
-.pv-ax-mma { fill: var(--spc-mma); font-size: 11px; }
-/* 均線零線：就是右軸的 0，比一般格線亮一點好辨認 */
-.pv-mzero { stroke: var(--spc-mma); stroke-width: 1; stroke-dasharray: 3 4; opacity: .5; }
+.pv-ax-mma { fill: var(--text2); font-size: 11px; }
+/* 均線零線：就是右軸的 0。均線改紅綠後這條轉中性灰，不與資料投到同一個色相 */
+.pv-mzero { stroke: var(--text3); stroke-width: 1; stroke-dasharray: 3 4; opacity: .7; }
 
 /* ── 發放日曆（本月＋下月，上下排）── */
 .rf-cal-wrap { display: flex; flex-direction: column; gap: 16px; max-width: 760px; }

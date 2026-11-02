@@ -326,7 +326,8 @@ function pvBindHover(data) {
 // （設定 → 退休現金流），不是從資料算出來的 ±3σ。
 //
 // 配色與走勢頁籤刻意不同（這一頁屬管制圖性質，顏色只在這張圖內有意義）：
-//   藍＝連續上升達標、紅＝連續下降達標、黃＝未達標準。燈號同一套，黃當空位。
+//   折線：紅＝連續上升達標、綠＝連續下降達標、黃＝未達標準（紅漲綠跌，跟全站同一套）。
+//   燈號是另一套安燈語意：綠＝上升正常、紅＝下降警示、黃當空位，正好與折線相反。
 // 「連續 N 日」以「每日較前一日」計：N=5 就是連續 5 個交易日同方向（5 段、6 個點）。
 // 實測 90 個交易日內總現值沒有任何一天與前一日完全相同，所以持平不必特別處理。
 
@@ -492,14 +493,12 @@ function pvSpcSvg(data) {
   if (mvals.length > 1) {
     s += '<line class="pv-mzero" x1="' + PAD_L + '" y1="' + y(zeroV).toFixed(1) +
       '" x2="' + (W - PAD_R) + '" y2="' + y(zeroV).toFixed(1) + '"/>' +
-      '<polyline class="pv-mma" points="' + mvals.map(function (o) {
-        return x(o.i).toFixed(1) + ',' + y(zeroV + o.v).toFixed(1);
-      }).join(' ') + '"/>' +
+      _pvMmaPath(mvals, x, y, zeroV) +
       '<text class="ck-axis pv-ax-mma" x="' + GUT_IN + '" y="' + (y(zeroV) + 3.5).toFixed(1) +
       '" text-anchor="start">市場效應 ' + cfg.n + ' 日均</text>';
   }
 
-  // 折線逐段著色：達標的連續段藍（上升）／紅（下降），其餘黃
+  // 折線逐段著色：達標的連續段紅（上升）／綠（下降），其餘黃
   var state = _pvRuns(vals, cfg.n);
   for (var i = 1; i < n; i++) {
     s += '<line class="pv-seg ' + state[i - 1] + '" x1="' + x(i - 1).toFixed(1) + '" y1="' + y(vals[i - 1]).toFixed(1) +
@@ -528,7 +527,7 @@ function pvSpcSvg(data) {
 
   // ── 逐日分解（堆疊直條）──
   // 當日變動 ＝ 市場效應 ＋ 買賣淨額 － 除息。三段相加等於上方折線的日變動。
-  // 顏色沿用這張圖的配色：市場正藍負紅、買賣灰（中性，不是賺賠）、除息黃（不是市場造成的）。
+  // 顏色：市場正紅負綠（跟全站同一套）、買賣白（中性，正號是資金搬進來不是賺）、除息黃（不是市場造成的）。
   var bTopY = PAD_T + PH + GAP, bBotY = bTopY + BAR_H;
   var span = 1;
   comp.forEach(function (o) {
@@ -565,16 +564,37 @@ function pvSpcSvg(data) {
   var head = '<div class="chart-info"><span id="pvs-tip">' +
     n + ' 日　' + _pvLampsHtml(vals, cfg.n) +
     '　區間內 <b>' + inBand + '</b>/' + n + ' 日（' + (inBand / n * 100).toFixed(0) + '%）' +
-    '　<span class="pv-lg2 mkt">市場</span><span class="pv-lg2 trade">買賣</span><span class="pv-lg2 ex">除息</span>' +
-    '<span class="pv-lg2 mma">市場效應 ' + cfg.n + ' 日均</span>' +
+    '　<span class="pv-lg2 duo"><span class="pv-sw up">▌</span><span class="pv-sw dn">▌</span>市場</span>' +
+    '<span class="pv-lg2 trade">買賣</span><span class="pv-lg2 ex">除息</span>' +
+    '<span class="pv-lg2 duo"><span class="pv-sw up">━</span><span class="pv-sw dn">━</span>市場效應 ' + cfg.n + ' 日均</span>' +
     '</span></div>';
   return head + s;
+}
+
+// 均線跟着零線切色：零線之上紅、之下綠，跨零的那一段在交點精確切開。
+// 整條一色會讓「現在是正是負」讀不出來，與下方直條的讀法也對不起來。
+function _pvMmaPath(mvals, x, y, zeroV) {
+  var up = '', dn = '', yz = y(zeroV);
+  var seg = function (x1, y1, x2, y2, red) {
+    var d = 'M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + 'L' + x2.toFixed(1) + ' ' + y2.toFixed(1);
+    if (red) up += d; else dn += d;
+  };
+  for (var i = 0; i < mvals.length - 1; i++) {
+    var a = mvals[i], b = mvals[i + 1];
+    var ax = x(a.i), ay = y(zeroV + a.v), bx = x(b.i), by = y(zeroV + b.v);
+    if ((a.v >= 0) === (b.v >= 0)) { seg(ax, ay, bx, by, a.v >= 0); continue; }
+    var cx = ax + (bx - ax) * (0 - a.v) / (b.v - a.v);
+    seg(ax, ay, cx, yz, a.v >= 0);
+    seg(cx, yz, bx, by, b.v >= 0);
+  }
+  return (dn ? '<path class="pv-mma dn" d="' + dn + '"/>' : '') +
+         (up ? '<path class="pv-mma up" d="' + up + '"/>' : '');
 }
 
 // 第 k 天往前 n 天的市場效應平均（含當天）。資料不足回「—」。
 // 與繪圖那一段同一套定義：市場 ＝ 當日變動 － 買賣淨額 ＋ 除息。
 function _pvMktMa(rows, k, n, tax) {
-  if (k < n) return '—';
+  if (k < n) return null;
   var acc = 0;
   for (var i = 0; i < n; i++) {
     var j = k - i;
@@ -582,8 +602,7 @@ function _pvMktMa(rows, k, n, tax) {
     acc += dv - (Math.round((rows[j].b || 0) * tax) - Math.round((rows[j].s || 0) * tax)) +
       Math.round((rows[j].x || 0) * tax);
   }
-  var v = Math.round(acc / n);
-  return (v > 0 ? '+' : (v === 0 ? '' : '')) + v.toLocaleString('zh-TW');
+  return Math.round(acc / n);
 }
 
 function pvBindSpcHover(data) {
@@ -624,7 +643,11 @@ function pvBindSpcHover(data) {
         seg(mkt >= 0 ? 'mkt' : 'mktdn', '市場', sgn(mkt)) +
         seg('trade', '買賣', sgn(trade)) +
         seg('ex', '除息', ex ? '-' + ex.toLocaleString('zh-TW') : '0') +
-        seg('mma', '市場效應 ' + cfg.n + ' 日均', _pvMktMa(rows, k, cfg.n, tax)));
+        (function () {
+          var mv = _pvMktMa(rows, k, cfg.n, tax);
+          return seg('mma ' + (mv == null ? 'na' : (mv >= 0 ? 'up' : 'dn')),
+            '市場效應 ' + cfg.n + ' 日均', mv == null ? '—' : sgn(mv));
+        })());
   });
   hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
 }
@@ -646,7 +669,7 @@ function pvClose() { _pvOpen = false; pvRender(); if (typeof renderTopbarTotals 
 function pvReload() { _pvData = null; try { localStorage.removeItem(PV_LS); } catch (e) {} pvRender(); pvEnsure(true).then(pvRender); }
 
 // 抽屜兩個頁籤共用同一份 90 日序列，切換不重抓。
-// 走勢＝紅綠（全站慣例）；管制圖＝藍紅黃（只在那張圖內有意義），兩套刻意不同。
+// 兩個頁籤的金額都是紅漲綠跌；管制圖的燈號是另一套安燈（綠正常紅警示），載體不同不混。
 var _pvTab = 'trend';
 function pvTab(t) { _pvTab = t; pvRender(); }
 // 登入後 retire.js 會把設定標記為待重讀，管制圖開著時要跟著重畫，否則停在未登入時的值
@@ -686,16 +709,21 @@ function pvRender() {
     ? '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日的總現值，用來看資產波動。' +
       '<b>目標上限／下限</b>是你自己設的資產水位（設定 → 退休現金流），不是從資料算出來的統計界線；' +
       '<b>中線</b>是上下限的中點，<b>90 日平均</b>是這段期間的實際平均，兩條不是同一回事。' +
-      '折線逐段著色：<span class="pv-c-up">藍＝連續上升達標</span>、' +
-      '<span class="pv-c-dn">紅＝連續下降達標</span>、<span class="pv-c-na">黃＝未達設定天數</span>；' +
-      '上方燈號亮幾格就是目前連續幾日，黃格是還沒走到的格數。連續天數以「每日較前一日」計。' +
+      '折線逐段著色：<span class="pv-c-up">紅＝連續上升達標</span>、' +
+      '<span class="pv-c-dn">綠＝連續下降達標</span>、<span class="pv-c-na">黃＝未達設定天數</span>，與全站的紅漲綠跌同一套。' +
+      '<b>上方燈號是另一套語意</b>：它是安燈不是漲跌，' +
+      '<span class="pv-lamptx up">綠＝上升正常</span>、<span class="pv-lamptx dn">紅＝下降警示</span>、' +
+      '<span class="pv-lamptx na">黃＝還沒走到的格數</span>，所以燈號與折線末段的顏色永遠相反。' +
+      '亮幾格就是目前連續幾日。連續天數以「每日較前一日」計。' +
       '線尾的「目前」是這張圖建立當下的分 K 收盤，與頂欄的即時報價取樣時點不同，' +
       '盤中會有小幅落差（實測 11,262 元，0.065%），按 ↻ 重新計算即對齊。' +
       '下方堆疊直條把當日變動拆開：<code>當日變動 ＝ 市場效應 ＋ 買賣淨額 － 除息</code>，' +
-      '三段相加等於上方折線的日變動。<span class="pv-c-up">市場正藍</span>／<span class="pv-c-dn">負紅</span>、' +
-      '<span class="pv-c-tr">買賣灰</span>（中性，不是賺賠）、<span class="pv-c-na">除息黃</span>（不是市場造成的）。' +
-      '近 90 天有 43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續紅段要先看直條是不是自己的動作造成的。' +
-      '青色那條是<b>市場效應 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向。' +
+      '三段相加等於上方折線的日變動。<span class="pv-c-up">市場正紅</span>／<span class="pv-c-dn">負綠</span>、' +
+      '<span class="pv-c-tr">買賣白</span>（中性：正號是資金搬進部位，不是賺）、<span class="pv-c-na">除息黃</span>（恒為負，不是市場造成的）。' +
+      '近 90 天有 43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續綠段要先看直條是不是自己的動作造成的。' +
+      '橫跨整張圖的那條線是<b>市場效應 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向。' +
+      '它跟全站同一套色，零線之上紅、之下綠；它與總現值折線在同一個窗格、又同一套顏色，' +
+      '所以用線型分：<b>實線是總現值、虛線是均線</b>。' +
       '它與總現值同一個窗格、同一套刻度，零線就是右軸的 0（左軸在同一列標的就是基準金額），' +
       '所以右軸同時是「總現值比零線高多少」與「均線的值」。' +
       '它平均的是<b>每日市場效應</b>，與那條「90 日平均」不同：後者是總現值本身的平均，兩者不要混。' +
