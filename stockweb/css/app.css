@@ -301,6 +301,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .btn-sort:hover { color: var(--text); border-color: var(--text3); }
 .btn-sort.active { border-color: var(--accent); color: var(--accent2); background: rgba(240,204,122,.1); }
 /* 兩欄中間分隔線：以 grid 間距搭配左欄右框線呈現 */
+/* 最後買入：(買進日) 買價 — 日期灰色退一階，買價用壓暗的金黃，和成本均價區隔 */
+.live-table .lb-cell { white-space: nowrap; }
+.lb-date { color: var(--text3); font-size: 11.5px; margin-right: 5px; }
+.lb-px { color: var(--accent); }
+
 /* 單欄表格，最右邊一欄是每檔當日分時走勢小圖 */
 .live-cols { display: block; }
 .live-table th.lc-cell { text-align: center; }
