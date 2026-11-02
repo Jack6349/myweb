@@ -301,28 +301,16 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .btn-sort:hover { color: var(--text); border-color: var(--text3); }
 .btn-sort.active { border-color: var(--accent); color: var(--accent2); background: rgba(240,204,122,.1); }
 /* 兩欄中間分隔線：以 grid 間距搭配左欄右框線呈現 */
-/* 單欄表格 ＋ 右側跟隨選取列的當日分時走勢；表格佔自然寬，圖吃剩下的空間 */
-.live-cols { display: grid; grid-template-columns: max-content minmax(320px, 1fr); gap: 0 0; align-items: start; }
-.live-col { padding-right: 18px; border-right: 1px solid var(--border); }
-.live-chart { padding-left: 18px; position: sticky; top: var(--h-chrome); }
-.live-chart .detail-note { margin-top: 6px; }
-.lc-empty { color: var(--text3); font-size: 13px; padding: 20px 0; }
-.lc-head { font-size: 13px; color: var(--text2); margin-bottom: 6px; min-height: 20px;
-  font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.lc-head b { color: var(--text); font-weight: 700; font-size: 15px; }
-.lc-code { color: var(--text); font-weight: 700; }
-.lc-name { color: var(--text2); }
-.lc-day { color: var(--text3); margin-left: auto; }
-/* 選取列：左緣一道色條，不用整列底色，免得和停損停利的反紅反綠打架 */
-.live-table tbody tr { cursor: pointer; }
-.live-table tbody tr:hover td { background: rgba(255,255,255,.04); }
-.live-table tbody tr.lc-on td { background: rgba(120,170,255,.10); }
-.live-table tbody tr.lc-on td:first-child { box-shadow: inset 3px 0 0 var(--accent2); }
-@media (max-width: 1100px) {
-  .live-cols { grid-template-columns: 1fr; }
-  .live-col { border-right: none; padding-right: 0; }
-  .live-chart { padding-left: 0; position: static; margin-top: 14px; }
-}
+/* 單欄表格，最右邊一欄是每檔當日分時走勢小圖 */
+.live-cols { display: block; }
+.live-table th.lc-cell { text-align: center; }
+.live-table td.lc-cell { width: 300px; padding: 3px 8px !important; }
+.lc-mini { width: 300px; height: 50px; }
+.lc-mini .lc-svg { width: 100%; height: 100%; display: block; }
+/* preserveAspectRatio="none" 會把線寬一起拉伸，用 non-scaling-stroke 讓線維持原粗細 */
+.lc-mini .lc-ln { vector-effect: non-scaling-stroke; }
+.lc-mini .ck-ref { vector-effect: non-scaling-stroke; }
+.lc-msg { color: var(--text3); font-size: 11.5px; display: flex; align-items: center; }
 .live-table th { top: 0; } /* 無外層捲動容器限制，仍貼齊各自表格頂 */
 .live-table td, .live-table th { padding: 7px 8px; }
 /* 注意股圓形標記：每檔固定識別色（紅→紫），On 亮/Off 暗 */
