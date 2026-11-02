@@ -1,5 +1,6 @@
 // 股利總管 Web — 即時持股（單欄精簡表＋每列當日分時走勢小圖，盤中逐筆即時更新）
-// 欄位：代號｜餘額(股)｜成本均價｜現價｜漲跌幅｜現值｜含息損益｜含息獲利率（無明細鈕、無名稱）
+// 欄位：代號｜餘額(股)｜成本均價｜最後買入｜現價｜漲跌幅｜現值｜含息損益｜含息獲利率｜走勢
+// （無明細鈕、無名稱）
 // 成本一律用原始成本（券商的成本已扣掉累積配息），與持股庫存同一套；
 // 顯示的損益與獲利率都含息，與停損停利的觸發基準一致
 // 版面：單欄列完所有持股（原本左右各半，欄位找起來要兩邊掃），
@@ -65,6 +66,28 @@ function liveCalc(p) {
            avg: shares ? cost / shares : p.price, alert: alert };
 }
 
+// 最後買入：建倉明細（_lotsMap，載入庫存時已抓，不另外呼叫 API）日期最大的那一批。
+// 同一天分多筆成交就加總後取加權平均。買價＝原始成本 ÷ 股數，與建倉明細彈窗同一套
+// （券商記的成本已扣掉該筆累積配息，price>0 的筆要加回）。
+function _liveLastBuy(code) {
+  var lots = (typeof _lotsMap !== 'undefined' && _lotsMap[String(code)]) || null;
+  if (!lots || !lots.length) return null;
+  var day = lots[lots.length - 1].date, cost = 0, sh = 0;
+  lots.forEach(function (l) {
+    if (l.date !== day) return;
+    cost += l.cost + (l.sub ? (l.div || 0) : 0);
+    sh += l.shares;
+  });
+  return { date: day, px: sh ? cost / sh : null };
+}
+// 日期一律 YY/MM/DD：只給 MM/DD 的話，跨年度的批次分不出是哪一年
+function _liveBuyCell(code) {
+  var b = _liveLastBuy(code);
+  if (!b || b.px == null) return '<td class="num lb-cell"><span class="flat">—</span></td>';
+  return '<td class="num lb-cell"><span class="lb-date">(' + b.date.slice(2).replace(/-/g, '/') + ')</span>' +
+    '<span class="lb-px">' + b.px.toFixed(2) + '</span></td>';
+}
+
 function liveRowHtml(p) {
   var v = liveCalc(p);
   var pcls = v.profit == null ? 'flat' : colorClass(v.profit);
@@ -76,6 +99,7 @@ function liveRowHtml(p) {
     '<td class="inv-code' + (typeof limitState === 'function' && limitState(v.code, v.price) ? ' lim-' + limitState(v.code, v.price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + v.code + '\')">' + v.code + '</span></td>' +
     '<td class="num">' + (p.quantity != null ? Math.round(p.quantity).toLocaleString('zh-TW') : '—') + '</td>' +
     costCellHtml(v.avg, v.price) +
+    _liveBuyCell(v.code) +
     '<td class="num ' + ccls + '">' + (v.price != null ? v.price.toFixed(2) : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (v.chgAmt == null ? '—' : fmtChg(v.chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (v.chg == null ? '—' : fmtPct(v.chg)) + '</td>' +
@@ -111,7 +135,9 @@ function _liveSortTh(label, key, numCls) {
 function liveHead() {
   return '<thead><tr><th class="live-dot-cell"></th>' +
     _liveSortTh('代號', 'code') +
-    '<th class="num">餘額</th><th class="num">成本均價</th><th class="num">現價</th>' +
+    '<th class="num">餘額</th><th class="num">成本均價</th>' +
+    '<th class="num lb-cell" title="建倉明細裡日期最新的那一批：(買進日) 每股買價">最後買入</th>' +
+    '<th class="num">現價</th>' +
     '<th class="num">漲跌</th>' +
     _liveSortTh('漲跌幅', 'chg', true) +
     '<th class="num">現值</th>' +
