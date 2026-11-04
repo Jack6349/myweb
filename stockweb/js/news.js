@@ -460,6 +460,14 @@ function _agoTxt(ms) {
   return Math.floor(h / 24) + ' 天前';
 }
 
+// 每格的資料時間小字。這裡標的是「資料本身的時刻」（交易所成交時間、銀行掛牌時間），
+// 不是我們打 API 的時刻 —— 美股收盤後兩者會差好幾個小時，混在一起標會讓人
+// 以為收盤價是即時價。抓取時刻另外標在盤勢標頭。
+function _macroAtHtml(ms, lab) {
+  if (!ms) return '';
+  return '<span class="macro-at">' + (lab || '') + _asOfTxt(ms) + '</span>';
+}
+
 // 單格 HTML：新聞情勢頁的盤勢列與頂欄抽屜共用，避免兩邊各寫一份而漂走。
 function _macroCellHtml(m) {
   {
@@ -489,7 +497,8 @@ function _macroCellHtml(m) {
     }
     return '<div class="macro-cell' + (m.alert ? ' macro-hit' : '') + '"' +
       (tip ? ' title="' + tip.replace(/"/g, '&quot;') + '"' : '') +
-      '>' + icon + '<span class="macro-name">' + m.name + tag + '</span>' +
+      '>' + icon + '<span class="macro-nm"><span class="macro-name">' + m.name + tag + '</span>' +
+      _macroAtHtml(m.asOf) + '</span>' +
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
       '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + cumTxt + '</span></div>';
   }
@@ -500,11 +509,12 @@ function _macroCellHtml(m) {
 function _esunJpyCellHtml() {
   if (!(_esun && _esun.rates && _esun.rates['日圓'])) return '';
   var jp = _esun.rates['日圓'];
-  var at = _esun.at ? _esun.at.slice(5, 16).replace('T', ' ') : '—';
+  var at = _esun.at ? _esun.at.slice(5, 16).replace('T', ' ').replace('-', '/') : '—';   // 與其他格的 11/04 同格式
   return '<div class="macro-cell macro-fx" title="玉山銀行 網銀/App優惠 銀行賣出＝線上換匯時你買日圓要付的台幣。' +
     '　掛牌時間 ' + at + '　同時間即期賣出 ' + (jp.spotSell != null ? jp.spotSell.toFixed(4) : '—') + '">' +
-    '<span class="macro-name">日圓網銀優惠<span class="macro-dim"> 玉山</span>' +
+    '<span class="macro-nm"><span class="macro-name">日圓網銀優惠<span class="macro-dim"> 玉山</span>' +
     '<button class="fx-reload" onclick="event.stopPropagation();esunReload(this)" title="重新抓牌告">↻</button></span>' +
+    '<span class="macro-at">掛牌 ' + at + '</span></span>' +
     '<span class="macro-fx-pair"><span class="fx-lb">賣出</span><span class="fx-v">' +
     (jp.prefSell != null ? jp.prefSell.toFixed(4) : '—') + '</span></span></div>';
 }
@@ -571,7 +581,8 @@ async function esunReload(btn) {
 // 台指夜盤單格（不在 MACRO_TICKERS 裡，另外抓）
 function _nightFutCellHtml() {
   if (!_nightFut) return '';
-  return '<div class="macro-cell"><span class="macro-name">台指夜盤 ' + (_nightFut.time || '') + '</span>' +
+  return '<div class="macro-cell"><span class="macro-nm"><span class="macro-name">台指夜盤</span>' +
+    (_nightFut.time ? '<span class="macro-at">成交 ' + _nightFut.time + '</span>' : '') + '</span>' +
     '<span class="macro-price">' + _fmtNum(_nightFut.price, 0) + '</span>' +
     '<span class="macro-chg ' + _chgCls(_nightFut.changePct) + '">' + (_chgTxt(_nightFut.changePct) || '—') + '</span></div>';
 }
@@ -583,6 +594,27 @@ function macroDrawerHtml() {
   if (!_macroSnap.length) return '<div class="macro-cell"><span class="macro-name">載入中…</span></div>';
   return _macroSnap.filter(function (m) { return MACRO_DRAWER_SKIP.indexOf(m.sym) < 0; })
     .map(_macroCellHtml).join('') + _esunJpyCellHtml() + _nightFutCellHtml();
+}
+
+// 抓取時刻 ＋ 手動重抓。跟格子裡的資料時間分開標：
+// 這個是「我這邊打 API 的時刻」，格子裡那個是「資料本身的時刻」。
+function macroFetchHtml() {
+  if (!_macroAt) return '';
+  return '<span class="macro-fetch">抓取 ' + _asOfTxt(_macroAt) + '　<b>' + _agoTxt(_macroAt) + '</b>' +
+    '<button class="fx-reload" onclick="event.stopPropagation();macroReload(this)" ' +
+    'title="略過 10 分鐘快取，整批重新抓取">↻</button></span>';
+}
+// 整批重抓：繞過 10 分鐘快取。玉山牌告也一起強制重抓，
+// 否則按了「重新抓取」牌告卻還是快取裡那份，跟按鈕的字對不上。
+async function macroReload(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await ensureMacro(true);
+    await loadEsunFx(true);
+    _macroCacheWrite();
+  } catch (e) { console.warn('[盤勢]', e); }
+  renderMacroBar();
+  if (typeof renderDrawerMacro === 'function') renderDrawerMacro();
 }
 
 function renderMacroBar() {
@@ -597,29 +629,19 @@ function renderMacroBar() {
     cells.push('<div class="macro-cell macro-fx" title="玉山銀行牌告即期匯率　掛牌時間 ' +
       (_esun.at ? _esun.at.slice(5, 16).replace('T', ' ') : '—') +
       '　銀行買入＝你賣日圓可換得的台幣；銀行賣出＝你買日圓要付的台幣">' +
-      '<span class="macro-name">日圓即期<span class="macro-dim"> 玉山</span></span>' +
+      '<span class="macro-nm"><span class="macro-name">日圓即期<span class="macro-dim"> 玉山</span></span>' +
+      '<span class="macro-at">掛牌 ' + (_esun.at ? _esun.at.slice(5, 16).replace('T', ' ').replace('-', '/') : '—') + '</span></span>' +
       '<span class="macro-fx-pair"><span class="fx-lb">買入</span><span class="fx-v">' +
       (jp2.spotBuy != null ? jp2.spotBuy.toFixed(4) : '—') + '</span>' +
       '<span class="fx-lb">賣出</span><span class="fx-v">' +
       (jp2.spotSell != null ? jp2.spotSell.toFixed(4) : '—') + '</span></span></div>');
   }
   if (_nightFut) cells.push(_nightFutCellHtml());
-  // 整列標報價時間「範圍」而非只標最新：匯率 24 小時交易可能是 1 分鐘前，
-  // 美股收盤後的指數卻是數小時前的收盤價，只寫最新會讓人誤以為全部都是即時。
-  var newest = 0, oldest = Infinity;
-  _macroSnap.forEach(function (m) {
-    if (!m.asOf) return;
-    if (m.asOf > newest) newest = m.asOf;
-    if (m.asOf < oldest) oldest = m.asOf;
-  });
+  // 每格都標了自己的資料時間，這一行不再重述報價時間範圍，只標抓取時刻與重抓入口。
   var head = '';
-  if (newest) {
-    var same = (newest - oldest) < 120000;   // 相差 2 分鐘內視為同一時點
-    head = '<div class="macro-asof">報價時間 ' +
-      (same ? _asOfTxt(newest) + '（台北）　<b>' + _agoTxt(newest) + '</b>'
-            : _asOfTxt(oldest) + ' ～ ' + _asOfTxt(newest) + '（台北）　最舊 <b>' + _agoTxt(oldest) +
-              '</b>、最新 <b>' + _agoTxt(newest) + '</b>') +
-      '　<span class="macro-dim">美股收盤後為收盤價；滑鼠移到單項可看該項時間</span></div>';
+  if (_macroAt) {
+    head = '<div class="macro-asof">' + macroFetchHtml() +
+      '　<span class="macro-dim">各格第二行為該項資料時間（台北）；美股收盤後為收盤價</span></div>';
   }
   // 警示說明：亮燈了才寫，平常不佔版面
   var hits = _macroSnap.filter(function (m) { return m.alert; });

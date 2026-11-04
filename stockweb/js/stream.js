@@ -701,6 +701,8 @@ function toggleDrawer() {
 function renderDrawerMacro() {
   var m = document.getElementById('dw-macro');
   if (m && typeof macroDrawerHtml === 'function') m.innerHTML = macroDrawerHtml();
+  var a = document.getElementById('dw-macro-at');
+  if (a && typeof macroFetchHtml === 'function') a.innerHTML = macroFetchHtml();
 }
 function renderDrawer() {
   var d = document.getElementById('dw');
@@ -711,7 +713,9 @@ function renderDrawer() {
   var cvar = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
   // 盤勢放最上面：抽屜一展開先看到市場，再往下才是自己的部位與配置
   var h = '<button class="dw-close" onclick="toggleDrawer()" title="收起">✕</button>';
-  h += '<div class="dw-sec">盤勢</div><div id="dw-macro" class="macro-row">' +
+  h += '<div class="dw-sec">盤勢<span id="dw-macro-at">' +
+    (typeof macroFetchHtml === 'function' ? macroFetchHtml() : '') +
+    '</span></div><div id="dw-macro" class="macro-row">' +
     (typeof macroDrawerHtml === 'function' ? macroDrawerHtml() : '') + '</div>';
   h += '<div class="dw-sec">部位</div><div class="dw-row">' +
     sumPair('資本損益(不含配息)', t.profit == null ? '—'
