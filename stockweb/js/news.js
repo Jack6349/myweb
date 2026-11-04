@@ -512,11 +512,15 @@ function _macroSparkHtml(m) {
     (pct == null ? '' : '　至今 ' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%') +
     '　（此處比的是一個月前，與右邊的當日漲跌不同基準）';
   // hover 用的點位。寫在 data 屬性上，滑鼠移上來直接讀，不必每次重繪都重算。
-  // 格式：日期|收盤|x|y，以 ; 分隔；最後一點若是現價，日期寫成空字串。
+  // 格式：日期|收盤|x|y|相對基準%，以 ; 分隔；最後一點若是現價，日期寫成空字串。
+  // 百分比在這裡就算好，hover 時只讀不算。比的是基準線（區間起點），
+  // 與線色同一個基準，所以紅線上的點必是正數，不會自相矛盾。
   var pts = [];
   for (var j = 0; j < n; j++) {
+    var dp = ref ? (cs[j] - ref) / ref * 100 : null;
     pts.push((j === liveK ? '' : ds[j].slice(5).replace('-', '/')) + '|' +
-      _fmtNum(cs[j], m.fmt) + '|' + x(j).toFixed(1) + '|' + y(cs[j]).toFixed(1));
+      _fmtNum(cs[j], m.fmt) + '|' + x(j).toFixed(1) + '|' + y(cs[j]).toFixed(1) + '|' +
+      (dp == null ? '' : (dp > 0 ? '+' : '') + dp.toFixed(2)));
   }
   return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '"' +
     ' data-pts="' + pts.join(';') + '">' +
@@ -568,7 +572,10 @@ document.addEventListener('mousemove', function (ev) {
   if (cross) { cross.setAttribute('x1', f[2]); cross.setAttribute('x2', f[2]); cross.style.display = ''; }
   if (dot) { dot.setAttribute('cx', f[2]); dot.setAttribute('cy', f[3]); dot.style.display = ''; }
   var t = _mspkTip();
-  t.innerHTML = '<b>' + (f[0] || '現價') + '</b>　' + f[1];
+  t.innerHTML = '<b>' + (f[0] || '現價') + '</b>　' + f[1] +
+    (f[4] === '' || f[4] == null ? ''
+      : '　<span class="' + (parseFloat(f[4]) > 0 ? 'up' : (parseFloat(f[4]) < 0 ? 'down' : 'flat')) +
+        '">' + f[4] + '%</span>');
   t.style.display = '';
   // 預設貼在圖的上緣，貼到視窗邊界就往內收
   var tw = t.offsetWidth, th = t.offsetHeight;
