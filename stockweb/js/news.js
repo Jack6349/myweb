@@ -468,6 +468,55 @@ function _macroAtHtml(ms, lab) {
   return '<span class="macro-at">' + (lab || '') + _asOfTxt(ms) + '</span>';
 }
 
+// ── 每格的近一個月走勢小圖 ──
+// 資料用本來就抓回來的日K（range=1mo，原本是給警示算累計用的），不另外打請求。
+// 基準線取區間第一根收盤：這張圖回答「現在相對一個月前」。右邊的百分比回答的是
+// 「今天相對昨天」，兩者問的不是同一件事，所以同一格的線色與百分比可能相反。
+// 畫法與即時持股的分時小圖同一套：基準線以上紅、以下綠，跨線處在交點切開。
+var MSPK_W = 100, MSPK_H = 26;
+function _macroSparkHtml(m) {
+  var b = m.bars;
+  if (!b || b.length < 3) return '';
+  var cs = b.map(function (r) { return r.c; });
+  // 端點換成最新報價，圖的尾巴才跟格子裡的數字是同一個價
+  if (m.price != null && m.asOf) {
+    var d = new Date(m.asOf).toISOString().slice(0, 10);
+    if (d === b[b.length - 1].d) cs[cs.length - 1] = m.price; else cs.push(m.price);
+  }
+  var n = cs.length, ref = cs[0];
+  var hi = Math.max.apply(null, cs), lo = Math.min.apply(null, cs);
+  var pad = (hi - lo) * 0.08 || Math.abs(ref) * 0.01 || 1;
+  hi += pad; lo -= pad;
+  var x = function (k) { return k / (n - 1) * MSPK_W; };
+  var y = function (p) { return (hi - p) * MSPK_H / (hi - lo); };
+  var yRef = y(ref), upLn = '', dnLn = '', upFl = '', dnFl = '';
+  var seg = function (xa, ya, xb, yb, red) {
+    var ln = 'M' + xa.toFixed(1) + ' ' + ya.toFixed(1) + 'L' + xb.toFixed(1) + ' ' + yb.toFixed(1);
+    var fl = ln + 'L' + xb.toFixed(1) + ' ' + yRef.toFixed(1) + 'L' + xa.toFixed(1) + ' ' + yRef.toFixed(1) + 'Z';
+    if (red) { upLn += ln; upFl += fl; } else { dnLn += ln; dnFl += fl; }
+  };
+  for (var k = 0; k < n - 1; k++) {
+    var ca = cs[k], cb = cs[k + 1], xa = x(k), xb = x(k + 1);
+    if ((ca >= ref) === (cb >= ref)) { seg(xa, y(ca), xb, y(cb), ca >= ref); continue; }
+    var xc = xa + (xb - xa) * (ref - ca) / (cb - ca);
+    seg(xa, y(ca), xc, yRef, ca >= ref);
+    seg(xc, yRef, xb, y(cb), cb >= ref);
+  }
+  var last = cs[n - 1];
+  var pct = ref ? (last - ref) / ref * 100 : null;
+  var tip = '近 ' + n + ' 個交易日收盤走勢　基準線＝區間起點 ' + _fmtNum(ref, m.fmt) +
+    (pct == null ? '' : '　至今 ' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%') +
+    '　（此處比的是一個月前，與右邊的當日漲跌不同基準）';
+  return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '">' +
+    '<svg viewBox="0 0 ' + MSPK_W + ' ' + MSPK_H + '" preserveAspectRatio="none">' +
+    (dnFl ? '<path class="ck-fill dn" d="' + dnFl + '"/>' : '') +
+    (upFl ? '<path class="ck-fill up" d="' + upFl + '"/>' : '') +
+    '<line class="ck-ref lc-ln" x1="0" y1="' + yRef.toFixed(1) + '" x2="' + MSPK_W + '" y2="' + yRef.toFixed(1) + '"/>' +
+    (dnLn ? '<path class="ck-iline dn lc-ln" d="' + dnLn + '"/>' : '') +
+    (upLn ? '<path class="ck-iline up lc-ln" d="' + upLn + '"/>' : '') +
+    '</svg></span>';
+}
+
 // 單格 HTML：新聞情勢頁的盤勢列與頂欄抽屜共用，避免兩邊各寫一份而漂走。
 function _macroCellHtml(m) {
   {
@@ -500,7 +549,8 @@ function _macroCellHtml(m) {
       '>' + icon + '<span class="macro-nm"><span class="macro-name">' + m.name + tag + '</span>' +
       _macroAtHtml(m.asOf) + '</span>' +
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
-      '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + cumTxt + '</span></div>';
+      '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + cumTxt + '</span>' +
+      _macroSparkHtml(m) + '</div>';
   }
 }
 
