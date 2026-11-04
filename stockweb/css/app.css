@@ -446,6 +446,16 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .macro-cell.macro-hit { border-color: var(--accent2); }
 .macro-cell.macro-hit:has(.macro-warn.alarm) { border-color: var(--up); }
 .detail-note .macro-dim { display: block; font-size: 11px; margin-top: 2px; }
+/* 名稱與資料時間疊成兩行。時間是這格資料本身的時刻（報價／掛牌／成交），
+   跟標頭的抓取時刻是兩回事，所以不放同一處。 */
+.macro-nm { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.macro-nm .macro-name { flex: none; }
+.macro-at { font-size: 10px; color: var(--text3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* 盤勢標頭的抓取時刻與重抓鈕 */
+.macro-fetch { font-size: 11px; font-weight: 400; color: var(--text2); white-space: nowrap; }
+.macro-fetch b { color: var(--accent2); font-weight: 700; }
+.macro-fetch .fx-reload { margin-left: 4px; font-size: 12px; }
+.dw-sec .macro-fetch { margin-left: 10px; }
 .macro-name { font-size: 12px; color: var(--text2); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .macro-price { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .macro-chg { font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
