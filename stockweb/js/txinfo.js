@@ -202,7 +202,8 @@ async function loadOrderBox() {
             : '') + tif + '</td>' +
         '<td class="num tx-px" data-code="' + code + '">' + _txPxHtml(code) + '</td>' +
         '<td class="num"' + (dealTitle ? ' title="' + dealTitle + '"' : '') + '>' +
-          (dq ? dq + unit + '<span class="tx-gap"></span>' + avg.toFixed(2) + (deals.length > 1 ? ' ×' + deals.length : '') +
+          (dq ? '<span class="tx-deal">' + dq + unit + '<span class="tx-gap"></span>' + avg.toFixed(2) + '</span>' +
+            (deals.length > 1 ? ' ×' + deals.length : '') +
             '<span class="tx-dd" data-code="' + code + '" data-avg="' + avg + '">' + _txDiffHtml(code, avg) + '</span>' : '—') + '</td>' +
         '<td class="num tx-pnl"' + (dq ? ' data-code="' + code + '" data-avg="' + avg + '" data-sh="' + (dq * mult) + '" data-side="' + (buy ? 'B' : 'S') + '"' : '') + '>' +
           (dq ? _txPnlHtml(code, avg, dq * mult, buy) : '<span class="swap-dim">—</span>') + '</td>' +
