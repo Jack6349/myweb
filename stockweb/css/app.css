@@ -1259,7 +1259,11 @@ td.cost-even::after  { background: var(--text3); }
 .tx-dd .tx-flat { color: var(--accent2); }
 .tx-pnl .tx-flat { color: var(--accent2); }
 #tx-pnl-sum .tx-flat { color: var(--accent2); }
-.tx-gap { display: inline-block; width: 10px; }   /* 委託／成交欄：數量與價格之間的間距（取代 @） */
+.tx-gap { display: inline-block; width: 10px; }   /* 成交欄的「幾張 多少錢」用橘黃：它跟左邊的委託欄字數格式一模一樣，
+   同樣白色掃一眼分不出哪一欄是已成交。後面的價差維持紅綠，那是漲跌不是金額。 */
+.tx-deal { color: var(--accent); }
+
+/* 委託／成交欄：數量與價格之間的間距（取代 @） */
 .dexm .dexm-diff { color: var(--text2); }   /* 本月除息：目前持有 ≠ 除息張數（除息後有買賣） */
 /* 關注股票 → ETF 評比 */
 .es-bar { flex-wrap: wrap; gap: 6px; }
