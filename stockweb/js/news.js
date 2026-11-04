@@ -617,6 +617,35 @@ async function macroReload(btn) {
   if (typeof renderDrawerMacro === 'function') renderDrawerMacro();
 }
 
+// ── 自動更新 ──
+// 每 60 秒檢查「距離上次抓取是否已滿 TTL」，不是設一個 10 分鐘的 interval：
+// 分頁被瀏覽器凍結或電腦睡眠時計時器不會補跑，固定 interval 會漂成 20、30 分鐘才抓一次。
+// 這個檢查順便每分鐘重畫「n 分鐘前」那行，否則抽屜不重開就一直停在展開當下的數字。
+var _macroTimer = null;
+var _macroLoading = false;
+// 看得到才抓：一輪是 11 個請求，沒人在看照打除了浪費還會提高被 Yahoo 擋的機會。
+function _macroVisible() {
+  if (document.hidden) return false;
+  if (typeof _dwOpen !== 'undefined' && _dwOpen) return true;          // 頂欄抽屜展開中
+  var el = document.getElementById('macro-bar');
+  return !!(el && el.innerHTML && el.offsetParent !== null);           // 人在新聞情勢頁
+}
+// 只換標頭那一行。兩個地方（抽屜、新聞情勢頁）可能同時存在，一起換。
+function renderMacroFetch() {
+  var h = macroFetchHtml();
+  [].forEach.call(document.querySelectorAll('.macro-fetch'), function (s) { s.outerHTML = h; });
+}
+async function _macroTick() {
+  if (_macroLoading || !_macroAt || !_macroVisible()) return;   // 第一次抓由展開抽屜那條路徑負責
+  if (Date.now() - _macroAt < MACRO_TTL_MS) { renderMacroFetch(); return; }
+  _macroLoading = true;
+  try { await loadMacro(); } catch (e) { console.warn('[盤勢自動更新]', e); }
+  finally { _macroLoading = false; }
+}
+if (!_macroTimer) _macroTimer = setInterval(_macroTick, 60000);
+// 分頁切回來時立刻補一次：背景時不抓，可能已經過期很久了
+document.addEventListener('visibilitychange', function () { if (!document.hidden) _macroTick(); });
+
 function renderMacroBar() {
   var el = document.getElementById('macro-bar');
   if (!el) return;
