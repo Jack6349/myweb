@@ -478,10 +478,14 @@ function _macroSparkHtml(m) {
   var b = m.bars;
   if (!b || b.length < 3) return '';
   var cs = b.map(function (r) { return r.c; });
+  var ds = b.map(function (r) { return r.d; });
+  var liveK = -1;   // 最後一點是現價而不是收盤時，標在哪一格
   // 端點換成最新報價，圖的尾巴才跟格子裡的數字是同一個價
   if (m.price != null && m.asOf) {
     var d = new Date(m.asOf).toISOString().slice(0, 10);
-    if (d === b[b.length - 1].d) cs[cs.length - 1] = m.price; else cs.push(m.price);
+    if (d === b[b.length - 1].d) { cs[cs.length - 1] = m.price; }
+    else { cs.push(m.price); ds.push(d); }
+    liveK = cs.length - 1;
   }
   var n = cs.length, ref = cs[0];
   var hi = Math.max.apply(null, cs), lo = Math.min.apply(null, cs);
@@ -507,15 +511,76 @@ function _macroSparkHtml(m) {
   var tip = '近 ' + n + ' 個交易日收盤走勢　基準線＝區間起點 ' + _fmtNum(ref, m.fmt) +
     (pct == null ? '' : '　至今 ' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%') +
     '　（此處比的是一個月前，與右邊的當日漲跌不同基準）';
-  return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '">' +
+  // hover 用的點位。寫在 data 屬性上，滑鼠移上來直接讀，不必每次重繪都重算。
+  // 格式：日期|收盤|x|y，以 ; 分隔；最後一點若是現價，日期寫成空字串。
+  var pts = [];
+  for (var j = 0; j < n; j++) {
+    pts.push((j === liveK ? '' : ds[j].slice(5).replace('-', '/')) + '|' +
+      _fmtNum(cs[j], m.fmt) + '|' + x(j).toFixed(1) + '|' + y(cs[j]).toFixed(1));
+  }
+  return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '"' +
+    ' data-pts="' + pts.join(';') + '">' +
     '<svg viewBox="0 0 ' + MSPK_W + ' ' + MSPK_H + '" preserveAspectRatio="none">' +
     (dnFl ? '<path class="ck-fill dn" d="' + dnFl + '"/>' : '') +
     (upFl ? '<path class="ck-fill up" d="' + upFl + '"/>' : '') +
     '<line class="ck-ref lc-ln" x1="0" y1="' + yRef.toFixed(1) + '" x2="' + MSPK_W + '" y2="' + yRef.toFixed(1) + '"/>' +
     (dnLn ? '<path class="ck-iline dn lc-ln" d="' + dnLn + '"/>' : '') +
     (upLn ? '<path class="ck-iline up lc-ln" d="' + upLn + '"/>' : '') +
+    '<line class="mspk-cross lc-ln" x1="0" y1="0" x2="0" y2="' + MSPK_H + '" style="display:none"/>' +
+    '<circle class="mspk-dot" r="2" cx="0" cy="0" style="display:none"/>' +
     '</svg></span>';
 }
+
+// ── 小圖的滑鼠指示 ──
+// 事件掛在 document 上做委派：盤勢每 10 分鐘整批重繪，逐格綁監聽器會重繪幾次疊幾層。
+// 原生 title 保留（寫基準與區間漲跌），它給不了「現在指著哪一天」，所以另外做這個浮層。
+var _mspkTipEl = null, _mspkCur = null;
+function _mspkTip() {
+  if (!_mspkTipEl) {
+    _mspkTipEl = document.createElement('div');
+    _mspkTipEl.className = 'macro-tip';
+    _mspkTipEl.style.display = 'none';
+    document.body.appendChild(_mspkTipEl);
+  }
+  return _mspkTipEl;
+}
+function _mspkClear() {
+  if (_mspkCur) {
+    var c = _mspkCur.querySelector('.mspk-cross'), o = _mspkCur.querySelector('.mspk-dot');
+    if (c) c.style.display = 'none';
+    if (o) o.style.display = 'none';
+    _mspkCur = null;
+  }
+  if (_mspkTipEl) _mspkTipEl.style.display = 'none';
+}
+document.addEventListener('mousemove', function (ev) {
+  var sp = ev.target && ev.target.closest ? ev.target.closest('.macro-spark') : null;
+  if (!sp || !sp.dataset.pts) { _mspkClear(); return; }
+  if (_mspkCur && _mspkCur !== sp) _mspkClear();
+  _mspkCur = sp;
+  var pts = sp.dataset.pts.split(';');
+  var r = sp.getBoundingClientRect();
+  if (!r.width) return;
+  var k = Math.round((ev.clientX - r.left) / r.width * (pts.length - 1));
+  if (k < 0) k = 0; if (k > pts.length - 1) k = pts.length - 1;
+  var f = pts[k].split('|');
+  var cross = sp.querySelector('.mspk-cross'), dot = sp.querySelector('.mspk-dot');
+  if (cross) { cross.setAttribute('x1', f[2]); cross.setAttribute('x2', f[2]); cross.style.display = ''; }
+  if (dot) { dot.setAttribute('cx', f[2]); dot.setAttribute('cy', f[3]); dot.style.display = ''; }
+  var t = _mspkTip();
+  t.innerHTML = '<b>' + (f[0] || '現價') + '</b>　' + f[1];
+  t.style.display = '';
+  // 預設貼在圖的上緣，貼到視窗邊界就往內收
+  var tw = t.offsetWidth, th = t.offsetHeight;
+  var left = Math.min(Math.max(4, ev.clientX - tw / 2), window.innerWidth - tw - 4);
+  var top = r.top - th - 6;
+  if (top < 4) top = r.bottom + 6;
+  t.style.left = left + 'px';
+  t.style.top = top + 'px';
+});
+// 抽屜收起、頁面捲動、滑鼠離開視窗：殘留的浮層要收掉
+document.addEventListener('scroll', _mspkClear, true);
+window.addEventListener('blur', _mspkClear);
 
 // 單格 HTML：新聞情勢頁的盤勢列與頂欄抽屜共用，避免兩邊各寫一份而漂走。
 function _macroCellHtml(m) {
