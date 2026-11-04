@@ -172,7 +172,7 @@ async function loadOrderBox() {
     }
     var buyAmt = 0, sellAmt = 0;
     var html = '<div class="tx-otable-wrap"><table class="tx-otable"><thead><tr>' +
-      '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：(成交均價－現價)×股數×(1−手續費－交易稅)，正＝賣在現價之上。兩邊都扣賣出成本，同價為 0">損益<span class="sort-ind">↕</span></th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量、成交均價，後面小字＝現價－成交均價">成交</th>' +
+      '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num" title="現價 － 成交均價。紅＝現價高於成交價，綠＝低於">差額</th><th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：(成交均價－現價)×股數×(1−手續費－交易稅)，正＝賣在現價之上。兩邊都扣賣出成本，同價為 0">損益<span class="sort-ind">↕</span></th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量、成交均價；與現價的差額在委託後面那一欄">成交</th>' +
       '<th class="sort-th" data-key="status" onclick="txSortCol(\'status\')">狀態<span class="sort-ind">↕</span></th>' + '<th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
       '<th>書號</th>' + '<th class="sort-th num" data-key="time" onclick="txSortCol(\'time\')">委託時間<span class="sort-ind">↕</span></th>' + '</tr></thead><tbody>';
     var aheads = await Promise.all(trades.map(function (t) { return _txAhead(t, trades).catch(function () { return null; }); }));
@@ -199,13 +199,15 @@ async function loadOrderBox() {
             ? ' <span class="tx-oldpx" title="原始委託價 ' + _txModified(t).toFixed(2) + '，已改價">' +
               _txModified(t).toFixed(2) + '</span>'
             : '') + tif + '</td>' +
+        '<td class="num tx-ddcell">' +
+          (dq ? '<span class="tx-dd" data-code="' + code + '" data-avg="' + avg + '">' + _txDiffHtml(code, avg) + '</span>'
+              : '<span class="swap-dim">—</span>') + '</td>' +
         '<td class="num tx-pnl"' + (dq ? ' data-code="' + code + '" data-avg="' + avg + '" data-sh="' + (dq * mult) + '" data-side="' + (buy ? 'B' : 'S') + '"' : '') + '>' +
           (dq ? _txPnlHtml(code, avg, dq * mult, buy) : '<span class="swap-dim">—</span>') + '</td>' +
         '<td class="num tx-px" data-code="' + code + '">' + _txPxHtml(code) + '</td>' +
         '<td class="num"' + (dealTitle ? ' title="' + dealTitle + '"' : '') + '>' +
           (dq ? '<span class="tx-deal">' + dq + unit + '<span class="tx-gap"></span>' + avg.toFixed(2) + '</span>' +
-            (deals.length > 1 ? ' ×' + deals.length : '') +
-            '<span class="tx-dd" data-code="' + code + '" data-avg="' + avg + '">' + _txDiffHtml(code, avg) + '</span>' : '—') + '</td>' +
+            (deals.length > 1 ? ' ×' + deals.length : '') : '—') + '</td>' +
         '<td>' + _stPill(t) + '</td>' +
         '<td class="num">' + _txAheadHtml(aheads[ti]) + '</td>' +
         '<td class="tx-dseq">' + ((o.ordno || '').trim() || '—') + '</td>' +
