@@ -99,6 +99,7 @@
   --ck-vwap: #e2e8f0;     /* 日均的均價線 */
   --ck-ivol: #6aa9e8;     /* 內外盤量 */
   --pv-rate: #7fb0ff;     /* 總現值走勢：資本報酬率 */
+  --pv-wrate: #c6dcff;    /* 總現值走勢：含息報酬率（與資本報酬率同色系淺一階：兩條都是右軸百分比，成組） */
   --pv-cost: #ff7ab8;     /* 總現值走勢：原始成本階梯線 */
   /* 管制圖兩套色彼此獨立，載體不同所以不會混：
      〈線圖＝股市〉紅漲綠跌，跟全站慣例同一套，黃（--spc-na）＝未形成連續趨勢。
@@ -1530,6 +1531,7 @@ td.cost-even::after  { background: var(--text3); }
 .pv-line { fill: none; stroke-width: 1.6; }
 .pv-line.val { stroke: var(--accent2); }
 .pv-line.rate { stroke: var(--pv-rate); }
+.pv-line.wrate { stroke: var(--pv-wrate); stroke-width: 1.4; }
 /* 原始成本：比現值細一級，維持「基準線」的層級，但顏色必須離開灰藍系 ——
    原本的 #8fa3ba 與 .ck-ref 完全同色、與 .ck-sep 和 --text2 同族，會被讀成裝飾線。
    選亮粉紅而非橘：橘 #e8731e 色相約 25°，與總現值的 var(--accent2)（約 42°）只差 17°，
@@ -1540,9 +1542,12 @@ td.cost-even::after  { background: var(--text3); }
 .pv-bar.dn { fill: var(--down); opacity: .6; }
 .pv-ax-r { fill: var(--pv-rate); }
 .pv-lg { font-size: 12px; margin-right: 12px; }
+/* 浮層裡的累計配息是佐證數字，不跟報酬率搶視線 */
+.pv-tip-sub { font-size: 11px; color: var(--text3); margin-left: 3px; }
 .pv-lg::before { content: '━ '; }
 .pv-lg.val { color: var(--accent2); }
 .pv-lg.rate { color: var(--pv-rate); }
+.pv-lg.wrate { color: var(--pv-wrate); }
 .pv-lg.cost { color: var(--pv-cost); }
 .pv-lg.bar { color: var(--up); }
 .pv-lg.bar::before { content: '▌ '; }
