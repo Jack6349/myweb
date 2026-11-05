@@ -196,13 +196,42 @@ function _pvWan(v) {
   return (Math.abs(w) >= 1000 ? Math.round(w).toLocaleString('zh-TW') : w.toFixed(0)) + '萬';
 }
 
+// ── 含息報酬率的配息序列 ──
+// 券商的配息欄位是「自買進以來的累計」，沒有日期可拆，所以沒辦法直接知道
+// 視窗第一天的累計配息是多少。這裡用倒推：
+//   視窗起點基數 ＝ 迄今已領配息總額 － 視窗內逐日除息金額的總和
+//   第 k 天累計配息 ＝ 起點基數 ＋ 第 0..k 天的除息金額
+// 終點因此必然等於「迄今已領配息」，曲線尾端與頂欄的損益率對得起來。
+// 代價寫在圖下說明：除息金額是「每股配息 × 當日持股」的推算，高估的部分
+// （二代健保補充保費、匯費）會全部被擠進起點基數，起點偏低、斜率偏陡。
+// 視窗內賣掉的批次同樣往這個方向偏：它的除息算在視窗內，卻不在「已領配息」裡。
+function _pvDivCum(rows) {
+  if (typeof _positions === 'undefined' || !_positions || !_positions.length) return null;
+  if (typeof invDivSum !== 'function') return null;
+  var total = null;
+  _positions.forEach(function (p) {
+    var d = invDivSum(String(p.code));
+    if (d != null) total = (total || 0) + d;
+  });
+  if (total == null) return null;
+  var win = 0;
+  rows.forEach(function (r) { win += (r.x || 0); });
+  var base = total - win, acc = base;
+  return rows.map(function (r) { acc += (r.x || 0); return Math.round(acc); });
+}
+
 function pvSvg(data) {
   var rows = (data && data.days) || [];
   if (rows.length < 2) return '<div class="modal-loading">資料不足</div>';
   var tax = (typeof _taxMode !== 'undefined' && _taxMode) ? 0.997735 : 1;
-  var pts = rows.map(function (r) {
+  var dcum = _pvDivCum(rows);
+  var pts = rows.map(function (r, k) {
     var v = Math.round(r.v * tax), p = r.c ? v - r.c : null;
-    return { d: r.d, v: v, c: r.c, p: p, rate: (p != null && r.c) ? p / r.c * 100 : null };
+    // 含息報酬率：配息是已入袋的現金，不隨賣出稅費打折，所以稅費只套在現值上
+    var dv = dcum ? dcum[k] : null;
+    return { d: r.d, v: v, c: r.c, p: p, dv: dv,
+             rate: (p != null && r.c) ? p / r.c * 100 : null,
+             wrate: (p != null && r.c && dv != null) ? (p + dv) / r.c * 100 : null };
   });
 
   var W = 1180, H = 380, PAD_L = 74, PAD_R = 58, PAD_T = 14, BAR_H = 86, GAP = 26, FOOT = 16;
@@ -218,6 +247,7 @@ function pvSvg(data) {
     if (o.v < vlo) vlo = o.v; if (o.v > vhi) vhi = o.v;
     if (o.c) { if (o.c < vlo) vlo = o.c; if (o.c > vhi) vhi = o.c; }
     if (o.rate != null) { if (o.rate < rlo) rlo = o.rate; if (o.rate > rhi) rhi = o.rate; }
+    if (o.wrate != null) { if (o.wrate < rlo) rlo = o.wrate; if (o.wrate > rhi) rhi = o.wrate; }
     if (o.p != null) { if (o.p < plo) plo = o.p; if (o.p > phi) phi = o.p; }
   });
   if (plo === Infinity) { plo = 0; phi = 1; }
@@ -265,10 +295,11 @@ function pvSvg(data) {
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (b0 - 3).toFixed(1) + '" text-anchor="end">損益 ' + _pvWan(pbase) + '</text>' +
     '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (bTop + 9) + '" text-anchor="end">' + _pvWan(ptop) + '</text>';
   // 折線
-  var lv = [], lr = [];
+  var lv = [], lr = [], lw = [];
   pts.forEach(function (o, k) {
     lv.push(x(k).toFixed(1) + ',' + yv(o.v).toFixed(1));
     if (o.rate != null) lr.push(x(k).toFixed(1) + ',' + yr(o.rate).toFixed(1));
+    if (o.wrate != null) lw.push(x(k).toFixed(1) + ',' + yr(o.wrate).toFixed(1));
   });
   // 原始成本是階梯不是曲線：實測 90 天裡 54 天完全沒動，只在有買賣的 35 天跳。
   // 用一般折線會在兩個交易日之間拉出斜坡，看起來像成本每天慢慢爬，那是假的。
@@ -282,6 +313,7 @@ function pvSvg(data) {
   if (lc.length > 1) s += '<polyline class="pv-line cost" points="' + lc.join(' ') + '"/>';
   s += '<polyline class="pv-line val" points="' + lv.join(' ') + '"/>';
   if (lr.length > 1) s += '<polyline class="pv-line rate" points="' + lr.join(' ') + '"/>';
+  if (lw.length > 1) s += '<polyline class="pv-line wrate" points="' + lw.join(' ') + '"/>';
   s += '<rect id="pv-hit" x="' + PAD_L + '" y="' + PAD_T + '" width="' + (W - PAD_L - PAD_R) + '" height="' + (PH + GAP + BAR_H) + '" fill="transparent"/>' +
     '<line id="pv-cross" class="ck-cross" x1="0" y1="' + PAD_T + '" x2="0" y2="' + (PAD_T + PH + GAP + BAR_H) + '" style="display:none"/></svg>';
 
@@ -291,7 +323,9 @@ function pvSvg(data) {
     n + ' 日　總現值 <b>' + a.v.toLocaleString('zh-TW') + '</b> → <b>' + z.v.toLocaleString('zh-TW') + '</b>　' +
     '<span class="' + cls + '">' + (dv >= 0 ? '+' : '') + dv.toLocaleString('zh-TW') + '</span>' +
     '</span>　<span class="pv-lg val">總現值</span><span class="pv-lg cost">原始成本</span>' +
-    '<span class="pv-lg rate">資本報酬率</span><span class="pv-lg bar">資本損益</span></div>';
+    '<span class="pv-lg rate">資本報酬率</span>' +
+    (lw.length > 1 ? '<span class="pv-lg wrate">含息報酬率</span>' : '') +
+    '<span class="pv-lg bar">資本損益</span></div>';
   return head + s;
 }
 
@@ -301,6 +335,7 @@ function pvBindHover(data) {
   if (!svg || !hit || !cross || !tip) return;
   var tax = (typeof _taxMode !== 'undefined' && _taxMode) ? 0.997735 : 1;
   var rows = data.days, n = rows.length;
+  var dcum = _pvDivCum(rows);
   var PAD_L = 74, step = (1180 - PAD_L - 58) / n, base = tip.innerHTML;
   hit.addEventListener('mousemove', function (ev) {
     var vx = (typeof _chartVX === 'function') ? _chartVX(svg, ev.clientX) : null;
@@ -311,12 +346,17 @@ function pvBindHover(data) {
     cross.setAttribute('x1', xx); cross.setAttribute('x2', xx); cross.style.display = '';
     var r = rows[k], v = Math.round(r.v * tax), p = r.c ? v - r.c : null;
     var rate = (p != null && r.c) ? p / r.c * 100 : null;
+    var dv = dcum ? dcum[k] : null;
+    var wr = (p != null && r.c && dv != null) ? (p + dv) / r.c * 100 : null;
     var c2 = p == null ? '' : (p >= 0 ? 'up' : 'down');
     tip.innerHTML = r.d.slice(5).replace('-', '/') +
       '　總現值 <b>' + v.toLocaleString('zh-TW') + '</b>' +
       '　原始成本 <b>' + (r.c ? r.c.toLocaleString('zh-TW') : '—') + '</b>' +
       '　資本損益 <b class="' + c2 + '">' + (p == null ? '—' : (p >= 0 ? '+' : '') + p.toLocaleString('zh-TW')) + '</b>' +
-      '　資本報酬率 <b class="' + c2 + '">' + (rate == null ? '—' : (rate > 0 ? '+' : '') + rate.toFixed(2) + '%') + '</b>';
+      '　資本報酬率 <b class="' + c2 + '">' + (rate == null ? '—' : (rate > 0 ? '+' : '') + rate.toFixed(2) + '%') + '</b>' +
+      (wr == null ? '' : '　含息報酬率 <b class="' + (wr >= 0 ? 'up' : 'down') + '">' +
+        (wr > 0 ? '+' : '') + wr.toFixed(2) + '%</b>' +
+        '<span class="pv-tip-sub">（累計配息 ' + dv.toLocaleString('zh-TW') + '）</span>');
   });
   hit.addEventListener('mouseleave', function () { cross.style.display = 'none'; tip.innerHTML = base; });
 }
@@ -736,7 +776,15 @@ function pvRender() {
       '<code>資本損益 ＝ 現值 － 原始成本</code>，資本報酬率為其除以原始成本；' +
       '賣出當天現值與成本會同時減少，已實現獲利不留在線上；除息當天價格先扣、配息還沒入帳，' +
       '總現值會出現向下的台階，那不是虧損。長條的底是區間外側、不是 0（整段同號時 0 基準每根都會頂到天花板），實際基準標在左軸。' +
-      '含息版本做不到：券商的配息欄位是自買進以來的累計，沒有日期可拆。</div>';
+      '<b>含息報酬率</b> ＝（資本損益 ＋ 累計配息）÷ 原始成本，與頂欄「損益」的百分比同一個口徑；' +
+      '兩條線的垂直間距就是配息的貢獻，間距只在除息日變寬。' +
+      '配息的逐日序列是倒推的：券商的配息欄位是自買進以來的累計、沒有日期可拆，' +
+      '所以用「迄今已領配息 － 視窗內除息金額合計」當視窗起點，再逐日加回。' +
+      '終點因此必然等於目前的已領配息，但<b>起點會偏低、斜率偏陡</b>：' +
+      '除息金額是「每股配息 × 當日持股」的推算，被二代健保補充保費與匯費吃掉的部分全擠進起點；' +
+      '視窗內賣掉的批次也同向偏（它的除息算在視窗內，卻不在「已領配息」裡，那只統計目前還持有的批次）。' +
+      '這張圖的現值跟著「含稅費」切換走，與頂欄同一套；尾端與頂欄仍會差一點，' +
+      '因為圖上是當日收盤、頂欄是即時報價。</div>';
 
   el.innerHTML =
     '<button class="dw-close" onclick="pvClose()" title="關閉">✕</button>' +
