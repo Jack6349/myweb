@@ -515,7 +515,7 @@ function _twseIdxHtml() {
 // 價格順序：即時報價 → 券商部位的 last_price → 不計入並回報檔數。
 // 少一整筆的總額比沒有總額更糟，所以寧可用稍舊的價格，真的都沒有才標出來。
 function portfolioTotals() {
-  var grandTotal = 0, wsum = 0, wtotal = 0, totalShares = 0, noPx = 0;
+  var grandTotal = 0, wsum = 0, wtotal = 0, totalShares = 0, noPx = 0, dayChg = 0, dayN = 0;
   var px = {};
   (_positions || []).forEach(function (p) { if (p.last_price != null) px[String(p.code)] = p.last_price; });
   Object.keys(_sharesMap || {}).forEach(function (code) {
@@ -530,6 +530,10 @@ function portfolioTotals() {
     if (c && c.reference) {
       wsum += val * ((v - c.reference) / c.reference * 100);
       wtotal += val;
+      // 今日變動金額＝（現價 － 昨收參考價）× 股數。除息當天參考價已是除息後價格，
+      // 蒸發掉的息值不會被算成下跌。不套稅費：這是帳面變動，沒有賣出就沒有手續費與交易稅。
+      dayChg += (v - c.reference) * sh;
+      dayN++;
     }
   });
   // 出借股數與其現值（帳面現值＝總現值扣除出借部分，與券商帳面一致）。
@@ -557,6 +561,7 @@ function portfolioTotals() {
   return {
     grandTotal: grandTotal, curVal: curVal, noPx: noPx, totalShares: totalShares,
     wpct: wtotal > 0 ? wsum / wtotal : null,
+    dayChg: dayN ? Math.round(dayChg) : null, dayN: dayN,
     profit: profit,
     prate: (profit != null && _totalCost) ? profit / _totalCost * 100 : null,
     div: divSum, withDiv: withDiv,
@@ -607,7 +612,17 @@ function renderSummary(targetId) {
     });
   }
   el.style.display = '';
-  el.innerHTML = '<div class="sum-line">' + toggleBtn + detailBtn + _twseIdxHtml() +
+  // 今日變動只掛在持股庫存頁：即時行情頁每一列本來就有自己的今日漲跌，不再疊一個合計。
+  // 名稱不用「今日損益」：交易帳務那個「今日損益」指的是今天成交的那幾筆，不是全持股的市值變動。
+  var dayPair = (targetId !== 'inv-summary' || t.dayChg == null) ? '' :
+    sumPair('今日變動',
+      (t.dayChg >= 0 ? '+' : '') + t.dayChg.toLocaleString('zh-TW'),
+      cls2var[colorClass(t.dayChg)],
+      '全部持股（含借出）的當日市值變動＝Σ（現價 － 昨收參考價）× 股數' +
+      (t.dayN ? '，計入 ' + t.dayN + ' 檔' : '') +
+      '。除息日的參考價已除息，不會算成下跌。帳面變動不扣稅費。' +
+      '與頂欄「今日」百分比分母不同（那個以現值加權），兩者相乘不會剛好相等。');
+  el.innerHTML = '<div class="sum-line">' + toggleBtn + detailBtn + dayPair + _twseIdxHtml() +
     sumPair('點選成本加總' + (pickN ? '(' + pickN + ')' : ''),
       pickCost == null ? '—' : Math.round(pickCost).toLocaleString('zh-TW'),
       pickCost == null ? 'var(--text3)' : 'var(--accent2)') +   // 與頂欄「總現值」同色
@@ -625,8 +640,9 @@ function renderSummary(targetId) {
 }
 
 // 標籤＋數值一組，合計列與抽屜「部位」共用
-function sumPair(label, val, colorStyle) {
-  return '<span class="sum-pair"><span class="sum-plabel">' + label + '</span>' +
+function sumPair(label, val, colorStyle, tip) {
+  return '<span class="sum-pair"' + (tip ? ' title="' + tip.replace(/"/g, '&quot;') + '"' : '') +
+    '><span class="sum-plabel">' + label + '</span>' +
     '<span class="sum-pval"' + (colorStyle ? ' style="color:' + colorStyle + '"' : '') + '>' + val + '</span></span>';
 }
 
