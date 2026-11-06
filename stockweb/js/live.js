@@ -207,6 +207,7 @@ async function startLive() {
   if (typeof renderTopbarTotals === 'function') renderTopbarTotals();
   renderLiveTables();
   if (typeof renderDailyDigest === 'function') renderDailyDigest(); // 今日提醒（非阻塞）
+  if (typeof touchMount === 'function') touchMount();             // 掛單參考（只有勾選過的標的才抓）
   info.textContent = '已連線｜' + _positions.length + ' 檔庫存';
 }
 

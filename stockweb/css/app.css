@@ -1845,3 +1845,21 @@ td.cost-even::after  { background: var(--text3); }
 /* 加權指數分時小圖的均價線：灰白細線，不分紅綠（它是一條平均，沒有漲跌可言）。
    參照券商 App 大盤分時圖的畫法。 */
 .mspk-avg { fill: none; stroke: var(--text2); stroke-width: 1; opacity: .85; }
+
+/* ── 掛單參考（js/touch.js）：即時持股表格下方 ── */
+.touch-box { margin-top: 18px; }
+.touch-sub { font-size: 11px; font-weight: 400; color: var(--text3); margin-left: 10px; }
+.touch-table td, .touch-table th { font-variant-numeric: tabular-nums; }
+/* 筆數偏低那幾列整列壓暗：數字還在，但不該被當成可靠的結論 */
+.touch-table tr.touch-thin td { opacity: .62; }
+.touch-dim { color: var(--text3); font-size: 11px; }
+/* 參數頁的勾選清單 */
+.touch-pick { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.touch-chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg2); font-size: 12px; color: var(--text2); user-select: none; }
+.touch-chk:hover { border-color: var(--border-strong); }
+.touch-chk.on { border-color: var(--accent); color: var(--text); }
+.touch-chk b { font-size: 13px; font-weight: 700; }
+.touch-chk span { color: var(--text3); }
+.touch-act { display: flex; align-items: center; gap: 10px; margin-top: 10px; }

@@ -71,6 +71,13 @@ var SET_SECTIONS = [
       desc: '只列出自動來源（MoneyDJ／CMoney）抓不到、需手動維護清單的 ETF（境外或主動式）',
       render: function (first) { if (typeof renderConstImport === 'function') renderConstImport(!first); } }
   ] },
+  { id: 'tick', title: '逐筆變動', rows: [
+    { key: 'touch-sel', title: '掛單參考：顯示哪幾檔', bodyId: 'params-touch-body',
+      desc: '勾選的標的會在即時持股頁下方列出「掛高 X 元在 10 分鐘內被觸及的比例」，用來決定限價單掛多遠。'
+          + '每檔第一次要抓三天的逐筆成交，成交熱絡的一天約 2～3 MB，只勾實際會掛單的那幾檔',
+      render: function () { if (typeof renderTouchSel === 'function') renderTouchSel(); },
+      status: function () { return (typeof touchStatus === 'function') ? touchStatus() : null; } }
+  ] },
   { id: 'cache', title: '快取與儲存', rows: [
     { key: 'cache-list', title: '本機快取', bodyId: 'params-cache-body',
       desc: '各項快取的大小與更新時間，可個別清除。清除只影響下次載入速度，不會刪掉你的設定',
