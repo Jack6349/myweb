@@ -1890,3 +1890,6 @@ td.cost-even::after  { background: var(--text3); }
 .live-table td.lc-cell { width: 240px; padding: 3px 4px !important; }
 /* 隔檔上底色：原本只靠上緣一條線分檔，兩列一組時看不出界線在哪 */
 .touch-table tr.touch-alt td { background: var(--bg3); }
+/* 今日委託與成交標頭的「未成交」：與左邊已成交的金額分成兩組，中間留白 */
+.tx-open-sum { padding-left: 10px; border-left: 1px solid var(--border-strong); }
+.tx-open-sum b { font-weight: 700; }
