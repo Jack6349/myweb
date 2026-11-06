@@ -722,21 +722,33 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-sp-lb { font-size: 11px; color: var(--text2); font-weight: 600; }
 .divest-sp-v { font-size: 14px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
 .divest-divider { border-top: 2px solid var(--border-strong); margin: 14px 0 4px; }
-.divest-stocks { }
+/* ── 個股明細：表頭列與每一檔共用同一組格線，欄位才會上下對齊 ──
+   原本是 flex，每格寬度由內容決定，加上欄位名寫在每一列裡（字數不同），
+   所以同一欄在不同列的位置永遠不一樣。改成固定欄寬的 grid，欄位名只留在表頭。
+   窄螢幕用橫向捲動而不是換行：對齊就是這次要的東西，換行等於只有桌機做到。 */
+.divest-stocks { overflow-x: auto; }
+.divest-hrow, .divest-stock { min-width: 930px; }
+.divest-hrow, .divest-shead {
+  display: grid; align-items: center; gap: 0 10px;
+  grid-template-columns: 72px minmax(130px, 1fr) 68px 108px 96px 164px 92px 92px 20px; }
+.divest-hrow { padding: 6px 2px; font-size: 11px; color: var(--text3);
+  border-bottom: 1px solid var(--border-strong); }
+.divest-hrow .num, .divest-shead .num { text-align: right; }
 .divest-stock { border-bottom: 1.5px solid var(--border); }
 .divest-stock:last-child { border-bottom: none; }
-.divest-shead { display: flex; justify-content: space-between; align-items: center; padding: 10px 2px; cursor: pointer; }
+.divest-shead { padding: 9px 2px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.divest-shead:hover { background: var(--bg2); }
+/* 每一格都不換行＋超出截斷：一列固定一行高，列與列之間才不會忽高忽低 */
+.divest-shead > span, .divest-hrow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .divest-scode { font-size: 14px; font-weight: 700; }
 .divest-sname { font-size: 12px; color: var(--text2); }
-/* 現價＋預估年殖利率：文字白、數字黃（供換股/調節配置判斷） */
-.divest-yield { font-size: 12px; color: #fff; margin-left: 12px; font-variant-numeric: tabular-nums; }
-/* 這一行最多排三段（預估年殖利率／成本殖利率／本月除息）。窄螢幕只在段與段之間換行，
-   段內不斷；左半要 min-width:0，否則它撐住不縮，右邊的已領／估算會被擠出框外。 */
-.divest-shead > div:first-child { min-width: 0; }
-.divest-yield > span { white-space: nowrap; }
-.divest-yield b { color: var(--accent2); font-weight: 700; }
-.divest-smeta { font-size: 12px; color: var(--text3); white-space: nowrap; }
-.divest-chev { color: var(--text3); margin-left: 4px; }
+/* 現價與預估年殖利率用黃字（供換股／調節配置判斷）；成本殖利率的顏色由 JS 逐列指定 */
+.divest-px, .divest-y { font-size: 12px; color: var(--accent2); font-weight: 700; }
+.divest-exnow { font-size: 11px; color: var(--text2); }
+.divest-exnow b { color: var(--accent2); font-weight: 700; }
+.divest-got { font-size: 12px; color: var(--down); }
+.divest-est { font-size: 12px; color: var(--accent2); }
+.divest-chev { color: var(--text3); text-align: center; }
 .divest-detail { padding: 2px 0 10px 8px; border-left: 2px solid var(--border-strong); margin: 0 0 8px 4px; font-size: 12px; }
 .divest-drow { display: flex; gap: 10px; padding: 2px 0; color: var(--text2); font-variant-numeric: tabular-nums; }
 .divest-dm { width: 34px; }
