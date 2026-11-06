@@ -109,7 +109,7 @@ function hushPanel() {
     p.className = 'hush-panel';
     document.body.appendChild(p);
   }
-  if (!_hushOpen || !_hushLog.length) { p.hidden = true; return; }
+  if (!_hushOpen || !_hushLog.length) { p.hidden = true; p.innerHTML = ''; return; }
   p.hidden = false;
   // 新的在上面：剛發生的才是你現在想知道的
   var rows = _hushLog.slice().sort(function (a, b) { return b.seq - a.seq; });
@@ -136,4 +136,44 @@ document.addEventListener('click', function (ev) {
   _hushOpen = false;
   hushPaint();
   hushPanel();
+});
+
+// ── 全域哨兵：沒有被 catch 接住、直接逃到瀏覽器最外層的錯誤 ──
+// 上面那個 hush() 收的是「程式寫了 catch 然後吞掉」的失敗，寫的人至少預期過它會壞。
+// 這裡收的是連寫的人都沒想到的：某個函式中途丟錯，一路往上逃掉。
+// 少了這一段，燈不亮就只代表「不是被吞掉的那一類」，推論不出「一切正常」，
+// 而安燈最重要的語意就是後者。所以兩邊要接到同一顆燈上。
+// 一律紅燈：沒人接的錯誤代表當下那段流程是中斷的，不是少一塊資料而已。
+
+// 從檔名或堆疊認出是哪一支，面板才顯示得出功能名而不是一句「全域」。
+function _hushFrom(s) {
+  var m = /\/js\/([a-z0-9-]+)\.js/i.exec(String(s || ''));
+  return m ? m[1] : 'global';
+}
+
+window.addEventListener('error', function (ev) {
+  // 兩種要濾掉的雜訊：
+  //   擴充套件（chrome-extension:// 等）與本站無關，會把燈點亮成假警報。
+  //   跨來源腳本瀏覽器只給 "Script error."，沒有檔名、沒有行號、error 也是 null，
+  //     記了也查不出任何東西。
+  // 判準不能只看檔名：動態建立的 inline script 檔名是空字串，但 error 物件與堆疊都在，
+  // 那是有用的資訊，不該跟著被丟掉。所以「檔名是本站」或「有真正的 error 物件」就收。
+  var f = (ev && ev.filename) || '';
+  if (/^[a-z-]+-extension:\/\//i.test(f)) return;
+  var own = f.indexOf(location.origin) === 0;
+  var e = ev && ev.error;
+  if (!own && !(e && e.stack)) return;
+  if (!e) e = new Error(ev.message || '未知錯誤');
+  var line = (ev.lineno ? ' @' + ev.lineno : '');
+  hush(_hushFrom(f || (e && e.stack)), { name: e.name || 'Error', message: (e.message || ev.message) + line }, 2);
+});
+
+window.addEventListener('unhandledrejection', function (ev) {
+  var r = ev && ev.reason;
+  var stack = (r && r.stack) || '';
+  // 非同步的錯誤沒有 filename，只能從堆疊找。找不到本站檔案時仍然記：
+  // 這一類幾乎都是自己的 async 函式沒人接，漏掉比誤報的代價大。
+  var src = _hushFrom(stack);
+  var msg = (r && r.message) ? r.message : String(r);
+  hush(src, { name: (r && r.name) || 'UnhandledRejection', message: msg }, 2);
 });
