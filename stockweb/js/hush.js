@@ -177,3 +177,25 @@ window.addEventListener('unhandledrejection', function (ev) {
   var msg = (r && r.message) ? r.message : String(r);
   hush(src, { name: (r && r.name) || 'UnhandledRejection', message: msg }, 2);
 });
+
+// ── 資源載入失敗：某支 js／css／圖片根本沒載進來 ──
+// 與上面兩個哨兵不同構，所以另外掛一個：
+//   這類事件不會冒泡到 window，只在捕獲階段發得出來，而且 ev.target 是元素不是 window。
+// 為什麼要抓：一支 js 沒載到，它提供的功能整個不存在 —— 按鈕沒反應、頁面空白，
+//   但不會丟任何 JS 錯誤，上面兩個哨兵一律沉默。
+//   這正是部署出錯最典型的樣態（版號改了、檔案沒上去），而燈的沉默會把人帶往錯的方向找。
+window.addEventListener('error', function (ev) {
+  var t = ev && ev.target;
+  if (!t || t === window || !t.tagName) return;        // 這裡只處理元素，腳本錯誤由上面那個收
+  var tag = t.tagName.toUpperCase();
+  var url = t.src || t.href || '';
+  if (!url) return;
+  if (/^[a-z-]+-extension:\/\//i.test(url)) return;    // 擴充套件插進頁面的資源，與本站無關
+  var kind = { SCRIPT: '程式檔', LINK: '樣式檔', IMG: '圖片', AUDIO: '音效', VIDEO: '影片' }[tag];
+  if (!kind) return;
+  // 短網址就好：面板那一欄放得下，認得出是哪一支才是重點
+  var sh = url.replace(location.origin, '').replace(/\?.*$/, '');
+  // 圖片載不到只是少一張圖，畫面其餘照常 → 黃燈；程式檔與樣式檔會讓功能整個不存在 → 紅燈
+  var lv = (tag === 'SCRIPT' || tag === 'LINK') ? 2 : 1;
+  hush(_hushFrom(url), { name: kind + '載入失敗', message: sh }, lv);
+}, true);
