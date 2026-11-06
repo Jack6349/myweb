@@ -150,7 +150,10 @@ async function fetchNightFutures() {
     var arr = await r.json();
     var s = arr && arr[0];
     if (!s || s.close == null) return null;
-    return { price: s.close, changePct: s.change_rate, time: (s.datetime || '').slice(11, 16) };
+    // ref＝期交所的參考價，用 close − change_price 回推。
+    // 圖上的基準線與格子右邊那個百分比因此同一個來源，不會各說各話。
+    var ref = (s.change_price != null) ? s.close - s.change_price : null;
+    return { price: s.close, changePct: s.change_rate, time: (s.datetime || '').slice(11, 16), ref: ref };
   } catch (e) { return null; }
 }
 
@@ -388,7 +391,7 @@ function _macroCacheWrite() {
   try {
     sessionStorage.setItem(MACRO_CACHE_KEY, JSON.stringify(
       { at: _macroAt, snap: _macroSnap, tw: _twLastClose, fut: _nightFut,
-        twidx: _twIdxIntra, esun: _esun, esunTs: _esunTs }));
+        twidx: _twIdxIntra, txf: _txfIntra, esun: _esun, esunTs: _esunTs }));
   } catch (e) {}   // 容量滿或隱私模式：沒快取就是每次重抓，不該因此壞掉
 }
 function _macroCacheRead() {
@@ -405,7 +408,7 @@ async function ensureMacro(force) {
     var c = _macroCacheRead();
     if (c) {
       _macroSnap = c.snap; _twLastClose = c.tw; _nightFut = c.fut; _macroAt = c.at;
-      _twIdxIntra = c.twidx || null;
+      _twIdxIntra = c.twidx || null; _txfIntra = c.txf || null;
       if (c.esun) { _esun = c.esun; _esunTs = c.esunTs || 0; }
       if (!_esun) await loadEsunFx();   // 牌告沒進快取（上次抓失敗）才補一個請求
       return;
@@ -426,6 +429,8 @@ async function loadMacro() {
   _nightFut = await fetchNightFutures();
   // 加權指數分時：本機 Shioaji，失敗不影響其餘七格（那一格不畫就是了）
   try { await loadTwIdxIntra(); } catch (e) { hush('news', e); }
+  // 台指期分時：參考價來自上面那個快照，沒有快照就不畫圖
+  try { await loadTxfIntra(_nightFut && _nightFut.ref); } catch (e) { hush('news', e); }
   _macroAt = Date.now();
   _macroCacheWrite();
   renderMacroBar();
@@ -632,12 +637,13 @@ async function loadTwIdxIntra() {
   return _twIdxIntra;
 }
 
-// 分時小圖。與其他格共用 MSPK_W/MSPK_H 與紅綠切線那一套，差別有二：
-//   基準線是昨收（不是區間起點），多畫一條均價線。
-function _twIdxSparkHtml(o) {
+// 分時小圖（加權指數與台指期共用）。與其他格共用 MSPK_W/MSPK_H 與紅綠切線那一套，
+// 差別有二：基準線是參考價（不是區間起點），而且多畫一條均價線。
+// o = { t[], c[], avg[], ref, fmt, note }
+function _intraSparkHtml(o) {
   var c = o.c, n = c.length;
   if (n < 3 || !o.ref) return '';
-  var ref = o.ref;
+  var ref = o.ref, fmt = o.fmt || 0;
   var hi = Math.max.apply(null, c), lo = Math.min.apply(null, c);
   // 基準線一定要在圖內，否則「在昨收之上或之下」看不出來
   if (ref > hi) hi = ref;
@@ -666,11 +672,11 @@ function _twIdxSparkHtml(o) {
   var pts = [];
   for (var p = 0; p < n; p++) {
     var dp = (c[p] - ref) / ref * 100;
-    pts.push(o.t[p] + '|' + _fmtNum(c[p], 0) + '|' + x(p).toFixed(1) + '|' +
+    pts.push(o.t[p] + '|' + _fmtNum(c[p], fmt) + '|' + x(p).toFixed(1) + '|' +
       y(c[p]).toFixed(1) + '|' + (dp > 0 ? '+' : '') + dp.toFixed(2));
   }
-  var tip = o.day + ' 當日分時　基準線＝昨收 ' + _fmtNum(ref, 0) +
-    '　灰線＝當日累計平均指數　（此處比的是昨收，與其他格的近一個月不同基準）';
+  var tip = o.note + '　基準線＝參考價 ' + _fmtNum(ref, fmt) +
+    '　（此處比的是參考價，與其他格的近一個月不同基準）';
   return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '"' +
     ' data-pts="' + pts.join(';') + '">' +
     '<svg viewBox="0 0 ' + MSPK_W + ' ' + MSPK_H + '" preserveAspectRatio="none">' +
@@ -697,7 +703,53 @@ function _twIdxCellHtml() {
     '<span class="macro-at">分時 ' + at + '</span></span>' +
     '<span class="macro-price">' + _fmtNum(o.last, 0) + '</span>' +
     '<span class="macro-chg ' + _chgCls(o.pct) + '">' + (_chgTxt(o.pct) || '—') + '</span>' +
-    _twIdxSparkHtml(o) + '</div>';
+    _intraSparkHtml({ t: o.t, c: o.c, avg: o.avg, ref: o.ref, fmt: 0,
+      note: o.day + ' 當日分時　灰線＝當日累計平均指數' }) + '</div>';
+}
+
+// ── 台指期的當盤分時（抽屜最後一格）──
+// 與加權指數那格同一套畫法，但均價線是真的 VWAP：
+// 期貨分 K 的 Amount 就是點數 × 口數，累計相除即 VWAP。實測本盤 39,220.79，
+// 對照快照的 average_price 39,217.3 差 3.5 點（0.009%，來自快照時點之後那幾根）。
+// 加權指數那格做不到這件事 —— 指數的 Amount ÷ Volume 是全市場每股均價，量級不對。
+//
+// 盤別：分 K 間隔超過 2 分鐘就是換盤，實測乾淨切出
+//   夜盤 15:01 → 次日 05:00（840 根，跨午夜，所以不能用日期分組）
+//   日盤 08:46 → 13:45（300 根）
+// 取最後一個區塊＝當下這一盤（盤與盤之間則是最近收完的那一盤）。
+// 名稱跟著盤別走：原本固定寫「台指夜盤」，但這格抓的是 TXFR1 的當下快照、不分盤別，
+// 所以白天會出現「台指夜盤 成交 12:28」這種自相矛盾的顯示（2026-11-06 實例）。
+// 日盤與夜盤的參考價不同，不講是哪一盤就不知道那個百分比在比什麼。
+var _txfIntra = null;        // { sess, t[], c[], avg[], ref, last, pct, day }
+async function loadTxfIntra(ref) {
+  if (ref == null) return null;
+  var d = function (t) { return new Date(t.getTime() + 8 * 3600000).toISOString().slice(0, 10); };
+  var now = new Date();
+  var r = await fetch(API + '/api/v1/data/kbars', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contract: { security_type: 'FUT', exchange: 'TAIFEX', code: 'TXFR1' },
+      start: d(new Date(now.getTime() - 4 * 86400000)), end: d(now) })
+  });
+  if (!r.ok) throw new Error('台指期分K HTTP ' + r.status);
+  var j = await r.json();
+  if (!j || !j.datetime || !j.datetime.length) throw new Error('無台指期分K');
+  var ms = j.datetime.map(function (x) { return Date.parse(x); });
+  var st = 0;
+  for (var i = 1; i < ms.length; i++) { if (ms[i] - ms[i - 1] > 120000) st = i; }
+  var t = [], c = [], avg = [], cv = 0, ca = 0;
+  for (var k = st; k < j.datetime.length; k++) {
+    t.push(j.datetime[k].slice(11, 16));
+    c.push(j.Close[k]);
+    cv += (j.Volume[k] || 0); ca += (j.Amount[k] || 0);
+    avg.push(cv > 0 ? ca / cv : j.Close[k]);   // 開盤第一根若無量，先用收盤頂著
+  }
+  if (c.length < 3) return (_txfIntra = null);
+  // 盤別看區塊第一根的時刻：夜盤 15:01 起（跨午夜仍屬同一盤），日盤 08:46 起
+  var sess = (t[0] >= '14:00') ? '夜盤' : '日盤';
+  var last = c[c.length - 1];
+  _txfIntra = { sess: sess, t: t, c: c, avg: avg, ref: ref, last: last,
+    day: j.datetime[st].slice(0, 10), pct: (last - ref) / ref * 100 };
+  return _txfIntra;
 }
 
 // 單格 HTML：新聞情勢頁的盤勢列與頂欄抽屜共用，避免兩邊各寫一份而漂走。
@@ -814,10 +866,16 @@ async function esunReload(btn) {
 // 台指夜盤單格（不在 MACRO_TICKERS 裡，另外抓）
 function _nightFutCellHtml() {
   if (!_nightFut) return '';
-  return '<div class="macro-cell"><span class="macro-nm"><span class="macro-name">台指夜盤</span>' +
+  // 名稱跟著盤別走，不再固定寫「夜盤」。分 K 抓不到時退回原本的純數字顯示。
+  var o = _txfIntra;
+  var nm = '台指期' + (o ? o.sess : '');
+  var spark = o ? _intraSparkHtml({ t: o.t, c: o.c, avg: o.avg, ref: o.ref, fmt: 0,
+    note: o.day.slice(5).replace(/-/g, '/') + ' ' + o.sess + ' 分時　灰線＝VWAP（累計成交金額 ÷ 累計口數）' }) : '';
+  return '<div class="macro-cell"><span class="macro-nm"><span class="macro-name">' + nm + '</span>' +
     (_nightFut.time ? '<span class="macro-at">成交 ' + _nightFut.time + '</span>' : '') + '</span>' +
     '<span class="macro-price">' + _fmtNum(_nightFut.price, 0) + '</span>' +
-    '<span class="macro-chg ' + _chgCls(_nightFut.changePct) + '">' + (_chgTxt(_nightFut.changePct) || '—') + '</span></div>';
+    '<span class="macro-chg ' + _chgCls(_nightFut.changePct) + '">' + (_chgTxt(_nightFut.changePct) || '—') + '</span>' +
+    spark + '</div>';
 }
 
 // 頂欄抽屜的盤勢：加權指數（當日分時）＋ 五檔 ＋ 日圓即期 ＋ 台指夜盤，排 4×2。
