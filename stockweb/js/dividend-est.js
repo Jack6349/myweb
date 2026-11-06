@@ -523,6 +523,56 @@ function computeEtfNextYear(recs, res, shares, todayIso, year, code) {
   return computeEtfYear(aug, shares, todayIso, year + 1, code, forceStep);
 }
 
+// ── 個股明細的排序 ──
+// 與下方「月份總覽」同一套互動：點標題排序，再點一次換升降，選擇記在 localStorage。
+// 預設 codeAsc：原本就是代碼順，預設不改既有行為；使用者點過之後記住他的選擇。
+// 可排序的只有三欄（代碼、預估年殖利率、成本殖利率），其餘欄位排了沒有意義。
+var DIV_EST_SORT_LS = 'divest_stock_sort_v1';
+var _divEstSort = (function () {
+  try { var v = localStorage.getItem(DIV_EST_SORT_LS); if (/^(code|yld|cyld)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  return 'codeAsc';
+})();
+function divEstSort(key) {
+  // 代碼預設升冪（小的在上），殖利率預設降冪（高的在上）：兩類欄位想先看到的那一端相反
+  var first = (key === 'code') ? 'Asc' : 'Desc';
+  _divEstSort = (_divEstSort === key + first) ? key + (first === 'Asc' ? 'Desc' : 'Asc') : key + first;
+  try { localStorage.setItem(DIV_EST_SORT_LS, _divEstSort); } catch (e) { hush('dividend-est', e); }
+  renderDividendEst();
+}
+
+// 每檔表頭的三個數字。抽出來是因為排序要先有值才排得了，
+// 不能邊畫邊算 —— 原本是在渲染迴圈裡現算的。
+function _divStockMetrics(s) {
+  var _r = (typeof _rows !== 'undefined') && _rows[s.code];
+  var price = (_r && _r.close != null) ? _r.close : ((typeof _contracts !== 'undefined' && _contracts[s.code] && _contracts[s.code].reference) || null);
+  var _mos = s.res.months || [];
+  // 代表性單次配息（每股）：優先用「下一次預估」，否則用最近一次已領
+  var _rep = _mos.filter(function (m) { return m.status === 'est'; })[0] ||
+    _mos.filter(function (m) { return m.status === 'actual'; }).slice(-1)[0];
+  var repPS = _rep ? _rep.perShare : 0;
+  // 配息頻率：與估算、換股試算共用 _divInferStep（含頻率覆寫與「紀錄不足」規則）
+  var _recsAsc = ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [{ code: s.code }])
+    .slice().sort(function (a, b) { return (a.exDate || '') < (b.exDate || '') ? -1 : 1; });
+  if (!_recsAsc[0].code) _recsAsc[0] = Object.assign({ code: s.code }, _recsAsc[0]);
+  var annPerShare = repPS * (12 / _divInferStep(_recsAsc));
+  // 預估年殖利率＝單次配息(每股) × 配息頻率 ÷ 現價（例：00988B 月配、0.157、現價 20 → 9.42%）
+  var yld = (price && annPerShare) ? annPerShare / price * 100 : null;
+  // 成本殖利率：分母換成持股成本均價（同持股庫存、同「本月除息個股」那張表）。
+  // 預估年殖利率回答「現在進場能領多少」，成本殖利率回答「手上這批能領多少」。
+  // 已出清的沒有成本基準。
+  var _pos = (typeof _positions !== 'undefined' && _positions || [])
+    .filter(function (p) { return String(p.code) === s.code; })[0];
+  var costPx = (!s.soldOut && _pos && _pos.price > 0) ? _pos.price : null;
+  var cyld = (costPx && annPerShare) ? annPerShare / costPx * 100 : null;
+  // 當月已公告除息（含 TPEx 預告與手動補登）。已出清的不顯示：這次領不到，
+  // 標在旁邊只會看起來像有錢要進來。
+  var _ym = _divTwDate().iso.slice(0, 7);
+  var ex = s.soldOut ? null : ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [])
+    .filter(function (r) { return r.exDate && r.exDate.slice(0, 7) === _ym; })
+    .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; })[0];
+  return { price: price, yld: yld, cyld: cyld, ex: ex };
+}
+
 function renderDividendEst() {
   var wrap = document.getElementById('divest-wrap');
   if (!_divEstResult) return;
@@ -571,8 +621,37 @@ function renderDividendEst() {
   html += '<div class="divest-divider"></div>' + _rfCalHtml();
 
   // ── 個股明細（可折疊）──
-  html += '<div class="divest-divider"></div><div class="sec-title">個股明細</div><div class="divest-stocks">';
-  stocks.forEach(function (s) {
+  html += '<div class="divest-divider"></div><div class="sec-title">個股明細</div>';
+  // 先把表頭的三個數字算出來，排序才有東西可排；渲染迴圈改成讀這份結果。
+  var met = {};
+  stocks.forEach(function (s) { met[s.code] = _divStockMetrics(s); });
+  var sAsc = /Asc$/.test(_divEstSort), sKey = _divEstSort.replace(/(Asc|Desc)$/, '');
+  var sorted = stocks.slice().sort(function (a, b) {
+    var byCode = String(a.code).localeCompare(String(b.code), undefined, { numeric: true });
+    if (sKey === 'code') return sAsc ? byCode : -byCode;
+    // 沒有值的一律墊底（升冪降冪都是）：把「讀不到成本」的檔排到最前面沒有意義，
+    // 同值時以代碼固定次序，每次重繪的順序才一樣。
+    var va = met[a.code][sKey], vb = met[b.code][sKey];
+    if (va == null && vb == null) return byCode;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return va === vb ? byCode : (sAsc ? va - vb : vb - va);
+  });
+  var sArrow = function (k) { return _divEstSort === k + 'Asc' ? '▲' : (_divEstSort === k + 'Desc' ? '▼' : '↕'); };
+  var sOn = function (k) { return sKey === k ? ' sorted' : ''; };
+  // 表頭列：欄位名只出現一次。原本每一列自己寫「預估年殖利率」「成本殖利率」，
+  // 每列字數不同，所以上下永遠對不齊。說明搬到表頭的 title。
+  html += '<div class="divest-stocks"><div class="divest-hrow">' +
+    '<span class="sort-th' + sOn('code') + '" onclick="divEstSort(\'code\')" title="點擊排序">代碼<span class="sort-ind">' + sArrow('code') + '</span></span>' +
+    '<span>名稱</span>' +
+    '<span class="num">現價</span>' +
+    '<span class="num sort-th' + sOn('yld') + '" onclick="divEstSort(\'yld\')" title="每股配息 × 年配息次數 ÷ 現價：現在買進的預估年報酬。點擊排序">預估年殖利率<span class="sort-ind">' + sArrow('yld') + '</span></span>' +
+    '<span class="num sort-th' + sOn('cyld') + '" onclick="divEstSort(\'cyld\')" title="每股配息 × 年配息次數 ÷ 持股成本均價：手上這批持股的配息報酬。點擊排序">成本殖利率<span class="sort-ind">' + sArrow('cyld') + '</span></span>' +
+    '<span>本月除息</span>' +
+    '<span class="num">已領</span>' +
+    '<span class="num">估算</span>' +
+    '<span></span></div>';
+  sorted.forEach(function (s) {
     var open = !!_divEstOpen[s.code];
     var det = '<div class="divest-drow divest-dhead">' +
         '<span class="divest-dm">發放月</span><span class="divest-dex">除息</span>' +
@@ -599,58 +678,28 @@ function renderDividendEst() {
       '</div>' +
       (hasLent && _divLentOpen[s.code + '|' + mo.exDate] ? '<div class="divest-lentx">' + _divLentLine(mo, money) + '</div>' : '');
     }).join('');
-    // 現價（進頁快照）＋預估年殖利率＝單次配息(每股) × 配息頻率 ÷ 現價 ×100（當前年化殖利率，供換股/調節判斷）
-    // 例：00988B 月配、下次預估 0.157、現價 20 → 0.157×12/20 = 9.42%
-    var _r = (typeof _rows !== 'undefined') && _rows[s.code];
-    var price = (_r && _r.close != null) ? _r.close : ((typeof _contracts !== 'undefined' && _contracts[s.code] && _contracts[s.code].reference) || null);
-    var _mos = s.res.months || [];
-    // 代表性單次配息（每股）：優先用「下一次預估」，否則用最近一次已領
-    var _rep = _mos.filter(function (m) { return m.status === 'est'; })[0] ||
-      _mos.filter(function (m) { return m.status === 'actual'; }).slice(-1)[0];
-    var repPS = _rep ? _rep.perShare : 0;
-    // 配息頻率：與估算、換股試算共用 _divInferStep（含頻率覆寫與「紀錄不足」規則），不再另用發放月間隔自算
-    var _recsAsc = ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [{ code: s.code }])
-      .slice().sort(function (a, b) { return (a.exDate || '') < (b.exDate || '') ? -1 : 1; });
-    if (!_recsAsc[0].code) _recsAsc[0] = Object.assign({ code: s.code }, _recsAsc[0]);
-    var freq = 12 / _divInferStep(_recsAsc);
-    var annPerShare = repPS * freq;
-    var yld = (price && annPerShare) ? annPerShare / price * 100 : null;
-    // 成本殖利率：分母換成持股成本均價（同持股庫存、同「本月除息個股」那張表）。
-    // 預估年殖利率回答「現在進場能領多少」，成本殖利率回答「手上這批能領多少」，
-    // 兩個問題不同，所以並列而不是二選一。
-    // 已出清的沒有成本基準，整段不顯示；還持有但讀不到成本才標 —。
-    var _pos = (typeof _positions !== 'undefined' && _positions || [])
-      .filter(function (p) { return String(p.code) === s.code; })[0];
-    var costPx = (_pos && _pos.price > 0) ? _pos.price : null;
-    var cyld = (costPx && annPerShare) ? annPerShare / costPx * 100 : null;
+    var m = met[s.code], price = m.price, yld = m.yld, cyld = m.cyld;
     // 顏色與「本月除息個股」同一套：成本殖利率高於現價殖利率→紅（成本比現價低，手上這批划算），
     // 低→綠，畫面顯示的兩位小數一樣就算相同→白。
     var cyldCol = (cyld == null || yld == null) ? 'var(--text3)'
       : (+cyld.toFixed(2) > +yld.toFixed(2) ? 'var(--up)'
         : (+cyld.toFixed(2) < +yld.toFixed(2) ? 'var(--down)' : 'var(--text)'));
-    var cyldHtml = s.soldOut ? ''
-      : '　<span class="divest-cyld" title="每股配息 × 年配息次數 ÷ 持股成本均價：手上這批持股的配息報酬">' +
-        '成本殖利率 <b style="color:' + cyldCol + '">' +
-        (cyld != null ? cyld.toFixed(2) + '%' : '—') + '</b></span>';
-    // 當月已公告除息（含 TPEx 預告與手動補登，由 _divMergeAnnounced 併入）；無則不顯示
-    var _ym = _divTwDate().iso.slice(0, 7);
-    // 已出清的不顯示：這次除息領不到，標在旁邊只會看起來像有錢要進來
-    var _exNow = s.soldOut ? null : ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [])
-      .filter(function (r) { return r.exDate && r.exDate.slice(0, 7) === _ym; })
-      .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; })[0];
-    var exHtml = _exNow
-      ? '　<span class="divest-exnow">本月除息 <b>' + md(_exNow.exDate) + '</b>　每股 <b>' +
-        (_exNow.amount != null ? _exNow.amount.toFixed(4) : '待公告') + '</b></span>'
-      : '';
+    // 本月除息：欄位名在表頭，這裡只放日期與金額
+    var exHtml = m.ex ? (md(m.ex.exDate) + ' 每股 <b>' +
+      (m.ex.amount != null ? m.ex.amount.toFixed(4) : '待公告') + '</b>') : '';
     html += '<div class="divest-stock">' +
       '<div class="divest-shead" onclick="toggleDivStock(\'' + s.code + '\')">' +
-        '<div><span class="divest-scode">' + s.code + '</span> <span class="divest-sname">' + s.name + '</span>' +
-          (s.soldOut ? ' <span class="dexm-lent">(已出清)</span>' : '') +
-          '<span class="divest-yield">現價 <b>' + (price != null ? price.toFixed(2) : '—') + '</b>　' +
-          '<span title="每股配息 × 年配息次數 ÷ 現價：現在買進的預估年報酬">預估年殖利率 <b>' +
-          (yld != null ? yld.toFixed(2) + '%' : '—') + '</b></span>' + cyldHtml + exHtml + '</span></div>' +
-        '<div class="divest-smeta">已領 <span style="color:var(--down)">' + money(s.res.actualTotal) + '</span>　估算 <span style="color:var(--accent2)">' + money(s.res.estTotal) + '</span>　' +
-          '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span></div>' +
+        '<span class="divest-scode">' + s.code + '</span>' +
+        '<span class="divest-sname">' + s.name +
+          (s.soldOut ? ' <span class="dexm-lent">(已出清)</span>' : '') + '</span>' +
+        '<span class="num divest-px">' + (price != null ? price.toFixed(2) : '—') + '</span>' +
+        '<span class="num divest-y">' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</span>' +
+        '<span class="num divest-y" style="color:' + cyldCol + '">' +
+          (s.soldOut ? '' : (cyld != null ? cyld.toFixed(2) + '%' : '—')) + '</span>' +
+        '<span class="divest-exnow">' + exHtml + '</span>' +
+        '<span class="num divest-got">' + money(s.res.actualTotal) + '</span>' +
+        '<span class="num divest-est">' + money(s.res.estTotal) + '</span>' +
+        '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span>' +
       '</div>' +
       (open ? '<div class="divest-detail">' + det +
         '<div class="divest-hist" data-code="' + s.code + '"></div>' +
