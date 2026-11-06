@@ -153,13 +153,32 @@ function _txAheadHtml(a) {
     (a.ahead > 0 ? '約 ' + a.ahead.toLocaleString('zh-TW') : '0') + '</span>';
 }
 
+// 沒有委託時的空畫面。開盤前要多講一句預約單，否則凌晨掛完五筆預約單走進來
+// 只看到「今日無委託」，會以為單沒掛成功。
+//
+// 預約單真的拿不到：2026-11-07 01:03 實測，券商 App 顯示五筆預約中（00:54–00:57），
+// 但 /order/trades 回空陣列、/order/order_deal_records 只有前一交易日 11/06 09:44–11:57 的 35 筆，
+// 五個委託書編號在任何回應裡都出現 0 次。整份 API 也沒有預約單端點
+// （stock_reserve_* 是圈存，不是預約下單）。預約單在送進交易所前只存在券商自己的系統，
+// Shioaji 的委託簿還沒有這筆，要等開盤前送出才會變成一般委託。
+function _txEmptyHtml() {
+  var tw = new Date(Date.now() + 8 * 3600000);
+  var hm = tw.getUTCHours() * 60 + tw.getUTCMinutes();
+  // 台股 08:30 起接受委託，預約單在那之後才會送入委託簿 → 只在 00:00–08:30 多講這句
+  var preOpen = hm < 510;
+  return '<div class="modal-loading">今日無委託' +
+    (preOpen ? '<div class="tx-empty-note">預約單不在此列：券商 API 不回傳預約中的委託，' +
+      '要等開盤前（台股 08:30 起接受委託）送入委託簿後才會出現。</div>' : '') +
+    '</div>';
+}
+
 async function loadOrderBox() {
   var el = document.getElementById('tx-order-body');
   el.innerHTML = '<div class="modal-loading">查詢中…</div>';
   try {
     _txTicks = {};                                  // 每次重新整理重抓逐筆（盤中持續增加）
     var trades = await fetchOrderTrades();
-    if (!trades || !trades.length) { el.innerHTML = '<div class="modal-loading">今日無委託</div>'; return; }
+    if (!trades || !trades.length) { el.innerHTML = _txEmptyHtml(); return; }
     trades.sort(function (a, b) { return ((b.status || {}).order_ts || 0) - ((a.status || {}).order_ts || 0); }); // 新→舊
     // 名稱：_contracts 要等行情引擎啟動才有，缺的代號就地查合約補進共用快取
     var needName = {};
