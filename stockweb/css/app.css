@@ -1870,3 +1870,12 @@ td.cost-even::after  { background: var(--text3); }
 .touch-side { color: var(--text2); font-size: 11px; white-space: nowrap; }
 .touch-table tr.touch-r1 td { border-top: 1px solid var(--border-strong); }
 .touch-table td[rowspan] { vertical-align: middle; }
+
+/* ── 即時持股與掛單參考：把左右內距收窄，讓整頁不再被撐出橫向捲軸 ──
+   兩張表的欄位之間本來就有明顯空白，縮內距不會讓任何數字被截斷。
+   只縮這兩張表，其他頁的表格維持原本的 8px。 */
+.live-table th, .live-table td,
+.touch-table th, .touch-table td { padding-left: 4px; padding-right: 4px; }
+/* 走勢那一欄原本固定 300px，是整列最寬的一欄，收到 240px 一次省 60px；
+   小圖是 SVG，等比縮放，不會因此看不清楚 */
+.live-table td.lc-cell { width: 240px; padding: 3px 4px !important; }
