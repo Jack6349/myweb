@@ -1841,3 +1841,7 @@ td.cost-even::after  { background: var(--text3); }
 .bid-fail-msg { font-size: 11px; color: var(--text3); margin: 6px 0 10px; word-break: break-word; }
 .bid-retry { font-size: 12px; padding: 4px 14px; border-radius: 6px; cursor: pointer;
   background: var(--bg3); color: var(--text); border: 1px solid var(--border-strong); }
+
+/* 加權指數分時小圖的均價線：灰白細線，不分紅綠（它是一條平均，沒有漲跌可言）。
+   參照券商 App 大盤分時圖的畫法。 */
+.mspk-avg { fill: none; stroke: var(--text2); stroke-width: 1; opacity: .85; }
