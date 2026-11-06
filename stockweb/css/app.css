@@ -1888,3 +1888,5 @@ td.cost-even::after  { background: var(--text3); }
 /* 走勢那一欄原本固定 300px，是整列最寬的一欄，收到 240px 一次省 60px；
    小圖是 SVG，等比縮放，不會因此看不清楚 */
 .live-table td.lc-cell { width: 240px; padding: 3px 4px !important; }
+/* 隔檔上底色：原本只靠上緣一條線分檔，兩列一組時看不出界線在哪 */
+.touch-table tr.touch-alt td { background: var(--bg3); }
