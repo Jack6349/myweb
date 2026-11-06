@@ -309,7 +309,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .lb-px { color: var(--accent); }
 
 /* 單欄表格，最右邊一欄是每檔當日分時走勢小圖 */
-.live-cols { display: block; }
+/* 13 欄的自然寬度約 1329px（走勢小圖那欄就佔 316px）。螢幕窄於這個數時，
+   原本會把整頁撐出橫向捲軸 —— 連頂欄與導覽列都要跟著左右滑。
+   改成捲軸收在表格內：表格自己滑，頁面不動。與持股庫存的 .inv-table-wrap 同一套。 */
+.live-cols { display: block; overflow-x: auto; }
 .live-table th.lc-cell { text-align: center; }
 .live-table td.lc-cell { width: 300px; padding: 3px 8px !important; }
 .lc-mini { width: 300px; height: 50px; }
@@ -1863,3 +1866,7 @@ td.cost-even::after  { background: var(--text3); }
 .touch-chk b { font-size: 13px; font-weight: 700; }
 .touch-chk span { color: var(--text3); }
 .touch-act { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+/* 掛單參考：一檔兩列（賣高／買低），代號與筆數跨兩列 */
+.touch-side { color: var(--text2); font-size: 11px; white-space: nowrap; }
+.touch-table tr.touch-r1 td { border-top: 1px solid var(--border-strong); }
+.touch-table td[rowspan] { vertical-align: middle; }
