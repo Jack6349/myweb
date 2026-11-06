@@ -1893,3 +1893,5 @@ td.cost-even::after  { background: var(--text3); }
 /* 今日委託與成交標頭的「未成交」：與左邊已成交的金額分成兩組，中間留白 */
 .tx-open-sum { padding-left: 10px; border-left: 1px solid var(--border-strong); }
 .tx-open-sum b { font-weight: 700; }
+/* 開盤前的預約單說明：接在「今日無委託」下方，字小一階 */
+.tx-empty-note { margin-top: 6px; font-size: 11.5px; color: var(--text3); line-height: 1.5; }
