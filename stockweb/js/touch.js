@@ -158,7 +158,9 @@ function touchHtml() {
   if (!sel.length) return '';
   var h = '<div class="sec-title">掛單參考<span class="touch-sub">近 ' + TOUCH_DAYS +
     ' 個交易日（含今日）　在某個成交時刻以「成交價 ＋ X」掛賣，往後 ' + TOUCH_WIN_MIN +
-    ' 分鐘內最高價碰到 X 的比例</span></div>';
+    ' 分鐘內最高價碰到 X 的比例。'
+    // 這裡的紅綠不是漲跌，是「碰得到／碰不到」，與全站慣例不同所以寫明
+    + '紅＝五成以上碰得到、綠＝一成以下（與全站的紅漲綠跌無關）</span></div>';
   if (!_touchRows) {
     return h + '<div class="modal-loading">載入逐筆成交中…（首次較久，過去的交易日算過就不再算）</div>';
   }
@@ -211,16 +213,24 @@ function touchMount() {
 }
 
 // ── 參數設定：選哪幾檔要看 ──
-function renderTouchSel() {
+async function renderTouchSel() {
   var el = document.getElementById('params-touch-body');
   if (!el) return;
+  // 持股優先用行情引擎已載入的 _positions；直接從首頁進參數設定時它還是空的，
+  // 這時直接向券商查一次（與成份股匯入同一套做法），不要卡在「載入中」。
+  var pos = (typeof _positions !== 'undefined' && _positions && _positions.length) ? _positions : [];
+  if (!pos.length) {
+    el.innerHTML = '<div class="modal-loading">查詢持股中…</div>';
+    try { pos = (typeof fetchBrokerPositions === 'function') ? (await fetchBrokerPositions() || []) : []; }
+    catch (e) { hush('touch', e); pos = []; }
+  }
   var codes = [];
-  (typeof _positions !== 'undefined' && _positions || []).forEach(function (p) {
+  pos.forEach(function (p) {
     var c = String(p.code);
     if (codes.indexOf(c) < 0) codes.push(c);
   });
   codes.sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
-  if (!codes.length) { el.innerHTML = '<div class="modal-loading">持股載入中…</div>'; return; }
+  if (!codes.length) { el.innerHTML = '<div class="modal-loading">查不到持股</div>'; return; }
   var sel = touchSel();
   el.innerHTML = '<div class="detail-note">勾選的標的會在即時持股頁下方列出掛單參考。' +
     '每檔第一次要抓三天的逐筆成交（成交熱絡的一天約 2～3 MB），只勾實際會掛單的那幾檔。</div>' +
