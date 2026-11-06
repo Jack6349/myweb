@@ -166,6 +166,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
    放寬不會讓文字變難讀。1800：1920 螢幕等於填滿，2560 螢幕停在 1800 不會拉到荒謬。
    注意表格是 width:100%，放寬只會讓欄位更鬆，不會多顯示資訊。 */
 .main-area { max-width: 1800px; margin: 0 auto; padding: 14px 28px 10px; }
+/* 橫向捲軸的真正來源：合計列（.stream-summary）與股利估算頂列（.divest-topbar）
+   用 calc(50% - 50vw) 做滿版延伸，而 vw 把垂直捲軸的寬度也算進去 ——
+   頁面一出現垂直捲軸，這兩條就比內容區寬約 15px，左右各溢出 7px，
+   剛好是那條幾乎佔滿整條軌道的橫向捲軸。實測 1600px 視窗：內容區 1585、該列 1600。
+   用 clip 而不是 hidden：clip 不會建立捲動容器，上面幾條 position: sticky 仍然有效。
+   html 與 body 兩個都要寫：實測只寫其中一個都還是溢出（computed 是 clip 但捲軸還在），
+   兩個一起寫才歸零。滿版的視覺維持原樣（該列仍是整個視窗寬）。
+   兩張寬表格本來就有自己的捲動容器，不會被這行誤切。 */
+html, body { overflow-x: clip; }
 
 /* 功能導覽列：固定於頂欄下方，直接切換各功能頁 */
 .nav-bar { position: sticky; top: var(--h-topbar); z-index: var(--z-nav); height: var(--h-navbar);
