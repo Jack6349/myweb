@@ -64,21 +64,21 @@ async function startTopConst() {
   info.textContent = '取得報價…';
   for (var i = 0; i < rows.length; i++) {
     var code = rows[i].code;
-    if (!_contracts[code]) { try { _contracts[code] = await fetchContract(code); } catch (e) {} }
+    if (!_contracts[code]) { try { _contracts[code] = await fetchContract(code); } catch (e) { hush('topconst', e); } }
     if (!_rows[code]) _rows[code] = { close: null, total_volume: null, time: '' };
   }
   try {
     var cons = rows.map(function (r) { return _contracts[r.code]; }).filter(Boolean);
     var snaps = await fetchSnapshots(cons);
     snaps.forEach(function (s) { _rows[s.code] = { close: s.close, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) }; });
-  } catch (e) {}
+  } catch (e) { hush('topconst', e); }
 
   // 訂閱 tick（僅非自身持股者；自身持股已由 ensureFeed 訂閱過）
   var own = {}; (_positions || []).forEach(function (p) { own[String(p.code)] = true; });
   _topSubbed = [];
   for (var j = 0; j < rows.length; j++) {
     var c = _contracts[rows[j].code];
-    if (c && !own[rows[j].code]) { try { await subscribeTick(c); _topSubbed.push(rows[j].code); } catch (e) {} }
+    if (c && !own[rows[j].code]) { try { await subscribeTick(c); _topSubbed.push(rows[j].code); } catch (e) { hush('topconst', e); } }
   }
   info.textContent = '已連線｜前 ' + rows.length + ' 大台股成分（依曝險）';
   renderTopConstTable();
@@ -136,7 +136,7 @@ function stopTopConst() {
     fetch(API + '/api/v1/stream/unsubscribe', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ security_type: 'STK', exchange: c.exchange, code: code, quote_type: 'Tick' })
-    }).catch(function () {});
+    }).catch(function (e) { hush('topconst', e); });
   });
   _topSubbed = [];
 }

@@ -72,8 +72,8 @@ async function renderDailyDigest() {
   el.className = 'live-digest';
   el.innerHTML = '<div class="modal-loading" style="padding:10px">彙整今日提醒（趨勢/籌碼/淨值/隔夜）…</div>';
 
-  try { if (typeof ensureTrend === 'function') await ensureTrend(); } catch (e) {}
-  try { if (typeof ensureSignals === 'function') await ensureSignals(); } catch (e) {}
+  try { if (typeof ensureTrend === 'function') await ensureTrend(); } catch (e) { hush('digest', e); }
+  try { if (typeof ensureSignals === 'function') await ensureSignals(); } catch (e) { hush('digest', e); }
 
   var trendMap = {}; (typeof _trendRows !== 'undefined' ? _trendRows : []).forEach(function (r) { if (r.trend) trendMap[r.code] = r.trend; });
   var sigMap = {}; (typeof _sigRows !== 'undefined' ? _sigRows : []).forEach(function (r) { sigMap[r.code] = r; });

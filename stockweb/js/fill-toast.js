@@ -102,7 +102,7 @@ function _ftAudioCtx() {
   return _ftAudio;
 }
 ['pointerdown', 'keydown'].forEach(function (evn) {
-  window.addEventListener(evn, function () { try { _ftAudioCtx(); } catch (e) {} }, { capture: true, passive: true });
+  window.addEventListener(evn, function () { try { _ftAudioCtx(); } catch (e) { hush('fill-toast', e); } }, { capture: true, passive: true });
 });
 var FT_SOUND = {
   //        [頻率 Hz, 開始秒, 長度秒]
@@ -128,7 +128,7 @@ function _ftBeep(key) {
       osc.connect(g); g.connect(ctx.destination);
       osc.start(t0); osc.stop(t1 + 0.02);
     });
-  } catch (e) {}
+  } catch (e) { hush('fill-toast', e); }
 }
 
 function _ftShow(ev) {

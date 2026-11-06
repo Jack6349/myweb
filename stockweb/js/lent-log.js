@@ -208,7 +208,7 @@ async function renderLentManual() {
 async function _lentAfterSave() {
   // 股利估算已算過的話重算一次，畫面上的拆分才會跟著變（同 div-meta.js 儲存後的作法）
   if (typeof _divEstResult !== 'undefined' && _divEstResult && typeof startDividendEst === 'function') {
-    try { await startDividendEst(false); } catch (e) {}
+    try { await startDividendEst(false); } catch (e) { hush('lent-log', e); }
   }
   await renderLentManual();
 }

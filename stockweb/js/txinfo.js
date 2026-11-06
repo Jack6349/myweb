@@ -313,7 +313,7 @@ async function _txPxTick() {
         return (_contracts[c]) || { exchange: 'TSE', code: c };
       }));
       (sn || []).forEach(function (x) { if (x && x.code && x.close > 0) _txSnapPx[x.code] = +x.close; });
-    } catch (e) {}
+    } catch (e) { hush('txinfo', e); }
   }
   cells.forEach(function (td) {
     var html = _txPxHtml(td.getAttribute('data-code'));

@@ -196,8 +196,8 @@ async function divMetaLoad(codes, force) {
   });
   await Promise.all(need.map(async function (c) {
     try { var m = await _divMetaFetchOne(c); m.ts = Date.now(); _divMeta[c] = m; dirty = true; }
-    catch (e) {}                                    // 網路／GAS 異常 → 不快取，下次再試
-  }).concat([_divManLoad().catch(function () {})]));
+    catch (e) { hush('div-meta', e); }                                    // 網路／GAS 異常 → 不快取，下次再試
+  }).concat([_divManLoad().catch(function (e) { hush('div-meta', e); })]));
   if (dirty) _divMetaSave();
 }
 
@@ -407,7 +407,7 @@ async function divMetaNextEx(code, raw) {
     map[code] = r;
   }
   _rfManSave(map);
-  try { await startDividendEst(false); } catch (e) {}   // 重算估算（沿用當日快取），本頁「下次除息」同步更新
+  try { await startDividendEst(false); } catch (e) { hush('div-meta', e); }   // 重算估算（沿用當日快取），本頁「下次除息」同步更新
   renderDivMeta();
 }
 async function divMetaSet(code, key, raw) {
@@ -421,6 +421,6 @@ async function divMetaSet(code, key, raw) {
   renderDivMeta();
   // 頻率變動會影響估算與殖利率 → 背景重算股利估算（配息紀錄走快取，不重打外部來源）
   if (key === 'step' && (rec.step || null) !== oldStep && typeof startDividendEst === 'function') {
-    startDividendEst(false).then(renderDivMeta).catch(function () {});
+    startDividendEst(false).then(renderDivMeta).catch(function (e) { hush('div-meta', e); });
   }
 }

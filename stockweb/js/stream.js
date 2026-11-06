@@ -90,7 +90,7 @@ async function checkServer() {
   try {
     var r = await fetch(API + '/api/v1/health', { cache: 'no-store' });
     alive = r.ok;
-  } catch (e) {}
+  } catch (e) { hush('stream', e); }
   if (!alive) {
     _srvState = 'down';
     el.textContent = '● 行情服務未啟動';
@@ -243,7 +243,7 @@ async function loadBrokerPositionsFull(say) {
     // 建倉明細（_lotsMap）到齊了：通知有在用它的頁面重畫。
     // 沒有這個通知的話，先開畫面的那一頁會停在「未持有」——
     // 2026-10-02 實測策略檢視的 00999A 就是這樣被標成未持有。
-    if (typeof sdOnLots === 'function') { try { sdOnLots(); } catch (e) {} }
+    if (typeof sdOnLots === 'function') { try { sdOnLots(); } catch (e) { hush('stream', e); } }
     // 順手記下今天各檔借出幾張：股利估算拆「直接入帳／借券補償」要知道除息日當天的借出量，
     // 券商 API 沒有歷史，只能自己逐日記（見 lent-log.js）。不等寫入完成，失敗不影響庫存載入。
     if (typeof lentLogRecord === 'function') { lentLogRecord().catch(function (e) { console.warn('[lent log]', e); }); }
@@ -407,10 +407,10 @@ async function refreshPositions() {
     if (typeof renderSummaries === 'function') renderSummaries();
     if (typeof renderTopbarTotals === 'function') renderTopbarTotals();
     if (_positions[0] && _positions[0].id !== null) syncPositionsToFirestore(_positions);
-    try { _posRawSig = _posSig(await fetchBrokerPositions()); } catch (e) {}   // 更新輪詢基準
+    try { _posRawSig = _posSig(await fetchBrokerPositions()); } catch (e) { hush('stream', e); }   // 更新輪詢基準
     // 股利估算的可領張數依建倉明細計算 → 持股一變就重算（已載入過才做；用快取不重打外部來源）
     if (typeof _divEstResult !== 'undefined' && _divEstResult && typeof startDividendEst === 'function') {
-      startDividendEst(false).catch(function () {});
+      startDividendEst(false).catch(function (e) { hush('stream', e); });
     }
     if (typeof loadInvSettle === 'function') loadInvSettle();   // 成交後待交割金額跟著變
     console.log('[positions] 委託事件重抓完成：' + _positions.length + ' 檔');
@@ -868,7 +868,7 @@ function openSSE() {
       if (typeof renderTopConstRow === 'function') renderTopConstRow(code);
       if (typeof renderWatchRow === 'function') renderWatchRow(code);
       if (prev != null && close !== prev) flashCard(code, close > prev ? 1 : -1);
-    } catch (e) {}
+    } catch (e) { hush('stream', e, 2); }
   });
   _es.onerror = function () {
     var info = document.getElementById('stream-info');
@@ -911,17 +911,17 @@ async function startStream() {
   // 補合約/快照/訂閱
   for (var i = 0; i < others.length; i++) {
     var oc = others[i];
-    if (!_contracts[oc]) { try { _contracts[oc] = await fetchContract(oc); } catch (e) {} }
+    if (!_contracts[oc]) { try { _contracts[oc] = await fetchContract(oc); } catch (e) { hush('stream', e); } }
     if (!_rows[oc]) _rows[oc] = { close: null, total_volume: null, time: '' };
   }
   try {
     var snaps = await fetchSnapshots(others.map(function (c) { return _contracts[c]; }).filter(Boolean));
     snaps.forEach(function (s) { _rows[s.code] = { close: s.close, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) }; });
-  } catch (e) {}
+  } catch (e) { hush('stream', e); }
   _streamOtherSubbed = [];
   for (var k = 0; k < others.length; k++) {
     var c2 = _contracts[others[k]];
-    if (c2) { try { await subscribeTick(c2); _streamOtherSubbed.push(others[k]); } catch (e) {} }
+    if (c2) { try { await subscribeTick(c2); _streamOtherSubbed.push(others[k]); } catch (e) { hush('stream', e); } }
   }
 
   // 兩段結構：上＝現有持股、下＝其他主要成分股，各依代碼排序
@@ -950,7 +950,7 @@ function stopStreamOthers() {
     fetch(API + '/api/v1/stream/unsubscribe', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ security_type: 'STK', exchange: c.exchange, code: code, quote_type: 'Tick' })
-    }).catch(function () {});
+    }).catch(function (e) { hush('stream', e); });
   });
   _streamOtherSubbed = [];
 }

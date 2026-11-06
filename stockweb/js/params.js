@@ -45,7 +45,7 @@ async function renderConstImport(force) {
     for (var i = 0; i < rows.length; i++) {
       var c = rows[i].code;
       if (!(typeof _contracts !== 'undefined' && _contracts[c])) {
-        try { _contracts[c] = await fetchContract(c); } catch (e) {}
+        try { _contracts[c] = await fetchContract(c); } catch (e) { hush('params', e); }
       }
       rows[i].name = (typeof _contracts !== 'undefined' && _contracts[c] && _contracts[c].name) || '';
     }

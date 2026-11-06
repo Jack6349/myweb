@@ -298,7 +298,7 @@ async function startSwap() {
   try {
     if (!_divEstResult) {
       wrap.innerHTML = '<div class="modal-loading">載入持股與配息資料…</div>';
-      try { await startDividendEst(); } catch (e) {}
+      try { await startDividendEst(); } catch (e) { hush('swap', e); }
     }
     if (!_divEstResult) {
       wrap.innerHTML = '<div class="modal-loading">尚無配息資料，請先切到「股利估算」頁載入成功後再試。</div>';
@@ -332,18 +332,18 @@ function _swapSnapPrices() {
 async function _swapEnsureCode(code) {
   code = String(code);
   if (!_contracts[code]) {
-    try { _contracts[code] = await fetchContract(code); } catch (e) {}
+    try { _contracts[code] = await fetchContract(code); } catch (e) { hush('swap', e); }
   }
   if (!_contracts[code]) return false;
   if (_swapPx[code] == null) {
     try {
       var snaps = await fetchSnapshots([_contracts[code]]);
       (snaps || []).forEach(function (s) { if (s.close != null) _swapPx[String(s.code)] = s.close; });
-    } catch (e) {}
+    } catch (e) { hush('swap', e); }
     if (_swapPx[code] == null && _contracts[code].reference) _swapPx[code] = _contracts[code].reference;
   }
   if (typeof _divGetRecs === 'function' && !(_divRecMap[code] && _divRecMap[code].length)) {
-    try { await _divGetRecs(code); } catch (e) {}
+    try { await _divGetRecs(code); } catch (e) { hush('swap', e); }
   }
   return true;
 }

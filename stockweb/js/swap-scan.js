@@ -37,7 +37,7 @@ var _swFreq = null, _swWatch = null;
   fetch(SW_FREQ_URL, { cache: 'no-cache' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) { if (j && j.map) _swFreq = j.map; })
-    .catch(function () {});
+    .catch(function (e) { hush('swap-scan', e); });
 })();
 
 // ── 觀察清單（區塊 D）：本機優先，登入後與 Firestore 合併，與 cost-override 同一套機制 ──
@@ -54,7 +54,7 @@ function swWatchSave(list) {
     if (typeof _fsDoc === 'function' && typeof _uid !== 'undefined' && _uid) {
       _fsDoc('stock_prefs', _uid).set({ swapWatch: _swWatch }, { merge: true });
     }
-  } catch (e) {}
+  } catch (e) { hush('swap-scan', e); }
 }
 
 // ── 基礎量 ──
@@ -117,7 +117,7 @@ function swEval(code) {
   try {
     var u = (typeof _npUnits !== 'undefined' && _npUnits && _npUnits[String(code)]) || null;
     if (u) { var ks = Object.keys(u).sort(); units = u[ks[ks.length - 1]]; size = units * px / 1e8; }
-  } catch (e) {}
+  } catch (e) { hush('swap-scan', e); }
   var vol = (typeof _npVol !== 'undefined' && _npVol && _npVol[String(code)]) || null;
   return {
     code: String(code), name: swName(code),

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=283">
+<link rel="stylesheet" href="css/app.css?v=284">
 </head>
 <body>
 
@@ -26,6 +26,8 @@
     <button id="dw-btn" class="dw-btn" hidden onclick="toggleDrawer()" title="部位與配置">▾ 更多</button>
     <span id="stream-info" class="stream-info"></span>
     <span id="conn-status" class="conn-status">連線檢查中…</span>
+    <!-- 安燈：被吞掉的錯誤有幾件。沒事時整個不顯示（見 js/hush.js） -->
+    <span id="hush-lamp" class="hush-lamp" hidden onclick="hushToggle()"></span>
     <button id="btn-back" class="btn-back" onclick="closeStream()" style="display:none">← 返回</button>
     <span id="div-sync-status" style="display:none"></span>
   </div>
@@ -416,46 +418,47 @@
 
 <script type="module" src="js/firebase-init.js?v=10"></script>
 <script src="js/auth.js?v=10"></script>
+<script src="js/hush.js?v=2"></script>
 <script src="js/note.js?v=5"></script>
 <script src="js/broker.js?v=22"></script>
-<script src="js/fill-toast.js?v=6"></script>
-<script src="js/stream.js?v=95"></script>
+<script src="js/fill-toast.js?v=7"></script>
+<script src="js/stream.js?v=96"></script>
 <script src="js/nav-usage.js?v=2"></script>
 <script src="js/daily-refresh.js?v=1"></script>
 <script src="js/category.js?v=2"></script>
-<script src="js/inventory.js?v=99"></script>
+<script src="js/inventory.js?v=100"></script>
 <script src="js/constituents.js?v=13"></script>
 <script src="js/live.js?v=57"></script>
 <script src="js/trades.js?v=11"></script>
-<script src="js/txinfo.js?v=23"></script>
+<script src="js/txinfo.js?v=24"></script>
 <script src="js/sbl.js?v=12"></script>
-<script src="js/cost-override.js?v=2"></script>
-<script src="js/lent-log.js?v=1"></script>
-<script src="js/params.js?v=5"></script>
-<script src="js/settings.js?v=6"></script>
+<script src="js/cost-override.js?v=3"></script>
+<script src="js/lent-log.js?v=2"></script>
+<script src="js/params.js?v=6"></script>
+<script src="js/settings.js?v=7"></script>
 <script src="js/retire.js?v=8"></script>
-<script src="js/topconst.js?v=8"></script>
+<script src="js/topconst.js?v=9"></script>
 <script src="js/style-drift.js?v=20"></script>
 <script src="js/style-drift-doc.js?v=19"></script>
-<script src="js/watch.js?v=25"></script>
-<script src="js/etf-screen.js?v=23"></script>
+<script src="js/watch.js?v=26"></script>
+<script src="js/etf-screen.js?v=24"></script>
 <script src="js/etf-new.js?v=3"></script>
-<script src="js/chart.js?v=38"></script>
-<script src="js/pvhist.js?v=24"></script>
+<script src="js/chart.js?v=39"></script>
+<script src="js/pvhist.js?v=25"></script>
 <script src="js/order.js?v=4"></script>
-<script src="js/div-mix.js?v=6"></script>
-<script src="js/div-meta.js?v=13"></script>
-<script src="js/dividend-est.js?v=71"></script>
+<script src="js/div-mix.js?v=7"></script>
+<script src="js/div-meta.js?v=14"></script>
+<script src="js/dividend-est.js?v=72"></script>
 <script src="js/divnav.js?v=3"></script>
-<script src="js/swap.js?v=37"></script>
-<script src="js/refill.js?v=39"></script>
+<script src="js/swap.js?v=38"></script>
+<script src="js/refill.js?v=40"></script>
 <script src="js/nav-premium.js?v=9"></script>
-<script src="js/swap-scan.js?v=6"></script>
-<script src="js/risk-score.js?v=38"></script>
-<script src="js/news.js?v=54"></script>
-<script src="js/trend.js?v=33"></script>
-<script src="js/signals.js?v=29"></script>
-<script src="js/alerts.js?v=42"></script>
-<script src="js/digest.js?v=42"></script>
+<script src="js/swap-scan.js?v=7"></script>
+<script src="js/risk-score.js?v=39"></script>
+<script src="js/news.js?v=55"></script>
+<script src="js/trend.js?v=34"></script>
+<script src="js/signals.js?v=30"></script>
+<script src="js/alerts.js?v=43"></script>
+<script src="js/digest.js?v=43"></script>
 </body>
 </html>

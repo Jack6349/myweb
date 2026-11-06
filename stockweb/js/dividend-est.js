@@ -54,7 +54,7 @@ async function fetchEtfDividendList(force) {
   // GAS 端錯誤（如 urlfetch 配額爆掉）會回 JSON {"error":...} → 丟出可讀訊息，不要當 HTML 解析
   if (text.charAt(0) === '{') {
     var je = null;
-    try { je = JSON.parse(text); } catch (pe) {}
+    try { je = JSON.parse(text); } catch (pe) { hush('dividend-est', pe); }
     if (je && je.error) throw new Error(je.error);
   }
   var rows = parseEtfDividendHtml(text);
@@ -92,7 +92,7 @@ async function fetchYahooDiv(code, force) {
         recs.push({ code: code, name: (_contracts[code] && _contracts[code].name) || '', exDate: ex, payDate: pay, amount: d.amount });
       });
     }
-  } catch (e) {}
+  } catch (e) { hush('dividend-est', e); }
   // 只快取有內容的結果；抓取失敗（空）不寫入，下次進頁面會自動重試
   if (recs.length) {
     cache.map[code] = recs;
@@ -141,7 +141,7 @@ var _wdReady = fetch('data/workday.json', { cache: 'no-cache' })
     _wdOff = {}; j.off.forEach(function (d) { _wdOff[d] = 1; });
     _wdYears = j.years || null;
   })
-  .catch(function () {});
+  .catch(function (e) { hush('dividend-est', e); });
 
 // 這一天放不放假。辦公日曆沒涵蓋到的年份回 null，由呼叫端退回只看週六日。
 function _divIsOff(iso) {
@@ -362,14 +362,14 @@ async function startDividendEst(force) {
   wrap.innerHTML = '<div class="modal-loading">讀取持股與配息資料…</div>';
 
   // 辦公日曆要在算發放日之前載好，否則第一次算出來的還是「只跳過週六日」的舊規則
-  if (typeof _wdReady !== 'undefined') { try { await _wdReady; } catch (e) {} }
+  if (typeof _wdReady !== 'undefined') { try { await _wdReady; } catch (e) { hush('dividend-est', e); } }
   // 持股/股數（沿用行情引擎的 _sharesMap；失敗容忍）
-  try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) {}
+  try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) { hush('dividend-est', e); }
   // ensureFeed 只在首次建立時讀庫存，之後直接沿用 → 盤中成交後張數會停在開頁時的值。
   // 按「重新整理」時強制重抓一次券商庫存（含建倉明細），可領張數才會跟上今日買賣。
   if (force && typeof refreshPositions === 'function') {
     info.textContent = '重抓券商庫存…';
-    try { await refreshPositions(); } catch (e) {}
+    try { await refreshPositions(); } catch (e) { hush('dividend-est', e); }
   }
   var shareMap = (typeof _sharesMap !== 'undefined' && _sharesMap) ? _sharesMap : {};
   var codes = Object.keys(shareMap).filter(isEtfCode);
@@ -397,9 +397,9 @@ async function startDividendEst(force) {
     else missing.push(code);
   });
   await Promise.all(missing.map(async function (code) {
-    try { var yr = await fetchYahooDiv(code, force); if (yr && yr.length) recMap[code] = yr; } catch (e) {}
+    try { var yr = await fetchYahooDiv(code, force); if (yr && yr.length) recMap[code] = yr; } catch (e) { hush('dividend-est', e); }
   }).concat([
-    divMetaLoad(codes).catch(function () {}),        // 官方 ETF 規格＋手動輸入（配息頻率估算要用，須在 computeEtfYear 前就緒；見 div-meta.js）
+    divMetaLoad(codes).catch(function (e) { hush('dividend-est', e); }),        // 官方 ETF 規格＋手動輸入（配息頻率估算要用，須在 computeEtfYear 前就緒；見 div-meta.js）
   ]));
   // 官方除權息歷史（補 e添富／Yahoo 漏掉的除息）：GAS 慢時 8 段要抓到一分鐘，不擋畫面——
   // 今日快取就緒 → 同步併入；否則先用現有資料顯示，背景抓完（完整）再重算一次，第二次即命中快取。
@@ -408,15 +408,15 @@ async function startDividendEst(force) {
   } else if (!_divOffHistBusy) {
     _divOffHistBusy = true;
     if (_divOffHistStored()) _divMergeOfficialHist(recMap, codes);   // 前次完整資料先頂著（過去的除息不會變）
-    _divLoadOfficialHist(codes, true).catch(function () {}).then(function () {
+    _divLoadOfficialHist(codes, true).catch(function (e) { hush('dividend-est', e); }).then(function () {
       _divOffHistBusy = false;
       if (_divOffHistReady(codes)) startDividendEst(false);
     });
   }
   // 上櫃 ETF 的未來除息只有 TPEx 有；先確保當日快取存在（每日 1 次全市場），股利估算不再相依填息追蹤頁
-  try { await fetchTpexExright(); } catch (e) {}
+  try { await fetchTpexExright(); } catch (e) { hush('dividend-est', e); }
   // Yahoo 下一期金額（div-mix.js 非同步載入）：沒等它就併，第一次進頁會少一筆金額
-  if (typeof _dmReady !== 'undefined') { try { await _dmReady; } catch (e) {} }
+  if (typeof _dmReady !== 'undefined') { try { await _dmReady; } catch (e) { hush('dividend-est', e); } }
   _divMergeAnnounced(recMap, allCodes);   // 併入已公告除息（TPEx 預告表／Yahoo／手動補登），估算改採實際公告值
   _divRecMap = recMap;   // 供換股試算與填息追蹤共用
 
@@ -427,7 +427,7 @@ async function startDividendEst(force) {
   } catch (e) { console.warn('[divest calendar]', e); _rfCal = _rfCal || []; }
 
   // 除息日借出張數（拆直接入帳／借券補償用）：computeEtfYear 是同步的，先載好
-  if (typeof lentLoad === 'function') { try { await lentLoad(); } catch (e) {} }
+  if (typeof lentLoad === 'function') { try { await lentLoad(); } catch (e) { hush('dividend-est', e); } }
 
   var tw = _divTwDate();
   var stocks = [];
@@ -709,7 +709,7 @@ function _divHistPrices(code) {
         for (var k = 0; k < ts.length; k++) {
           if (cl[k] != null) bars.push([new Date(ts[k] * 1000 + 8 * 3600000).toISOString().slice(0, 10), cl[k]]);
         }
-      } catch (e) {}
+      } catch (e) { hush('dividend-est', e); }
     }
     _divPxBusy[code] = false;
     // 失敗記空陣列＋時間：60 秒內重繪不重打 GAS，之後再開明細會重試（GAS 是偶發失敗，不能整天放棄）
@@ -1163,7 +1163,7 @@ async function _divLoadOfficialHist(codes, force) {
       try {
         var j = await _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(u), 40000).then(function (r) { return r.json(); });
         if (j && !j.error) return j;
-      } catch (e) {}
+      } catch (e) { hush('dividend-est', e); }
     }
     throw new Error('GAS 抓取失敗：' + u);
   };
@@ -1251,7 +1251,7 @@ function _divMergeAnnounced(recMap, allCodes) {
         if (y) push(code, y.ex, y.pay, y.amt, 'Yahoo預告');
       });
     }
-  } catch (e) {}
+  } catch (e) { hush('dividend-est', e); }
   try {                                            // 手動補登（後併入，可補上 TPEx 缺的金額/發放日）
     var man = JSON.parse(localStorage.getItem('refill_manual_v1') || '{}');
     Object.keys(man).forEach(function (code) {
@@ -1298,11 +1298,11 @@ async function _divGetRecs(code, force) {
       var bc = {};
       rows.forEach(function (r) { (bc[r.code] = bc[r.code] || []).push(r); });
       _divByCode = bc;
-    } catch (e) {}
+    } catch (e) { hush('dividend-est', e); }
   }
   if (_divByCode[code] && _divByCode[code].length) { _divRecMap[code] = _divByCode[code]; return _divRecMap[code]; }
   var yr = [];
-  try { yr = await fetchYahooDiv(code, force); } catch (e) {}
+  try { yr = await fetchYahooDiv(code, force); } catch (e) { hush('dividend-est', e); }
   _divRecMap[code] = yr || [];
   return _divRecMap[code];
 }

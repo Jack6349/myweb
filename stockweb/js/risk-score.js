@@ -78,7 +78,7 @@ async function _rsNight() {
     });
     var a = await r.json();
     if (a && a[0] && a[0].close != null) return { value: a[0].close, chg: a[0].change_rate };
-  } catch (e) {}
+  } catch (e) { hush('risk-score', e); }
   return null;
 }
 
@@ -90,7 +90,7 @@ async function _rsOAS() {
     var url = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A0HYM2';
     var r = await fetch(NEWS_GAS_URL + '?urltext=' + encodeURIComponent(url));
     var text = await r.text();
-    if (text.charAt(0) === '{') { var je = null; try { je = JSON.parse(text); } catch (e) {} if (je && je.error) return null; }
+    if (text.charAt(0) === '{') { var je = null; try { je = JSON.parse(text); } catch (e) { hush('risk-score', e); } if (je && je.error) return null; }
     var lines = text.trim().split(/\r?\n/), pts = [];
     for (var i = 1; i < lines.length; i++) {
       var p = lines[i].split(','); var v = parseFloat(p[1]);
@@ -114,11 +114,11 @@ async function _rsBondNav(code) {
       var p = npPremium(code);
       if (p) return { nav: p.nav, premium: p.prem, price: p.px, date: p.date, src: 'np' };
     }
-  } catch (e) {}
+  } catch (e) { hush('risk-score', e); }
   try {
     if (typeof sigEnsureNavMap === 'function') await sigEnsureNavMap();
     if (typeof sigGetNav === 'function') return sigGetNav(code); // {nav, premium(%), price, date}
-  } catch (e) {}
+  } catch (e) { hush('risk-score', e); }
   return null;
 }
 // 成交量比：當日量 vs 近 90 日中位數（换股試算的「換手品質」仍在用，見 swap.js _swapQualEnsure）
@@ -160,7 +160,7 @@ async function startRiskReport(force) {
 
   // 債券區塊要依「實際持有的非投等債 ETF」列出 → 本頁需先有持股資料（本頁原本不載入持股）
   if (typeof ensureFeed === 'function' && !Object.keys((typeof _sharesMap !== 'undefined' && _sharesMap) || {}).length) {
-    try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) {}
+    try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) { hush('risk-score', e); }
   }
 
   var res = await Promise.all([
@@ -338,7 +338,7 @@ async function _rsBars1y(sym) {
     for (var k = 0; k < ts.length; k++) {
       if (cl[k] != null) bars.push([new Date(ts[k] * 1000 + 8 * 3600000).toISOString().slice(0, 10), cl[k]]);
     }
-  } catch (e) {}
+  } catch (e) { hush('risk-score', e); }
   if (bars.length) _rsBars[sym] = bars;
   return bars;
 }

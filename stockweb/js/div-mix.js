@@ -32,12 +32,12 @@ var _dmReady = (function () {
   var a = fetch('data/etf-div-mix.json', { cache: 'no-cache' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) { if (j && j.map) { _dmMap = j.map; _dmDay = j.updated || null; } })
-    .catch(function () {});
+    .catch(function (e) { hush('div-mix', e); });
   // 下一期已公告金額，失敗不影響主資料
   var b = fetch('data/etf-div-next.json', { cache: 'no-cache' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) { if (j && j.map) { _dmNext = j.map; _dmNextDay = j.updated || null; } })
-    .catch(function () {});
+    .catch(function (e) { hush('div-mix', e); });
   return Promise.all([a, b]).then(function () {
     _dmLoaded = true;
     if (typeof dmOnLoad === 'function') dmOnLoad();

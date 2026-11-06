@@ -189,13 +189,13 @@ async function coSaveRow(code, date) {
   var v = parseFloat(inp.value);
   if (!(v >= 0)) { alert('請輸入每股認購價（例 10.00）'); inp.focus(); return; }
   await coSet(code, date, v);
-  if (typeof refreshPositions === 'function') { try { await refreshPositions(); } catch (e) {} }
+  if (typeof refreshPositions === 'function') { try { await refreshPositions(); } catch (e) { hush('cost-override', e); } }
   await renderCostOverride(false);
 }
 
 async function coDelRow(code, date) {
   if (!confirm('刪除 ' + code + ' ' + date + ' 的認購成本設定？\n刪除後該批次會回到券商端的原始值（成本 0），持股成本與損益率會再次失真。')) return;
   await coSet(code, date, null);
-  if (typeof refreshPositions === 'function') { try { await refreshPositions(); } catch (e) {} }
+  if (typeof refreshPositions === 'function') { try { await refreshPositions(); } catch (e) { hush('cost-override', e); } }
   await renderCostOverride(false);
 }

@@ -461,7 +461,8 @@ function _bidHLUpdate(code, hi, lo) {
   if (lo > 0 && (_bidHL.low == null || lo < _bidHL.low)) { _bidHL.low = lo; changed = true; }
   if (changed && _bidLast) {
     var wrap = document.getElementById('bid-wrap');
-    if (wrap) wrap.innerHTML = _bidAskHtml(_bidLast, code);
+    // 與推送那條路徑同一套：畫不出來就就地說，不要讓例外往上逃掉
+    if (wrap) { try { wrap.innerHTML = _bidAskHtml(_bidLast, code); } catch (e) { hush('chart', e, 2); _bidFail(e); } }
   }
 }
 
@@ -474,7 +475,7 @@ async function _chartLoadBidAsk() {
   fetchSnapshots([_contracts[code] || { exchange: 'TSE', code: code }]).then(function (sn) {
     var x = (sn || [])[0];
     if (x) _bidHLUpdate(code, +x.high, +x.low);
-  }).catch(function () {});
+  }).catch(function (e) { hush('chart', e); });
   // 左右並排：五檔（掛單）在左、逐筆（成交）在右。
   // 兩者原本上下排會超出彈窗高度需捲動，但各自都用不到全寬 → 改用橫向分欄消化寬度。
   area.innerHTML = '<div class="bid-cols">' +
@@ -504,9 +505,10 @@ async function _chartLoadBidAsk() {
       var wrap = document.getElementById('bid-wrap');
       if (wrap) wrap.innerHTML = _bidAskHtml(b, b.code);
       // 這個 catch 原本是空的，用意是擋格式怪異的推送，結果連 _bidAskHtml 自己的錯
-      // 也一起吞掉：渲染一丟例外，畫面就永遠停在「等待五檔推送…」，console 什麼都沒有。
-      // 2026-11-06 查到的 sumB is not defined 就是這樣藏了兩週。要吞，至少留下紀錄。
-    } catch (e) { console.warn('[五檔]', e); }
+      // 也一起吞掉：渲染一丟例外，畫面就停在「等待五檔推送…」，看起來像還沒來而不是壞了。
+      // 2026-11-06 查到的 sumB is not defined 就是這樣藏了兩週。
+      // 現在：就地把那一格換成錯誤訊息（看的人在這裡，訊息就要在這裡），同時點亮頂欄紅燈。
+    } catch (e) { hush('chart', e, 2); _bidFail(e); }
   });
   // 先用歷史逐筆填滿（盤後也看得到內容），再由 SSE 即時往上疊新成交
   _chartLoadTickHistory(code);
@@ -582,7 +584,7 @@ function _chartStartTickStream() {
         var px = Number(d.close);
         _bidHLUpdate(d.code, d.high != null ? Number(d.high) : px, d.low != null ? Number(d.low) : px);
       }
-    } catch (e) {}
+    } catch (e) { hush('chart', e); }
   });
 }
 
@@ -593,7 +595,7 @@ function _chartStopTickStream() {
     fetch(API + '/api/v1/stream/unsubscribe', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ security_type: 'STK', exchange: ct.exchange || 'TSE', code: _tickSubCode, quote_type: 'Tick' })
-    }).catch(function () {});
+    }).catch(function (e) { hush('chart', e); });
     _tickSubCode = null;
   }
 }
@@ -624,6 +626,23 @@ function _tickHtml() {
   return h + '</tbody></table>';
 }
 
+// 五檔渲染失敗時的就地狀態。不能留在「等待五檔推送…」：那句話的意思是資料還沒到，
+// 但實際上是到了而且畫壞了，兩者要分得開，不然壞掉會被當成在等。
+function _bidFail(e) {
+  var wrap = document.getElementById('bid-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="modal-loading bid-fail">五檔顯示失敗' +
+    '<div class="bid-fail-msg">' + String((e && e.message) || e).replace(/</g, '&lt;') + '</div>' +
+    '<button class="bid-retry" onclick="_bidRetry()">重試</button></div>';
+}
+// 重試：用最後一筆推送重畫。還是壞的話會再回到上面那個狀態，不會無聲無息。
+function _bidRetry() {
+  var wrap = document.getElementById('bid-wrap');
+  if (!wrap) return;
+  try { wrap.innerHTML = _bidAskHtml(_bidLast, _chartCode); }
+  catch (e) { hush('chart', e, 2); _bidFail(e); }
+}
+
 function _chartStopBidAsk() {
   _chartStopTickStream();      // 逐筆與五檔同頁籤，一起退訂才不會佔著行情額度
   if (_bidEs) { _bidEs.close(); _bidEs = null; }
@@ -632,7 +651,7 @@ function _chartStopBidAsk() {
     fetch(API + '/api/v1/stream/unsubscribe', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ security_type: 'STK', exchange: ct.exchange || 'TSE', code: _bidSubCode, quote_type: 'BidAsk' })
-    }).catch(function () {});
+    }).catch(function (e) { hush('chart', e); });
     _bidSubCode = null;
   }
 }
@@ -1023,7 +1042,7 @@ async function _chartDaySeries(code) {
   else base = (st && st.length) ? st : ls;
 
   var bars = null;
-  if (base && base.length) { try { bars = await _chartTopUp(code, base); } catch (e) {} }
+  if (base && base.length) { try { bars = await _chartTopUp(code, base); } catch (e) { hush('chart', e); } }
   if (_chartDkFresh(bars, prev)) { _chartDaySrc = '快取＋Yahoo 補丁'; }
   else { bars = await _chartFetchYahoo(code, CHART_Y_RANGE); _chartDaySrc = 'Yahoo 整條'; }
   _chartDkWrite(code, bars, 'yahoo');

@@ -179,7 +179,7 @@ function _setRenderCache() {
       var j = JSON.parse(v);
       day = j.day || j.built || (j.updated ? String(j.updated).slice(0, 10) : '') ||
         (j.at ? new Date(j.at).toISOString().slice(0, 10) : '');
-    } catch (e) {}
+    } catch (e) { hush('settings', e); }
     rows += '<tr><td>' + c[1] + '<span class="set-key">' + c[0] + '</span></td>' +
       '<td class="num">' + _setBytes(v.length) + '</td>' +
       '<td>' + (day || '—') + '</td>' +
