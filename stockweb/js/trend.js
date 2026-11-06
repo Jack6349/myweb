@@ -71,7 +71,7 @@ async function startTrend() {
   try {
     var positions = (_positions && _positions.length) ? _positions : await fetchBrokerPositions();
     var names = {};
-    try { (await loadPortfolioFallback()).forEach(function (s) { if (s.name) names[String(s.code)] = s.name; }); } catch (e) {}
+    try { (await loadPortfolioFallback()).forEach(function (s) { if (s.name) names[String(s.code)] = s.name; }); } catch (e) { hush('trend', e); }
     holdings = (positions || []).map(function (p) {
       var code = String(p.code);
       return { code: code, name: (_contracts[code] && _contracts[code].name) || names[code] || '' };
@@ -145,13 +145,13 @@ async function fetchEtfConstituents(code) {
     var r1 = await fetch(TREND_GAS + '?holdings=' + encodeURIComponent(code));
     var j1 = await r1.json();
     if (j1.stat === 'OK' && j1.holdings && j1.holdings.length) return { source: 'MoneyDJ', holdings: j1.holdings };
-  } catch (e) {}
+  } catch (e) { hush('trend', e); }
   try {
     var r2 = await fetch(TREND_GAS + '?cmconstituent=' + encodeURIComponent(code));
     var j2 = await r2.json();
     var h = j2.holdings || j2.constituents || [];
     if (h.length) return { source: 'CMoney', holdings: h };
-  } catch (e) {}
+  } catch (e) { hush('trend', e); }
   return { source: null, holdings: [] };
 }
 
@@ -204,7 +204,7 @@ async function ensureTrend() {
       var code = String(p.code);
       return { code: code, name: (_contracts[code] && _contracts[code].name) || '', isEtf: isEtfCode(code), trend: await trendForHolding(code) };
     }));
-  } catch (e) {}
+  } catch (e) { hush('trend', e); }
 }
 
 function trendSummaryForPrompt() {

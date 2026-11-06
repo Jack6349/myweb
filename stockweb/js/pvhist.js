@@ -98,7 +98,7 @@ async function pvBuild() {
   var end = _pvYmd(today), begin = _pvYmd(new Date(today.getTime() - PV_BACK_DAYS * 86400000));
 
   // 除息金額要用配息組成的除息日，先等它載完（_dmReady 由 div-mix.js 建立）
-  if (typeof _dmReady !== 'undefined') { try { await _dmReady; } catch (e) {} }
+  if (typeof _dmReady !== 'undefined') { try { await _dmReady; } catch (e) { hush('pvhist', e); } }
   var led = await _pvLedger(begin, end);
   var lots = led.lots;
   if (!lots.length) throw new Error('沒有建倉批次可用');

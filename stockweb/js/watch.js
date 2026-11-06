@@ -166,7 +166,7 @@ function _wtUnsub(code) {
   fetch(API + '/api/v1/stream/unsubscribe', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ security_type: 'STK', exchange: c.exchange, code: code, quote_type: 'Tick' })
-  }).catch(function () {});
+  }).catch(function (e) { hush('watch', e); });
 }
 function stopWatch() {                      // 離開頁面：退訂本頁新訂閱者，歸還額度
   _wtSubbed.slice().forEach(function (code) { _wtUnsub(code); });
@@ -191,7 +191,7 @@ async function startWatch() {
   info.textContent = '取得報價…';
   for (var i = 0; i < list.length; i++) {
     var code = list[i];
-    if (!_contracts[code]) { try { _contracts[code] = await fetchContract(code); } catch (e) {} }
+    if (!_contracts[code]) { try { _contracts[code] = await fetchContract(code); } catch (e) { hush('watch', e); } }
     if (!_rows[code]) _rows[code] = { close: null, total_volume: null, time: '' };
   }
   try {
@@ -200,12 +200,12 @@ async function startWatch() {
       var snaps = await fetchSnapshots(cons);
       snaps.forEach(function (s) { _rows[s.code] = { close: s.close, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) }; });
     }
-  } catch (e) {}
+  } catch (e) { hush('watch', e); }
   var own = {}; (_positions || []).forEach(function (p) { own[String(p.code)] = true; });
   for (var j = 0; j < list.length; j++) {
     var cd = list[j], ct = _contracts[cd];
     if (ct && !own[cd] && _wtSubbed.indexOf(cd) < 0) {
-      try { await subscribeTick(ct); _wtSubbed.push(cd); } catch (e) {}
+      try { await subscribeTick(ct); _wtSubbed.push(cd); } catch (e) { hush('watch', e); }
     }
   }
   info.textContent = (_wtIdx || []).length.toLocaleString('zh-TW') + ' 檔可搜尋｜關注 ' + list.length + '/' + WT_MAX + '｜已連線';
@@ -296,7 +296,7 @@ async function wtOpenDiv(code) {
   body.innerHTML = '<div class="modal-loading">讀取配息資料…</div>';
 
   var recs = [];
-  try { if (typeof _divGetRecs === 'function') recs = await _divGetRecs(code); } catch (e) {}
+  try { if (typeof _divGetRecs === 'function') recs = await _divGetRecs(code); } catch (e) { hush('watch', e); }
   if (!recs || !recs.length) {
     body.innerHTML = '<div class="modal-loading">查無配息紀錄（上市 ETF 取自 e添富，其餘取自 Yahoo；個股或未配息標的可能沒有資料）。</div>';
     return;
@@ -413,7 +413,7 @@ async function _wtDivOf(code, ym, cache) {
   var key = code + '|' + ym;
   if (cache[key]) return cache[key];
   var recs = [];
-  try { if (typeof _divGetRecs === 'function') recs = await _divGetRecs(code); } catch (e) {}
+  try { if (typeof _divGetRecs === 'function') recs = await _divGetRecs(code); } catch (e) { hush('watch', e); }
   recs = (recs || []).filter(function (r) { return r.exDate && r.amount != null; })
     .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
   if (!recs.length) return { code: code, none: true };
@@ -452,7 +452,7 @@ async function wtScanBond() {
   try {
     for (var i = 0; i < pool.length; i++) {
       var cd = pool[i].c;
-      if (!_contracts[cd]) { try { _contracts[cd] = await fetchContract(cd); } catch (e) {} }
+      if (!_contracts[cd]) { try { _contracts[cd] = await fetchContract(cd); } catch (e) { hush('watch', e); } }
     }
     var cons = pool.map(function (x) { return _contracts[x.c]; }).filter(Boolean);
     if (cons.length) {
@@ -510,7 +510,7 @@ async function _wtActFetch(code) {
       var cl = ((res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close) || [])
         .filter(function (x) { return x != null; });
       if (cl.length >= 5) return { cl: cl, live: (res.meta && res.meta.regularMarketPrice) || null };
-    } catch (e) {}
+    } catch (e) { hush('watch', e); }
   }
   return null;
 }
@@ -533,7 +533,7 @@ async function _wtActPx(codes, fallback) {
   var px = {};
   try {
     for (var i = 0; i < codes.length; i++) {
-      if (!_contracts[codes[i]]) { try { _contracts[codes[i]] = await fetchContract(codes[i]); } catch (e) {} }
+      if (!_contracts[codes[i]]) { try { _contracts[codes[i]] = await fetchContract(codes[i]); } catch (e) { hush('watch', e); } }
     }
     var cons = codes.map(function (c) { return _contracts[c]; }).filter(Boolean);
     if (cons.length) {

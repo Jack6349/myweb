@@ -18,7 +18,7 @@ async function sigEnsureNavMap(force) {
     var r = await fetch(SIG_GAS + '?etfnav=1');
     var j = await r.json();
     if (j && j.stat === 'OK' && j.map && Object.keys(j.map).length) map = j.map;
-  } catch (e) {}
+  } catch (e) { hush('signals', e); }
   if (!map) { // 回退：直抓 all_etf.txt
     map = {};
     for (var a = 0; a < 4 && !Object.keys(map).length; a++) {
@@ -33,7 +33,7 @@ async function sigEnsureNavMap(force) {
             if (!isNaN(nav) && nav > 0) map[String(x.a).toUpperCase()] = { nav: nav, premium: isNaN(prem) ? null : prem, price: isNaN(price) ? null : price, date: x.i };
           });
         });
-      } catch (e) {}
+      } catch (e) { hush('signals', e); }
       if (!Object.keys(map).length) await new Promise(function (rs) { setTimeout(rs, 500); });
     }
   }
@@ -164,7 +164,7 @@ function sigIsUsHolding(holdings) {
 async function sigUsPrices(syms) {
   if (!syms.length) return null;
   try { var r = await fetch(SIG_GAS + '?usprices=' + encodeURIComponent(syms.join(','))); var j = await r.json();
-    if (j.stat === 'OK') return { prices: j.prices || {}, fx: j.fx || null }; } catch (e) {}
+    if (j.stat === 'OK') return { prices: j.prices || {}, fx: j.fx || null }; } catch (e) { hush('signals', e); }
   return null;
 }
 
@@ -222,7 +222,7 @@ async function startSignals() {
   try {
     var positions = (_positions && _positions.length) ? _positions : await fetchBrokerPositions();
     var names = {};
-    try { (await loadPortfolioFallback()).forEach(function (s) { if (s.name) names[String(s.code)] = s.name; }); } catch (e) {}
+    try { (await loadPortfolioFallback()).forEach(function (s) { if (s.name) names[String(s.code)] = s.name; }); } catch (e) { hush('signals', e); }
     held = (positions || []).map(function (p) { return { code: String(p.code).toUpperCase(), name: (_contracts[String(p.code)] && _contracts[String(p.code)].name) || names[String(p.code)] || '' }; })
       .map(function (h) { h.isEtf = /^00/.test(h.code); return h; });
   } catch (e) { errEl.style.display = 'block'; errEl.textContent = '讀不到持股：' + e.message; wrap.innerHTML = ''; return; }
@@ -230,8 +230,8 @@ async function startSignals() {
 
   await sigEnsureNavMap();
   var t86days = [], mgnDays = [];
-  try { t86days = await sigRecentT86(SIG_T86_DAYS); } catch (e) {}
-  try { mgnDays = await sigRecentMargin(SIG_T86_DAYS); } catch (e) {}
+  try { t86days = await sigRecentT86(SIG_T86_DAYS); } catch (e) { hush('signals', e); }
+  try { mgnDays = await sigRecentMargin(SIG_T86_DAYS); } catch (e) { hush('signals', e); }
 
   // TDCC 週快照（距上次≥6天才重抓）
   var hist = _tdccHist();
@@ -251,7 +251,7 @@ async function startSignals() {
         var ds = Object.keys(hist[c]).sort(); while (ds.length > TDCC_KEEP) delete hist[c][ds.shift()];
       });
       _tdccSave(hist);
-    } catch (e) {}
+    } catch (e) { hush('signals', e); }
   }
 
   info.textContent = '近 ' + (t86days.length || 0) + ' 交易日法人｜官方淨值 ' + (_sigNavMap && Object.keys(_sigNavMap).length ? '已載入' : 'N/A');
@@ -267,7 +267,7 @@ async function startSignals() {
       chip = sigComputeChipScore(parts, t86days);
       if (sigIsUsHolding(parts)) overnight = await sigEstNavUS(parts);
       else adr = await sigAdrBias(parts);
-    } catch (e) {}
+    } catch (e) { hush('signals', e); }
     var rec = hist[h.code] || {}; var ds = Object.keys(rec).sort().reverse();
     var tdcc = ds.length ? { cur: rec[ds[0]], prev: ds.length > 1 ? rec[ds[1]] : null, date: ds[0], prevDate: ds[1] } : null;
     _sigRows.push({ code: h.code, name: h.name, nav: nav, chip: chip, margin: mgn, tdcc: tdcc, overnight: overnight, adr: adr });
@@ -416,10 +416,10 @@ async function ensureSignals() {
         chip = sigComputeChipScore(parts, t86days);
         if (sigIsUsHolding(parts)) overnight = await sigEstNavUS(parts);
         else adr = await sigAdrBias(parts);
-      } catch (e) {}
+      } catch (e) { hush('signals', e); }
       return { code: code, name: (_contracts[code] && _contracts[code].name) || '', nav: nav, chip: chip, overnight: overnight, adr: adr };
     }));
-  } catch (e) {}
+  } catch (e) { hush('signals', e); }
 }
 function signalsSummaryForPrompt() {
   if (!_sigRows.length) return '';

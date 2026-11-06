@@ -441,7 +441,7 @@ function _invEnsureDiv() {
   if (_invDivLoading || typeof startDividendEst !== 'function') return;
   if (typeof _divRecMap !== 'undefined' && Object.keys(_divRecMap).length) return;
   _invDivLoading = true;
-  startDividendEst(false).catch(function () {}).then(function () {
+  startDividendEst(false).catch(function (e) { hush('inventory', e); }).then(function () {
     _invDivLoading = false;
     if (document.getElementById('inv-tbody') && document.getElementById('inv-tbody').children.length) renderInvTable();
   });

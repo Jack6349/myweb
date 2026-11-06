@@ -52,7 +52,7 @@ function _esRocToIso(txt) {
 // 某日（遇假日往前找，最多 7 天）全部 ETF 收盤：{ code: {c, n, mkt} }
 async function _esClosesNear(iso) {
   var t = Date.parse(iso);
-  var tries = async function (fn) { for (var a = 0; a < 3; a++) { try { var v = await fn(); if (v) return v; } catch (e) {} } return null; };
+  var tries = async function (fn) { for (var a = 0; a < 3; a++) { try { var v = await fn(); if (v) return v; } catch (e) { hush('etf-screen', e); } } return null; };
   for (var k = 0; k < 7; k++) {
     var d = new Date(t - k * 86400000), ymd = _esIso(d).replace(/-/g, '');
     var roc = (d.getUTCFullYear() - 1911) + '/' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '/' + ('0' + d.getUTCDate()).slice(-2);
@@ -99,7 +99,7 @@ async function _esDivs(todayIso) {
         var j = await _esVia('https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=' + roc(sp[0]) + '&endDate=' + roc(sp[1]) + '&response=json');
         var tb = j && j.tables && j.tables[0];
         if (tb) { ok++; (tb.data || []).forEach(function (x) { add(x[1], _esRocToIso(x[0]), _esNum(x[6]), _esNum(x[3])); }); return; }
-      } catch (e) {}
+      } catch (e) { hush('etf-screen', e); }
     }
   }).concat(spans.map(async function (sp) {
     for (var a = 0; a < 2; a++) {
@@ -107,7 +107,7 @@ async function _esDivs(todayIso) {
         var j = await _esVia('https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate=' + ymd(sp[0]) + '&endDate=' + ymd(sp[1]) + '&response=json');
         var rows = j && (j.data || (j.tables && j.tables[0] && j.tables[0].data));
         if (rows) { ok++; rows.forEach(function (x) { if (/息/.test(x[6]) && !/權/.test(x[6])) add(x[1], _esRocToIso(x[0]), _esNum(x[5]), _esNum(x[3])); }); return; }
-      } catch (e) {}
+      } catch (e) { hush('etf-screen', e); }
     }
   })));
   Object.keys(map).forEach(function (c) {
@@ -259,7 +259,7 @@ async function _esBarsOf(code, mkt) {
       var res = j.chart && j.chart.result && j.chart.result[0];
       var ts = (res && res.timestamp) || [], cl = (res && res.indicators.quote[0].close) || [];
       for (var k = 0; k < ts.length; k++) if (cl[k] != null) bars.push([new Date(ts[k] * 1000 + 8 * 3600000).toISOString().slice(0, 10), cl[k]]);
-    } catch (e) {}
+    } catch (e) { hush('etf-screen', e); }
   }
   if (bars.length) _esBars[code] = bars;
   return bars;
@@ -290,7 +290,7 @@ async function _esEnsureFill(list) {
   var worker = async function () {
     while (q.length) {
       var r = q.shift();
-      try { var f = await _esFillOne(r); if (f) _esFill[r.code] = f; } catch (e) {}
+      try { var f = await _esFillOne(r); if (f) _esFill[r.code] = f; } catch (e) { hush('etf-screen', e); }
       done++;
       _esMsg = '計算填息率 ' + done + '/' + total + '（Yahoo 日線，當日快取）';
       renderEtfScreen();
@@ -388,7 +388,7 @@ async function _esLoadExtra() {
   var rk = _esRank();
   if (!rk) return;
   var codes = rk.short.map(function (r) { return r.code; });
-  if (typeof divMetaLoad === 'function') { divMetaLoad(codes).then(renderEtfScreen).catch(function () {}); }
+  if (typeof divMetaLoad === 'function') { divMetaLoad(codes).then(renderEtfScreen).catch(function (e) { hush('etf-screen', e); }); }
   await _esEnsureFill(rk.short);
   renderEtfScreen();
 }
@@ -442,7 +442,7 @@ async function esWatchToggle(code) {
     list.push(code);
     _wtSave();
     _esMsg = code + ' 已加入關注清單';
-    if (typeof startWatch === 'function') startWatch().catch(function () {});
+    if (typeof startWatch === 'function') startWatch().catch(function (e) { hush('etf-screen', e); });
   }
   renderEtfScreen();
   setTimeout(function () { if (/關注清單/.test(_esMsg)) { _esMsg = ''; renderEtfScreen(); } }, 4000);
@@ -635,7 +635,7 @@ async function esWatchPrep(codes) {
     if (typeof renderWatch === 'function') renderWatch();
     var etfs = (codes || []).map(esMetricsFor).filter(Boolean);
     if (!etfs.length) return;
-    if (typeof divMetaLoad === 'function') divMetaLoad(etfs.map(function (r) { return r.code; })).then(function () { if (typeof renderWatch === 'function') renderWatch(); }).catch(function () {});
+    if (typeof divMetaLoad === 'function') divMetaLoad(etfs.map(function (r) { return r.code; })).then(function () { if (typeof renderWatch === 'function') renderWatch(); }).catch(function (e) { hush('etf-screen', e); });
     await _esEnsureFill(etfs);
     if (typeof renderWatch === 'function') renderWatch();
   } catch (e) { console.warn('[關注清單 ETF 指標]', e); }
@@ -725,8 +725,8 @@ function esMountDetail(slot, keep) {
   _esLoadDetail(slot.firstChild, code);
 }
 async function _esLoadDetail(el, code) {
-  try { if (typeof _divGetRecs === 'function') await _divGetRecs(code); } catch (e) {}
-  try { await _esGetBase(false); } catch (e) {}
+  try { if (typeof _divGetRecs === 'function') await _divGetRecs(code); } catch (e) { hush('etf-screen', e); }
+  try { await _esGetBase(false); } catch (e) { hush('etf-screen', e); }
   if (!el.isConnected) return;
   var recs = ((typeof _divRecMap !== 'undefined' && _divRecMap[code]) || []).filter(function (r) { return r.exDate; })
     .slice().sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; });
@@ -766,7 +766,7 @@ function _esRecTable(code, recs, base, bars) {
   var list = recs.filter(function (r) { return r.exDate >= d24; });
   if (!list.length) return '<div class="detail-note nb-keep">近 2 年無配息紀錄</div>';
   var step = null;
-  try { step = _divInferStep(recs.map(function (r) { return Object.assign({ code: code }, r); })); } catch (e) {}
+  try { step = _divInferStep(recs.map(function (r) { return Object.assign({ code: code }, r); })); } catch (e) { hush('etf-screen', e); }
   var perYear = step ? 12 / step : null;
   var md = function (iso) { return iso ? iso.slice(2).replace(/-/g, '/') : '—'; };
   var dim = function (t) { return '<span class="dm-dim">' + t + '</span>'; };

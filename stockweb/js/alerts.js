@@ -55,7 +55,7 @@ async function startAlerts() {
   // 已含出借/匯撥補償與銀行認購成本補正，成本均價才會三頁一致；
   // 直接呼叫 fetchBrokerPositions() 會拿到未補正的原始值（例：00405A 0.00、00407A 7.15）
   var positions = [];
-  try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) {}
+  try { await ensureFeed(function (m) { info.textContent = m; }); } catch (e) { hush('alerts', e); }
   positions = (_positions && _positions.length) ? _positions : [];
   if (!positions.length) {                      // 行情引擎未就緒時的最後手段
     try { positions = await fetchBrokerPositions(); } catch (e) { positions = []; }
@@ -63,7 +63,7 @@ async function startAlerts() {
   if (!positions.length) { errEl.style.display = 'block'; errEl.textContent = '讀不到持股（券商連線可能未就緒，稍候重試）'; wrap.innerHTML = ''; return; }
 
   var names = {};
-  try { (await loadPortfolioFallback()).forEach(function (s) { if (s.name) names[String(s.code)] = s.name; }); } catch (e) {}
+  try { (await loadPortfolioFallback()).forEach(function (s) { if (s.name) names[String(s.code)] = s.name; }); } catch (e) { hush('alerts', e); }
 
   var all = loadAlerts();
   var rows = positions.slice().sort(function (a, b) { return String(a.code).localeCompare(String(b.code), undefined, { numeric: true }); });

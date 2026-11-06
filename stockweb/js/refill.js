@@ -170,7 +170,7 @@ async function _rfFetchDaily(code) {
         out.push({ d: new Date(res.timestamp[k] * 1000 + 8 * 3600000).toISOString().slice(0, 10), c: cl[k] });
       }
       if (out.length >= 20) bars = out;
-    } catch (e) {}
+    } catch (e) { hush('refill', e); }
   }
   if (!bars && stale) return hit;                    // 重抓失敗 → 沿用收盤前的資料
   if (bars) {
@@ -237,7 +237,7 @@ async function startRefill(force) {
   // 先清掉已完成的補登，再算股利估算，否則估算會先吃到過期資料
   var pruned = _rfManPrune();
 
-  if (!_divEstResult || pruned) { try { await startDividendEst(); } catch (e) {} }
+  if (!_divEstResult || pruned) { try { await startDividendEst(); } catch (e) { hush('refill', e); } }
   var shareMap = (typeof _sharesMap !== 'undefined' && _sharesMap) ? _sharesMap : {};
   var codes = Object.keys(shareMap).filter(function (c) { return shareMap[c] > 0 && isEtfCode(c); })
     .sort(function (a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true }); });

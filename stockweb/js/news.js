@@ -924,7 +924,7 @@ async function newsHoldingsList() {
   try {
     var pf = await loadPortfolioFallback();
     pf.forEach(function (s) { if (s.name) names[String(s.code)] = s.name; });
-  } catch (e) {}
+  } catch (e) { hush('news', e); }
   var positions = _positions;
   if (!positions || !positions.length) {
     try { positions = await fetchBrokerPositions(); } catch (e) { positions = []; }
@@ -942,19 +942,19 @@ async function buildNewsPrompt() {
   var holdings = await newsHoldingsList();
 
   // 市場資料快照（若尚未載入則現抓）
-  if (!_macroSnap.length) { try { await loadMacro(); } catch (e) {} }
-  if (!_esun) { try { await loadEsunFx(); } catch (e) {} }
-  if (!_fredSnap.length) { try { await loadFred(); } catch (e) {} }
-  if (!_consist.length) { try { await loadConsistency(); } catch (e) {} }
+  if (!_macroSnap.length) { try { await loadMacro(); } catch (e) { hush('news', e); } }
+  if (!_esun) { try { await loadEsunFx(); } catch (e) { hush('news', e); } }
+  if (!_fredSnap.length) { try { await loadFred(); } catch (e) { hush('news', e); } }
+  if (!_consist.length) { try { await loadConsistency(); } catch (e) { hush('news', e); } }
   // 持股技術面趨勢（若尚未載入則靜默計算）
   var trendTxt = '';
   if (typeof ensureTrend === 'function') {
-    try { await ensureTrend(); trendTxt = trendSummaryForPrompt(); } catch (e) {}
+    try { await ensureTrend(); trendTxt = trendSummaryForPrompt(); } catch (e) { hush('news', e); }
   }
   // 籌碼/淨值面（L2 折溢價 + L3 法人籌碼）
   var sigTxt = '';
   if (typeof ensureSignals === 'function') {
-    try { await ensureSignals(); sigTxt = signalsSummaryForPrompt(); } catch (e) {}
+    try { await ensureSignals(); sigTxt = signalsSummaryForPrompt(); } catch (e) { hush('news', e); }
   }
   var macroTxt = _macroSnap.map(function (m) {
     var s = '- ' + m.name + '：' + _fmtNum(m.price, m.fmt) + '（' + (m.changePct == null ? 'N/A' : (m.changePct >= 0 ? '+' : '') + m.changePct.toFixed(2) + '%') + '）';
