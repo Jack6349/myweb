@@ -191,9 +191,11 @@ function touchHtml() {
     '<th class="num" title="有完整視窗的時刻數。相鄰時刻的視窗高度重疊，彼此不獨立：真正獨立的視窗約 ' +
     Math.round(270 / TOUCH_WIN_MIN) * TOUCH_DAYS + ' 個">樣本</th>' +
     '</tr></thead><tbody>';
-  _touchRows.forEach(function (r) {
+  _touchRows.forEach(function (r, i) {
     // 一檔兩列：賣高、買低。代號與筆數跨兩列，表格不會因為多一側就變寬一倍。
-    var tr = r.thin ? ' class="touch-thin"' : '';
+    // 隔檔上底色（整檔兩列一起上，不是隔列）：這張表的分隔單位是「一檔」，
+    // 隔列上色會把同一檔的賣高／買低拆成深淺兩塊，反而更難看出哪兩列是同一檔。
+    var base = (r.thin ? 'touch-thin ' : '') + (i % 2 ? 'touch-alt ' : '');
     var cells = function (arr) {
       // 色階只分三段：高（碰得到）、中、低（幾乎碰不到）。
       // 分界取自這張表的用途 —— 低於五成是多數時候掛不到，低於一成等於掛不到。
@@ -202,14 +204,14 @@ function touchHtml() {
         return '<td class="num ' + cls + '">' + (v == null ? '—' : Math.round(v) + '%') + '</td>';
       }).join('');
     };
-    h += '<tr' + tr + ' class="' + (r.thin ? 'touch-thin ' : '') + 'touch-r1">' +
+    h += '<tr class="' + base + 'touch-r1">' +
       '<td class="dstat-code" rowspan="2">' + r.code +
       (r.thin ? ' <span class="dexm-lent">筆數低</span>' : '') + '</td>' +
       '<td class="touch-side" title="以「成交價 ＋ 幅度」掛賣，看往後 ' + TOUCH_WIN_MIN +
       ' 分鐘內的最高價有沒有碰到">賣高</td>' + cells(r.up) +
       '<td class="num touch-dim" rowspan="2">' + r.ticks.toLocaleString('zh-TW') + '</td>' +
       '<td class="num touch-dim" rowspan="2">' + r.n.toLocaleString('zh-TW') + '</td></tr>' +
-      '<tr' + tr + '>' +
+      '<tr class="' + base + '">' +
       '<td class="touch-side" title="以「成交價 － 幅度」掛買，看往後 ' + TOUCH_WIN_MIN +
       ' 分鐘內的最低價有沒有碰到">買低</td>' + cells(r.dn) + '</tr>';
   });
