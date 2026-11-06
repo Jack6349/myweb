@@ -388,7 +388,7 @@ function _macroCacheWrite() {
   try {
     sessionStorage.setItem(MACRO_CACHE_KEY, JSON.stringify(
       { at: _macroAt, snap: _macroSnap, tw: _twLastClose, fut: _nightFut,
-        esun: _esun, esunTs: _esunTs }));
+        twidx: _twIdxIntra, esun: _esun, esunTs: _esunTs }));
   } catch (e) {}   // 容量滿或隱私模式：沒快取就是每次重抓，不該因此壞掉
 }
 function _macroCacheRead() {
@@ -405,6 +405,7 @@ async function ensureMacro(force) {
     var c = _macroCacheRead();
     if (c) {
       _macroSnap = c.snap; _twLastClose = c.tw; _nightFut = c.fut; _macroAt = c.at;
+      _twIdxIntra = c.twidx || null;
       if (c.esun) { _esun = c.esun; _esunTs = c.esunTs || 0; }
       if (!_esun) await loadEsunFx();   // 牌告沒進快取（上次抓失敗）才補一個請求
       return;
@@ -423,6 +424,8 @@ async function loadMacro() {
   });
   _macroSnap.forEach(function (m) { m.alert = _macroAlert(m, _twLastClose); });
   _nightFut = await fetchNightFutures();
+  // 加權指數分時：本機 Shioaji，失敗不影響其餘七格（那一格不畫就是了）
+  try { await loadTwIdxIntra(); } catch (e) { hush('news', e); }
   _macroAt = Date.now();
   _macroCacheWrite();
   renderMacroBar();
@@ -589,6 +592,114 @@ document.addEventListener('mousemove', function (ev) {
 document.addEventListener('scroll', _mspkClear, true);
 window.addEventListener('blur', _mspkClear);
 
+// ── 加權指數的當日分時（抽屜第一格）──
+// 比照券商 App 的大盤「詳細」頁：分時線 ＋ 均價線 ＋ 昨收基準，昨收之上紅、之下綠。
+// 資料來自本機 Shioaji 的指數分 K：security_type IND、exchange TSE、code 001。
+// 抓 10 天、只取最後一個有資料的交易日 → 非盤中時段自動顯示最近交易日。
+//
+// 均價線＝當日到該分鐘為止所有分 K 收盤的算術平均。
+// 不能用 Amount ÷ Volume：指數分 K 的這兩個欄位是全市場的成交金額與股數，
+// 相除得到的是「每股平均成交價」（幾十元），跟三萬多點的指數不是同一個量級。
+//
+// 這一格的時間軸與同一排其他格不同（它是今天，其他是近一個月日 K），
+// 所以名稱後面固定標「今日」，第二行標資料日期。
+var _twIdxIntra = null;      // { day, t[], c[], avg[], ref, last, pct }
+async function loadTwIdxIntra() {
+  var d = function (t) { return new Date(t.getTime() + 8 * 3600000).toISOString().slice(0, 10); };
+  var now = new Date();
+  var r = await fetch(API + '/api/v1/data/kbars', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contract: { security_type: 'IND', exchange: 'TSE', code: '001' },
+      start: d(new Date(now.getTime() - 10 * 86400000)), end: d(now) })
+  });
+  if (!r.ok) throw new Error('指數分K HTTP ' + r.status);
+  var j = await r.json();
+  if (!j || !j.datetime || !j.datetime.length) throw new Error('無指數分K');
+  var day = j.datetime[j.datetime.length - 1].slice(0, 10);
+  // 昨收：取前一個交易日的最後一根收盤。快照的 change_price 也能回推，
+  // 但快照盤後會停更，用同一份 K 線資料推比較不會兩邊對不起來。
+  var prevClose = null, t = [], c = [];
+  for (var i = 0; i < j.datetime.length; i++) {
+    if (j.datetime[i].slice(0, 10) === day) { t.push(j.datetime[i].slice(11, 16)); c.push(j.Close[i]); }
+    else prevClose = j.Close[i];
+  }
+  if (!c.length) throw new Error('當日無指數分K');
+  var avg = [], sum = 0;
+  for (var k = 0; k < c.length; k++) { sum += c[k]; avg.push(sum / (k + 1)); }
+  var last = c[c.length - 1];
+  _twIdxIntra = { day: day, t: t, c: c, avg: avg, ref: prevClose, last: last,
+    pct: prevClose ? (last - prevClose) / prevClose * 100 : null };
+  return _twIdxIntra;
+}
+
+// 分時小圖。與其他格共用 MSPK_W/MSPK_H 與紅綠切線那一套，差別有二：
+//   基準線是昨收（不是區間起點），多畫一條均價線。
+function _twIdxSparkHtml(o) {
+  var c = o.c, n = c.length;
+  if (n < 3 || !o.ref) return '';
+  var ref = o.ref;
+  var hi = Math.max.apply(null, c), lo = Math.min.apply(null, c);
+  // 基準線一定要在圖內，否則「在昨收之上或之下」看不出來
+  if (ref > hi) hi = ref;
+  if (ref < lo) lo = ref;
+  var pad = (hi - lo) * 0.08 || Math.abs(ref) * 0.001 || 1;
+  hi += pad; lo -= pad;
+  var x = function (k) { return k / (n - 1) * MSPK_W; };
+  var y = function (p) { return (hi - p) * MSPK_H / (hi - lo); };
+  var yRef = y(ref), upLn = '', dnLn = '', upFl = '', dnFl = '';
+  var seg = function (xa, ya, xb, yb, red) {
+    var ln = 'M' + xa.toFixed(1) + ',' + ya.toFixed(1) + 'L' + xb.toFixed(1) + ',' + yb.toFixed(1);
+    var fl = ln + 'L' + xb.toFixed(1) + ',' + yRef.toFixed(1) + 'L' + xa.toFixed(1) + ',' + yRef.toFixed(1) + 'Z';
+    if (red) { upLn += ln; upFl += fl; } else { dnLn += ln; dnFl += fl; }
+  };
+  for (var k = 0; k < n - 1; k++) {
+    var ca = c[k], cb = c[k + 1], xa = x(k), xb = x(k + 1);
+    if ((ca >= ref) === (cb >= ref)) { seg(xa, y(ca), xb, y(cb), ca >= ref); continue; }
+    var xc = xa + (xb - xa) * (ref - ca) / (cb - ca);
+    seg(xa, y(ca), xc, yRef, ca >= ref);
+    seg(xc, yRef, xb, y(cb), cb >= ref);
+  }
+  // 均價線：單一灰線，不分紅綠（它是一條平均，沒有「漲或跌」可言）
+  var av = [];
+  for (var a = 0; a < n; a++) av.push(x(a).toFixed(1) + ',' + y(o.avg[a]).toFixed(1));
+  // hover 的資料：時間|指數|x|y|相對昨收%，與其他小圖同一個格式
+  var pts = [];
+  for (var p = 0; p < n; p++) {
+    var dp = (c[p] - ref) / ref * 100;
+    pts.push(o.t[p] + '|' + _fmtNum(c[p], 0) + '|' + x(p).toFixed(1) + '|' +
+      y(c[p]).toFixed(1) + '|' + (dp > 0 ? '+' : '') + dp.toFixed(2));
+  }
+  var tip = o.day + ' 當日分時　基準線＝昨收 ' + _fmtNum(ref, 0) +
+    '　灰線＝當日累計平均指數　（此處比的是昨收，與其他格的近一個月不同基準）';
+  return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '"' +
+    ' data-pts="' + pts.join(';') + '">' +
+    '<svg viewBox="0 0 ' + MSPK_W + ' ' + MSPK_H + '" preserveAspectRatio="none">' +
+    (dnFl ? '<path class="ck-fill dn" d="' + dnFl + '"/>' : '') +
+    (upFl ? '<path class="ck-fill up" d="' + upFl + '"/>' : '') +
+    '<line class="ck-ref lc-ln" x1="0" y1="' + yRef.toFixed(1) + '" x2="' + MSPK_W + '" y2="' + yRef.toFixed(1) + '"/>' +
+    (dnLn ? '<path class="ck-iline dn lc-ln" d="' + dnLn + '"/>' : '') +
+    (upLn ? '<path class="ck-iline up lc-ln" d="' + upLn + '"/>' : '') +
+    '<polyline class="mspk-avg lc-ln" points="' + av.join(' ') + '"/>' +
+    '<line class="mspk-cross lc-ln" x1="0" y1="0" x2="0" y2="' + MSPK_H + '" style="display:none"/>' +
+    '<circle class="mspk-dot" r="2" cx="0" cy="0" style="display:none"/>' +
+    '</svg></span>';
+}
+
+// 抽屜第一格。時間前面固定標「分時」：同一排其他格的小圖畫的是近一個月日 K，
+// 這一格是當日分時，不標會被讀成同一個期間。前綴掛在第二行而不是名稱後面 ——
+// 四欄格子裡名稱是 nowrap ＋ ellipsis，多兩個字就會被截成「加權指…」。
+function _twIdxCellHtml() {
+  var o = _twIdxIntra;
+  if (!o) return '';
+  var at = o.day.slice(5).replace(/-/g, '/') + (o.t.length ? ' ' + o.t[o.t.length - 1] : '');
+  return '<div class="macro-cell"><span class="macro-nm">' +
+    '<span class="macro-name">加權指數</span>' +
+    '<span class="macro-at">分時 ' + at + '</span></span>' +
+    '<span class="macro-price">' + _fmtNum(o.last, 0) + '</span>' +
+    '<span class="macro-chg ' + _chgCls(o.pct) + '">' + (_chgTxt(o.pct) || '—') + '</span>' +
+    _twIdxSparkHtml(o) + '</div>';
+}
+
 // 單格 HTML：新聞情勢頁的盤勢列與頂欄抽屜共用，避免兩邊各寫一份而漂走。
 function _macroCellHtml(m) {
   {
@@ -709,12 +820,16 @@ function _nightFutCellHtml() {
     '<span class="macro-chg ' + _chgCls(_nightFut.changePct) + '">' + (_chgTxt(_nightFut.changePct) || '—') + '</span></div>';
 }
 
-// 頂欄抽屜的盤勢：六檔 ＋ 日圓即期 ＋ 台指夜盤，排 4×2。
-// 不含美元指數與美元兌台幣（抽屜只有四欄）；新聞情勢頁維持原本八檔 ＋ 日圓，不動。
-var MACRO_DRAWER_SKIP = ['DX-Y.NYB', 'TWD=X'];
+// 頂欄抽屜的盤勢：加權指數（當日分時）＋ 五檔 ＋ 日圓即期 ＋ 台指夜盤，排 4×2。
+// 不含美元指數與美元兌台幣（抽屜只有四欄）。
+// S&P 500 只在抽屜略過，不從 MACRO_TICKERS 刪：新聞情勢頁那排要留，
+// 而且加減碼報告的系統性風險評分也在用它。
+var MACRO_DRAWER_SKIP = ['DX-Y.NYB', 'TWD=X', '^GSPC'];
 function macroDrawerHtml() {
   if (!_macroSnap.length) return '<div class="macro-cell"><span class="macro-name">載入中…</span></div>';
-  return _macroSnap.filter(function (m) { return MACRO_DRAWER_SKIP.indexOf(m.sym) < 0; })
+  // 大盤排第一格：這是台股投資組合的工具，本地市場應該在美股前面
+  return _twIdxCellHtml() +
+    _macroSnap.filter(function (m) { return MACRO_DRAWER_SKIP.indexOf(m.sym) < 0; })
     .map(_macroCellHtml).join('') + _esunJpyCellHtml() + _nightFutCellHtml();
 }
 
