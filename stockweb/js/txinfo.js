@@ -170,7 +170,7 @@ async function loadOrderBox() {
     for (var code in needName) {
       try { _contracts[code] = await fetchContract(code); } catch (e) { console.warn('[txinfo contract]', code, e); }
     }
-    var buyAmt = 0, sellAmt = 0;
+    var buyAmt = 0, sellAmt = 0, buyOpen = 0, sellOpen = 0;
     var html = '<div class="tx-otable-wrap"><table class="tx-otable"><thead><tr>' +
       '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num" title="現價 － 成交均價。紅＝現價高於成交價，綠＝低於">差額</th><th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：(成交均價－現價)×股數×(1−手續費－交易稅)，正＝賣在現價之上。兩邊都扣賣出成本，同價為 0">損益<span class="sort-ind">↕</span></th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量、成交均價；與現價的差額在委託後面那一欄">成交</th>' +
       '<th class="sort-th" data-key="status" onclick="txSortCol(\'status\')">狀態<span class="sort-ind">↕</span></th>' + '<th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
@@ -188,6 +188,16 @@ async function loadOrderBox() {
       deals.forEach(function (d) { dq += d.quantity; dsum += d.price * d.quantity; });
       var avg = dq ? (dsum / dq) : null;
       if (buy) buyAmt += dsum * mult; else sellAmt += dsum * mult;
+      // 未成交金額＝（委託量 － 已成交量）× 委託價。只計仍在簿上的委託：
+      // 已取消／失敗的單也有未成交數量，但那些不會再成交，算進來等於虛報。
+      // 價用 _txPx（改價後的有效價），不是 order.price。
+      if (_txLive(t)) {
+        var openQ = (o.quantity || 0) - (s.deal_quantity || 0);
+        if (openQ > 0) {
+          var openAmt = openQ * _txPx(t) * mult;
+          if (buy) buyOpen += openAmt; else sellOpen += openAmt;
+        }
+      }
       var dealTitle = deals.length > 1 ? deals.map(function (d) {
         return d.quantity + unit + ' ' + d.price.toFixed(2) + ' ' + _hms(d.ts);
       }).join('　') : '';
@@ -225,7 +235,15 @@ async function loadOrderBox() {
       sumEl.innerHTML = '買進 <span class="up">' + Math.round(buyAmt).toLocaleString('zh-TW') + '</span>' +
         '｜賣出 <span class="down">' + Math.round(sellAmt).toLocaleString('zh-TW') + '</span>' +
         '｜合計 <span class="' + ncls + '">' + (net > 0 ? '+' : '') + Math.round(net).toLocaleString('zh-TW') + '</span>' +
-        '｜損益 <span id="tx-pnl-sum" title="下方各筆「損益」加總（買賣皆已扣手續費與交易稅），隨現價更新">' + _txPnlSumHtml() + '</span>';
+        '｜損益 <span id="tx-pnl-sum" title="下方各筆「損益」加總（買賣皆已扣手續費與交易稅），隨現價更新">' + _txPnlSumHtml() + '</span>' +
+        // 未成交：還掛在簿上、尚未成交的部分。ROD 當日有效，收盤後一律是 0，
+        // 所以沒有未成交時整段不顯示，避免盤後每天都掛一行 0。
+        ((buyOpen || sellOpen)
+          ? '　<span class="tx-open-sum" title="仍掛在委託簿上、尚未成交的部分：（委託量 － 已成交量）× 委託價。' +
+            '已取消與失敗的單不計。買進＝若全部成交要付出的金額，賣出＝可收到的金額（皆未扣手續費與交易稅）。' +
+            'ROD 當日有效，收盤後會歸零">未成交 買 <b class="up">' + Math.round(buyOpen).toLocaleString('zh-TW') +
+            '</b>｜賣 <b class="down">' + Math.round(sellOpen).toLocaleString('zh-TW') + '</b></span>'
+          : '');
     }
   } catch (e) { el.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>'; }
 }
