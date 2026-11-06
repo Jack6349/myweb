@@ -429,6 +429,14 @@ async function loadMacro() {
       : { name: MACRO_TICKERS[i].name, sym: MACRO_TICKERS[i].sym, price: null, changePct: null, fmt: MACRO_TICKERS[i].fmt };
   });
   _macroSnap.forEach(function (m) { m.alert = _macroAlert(m, _twLastClose); });
+  // 美股分時（只給抽屜畫圖用）。與日線分開抓：日線給警示的跨日累計，分時給圖。
+  // 任一檔失敗只讓那一格沒有圖，其餘照常。
+  var intras = await Promise.allSettled(MACRO_INTRA_SYMS.map(fetchYahooIntra));
+  MACRO_INTRA_SYMS.forEach(function (sym, i) {
+    var hit = _macroSnap.filter(function (m) { return m.sym === sym; })[0];
+    if (hit) hit.intra = (intras[i].status === 'fulfilled') ? intras[i].value : null;
+    if (intras[i].status === 'rejected') hush('news', intras[i].reason);
+  });
   _nightFut = await fetchNightFutures();
   // 加權指數分時：本機 Shioaji，失敗不影響其餘七格（那一格不畫就是了）
   try { await loadTwIdxIntra(); } catch (e) { hush('news', e); }
@@ -602,6 +610,40 @@ document.addEventListener('mousemove', function (ev) {
 document.addEventListener('scroll', _mspkClear, true);
 window.addEventListener('blur', _mspkClear);
 
+// ── 美股五格的當盤分時 ──
+// 抽屜看的是「今晚美股對今天台股開盤的影響」，近一個月的日線回答不了這件事：
+// 台股開盤前要知道的是這一盤走成什麼樣，不是一個月的趨勢。所以抽屜改畫分時，
+// 基準線用 chartPreviousClose（美股昨收），與格子右邊的當日漲跌同一個基準。
+//
+// 日線不能拔掉：HYG 與美10年殖利率的警示算的是「台股收盤後至今的累計變動」，
+// 那是跨日的計算，要日線才做得出來（見 _macroCum）。所以日線照抓，分時另外抓一份。
+//
+// 均價線用當盤累計算術平均，不是 VWAP：實測只有 ^IXIC 與 HYG 有成交量，
+// ^SOX／^VIX／^TNX 的 volume 全為 0，算不出 VWAP。五格用同一個定義才不會各說各話。
+var MACRO_INTRA_SYMS = ['^IXIC', '^SOX', '^VIX', '^TNX', 'HYG'];
+async function fetchYahooIntra(sym) {
+  var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?interval=5m&range=1d';
+  var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
+  var j = await r.json();
+  var res = j.chart && j.chart.result && j.chart.result[0];
+  if (!res) throw new Error(sym + ' no intra');
+  var m = res.meta || {}, ts = res.timestamp || [];
+  var raw = (res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close) || [];
+  var off = (m.gmtoffset || 0);
+  var t = [], c = [];
+  for (var i = 0; i < raw.length; i++) {
+    if (raw[i] == null || ts[i] == null) continue;
+    // 標的所在交易所的當地時間（^VIX／^TNX 是芝加哥、其餘紐約），與 Yahoo 畫的一致
+    t.push(new Date((ts[i] + off) * 1000).toISOString().slice(11, 16));
+    c.push(raw[i]);
+  }
+  if (c.length < 3) throw new Error(sym + ' intra too few');
+  var avg = [], sum = 0;
+  for (var k = 0; k < c.length; k++) { sum += c[k]; avg.push(sum / (k + 1)); }
+  var ref = (m.chartPreviousClose != null) ? m.chartPreviousClose : null;
+  return { t: t, c: c, avg: avg, ref: ref, tz: m.exchangeTimezoneName || '' };
+}
+
 // ── 加權指數的當日分時（抽屜第一格）──
 // 比照券商 App 的大盤「詳細」頁：分時線 ＋ 均價線 ＋ 昨收基準，昨收之上紅、之下綠。
 // 資料來自本機 Shioaji 的指數分 K：security_type IND、exchange TSE、code 001。
@@ -758,7 +800,7 @@ async function loadTxfIntra(ref) {
 }
 
 // 單格 HTML：新聞情勢頁的盤勢列與頂欄抽屜共用，避免兩邊各寫一份而漂走。
-function _macroCellHtml(m) {
+function _macroCellHtml(m, intra) {
   {
     var tip = m.asOf ? '報價時間 ' + _asOfTxt(m.asOf) + '（台北）　' + _agoTxt(m.asOf) : '';
     var icon = '', tag = '';
@@ -790,7 +832,9 @@ function _macroCellHtml(m) {
       _macroAtHtml(m.asOf) + '</span>' +
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
       '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + cumTxt + '</span>' +
-      _macroSparkHtml(m) + '</div>';
+      ((intra && m.intra) ? _intraSparkHtml({ t: m.intra.t, c: m.intra.c, avg: m.intra.avg,
+      ref: m.intra.ref, fmt: m.fmt, note: '當盤分時（' + (m.intra.tz || '當地') + '）　灰線＝當盤累計平均' })
+      : _macroSparkHtml(m)) + '</div>';
   }
 }
 
@@ -941,7 +985,8 @@ function macroDrawerHtml() {
   // 大盤排第一格：這是台股投資組合的工具，本地市場應該在美股前面
   return _twIdxCellHtml() +
     _macroSnap.filter(function (m) { return MACRO_DRAWER_SKIP.indexOf(m.sym) < 0; })
-    .map(_macroCellHtml).join('') + _esunJpyCellHtml() + _nightFutCellHtml();
+    .map(function (m) { return _macroCellHtml(m, true); }).join('') +
+    _esunJpyCellHtml() + _nightFutCellHtml();
 }
 
 // 抓取時刻 ＋ 手動重抓。跟格子裡的資料時間分開標：
@@ -997,7 +1042,10 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 function renderMacroBar() {
   var el = document.getElementById('macro-bar');
   if (!el) return;
-  var cells = _macroSnap.map(_macroCellHtml);
+  // 不能直接把 _macroCellHtml 當 callback：map 會把索引當第二個參數傳進去，
+  // 而第二個參數是「畫分時」的旗標 —— 索引 1 以後全為真，這一頁就會變成分時圖。
+  // 新聞情勢頁要的是近一個月的趨勢，不是今晚這一盤。
+  var cells = _macroSnap.map(function (m) { return _macroCellHtml(m); });
   // 玉山日圓即期匯率：換匯實際成交的價格（買入＝銀行跟你買，賣出＝銀行賣你）。
   // Yahoo 的 JPYTWD=X 是國際中間價，換匯時拿不到，故另列一格供實際判斷。
   // 新聞情勢頁維持即期買入／賣出（換匯前後都要看），抽屜那格只給線上換匯會用到的優惠賣出
