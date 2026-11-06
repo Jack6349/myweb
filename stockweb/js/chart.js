@@ -503,7 +503,10 @@ async function _chartLoadBidAsk() {
       _bidLast = b;
       var wrap = document.getElementById('bid-wrap');
       if (wrap) wrap.innerHTML = _bidAskHtml(b, b.code);
-    } catch (e) {}
+      // 這個 catch 原本是空的，用意是擋格式怪異的推送，結果連 _bidAskHtml 自己的錯
+      // 也一起吞掉：渲染一丟例外，畫面就永遠停在「等待五檔推送…」，console 什麼都沒有。
+      // 2026-11-06 查到的 sumB is not defined 就是這樣藏了兩週。要吞，至少留下紀錄。
+    } catch (e) { console.warn('[五檔]', e); }
   });
   // 先用歷史逐筆填滿（盤後也看得到內容），再由 SSE 即時往上疊新成交
   _chartLoadTickHistory(code);
@@ -695,7 +698,14 @@ function _bidAskHtml(b, code) {
     // 點價下單：買方欄預設買進、賣方欄預設賣出，另一邊在確認框一鍵切換
     var tap = (typeof ordFromLadder === 'function')
       ? ' bid-tap" onclick="ordFromLadder(\'' + code + '\',' + p + ',\'' + side + '\')" title="點選下單"' : '"';
-    return '<td class="num bid-px ' + side + ' ' + cls + tap + '>' + txt + '</td>'; }; // 內外盤比 Bar（移到最上方、加高，兩側放張數與百分比） var sumB = 0, sumA = 0; bv.forEach(function (v) { sumB += v; }); av.forEach(function (v) { sumA += v; }); var tot = sumB + sumA || 1, pB = sumB / tot * 100, pA = sumA / tot * 100; var ratio = '<div class="bid-ratio">' +
+    return '<td class="num bid-px ' + side + ' ' + cls + tap + '>' + txt + '</td>';
+  };
+
+  // 內外盤比 Bar（移到最上方、加高，兩側放張數與百分比）
+  var sumB = 0, sumA = 0;
+  bv.forEach(function (v) { sumB += v; }); av.forEach(function (v) { sumA += v; });
+  var tot = sumB + sumA || 1, pB = sumB / tot * 100, pA = sumA / tot * 100;
+  var ratio = '<div class="bid-ratio">' +
     '<span class="bid-ratio-lbl">委買</span>' +
     '<span class="bid-ratio-side left"><b class="y">' + sumB.toLocaleString('zh-TW') + '</b>（' + pB.toFixed(1) + '%）</span>' +
     '<span class="bid-ratio-bar"><i class="bid" style="width:' + pB.toFixed(1) + '%"></i><i class="ask" style="width:' + pA.toFixed(1) + '%"></i></span>' +
