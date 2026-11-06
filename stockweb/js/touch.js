@@ -35,7 +35,7 @@ var TOUCH_BACK = 12;                    // 最多往回找幾個日曆天（含�
 var TOUCH_MIN_TICKS = 270 * TOUCH_DAYS;
 
 var TOUCH_SEL_LS = 'touch_sel_v1';      // 要顯示的代號清單
-var TOUCH_STAT_LS = 'touch_stat_v1';    // { 'code|YYYY-MM-DD': { n, hit[], ticks } }
+var TOUCH_STAT_LS = 'touch_stat_v2';    // { 'code|YYYY-MM-DD': { n, up[], dn[], ticks } }（v1 只有賣出側）
 
 var _touchStat = null;                  // 記憶體中的快取
 var _touchRows = null;                  // 算好的各檔結果
@@ -65,32 +65,45 @@ function _touchYmd(d) {
   return new Date(d.getTime() + 8 * 3600000).toISOString().slice(0, 10);
 }
 
-// 單日統計。回傳 { n, hit[], ticks }：n＝有完整視窗的時刻數，hit[k]＝其中觸及第 k 個偏移的次數。
+// 單日統計。兩側一起算：
+//   up[k]＝「掛高第 k 個偏移賣出」在視窗內被最高價碰到的次數
+//   dn[k]＝「掛低第 k 個偏移買進」在視窗內被最低價碰到的次數
+// n＝有完整視窗的時刻數（結尾不足一個視窗的不計）。
+// 兩側分開算而不是用同一個區間：價格可能一路往上，向上碰得到、向下碰不到，
+// 用「區間高低差」會把這兩件事混成一個數字。
 function _touchDay(j) {
   var p = j.close || [], dts = j.datetime || [];
   var n = p.length;
-  if (n < 2) return { n: 0, hit: TOUCH_OFFS.map(function () { return 0; }), ticks: n };
+  var zero = function () { return TOUCH_OFFS.map(function () { return 0; }); };
+  if (n < 2) return { n: 0, up: zero(), dn: zero(), ticks: n };
   var ts = new Array(n);
   for (var i = 0; i < n; i++) ts[i] = Date.parse(dts[i]);
   var win = TOUCH_WIN_MIN * 60000, end = ts[n - 1] - win;
-  var hit = TOUCH_OFFS.map(function () { return 0; });
-  // 單調遞減佇列：隊首永遠是目前視窗內的最高價
-  var dq = new Int32Array(n), head = 0, tail = 0, j2 = 0, cnt = 0;
+  var up = zero(), dn = zero();
+  // 兩條單調佇列：qH 遞減（隊首＝視窗內最高價）、qL 遞增（隊首＝最低價）
+  var qH = new Int32Array(n), hH = 0, tH = 0;
+  var qL = new Int32Array(n), hL = 0, tL = 0;
+  var j2 = 0, cnt = 0;
   for (var a = 0; a < n; a++) {
     if (ts[a] > end) break;
     while (j2 < n && ts[j2] <= ts[a] + win) {
-      while (tail > head && p[dq[tail - 1]] <= p[j2]) tail--;
-      dq[tail++] = j2; j2++;
+      while (tH > hH && p[qH[tH - 1]] <= p[j2]) tH--;
+      qH[tH++] = j2;
+      while (tL > hL && p[qL[tL - 1]] >= p[j2]) tL--;
+      qL[tL++] = j2;
+      j2++;
     }
-    while (tail > head && dq[head] < a) head++;
-    if (tail <= head) continue;
-    var hi = p[dq[head]];
+    while (tH > hH && qH[hH] < a) hH++;
+    while (tL > hL && qL[hL] < a) hL++;
+    if (tH <= hH || tL <= hL) continue;
+    var hi = p[qH[hH]], lo = p[qL[hL]];
     cnt++;
     for (var k = 0; k < TOUCH_OFFS.length; k++) {
-      if (hi >= p[a] + TOUCH_OFFS[k] - 1e-9) hit[k]++;
+      if (hi >= p[a] + TOUCH_OFFS[k] - 1e-9) up[k]++;
+      if (lo <= p[a] - TOUCH_OFFS[k] + 1e-9) dn[k]++;
     }
   }
-  return { n: cnt, hit: hit, ticks: n };
+  return { n: cnt, up: up, dn: dn, ticks: n };
 }
 
 async function _touchFetch(code, date) {
@@ -107,7 +120,8 @@ async function _touchFetch(code, date) {
 async function _touchCode(code) {
   var st = _touchStatLoad();
   var today = _touchYmd(new Date());
-  var days = [], tot = { n: 0, hit: TOUCH_OFFS.map(function () { return 0; }), ticks: 0 };
+  var zero = function () { return TOUCH_OFFS.map(function () { return 0; }); };
+  var days = [], tot = { n: 0, up: zero(), dn: zero(), ticks: 0 };
   for (var back = 0; back < TOUCH_BACK && days.length < TOUCH_DAYS; back++) {
     var date = _touchYmd(new Date(Date.now() - back * 86400000));
     var key = code + '|' + date;
@@ -122,13 +136,14 @@ async function _touchCode(code) {
     if (!one.ticks) continue;                      // 假日或停止交易
     days.push(date);
     tot.n += one.n; tot.ticks += one.ticks;
-    for (var k = 0; k < TOUCH_OFFS.length; k++) tot.hit[k] += one.hit[k];
+    for (var k = 0; k < TOUCH_OFFS.length; k++) { tot.up[k] += one.up[k]; tot.dn[k] += one.dn[k]; }
   }
   _touchStatSave();
   if (!days.length) return null;
   return {
     code: code, days: days.slice().reverse(), n: tot.n, ticks: tot.ticks,
-    rate: tot.hit.map(function (h) { return tot.n ? h / tot.n * 100 : null; }),
+    up: tot.up.map(function (h) { return tot.n ? h / tot.n * 100 : null; }),
+    dn: tot.dn.map(function (h) { return tot.n ? h / tot.n * 100 : null; }),
     thin: tot.ticks < TOUCH_MIN_TICKS
   };
 }
@@ -158,7 +173,7 @@ function touchHtml() {
   if (!sel.length) return '';
   var h = '<div class="sec-title">掛單參考<span class="touch-sub">近 ' + TOUCH_DAYS +
     ' 個交易日（含今日）　在某個成交時刻以「成交價 ＋ X」掛賣，往後 ' + TOUCH_WIN_MIN +
-    ' 分鐘內最高價碰到 X 的比例。'
+    ' 分鐘內最高價碰到 X 的比例；買進則是掛低 X、看最低價碰不碰得到。'
     // 這裡的紅綠不是漲跌，是「碰得到／碰不到」，與全站慣例不同所以寫明
     + '紅＝五成以上碰得到、綠＝一成以下（與全站的紅漲綠跌無關）</span></div>';
   if (!_touchRows) {
@@ -168,24 +183,35 @@ function touchHtml() {
     return h + '<div class="detail-note">' + (_touchErr || '選取的標的沒有逐筆成交資料。') + '</div>';
   }
   h += '<div class="inv-table-wrap"><table class="inv-table touch-table"><thead><tr>' +
-    '<th>代號</th>' +
-    TOUCH_OFFS.map(function (o) { return '<th class="num">+' + o.toFixed(2) + '</th>'; }).join('') +
+    '<th>代號</th><th>方向</th>' +
+    // 欄名只寫幅度，正負由「方向」那一欄決定：賣是掛高、買是掛低，同一個幅度
+    TOUCH_OFFS.map(function (o) { return '<th class="num">' + o.toFixed(2) + '</th>'; }).join('') +
     '<th class="num" title="三日合計成交筆數。低於 ' + TOUCH_MIN_TICKS +
     '（交易分鐘數 ' + (270 * TOUCH_DAYS) + '）時多數視窗裡沒有價格更新，百分比參考價值低">筆數</th>' +
     '<th class="num" title="有完整視窗的時刻數。相鄰時刻的視窗高度重疊，彼此不獨立：真正獨立的視窗約 ' +
     Math.round(270 / TOUCH_WIN_MIN) * TOUCH_DAYS + ' 個">樣本</th>' +
     '</tr></thead><tbody>';
   _touchRows.forEach(function (r) {
-    h += '<tr' + (r.thin ? ' class="touch-thin"' : '') + '><td class="dstat-code">' + r.code +
-      (r.thin ? ' <span class="dexm-lent">筆數低</span>' : '') + '</td>';
-    r.rate.forEach(function (v) {
-      // 百分位的色階只分三段：高（還碰得到）、中、低（幾乎碰不到）。
-      // 分界取自這張表本身的用途 —— 低於五成就是多數時候掛不到，低於一成等於掛不到。
-      var cls = v == null ? '' : (v >= 50 ? 'up' : (v >= 10 ? '' : 'down'));
-      h += '<td class="num ' + cls + '">' + (v == null ? '—' : Math.round(v) + '%') + '</td>';
-    });
-    h += '<td class="num touch-dim">' + r.ticks.toLocaleString('zh-TW') + '</td>' +
-      '<td class="num touch-dim">' + r.n.toLocaleString('zh-TW') + '</td></tr>';
+    // 一檔兩列：賣高、買低。代號與筆數跨兩列，表格不會因為多一側就變寬一倍。
+    var tr = r.thin ? ' class="touch-thin"' : '';
+    var cells = function (arr) {
+      // 色階只分三段：高（碰得到）、中、低（幾乎碰不到）。
+      // 分界取自這張表的用途 —— 低於五成是多數時候掛不到，低於一成等於掛不到。
+      return arr.map(function (v) {
+        var cls = v == null ? '' : (v >= 50 ? 'up' : (v >= 10 ? '' : 'down'));
+        return '<td class="num ' + cls + '">' + (v == null ? '—' : Math.round(v) + '%') + '</td>';
+      }).join('');
+    };
+    h += '<tr' + tr + ' class="' + (r.thin ? 'touch-thin ' : '') + 'touch-r1">' +
+      '<td class="dstat-code" rowspan="2">' + r.code +
+      (r.thin ? ' <span class="dexm-lent">筆數低</span>' : '') + '</td>' +
+      '<td class="touch-side" title="以「成交價 ＋ 幅度」掛賣，看往後 ' + TOUCH_WIN_MIN +
+      ' 分鐘內的最高價有沒有碰到">賣高</td>' + cells(r.up) +
+      '<td class="num touch-dim" rowspan="2">' + r.ticks.toLocaleString('zh-TW') + '</td>' +
+      '<td class="num touch-dim" rowspan="2">' + r.n.toLocaleString('zh-TW') + '</td></tr>' +
+      '<tr' + tr + '>' +
+      '<td class="touch-side" title="以「成交價 － 幅度」掛買，看往後 ' + TOUCH_WIN_MIN +
+      ' 分鐘內的最低價有沒有碰到">買低</td>' + cells(r.dn) + '</tr>';
   });
   return h + '</tbody></table></div>';
 }
