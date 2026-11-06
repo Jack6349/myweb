@@ -189,8 +189,11 @@ async function loadEsunFx(force) {
       var key = grp + (side.indexOf('買入') >= 0 ? 'Buy' : 'Sell');
       (rates[cur] = rates[cur] || {})[key] = +pr[1];
     }
-    if (Object.keys(rates).length) { _esun = { at: at, rates: rates }; _esunTs = Date.now(); }
-  } catch (e) { console.warn('[esun fx]', e); }
+    if (Object.keys(rates).length) {
+      _esun = { at: at, rates: rates }; _esunTs = Date.now();
+      _esunJpyHistPush();     // 牌告每抓回來一次就記一天，累積玉山自己的走勢
+    }
+  } catch (e) { hush('news', e); }
   return _esun;
 }
 
@@ -391,7 +394,7 @@ function _macroCacheWrite() {
   try {
     sessionStorage.setItem(MACRO_CACHE_KEY, JSON.stringify(
       { at: _macroAt, snap: _macroSnap, tw: _twLastClose, fut: _nightFut,
-        twidx: _twIdxIntra, txf: _txfIntra, esun: _esun, esunTs: _esunTs }));
+        twidx: _twIdxIntra, txf: _txfIntra, jpy: _jpyMid, esun: _esun, esunTs: _esunTs }));
   } catch (e) {}   // 容量滿或隱私模式：沒快取就是每次重抓，不該因此壞掉
 }
 function _macroCacheRead() {
@@ -408,7 +411,7 @@ async function ensureMacro(force) {
     var c = _macroCacheRead();
     if (c) {
       _macroSnap = c.snap; _twLastClose = c.tw; _nightFut = c.fut; _macroAt = c.at;
-      _twIdxIntra = c.twidx || null; _txfIntra = c.txf || null;
+      _twIdxIntra = c.twidx || null; _txfIntra = c.txf || null; _jpyMid = c.jpy || null;
       if (c.esun) { _esun = c.esun; _esunTs = c.esunTs || 0; }
       if (!_esun) await loadEsunFx();   // 牌告沒進快取（上次抓失敗）才補一個請求
       return;
@@ -431,6 +434,8 @@ async function loadMacro() {
   try { await loadTwIdxIntra(); } catch (e) { hush('news', e); }
   // 台指期分時：參考價來自上面那個快照，沒有快照就不畫圖
   try { await loadTxfIntra(_nightFut && _nightFut.ref); } catch (e) { hush('news', e); }
+  // 日圓中間價：只拿來畫線形，抓不到就這格不畫圖，數字照舊
+  try { await loadJpyMid(); } catch (e) { hush('news', e); }
   _macroAt = Date.now();
   _macroCacheWrite();
   renderMacroBar();
@@ -518,7 +523,7 @@ function _macroSparkHtml(m) {
   var pct = ref ? (last - ref) / ref * 100 : null;
   var tip = '近 ' + n + ' 個交易日收盤走勢　基準線＝區間起點 ' + _fmtNum(ref, m.fmt) +
     (pct == null ? '' : '　至今 ' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%') +
-    '　（此處比的是一個月前，與右邊的當日漲跌不同基準）';
+    '　（此處比的是一個月前，與右邊的當日漲跌不同基準）' + (m.note || '');
   // hover 用的點位。寫在 data 屬性上，滑鼠移上來直接讀，不必每次重繪都重算。
   // 格式：日期|收盤|x|y|相對基準%，以 ; 分隔；最後一點若是現價，日期寫成空字串。
   // 百分比在這裡就算好，hover 時只讀不算。比的是基準線（區間起點），
@@ -799,9 +804,57 @@ function _esunJpyCellHtml() {
     '　掛牌時間 ' + at + '　同時間即期賣出 ' + (jp.spotSell != null ? jp.spotSell.toFixed(4) : '—') + '">' +
     '<span class="macro-nm"><span class="macro-name">日圓網銀優惠<span class="macro-dim"> 玉山</span>' +
     '<button class="fx-reload" onclick="event.stopPropagation();esunReload(this)" title="重新抓牌告">↻</button></span>' +
-    '<span class="macro-at">掛牌 ' + at + '</span></span>' +
+    '<span class="macro-at">掛牌 ' + at +
+    // 線與數字不同來源，標在格子上而不是只寫在 tooltip：
+    // 不標會被讀成玉山自己的歷史牌告。
+    (_jpyMid ? '<span class="macro-dim">　線＝中間價</span>' : '') + '</span></span>' +
     '<span class="macro-fx-pair"><span class="fx-lb">賣出</span><span class="fx-v">' +
-    (jp.prefSell != null ? jp.prefSell.toFixed(4) : '—') + '</span></span></div>';
+    (jp.prefSell != null ? jp.prefSell.toFixed(4) : '—') + '</span></span>' +
+    (_jpyMid ? _macroSparkHtml({ bars: _jpyMid.bars, price: _jpyMid.price, asOf: _jpyMid.asOf, fmt: 4,
+      note: '　線是 Yahoo 的 JPYTWD=X 國際中間價，與上面那個玉山網銀優惠賣出不是同一個價' +
+        '（差的是銀行價差）。這張圖看方向，絕對價位看數字。' }) : '') +
+    '</div>';
+}
+
+// ── 日圓小圖的資料 ──
+// 這一格的數字是玉山的網銀優惠賣出（爬牌告，只有「現在這一筆」）。
+// 玉山不提供歷史牌告，畫不出它自己的走勢，所以線形借用 Yahoo 的 JPYTWD=X 國際中間價。
+//
+// 兩者不是同一個價：實測 2026-11-06 中間價 0.2065、玉山即期買入 0.2067、
+// 網銀優惠賣出 0.2095、即期賣出 0.2107。中間價與格子上的數字差約 1.45%，那是銀行價差。
+// 所以這張圖只回答「日圓這一個月往哪走」，絕對價位要看格子上的數字。
+//
+// 刻意不做的事：把中間價整條平移、讓尾端對上 0.2095。那等於宣稱一個月前玉山的價差
+// 也是 0.0030，是編出來的數字。線與數字接不起來是事實，標清楚比抹平誠實。
+// 另一個已知限制：銀行價差這一個月是否穩定無法驗證（沒有玉山歷史可比），
+// 價差若變動，線形的方向大致對、幅度不保證。
+//
+// 長期解：下面的 _esunJpyHistPush 從今天起把每天的玉山牌告記進 localStorage，
+// 累積夠多之後這張圖可以換成真正的玉山走勢。只在你開過頁的日子有資料，會是斷續序列。
+var _jpyMid = null;          // Yahoo JPYTWD=X：{ price, asOf, bars[], fmt }
+async function loadJpyMid() {
+  _jpyMid = await fetchYahooQuote({ name: '日圓中間價', sym: 'JPYTWD=X', fmt: 4 });
+  return _jpyMid;
+}
+
+// 玉山牌告的自記歷史。一天一筆（同一天重複開頁就更新成最後看到的值）。
+// 上限 400 筆：一年多的交易日，localStorage 放得下，也夠一張月線圖用很久。
+var ESUN_JPY_HIST_LS = 'esun_jpy_hist_v1';
+function _esunJpyHistRead() {
+  try { var a = JSON.parse(localStorage.getItem(ESUN_JPY_HIST_LS)); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+function _esunJpyHistPush() {
+  if (!(_esun && _esun.rates && _esun.rates['日圓'])) return;
+  var v = _esun.rates['日圓'].prefSell;
+  if (v == null) return;
+  // 日期用牌告時間，不是現在：盤後才開頁時記的仍是那天的牌告
+  var d = (_esun.at || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+  var a = _esunJpyHistRead();
+  if (a.length && a[a.length - 1].d === d) a[a.length - 1].s = v;
+  else a.push({ d: d, s: v });
+  if (a.length > 400) a = a.slice(a.length - 400);
+  try { localStorage.setItem(ESUN_JPY_HIST_LS, JSON.stringify(a)); } catch (e) { hush('news', e); }
 }
 
 // ── 日圓買入提醒 ──
