@@ -730,6 +730,10 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-sname { font-size: 12px; color: var(--text2); }
 /* 現價＋預估年殖利率：文字白、數字黃（供換股/調節配置判斷） */
 .divest-yield { font-size: 12px; color: #fff; margin-left: 12px; font-variant-numeric: tabular-nums; }
+/* 這一行最多排三段（預估年殖利率／成本殖利率／本月除息）。窄螢幕只在段與段之間換行，
+   段內不斷；左半要 min-width:0，否則它撐住不縮，右邊的已領／估算會被擠出框外。 */
+.divest-shead > div:first-child { min-width: 0; }
+.divest-yield > span { white-space: nowrap; }
 .divest-yield b { color: var(--accent2); font-weight: 700; }
 .divest-smeta { font-size: 12px; color: var(--text3); white-space: nowrap; }
 .divest-chev { color: var(--text3); margin-left: 4px; }

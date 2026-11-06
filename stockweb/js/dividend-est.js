@@ -615,6 +615,23 @@ function renderDividendEst() {
     var freq = 12 / _divInferStep(_recsAsc);
     var annPerShare = repPS * freq;
     var yld = (price && annPerShare) ? annPerShare / price * 100 : null;
+    // 成本殖利率：分母換成持股成本均價（同持股庫存、同「本月除息個股」那張表）。
+    // 預估年殖利率回答「現在進場能領多少」，成本殖利率回答「手上這批能領多少」，
+    // 兩個問題不同，所以並列而不是二選一。
+    // 已出清的沒有成本基準，整段不顯示；還持有但讀不到成本才標 —。
+    var _pos = (typeof _positions !== 'undefined' && _positions || [])
+      .filter(function (p) { return String(p.code) === s.code; })[0];
+    var costPx = (_pos && _pos.price > 0) ? _pos.price : null;
+    var cyld = (costPx && annPerShare) ? annPerShare / costPx * 100 : null;
+    // 顏色與「本月除息個股」同一套：成本殖利率高於現價殖利率→紅（成本比現價低，手上這批划算），
+    // 低→綠，畫面顯示的兩位小數一樣就算相同→白。
+    var cyldCol = (cyld == null || yld == null) ? 'var(--text3)'
+      : (+cyld.toFixed(2) > +yld.toFixed(2) ? 'var(--up)'
+        : (+cyld.toFixed(2) < +yld.toFixed(2) ? 'var(--down)' : 'var(--text)'));
+    var cyldHtml = s.soldOut ? ''
+      : '　<span class="divest-cyld" title="每股配息 × 年配息次數 ÷ 持股成本均價：手上這批持股的配息報酬">' +
+        '成本殖利率 <b style="color:' + cyldCol + '">' +
+        (cyld != null ? cyld.toFixed(2) + '%' : '—') + '</b></span>';
     // 當月已公告除息（含 TPEx 預告與手動補登，由 _divMergeAnnounced 併入）；無則不顯示
     var _ym = _divTwDate().iso.slice(0, 7);
     // 已出清的不顯示：這次除息領不到，標在旁邊只會看起來像有錢要進來
@@ -630,7 +647,8 @@ function renderDividendEst() {
         '<div><span class="divest-scode">' + s.code + '</span> <span class="divest-sname">' + s.name + '</span>' +
           (s.soldOut ? ' <span class="dexm-lent">(已出清)</span>' : '') +
           '<span class="divest-yield">現價 <b>' + (price != null ? price.toFixed(2) : '—') + '</b>　' +
-          '預估年殖利率 <b>' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</b>' + exHtml + '</span></div>' +
+          '<span title="每股配息 × 年配息次數 ÷ 現價：現在買進的預估年報酬">預估年殖利率 <b>' +
+          (yld != null ? yld.toFixed(2) + '%' : '—') + '</b></span>' + cyldHtml + exHtml + '</span></div>' +
         '<div class="divest-smeta">已領 <span style="color:var(--down)">' + money(s.res.actualTotal) + '</span>　估算 <span style="color:var(--accent2)">' + money(s.res.estTotal) + '</span>　' +
           '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span></div>' +
       '</div>' +
