@@ -314,6 +314,39 @@ function rbRender() {
   wrap.innerHTML = html;
 }
 
+// ══════════ 部位（沿用既有基準，不另外算一份）══════════
+// 成本、損益、含息獲利率一律呼叫 inventory.js 的 invMetrics：
+// 那裡已經處理過「券商淨成本已扣配息要還原」與認購成本補正，
+// 在這裡重算一份必然會跟庫存頁對不起來。含稅費也跟著頂欄的切換走。
+function _rbPos(code) {
+  var ps = (typeof _positions !== 'undefined' && _positions) || [];
+  for (var i = 0; i < ps.length; i++) {
+    if (String(ps[i].code) !== code) continue;
+    if (typeof invMetrics !== 'function') return null;
+    try { return invMetrics(ps[i]); } catch (e) { hush('rebound', e); return null; }
+  }
+  return null;
+}
+function _rbAlert(code) {
+  return ((typeof loadAlerts === 'function' ? loadAlerts() : {}) || {})[code] || null;
+}
+
+// 年化波動率：日報酬標準差 × √252。用還原收盤，否則除息日會被當成一次大跌、把波動灌高。
+function _rbVol(bars) {
+  if (!bars || bars.length < 30) return null;
+  var r = [];
+  for (var i = 1; i < bars.length; i++) if (bars[i - 1].a > 0) r.push(bars[i].a / bars[i - 1].a - 1);
+  if (r.length < 30) return null;
+  var m = r.reduce(function (a, b) { return a + b; }, 0) / r.length;
+  var v = r.reduce(function (a, b) { return a + (b - m) * (b - m); }, 0) / (r.length - 1);
+  return Math.sqrt(v) * Math.sqrt(252) * 100;
+}
+
+function _rbMoney(v) {
+  if (v == null) return '—';
+  return (v < 0 ? '−' : '') + Math.round(Math.abs(v)).toLocaleString('zh-TW');
+}
+
 // 各檔實際可用歷史：主動式 ETF 多半 2025 下半年到 2026 年才上市，
 // 「歷史 2 年」是抓取區間、不是各檔真的有 2 年資料，這一行把差距講出來。
 function _rbHistLine() {
@@ -327,30 +360,134 @@ function _rbHistLine() {
     + '（' + hi.n + ' 個交易日）';
 }
 
-// ── 決策視圖：結論先行。只有最長持有期的勝率、中位數、最差，依中位數排序。──
+// ── 決策視圖：手上的部位現況，接上這一檔跌深之後的歷史分布，同一列看完。──
+// 分開兩張表的話，判斷「這一檔現在能不能接／該不該停利」要自己對代號，
+// 那等於把合併的工作丟回去。
+var RB_SORT_LS = 'rebound_sort_v1';
+var _rbSort = (function () {
+  try { var v = localStorage.getItem(RB_SORT_LS); if (v) return v; } catch (e) {}
+  return 'medDesc';
+})();
+function rbSort(key) {
+  _rbSort = (_rbSort === key + 'Desc') ? key + 'Asc' : key + 'Desc';
+  try { localStorage.setItem(RB_SORT_LS, _rbSort); } catch (e) {}
+  rbRender();
+}
+function _rbTh(key, label, cls) {
+  var on = (_rbSort === key + 'Asc' || _rbSort === key + 'Desc');
+  var ind = _rbSort === key + 'Asc' ? '▲' : (_rbSort === key + 'Desc' ? '▼' : '↕');
+  return '<th class="' + (cls || 'num') + ' sort-th' + (on ? ' sorted' : '') + '" onclick="rbSort(\'' + key + '\')">'
+    + label + '<span class="sort-ind">' + ind + '</span></th>';
+}
+
 function _rbDecHtml(dates, usableEps, sysEps) {
   var cfg = _rbData.cfg, h = cfg.holds[cfg.holds.length - 1];
   var rows = _rbData.codes.map(function (c) {
-    return { c: c, s: _rbFwd(_rbData.series[c] || [], dates, h) };
-  }).filter(function (r) { return r.s; });
-  if (!rows.length) {
-    return '<div class="detail-note nb-keep">歷史樣本不足：' + cfg.years + ' 年內沒有走滿 ' + h
-      + ' 個交易日的非系統性觸發事件，無法給出機率。放寬門檻或拉長歷史長度（參數設定 → 跌深反彈訊號）才有樣本。</div>';
-  }
-  rows.sort(function (a, b) { return b.s.med - a.s.med; });
-
-  var html = '<div class="sec-title">跌深之後持有 ' + h + ' 個交易日</div>' +
-    '<table class="inv-table rb-table"><thead><tr>' +
-    '<th>代號 / 名稱</th><th class="num">上漲機率</th><th class="num">報酬中位數</th>' +
-    '<th class="num">最差一次</th><th class="num">樣本（事件／觸發日）</th></tr></thead><tbody>';
-  rows.forEach(function (r) {
-    html += '<tr><td><span class="tx-ocode">' + r.c + '</span><span class="tx-oname">' + _rbName(r.c) + '</span></td>' +
-      '<td class="num" style="font-weight:700">' + r.s.up.toFixed(0) + '%</td>' +
-      '<td class="num" style="color:' + _rbCol(r.s.med) + ';font-weight:700">' + _rbPct(r.s.med) + '</td>' +
-      '<td class="num" style="color:' + _rbCol(r.s.min) + '">' + _rbPct(r.s.min) + '</td>' +
-      '<td class="num rs-dim">' + r.s.eps + ' 段 ／ ' + r.s.n + ' 日</td></tr>';
+    var s = _rbFwd(_rbData.series[c] || [], dates, h);
+    var p = _rbPos(c), a = _rbAlert(c);
+    var price = p ? (p.cost && p.shares ? null : null) : null;
+    // 現價：invMetrics 沒回現價，從同一份報價取（與庫存頁同一個來源）
+    var r0 = (typeof _rows !== 'undefined' && _rows[c]) || null;
+    price = (r0 && r0.close != null) ? r0.close : null;
+    var gap = (price != null && p && p.avg) ? (price - p.avg) / p.avg * 100 : null;
+    return {
+      c: c, s: s, p: p, a: a, price: price, gap: gap,
+      vol: _rbVol(_rbData.series[c] || []),
+      avg: p ? p.avg : null, cost: p ? p.cost : null, val: p ? p.val : null,
+      prate: p ? p.prate : null, div: p ? p.div : null, wrate: p ? p.wrate : null,
+      chg: p ? p.chg : null,
+      up: s ? s.up : null, med: s ? s.med : null, min: s ? s.min : null
+    };
   });
-  html += '</tbody></table>';
+  var withStat = rows.filter(function (r) { return r.s; });
+  if (!withStat.length) {
+    return '<div class="detail-note nb-keep">歷史樣本不足：沒有走滿 ' + h
+      + ' 個交易日的非系統性觸發事件，無法給出機率。'
+      + '放寬門檻或拉長歷史長度（參數設定 → 跌深反彈訊號）才有樣本。</div>';
+  }
+
+  var key = _rbSort.replace(/(Asc|Desc)$/, ''), dir = /Asc$/.test(_rbSort) ? 1 : -1;
+  rows.sort(function (a, b) {
+    if (key === 'code') return a.c < b.c ? -dir : (a.c > b.c ? dir : 0);
+    var x = a[key], y = b[key];
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;            // 沒有資料的一律沉底，不隨升降冪跑到最前面
+    if (y == null) return -1;
+    return (x - y) * dir;
+  });
+
+  var hasPos = rows.some(function (r) { return r.p; });
+  var html = '<div class="sec-title">部位現況 ＋ 跌深之後持有 ' + h + ' 個交易日</div>';
+  if (!hasPos) {
+    html += '<div class="rb-caveat nb-keep">部位欄位是空的：行情與庫存尚未載入（未登入或券商連線未建立）。'
+      + '按「↻ 重新整理」重試；統計欄位不受影響。</div>';
+  }
+  html += '<div class="rs-cat-wrap"><table class="inv-table rb-table rb-dec"><thead><tr>'
+    + '<th rowspan="2">代號 / 名稱</th>'
+    + '<th colspan="7" class="rb-grp">現在手上的部位</th>'
+    + '<th colspan="4" class="rb-grp">跌深後持有 ' + h + ' 日（歷史）</th></tr><tr>'
+    + _rbTh('price', '現價')
+    + _rbTh('avg', '原始均價')
+    + _rbTh('gap', '現價 vs 均價')
+    + _rbTh('cost', '原始成本')
+    + _rbTh('val', '現值')
+    + _rbTh('div', '已配息')
+    + _rbTh('wrate', '含息獲利率')
+    + _rbTh('up', '上漲機率')
+    + _rbTh('med', '報酬中位數')
+    + _rbTh('min', '最差一次')
+    + '<th class="num">樣本</th>'
+    + '</tr></thead><tbody>';
+
+  rows.forEach(function (r) {
+    // 現價格底下掛買進價門檻：決定「分段接」掛多少的時候要看的就是這兩個
+    // 差距為負＝門檻已經越過，寫「已達」而不是寫一個負數：
+    // 「差 −2.8pp」要讀的人自己翻譯成「已經超過了」，那是把判讀丟回去。
+    var gapTxt = function (label, unit, diff, dec) {
+      if (diff <= 0) return '<div class="rb-sub3 rb-hit">' + label + '　已達（超過 '
+        + Math.abs(diff).toFixed(dec) + unit + '）</div>';
+      return '<div class="rb-sub3">' + label + '（差 ' + diff.toFixed(dec) + unit + '）</div>';
+    };
+    var buyLine = '';
+    if (r.a && r.a.buyPrice != null && r.price != null) {
+      // 買進價是「跌到這個價才買」→ 現價越低越接近，差距＝現價 − 門檻
+      buyLine = gapTxt('買進 ' + r.a.buyPrice, '', r.price - r.a.buyPrice, 2);
+    } else if (r.price != null) {
+      buyLine = '<div class="rb-sub3 rs-dim">未設買進價</div>';
+    }
+    // 含息獲利率底下掛停利門檻：決定「要不要停利」看的是這兩個
+    var tpLine = '';
+    if (r.a && r.a.tpRate != null && r.wrate != null) {
+      tpLine = gapTxt('停利 ' + r.a.tpRate + '%', 'pp', r.a.tpRate - r.wrate, 1);
+    } else if (r.a && r.a.tpPrice != null && r.price != null) {
+      tpLine = gapTxt('停利 ' + r.a.tpPrice, '', r.a.tpPrice - r.price, 2);
+    } else if (r.wrate != null) {
+      tpLine = '<div class="rb-sub3 rs-dim">未設停利</div>';
+    }
+    var s = r.s;
+    html += '<tr><td><span class="tx-ocode">' + r.c + '</span><span class="tx-oname">' + _rbName(r.c) + '</span>'
+      + (r.vol != null ? '<div class="rb-sub3 rs-dim">年化波動 ' + r.vol.toFixed(1) + '%</div>' : '') + '</td>'
+      + '<td class="num">' + (r.price == null ? '—' : r.price.toFixed(2))
+        + (r.chg != null ? '<div class="rb-sub3" style="color:' + _rbCol(r.chg) + '">' + _rbPct(r.chg, 2) + '</div>' : '')
+        + buyLine + '</td>'
+      + '<td class="num">' + (r.avg == null ? '—' : r.avg.toFixed(2)) + '</td>'
+      + '<td class="num" style="color:' + _rbCol(r.gap) + ';font-weight:700">' + _rbPct(r.gap) + '</td>'
+      + '<td class="num rs-dim">' + _rbMoney(r.cost) + '</td>'
+      + '<td class="num">' + _rbMoney(r.val) + '</td>'
+      + '<td class="num rs-dim">' + _rbMoney(r.div) + '</td>'
+      + '<td class="num" style="color:' + _rbCol(r.wrate) + ';font-weight:700">' + _rbPct(r.wrate)
+        + (r.prate != null ? '<div class="rb-sub3 rs-dim">資本 ' + _rbPct(r.prate) + '</div>' : '')
+        + tpLine + '</td>'
+      + (s
+        ? '<td class="num" style="font-weight:700">' + s.up.toFixed(0) + '%</td>'
+          + '<td class="num" style="color:' + _rbCol(s.med) + ';font-weight:700">' + _rbPct(s.med) + '</td>'
+          + '<td class="num" style="color:' + _rbCol(s.min) + '">' + _rbPct(s.min) + '</td>'
+          + '<td class="num rs-dim">' + s.eps + ' 段 ／ ' + s.n + ' 日</td>'
+        : '<td class="num rs-dim" colspan="4">歷史不足 ' + h + ' 日，無統計</td>')
+      + '</tr>';
+  });
+  html += '</tbody></table></div>';
+  rows = withStat;
 
   var thin = rows.slice().sort(function (a, b) { return a.s.eps - b.s.eps; })[0];
   html += '<div class="rb-caveat">勝率與中位數的分母是「觸發日」，但同一段修正會連續好幾天都達門檻，'
@@ -363,7 +500,7 @@ function _rbDecHtml(dates, usableEps, sysEps) {
     + '各檔段數差這麼多是因為上市日差很多：' + _rbHistLine() + '。'
     + '歷史最短的那幾檔只涵蓋一段多頭，它們的勝率不是「長期統計」，是「這幾個月的樣子」。</div>';
 
-  html += '<div class="detail-note"><dl>' + _rbSixHtml() + '</dl></div>';
+  html += '<div class="detail-note"><dl>' + _rbPosSixHtml() + _rbSixHtml() + '</dl></div>';
   return html;
 }
 
@@ -422,7 +559,39 @@ function _rbAnaHtml(dates, usableEps, sysEps) {
   return html;
 }
 
-// 六欄交付標準
+// 部位欄位的六欄
+function _rbPosSixHtml() {
+  return '<dt>部位欄位 · 定義</dt><dd>全部沿用持股庫存頁的 <code>invMetrics</code>，不在這一頁另算一份。'
+    + '<code>原始成本 ＝ 券商淨成本 ＋ 這些批次累積已領的配息</code>（券商的成本已被配息扣過，要先還原，'
+    + '否則配息愈多成本看起來愈低、損益率虛胖）；<code>原始均價 ＝ 原始成本 ÷ 持有股數</code>；'
+    + '<code>現價 vs 均價 ＝ (現價 − 原始均價) ÷ 原始均價</code>；'
+    + '<code>資本損益率 ＝ (現值 − 原始成本) ÷ 原始成本</code>（純價差）；'
+    + '<code>含息獲利率 ＝ (價差 ＋ 已落袋配息) ÷ 原始成本</code>。'
+    + '現值是否扣賣出手續費與交易稅，跟著頂欄的「含稅費」切換走。'
+    + '年化波動率＝日報酬標準差 × √252，用還原收盤算，不然除息日會被當成一次大跌。</dd>'
+    + '<dt>部位欄位 · 比較基準</dt><dd>三個基準各管一件事。'
+    + '「現價 vs 均價」比的是自己的成本，回答分段接還有多少空間、接下去會把均價拉到哪一邊；'
+    + '「含息獲利率」比的是停損停利頁設的停利率門檻（小字那一行就是差距），回答該不該停利；'
+    + '「年化波動率」是各檔互相比，回答同樣一筆錢放哪一檔帳面會晃得比較兇。</dd>'
+    + '<dt>部位欄位 · 白話意義</dt><dd>這幾欄回答「我現在站在哪裡」。'
+    + '右邊的統計欄回答「從這裡往前走，歷史上會怎樣」。兩邊要同一列看：'
+    + '歷史反彈中位數再高，如果這一檔已經超過你的停利門檻，那是要賣的情境不是要接的情境。</dd>'
+    + '<dt>部位欄位 · 機制</dt><dd>為什麼成本要還原配息：券商的庫存成本是「付出的錢 − 領到的配息」，'
+    + '它報的損益因此天生含息。不還原的話，配息領愈多的那幾檔成本愈低、資本損益率愈好看，'
+    + '跟真正的價差表現無關，各檔之間也就不能比。還原之後才分得出兩件事 —— '
+    + '價差賺多少（資本損益率）、加上配息總共賺多少（含息獲利率）。</dd>'
+    + '<dt>部位欄位 · 行動含義</dt><dd>「現價 vs 均價」為負代表接下去會降低均價，'
+    + '負得愈多降得愈快；為正代表接下去會墊高均價。'
+    + '「含息獲利率」與停利門檻的差距縮到 0 就是停損停利頁會亮燈的時候。'
+    + '這兩欄只說明位置，不說明金額 —— 要接多少、要賣幾張，這一頁不算。</dd>'
+    + '<dt>部位欄位 · 不能告訴你什麼</dt><dd>兩件事。'
+    + '一、不含已出清的批次，所以「已配息」只算還在手上的這些批次領過的，'
+    + '不是這檔歷年配息總額，拿來算長期報酬會低估。'
+    + '二、現價是最近一筆報價，收盤後到隔天開盤之間是停住的；'
+    + '盤前看到的「現價 vs 均價」是昨天的位置，不是現在的。</dd>';
+}
+
+// 統計欄位的六欄
 function _rbSixHtml() {
   var cfg = _rbData.cfg, hL = cfg.holds[cfg.holds.length - 1];
   return '<dt>定義</dt><dd>觸發日＝大盤（^TWII）當日收盤相對 ' + cfg.look + ' 個交易日前收盤累計 ≤ −' + cfg.drop + '%。'
@@ -441,8 +610,9 @@ function _rbSixHtml() {
     + '各檔形狀不同：有的短天期強、長天期把漲幅吐回去，有的愈久愈好，'
     + '這是持股周轉速度與產業集中度的差別，不是統計雜訊。</dd>'
     + '<dt>行動含義</dt><dd>勝率與中位數說明「這個時點的分布」，不說明「要買多少」。'
-    + '要掛多遠才會成交看即時持股頁的掛單參考；賣出看停損停利頁的門檻。'
-    + '這一頁只負責回答「現在是不是那個時點、各檔歷史上彈得如何」。</dd>'
+    + '要掛多遠才會成交看即時持股頁的掛單參考。'
+    + '跟左邊的部位欄位合起來才完整：統計說這一檔跌深之後歷史上彈得好，'
+    + '部位說你現在的均價在哪、離停利門檻多遠 —— 前者是機會，後者是這個機會對你的意義。</dd>'
     + '<dt>這個指標不能告訴你什麼</dt><dd>三件事。'
     + '一、不能分辨系統性與非系統性 —— 程式看不出跌深的原因，要靠你手動標，標錯統計就錯。'
     + '二、不能告訴你這一次會不會是最差那一次：勝率 80% 的另一面是五次裡有一次踩到，'
@@ -453,9 +623,11 @@ function _rbSixHtml() {
 }
 function _rbMethodHtml() {
   var cfg = _rbData.cfg;
-  return '<dt>這一頁不做什麼</dt><dd>不算成本與損益（在持股庫存與停損停利頁）、不判定成交機率'
-    + '（在即時持股頁的掛單參考）、不給傾向。列完分布就停。</dd>'
-    + '<dt>資料來源</dt><dd>Yahoo Finance 日線（^TWII 與各檔，經 GAS 代理），取 ' + cfg.years + ' 年。'
+  return '<dt>這一頁不做什麼</dt><dd>不判定成交機率（那在即時持股頁的掛單參考：掛高／掛低 X 元在 10 分鐘內'
+    + '被觸及的比例）、不設定停利停損門檻（那在停損停利頁，這裡只顯示設好的門檻與差距）、'
+    + '不算要接多少或賣幾張、不給傾向。列完位置與分布就停。</dd>'
+    + '<dt>資料來源</dt><dd>部位欄位來自券商庫存與即時報價（與持股庫存頁同一份，經 invMetrics）。'
+    + '統計欄位來自 Yahoo Finance 日線（^TWII 與各檔，經 GAS 代理），取 ' + cfg.years + ' 年。'
     + '大盤用未還原收盤（指數無配息），個股用還原收盤。'
     + '盤中最後一根是當日快照、不是定盤，收盤前的觸發判定會變動。</dd>'
     + '<dt>重疊樣本</dt><dd>同一段修正會連續好幾天都達門檻，每一天都算一次樣本，'
