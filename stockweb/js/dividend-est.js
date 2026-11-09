@@ -75,6 +75,46 @@ function _divFetchT(url, ms) {
     .finally(function () { if (timer) clearTimeout(timer); });
 }
 
+// ── 外部資料來源：直連優先，失敗退回 GAS 代理 ──
+//
+// 為什麼要直連：2026-11-09 安燈抓到兩筆失敗，配息資料 ×19（TWSE ETF/productContent）、
+// ETF 篩選 ×17（TWSE exRight/TWT49U），錯誤都是
+//   Unexpected token '<', "<html><hea"... is not valid JSON
+// 也就是 TWSE 回了 HTML 給 Google 的伺服器。同一時刻從本機直連同一個網址拿到的是
+// 完整 JSON（86 筆）。所以壞的不是我們的程式、也不是資料，是中間多出來的那一層。
+//
+// 哪些能直連：實測只有 www.twse.com.tw 的回應帶 Access-Control-Allow-Origin: *。
+// TPEx、mis.twse、openapi.twse、Yahoo 都沒有，瀏覽器直連必定失敗 —— 那些就不試，
+// 不浪費一次請求。
+//
+// 為什麼仍保留代理當後路：TWSE 哪天拿掉 CORS 標頭，這幾支會整個斷掉。
+// 兩段式的話只是退回現在的行為。
+//
+// 直連回 200 但內容是 HTML 也算失敗：那正是這次遇到的樣子，只看 HTTP 狀態碼攔不到。
+var DIV_DIRECT_HOSTS = ['https://www.twse.com.tw/'];
+function _divRespOf(txt, status) {
+  return {
+    ok: status >= 200 && status < 300, status: status,
+    text: function () { return Promise.resolve(txt); },
+    json: function () { try { return Promise.resolve(JSON.parse(txt)); } catch (e) { return Promise.reject(e); } }
+  };
+}
+function _divViaFetch(u, ms) {
+  var t = ms || 40000;
+  var proxy = function () { return _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(u), t); };
+  var direct = DIV_DIRECT_HOSTS.some(function (h) { return String(u).indexOf(h) === 0; });
+  if (!direct) return proxy();
+  return _divFetchT(u, t).then(function (r) {
+    if (!r.ok) throw new Error('direct HTTP ' + r.status);
+    return r.text();
+  }).then(function (txt) {
+    // 退回代理的情況不點安燈：那是已經復原的失敗，亮燈只會讓燈失去意義。
+    // 兩邊都失敗時，呼叫端原本的 catch 會記。
+    if (/^\s*</.test(txt)) throw new Error('direct returned HTML');
+    return _divRespOf(txt, 200);
+  }).catch(function () { return proxy(); });
+}
+
 async function fetchYahooDiv(code, force) {
   var day = _divTwDate().iso, lsKey = 'divest_yf_v1', cache = { day: day, map: {} };
   try { var c = JSON.parse(localStorage.getItem(lsKey) || 'null'); if (c && c.day === day) cache = c; } catch (e) {}
@@ -762,7 +802,7 @@ function _divHistPrices(code) {
     for (var i = 0; i < syms.length && !bars.length; i++) {
       try {
         var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + syms[i] + '?interval=1d&range=2y';
-        var r = await _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(url), 40000);
+        var r = await _divViaFetch(url, 40000);   // Yahoo 無 CORS，實際仍走代理
         var j = await r.json();   // GAS 偶發回 HTML 錯誤頁 → 這裡丟錯，換下一個代號或放棄
         var res = j.chart && j.chart.result && j.chart.result[0];
         var ts = (res && res.timestamp) || [], cl = (res && res.indicators.quote[0].close) || [];
@@ -1164,7 +1204,8 @@ async function fetchTpexExright() {
   } catch (e) { console.warn('[tpex exright]', e); }
   // 上市：TWSE 除權除息預告表（OpenAPI TWT48U_ALL，約涵蓋未來兩週）；只取有除息者
   try {
-    var r2 = await _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent('https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL'), 40000);
+    // openapi.twse 與 www.twse 是不同主機，實測沒有 CORS，所以仍走代理
+    var r2 = await _divViaFetch('https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL', 40000);
     var j2 = await r2.json();
     (Array.isArray(j2) ? j2 : []).forEach(function (x) {
       var d = String(x.Date || '');
@@ -1221,7 +1262,7 @@ async function _divLoadOfficialHist(codes, force) {
   var via = async function (u) {           // GAS 逾時會回 {error}（HTTP 200），當作失敗重試一次
     for (var a = 0; a < 2; a++) {
       try {
-        var j = await _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(u), 40000).then(function (r) { return r.json(); });
+        var j = await _divViaFetch(u, 40000).then(function (r) { return r.json(); });
         if (j && !j.error) return j;
       } catch (e) { hush('dividend-est', e); }
     }

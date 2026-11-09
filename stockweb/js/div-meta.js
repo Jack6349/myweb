@@ -163,7 +163,8 @@ function _divMetaField(j, name) {
   return (i >= 0 && tb.data && tb.data[0]) ? tb.data[0][i] : null;
 }
 async function _divMetaFetchOne(code) {
-  var via = function (u) { return _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(u), 40000).then(function (r) { return r.json(); }); };
+  // TWSE 直連、TPEx 走代理，由 _divViaFetch 依網址自己決定（見該函式的註解）
+  var via = function (u) { return _divViaFetch(u, 40000).then(function (r) { return r.json(); }); };
   var otc = (_contracts[code] && _contracts[code].exchange) === 'OTC';
   if (!otc) {
     var j = await via('https://www.twse.com.tw/rwd/zh/ETF/productContent?id=' + encodeURIComponent(code) + '&response=json');

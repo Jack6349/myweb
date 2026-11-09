@@ -33,7 +33,8 @@ var _esSort = (function () {
 })();
 
 function _esVia(u, ms) {
-  return _divFetchT(NEWS_GAS_URL + '?url=' + encodeURIComponent(u), ms || 40000).then(function (r) { return r.text(); })
+  // TWSE 直連、TPEx／MIS 走代理，由 _divViaFetch 依網址自己決定（見該函式的註解）
+  return _divViaFetch(u, ms || 40000).then(function (r) { return r.text(); })
     .then(function (t) {
       var j;
       try { j = JSON.parse(t); }
