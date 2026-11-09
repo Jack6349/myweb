@@ -1158,7 +1158,10 @@ td.cost-even::after  { background: var(--text3); }
 .dw-sec { font-size: 14px; color: var(--accent2); font-weight: 600; margin: 12px 0 6px; }
 .dw-sec:first-of-type { margin-top: 0; }
 .dw-row { display: flex; flex-wrap: wrap; gap: 8px 26px; }
-.dw-close { float: right; background: none; border: 0; color: var(--text3); cursor: pointer; font-size: 14px; }
+/* ✕ 的點擊範圍原本只有字本身，與左邊的頁籤貼在一起會誤點，補一點內距拉開 */
+.dw-close { float: right; background: none; border: 0; color: var(--text3); cursor: pointer; font-size: 14px;
+  padding: 2px 2px 2px 8px; line-height: 1; }
+.dw-close:hover { color: var(--text); }
 /* 盤勢：1fr 的最小尺寸是內容寬度，抽屜比新聞情勢頁窄會被撐出去。
    minmax(0,1fr) 強制等分，八格排四欄兩列，跟下方的配置對齊。 */
 .dw .macro-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1660,7 +1663,8 @@ td.cost-even::after  { background: var(--text3); }
    線圖與所有金額＝紅漲綠跌（全站慣例），黃＝未形成連續趨勢；
    圓點燈號＝安燈三色（綠正常、紅警示、黃空位），講的是趨勢訊號不是漲跌。
    兩者由同一個連續段計算驅動，所以燈號與折線末段必然相反。 */
-.pv-tabs { float: right; display: inline-flex; gap: 4px; }
+/* 與右邊的 ✕ 之間留一段距離：兩者都是 float:right，不留白會黏在一起（實測會誤點） */
+.pv-tabs { float: right; display: inline-flex; gap: 4px; margin-right: 16px; }
 .pv-tab { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
   font-family: var(--font); font-size: 12px; padding: 3px 12px; border-radius: 6px; cursor: pointer; }
 .pv-tab:hover { color: var(--text); }
