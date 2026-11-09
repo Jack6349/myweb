@@ -1390,6 +1390,28 @@ function _divMergeAnnounced(recMap, allCodes) {
 }
 
 // 取單檔配息紀錄（e添富 優先、Yahoo 後備），結果併入 _divRecMap 快取；供換股試算查「指定代碼」
+// 併入「已公告但還沒除息」的那一次。
+//
+// 為什麼放在這裡而不是各呼叫端：兩個來源都只給已經除完息的紀錄 ——
+// e添富只涵蓋上市 ETF，上櫃的退回 Yahoo，而 Yahoo 的配息只有歷史。
+// 下一次的除息日要另外從 TPEx 預告表／Yahoo 下一期（etf-divnext.py 每日）／手動補登來。
+// 股利估算自己有做這個合併，關注股票沒有，所以同一檔在兩頁看到的最後一次除息不一樣：
+// 2026-11-09 實測 00989B（上櫃債券 ETF），關注股票停在 10/16，
+// 但 data/etf-div-next.json 早就有 {ex:2026-11-16, pay:2026-12-04, amt:0.066}。
+// 併進 _divGetRecs 之後每個呼叫端都拿得到，不必各自記得補一次。
+//
+// 合併本身冪等（依除息日去重、只補缺漏欄位），股利估算後面再併一次不會重複。
+async function _divMergeNext(code) {
+  // dmNextRaw 讀的是非同步載入的 JSON，不等它會在剛進頁時靜靜地什麼都沒併到
+  if (typeof _dmReady !== 'undefined') { try { await _dmReady; } catch (e) { hush('dividend-est', e); } }
+  if (typeof _divMergeAnnounced !== 'function') return;
+  var m = {};
+  m[code] = _divRecMap[code] || [];
+  try {
+    _divMergeAnnounced(m, [code]);
+    if (m[code]) _divRecMap[code] = m[code];     // 合併會回傳新陣列，不會污染 e添富 的共用快取
+  } catch (e) { hush('dividend-est', e); }
+}
 async function _divGetRecs(code, force) {
   code = String(code);
   if (!force && _divRecMap[code] && _divRecMap[code].length) return _divRecMap[code];
@@ -1401,10 +1423,15 @@ async function _divGetRecs(code, force) {
       _divByCode = bc;
     } catch (e) { hush('dividend-est', e); }
   }
-  if (_divByCode[code] && _divByCode[code].length) { _divRecMap[code] = _divByCode[code]; return _divRecMap[code]; }
+  if (_divByCode[code] && _divByCode[code].length) {
+    _divRecMap[code] = _divByCode[code];
+    await _divMergeNext(code);
+    return _divRecMap[code];
+  }
   var yr = [];
   try { yr = await fetchYahooDiv(code, force); } catch (e) { hush('dividend-est', e); }
   _divRecMap[code] = yr || [];
+  await _divMergeNext(code);
   return _divRecMap[code];
 }
 
