@@ -742,7 +742,8 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .divest-hrow, .divest-stock { min-width: 930px; }
 .divest-hrow, .divest-shead {
   display: grid; align-items: center; gap: 0 10px;
-  grid-template-columns: 72px minmax(130px, 1fr) 68px 108px 96px 164px 92px 92px 20px; }
+  grid-template-columns: 72px minmax(120px, 1fr) 72px 64px 100px 92px 152px 88px 88px 20px; }
+.divest-freq { font-size: 12px; color: var(--text2); }
 .divest-hrow { padding: 6px 2px; font-size: 11px; color: var(--text3);
   border-bottom: 1px solid var(--border-strong); }
 .divest-hrow .num, .divest-shead .num { text-align: right; }
