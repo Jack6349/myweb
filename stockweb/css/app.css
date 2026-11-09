@@ -1010,7 +1010,11 @@ td.cost-even::after  { background: var(--text3); }
    代價：一旦 overflow-x 不是 visible，overflow-y 會跟著算成 auto，sticky 表頭在這個寬度下
    就不黏了。看不到資料比表頭不黏嚴重，所以只在窄視窗換這個取捨。 */
 @media (max-width: 1280px) { .wt-wrap { overflow-x: auto; } }
-.wt-wrap .inv-table th { top: var(--h-chrome); }
+/* 只挑外層那張表自己的表頭。用後代選取器（.wt-wrap .inv-table th）會連展開列裡面
+   那張配息紀錄表的 th 一起選到 —— 它是外層 .inv-table 的後代，於是它的 sticky
+   也被設成 top:119px，表頭就黏在自己捲動區往下 119px 的地方，看起來像插在資料中間。
+   2026-11-09 實測：.es-evt 上緣 520、表頭 639，差正好 119。 */
+.wt-wrap > .inv-table > thead > tr > th { top: var(--h-chrome); }
 
 /* 關注股票：頁籤內工具列 */
 .wt-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text2); margin-bottom: 10px; }
