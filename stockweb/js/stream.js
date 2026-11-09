@@ -700,6 +700,29 @@ function renderTopbarTotals() {
 // ── 頂欄抽屜：部位與配置 ──
 // 刻意不記狀態：每次進頁都是收起，抽屜是臨時查看，不是常駐資訊。
 var _dwOpen = false;
+
+// 點抽屜以外的地方就收起（部位抽屜與總現值走勢抽屜都適用）。
+// 抽屜是浮在內容上的臨時視窗，看完要回去操作下面的表格，本來就得先關掉它。
+//
+// 用捕獲階段（第三個參數 true），不是冒泡：
+//   頁籤（走勢／管制圖）、重算鈕這些 inline onclick 會就地重畫整個抽屜，
+//   等冒泡上來時 event.target 已經從 DOM 拆掉，closest('#pv') 一律回 null，
+//   會被誤判成「點在抽屜外」而關掉。捕獲階段跑在 inline onclick 之前，節點還在。
+document.addEventListener('click', function (ev) {
+  var t = ev.target;
+  if (!t || !t.closest) return;
+  if (!_dwOpen && !(typeof _pvOpen !== 'undefined' && _pvOpen)) return;
+  var inDw = !!t.closest('#dw'), inPv = !!t.closest('#pv');
+  // 開關自己的那顆按鈕交給它自己的 toggle 處理，這裡不能先關，否則會一開一關互相抵消
+  var onDwBtn = !!t.closest('#dw-btn'), onPvBtn = !!t.closest('#pv-btn');
+  if (_dwOpen && !inDw && !onDwBtn) {
+    _dwOpen = false;
+    renderTopbarTotals();
+  }
+  if (typeof _pvOpen !== 'undefined' && _pvOpen && !inPv && !onPvBtn) {
+    if (typeof pvClose === 'function') pvClose();
+  }
+}, true);
 function toggleDrawer() {
   _dwOpen = !_dwOpen;
   // 兩個抽屜會疊在一起，一次只開一個
