@@ -1327,7 +1327,7 @@ td.cost-even::after  { background: var(--text3); }
 @keyframes tx-px-flash { from { background: rgba(245,216,122,.28); } to { background: transparent; } }
 .tx-pct { display: inline-block; min-width: 4.6em; margin-left: 6px; font-size: .82em; text-align: right; }   /* 固定寬度，各列價格才對齊 */
 .tx-dd { display: inline-block; min-width: 3.6em; margin-left: 6px; font-size: .82em; text-align: right; }
-/* 差額自成一欄之後不再是「挂在成交價後面的小字」，要和其他欄一樣大 */
+/* 差額自成一欄之後不再是「掛在成交價後面的小字」，要和其他欄一樣大 */
 .tx-ddcell .tx-dd { margin-left: 0; min-width: 0; font-size: 1em; }   /* 成交欄價差，固定寬度對齊 */
 .tx-dd .tx-flat { color: var(--accent2); }
 .tx-pnl .tx-flat { color: var(--accent2); }
