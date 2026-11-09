@@ -526,14 +526,15 @@ function computeEtfNextYear(recs, res, shares, todayIso, year, code) {
 // ── 個股明細的排序 ──
 // 與下方「月份總覽」同一套互動：點標題排序，再點一次換升降，選擇記在 localStorage。
 // 預設 codeAsc：原本就是代碼順，預設不改既有行為；使用者點過之後記住他的選擇。
-// 可排序的只有三欄（代碼、預估年殖利率、成本殖利率），其餘欄位排了沒有意義。
+// 可排序的只有四欄（代碼、配息頻率、預估年殖利率、成本殖利率），其餘欄位排了沒有意義。
 var DIV_EST_SORT_LS = 'divest_stock_sort_v1';
 var _divEstSort = (function () {
-  try { var v = localStorage.getItem(DIV_EST_SORT_LS); if (/^(code|yld|cyld)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  try { var v = localStorage.getItem(DIV_EST_SORT_LS); if (/^(code|yld|cyld|freq)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
   return 'codeAsc';
 })();
 function divEstSort(key) {
-  // 代碼預設升冪（小的在上），殖利率預設降冪（高的在上）：兩類欄位想先看到的那一端相反
+  // 代碼預設升冪（小的在上）；頻率與殖利率預設降冪（配得密的、殖利率高的在上）：
+  // 兩類欄位想先看到的那一端相反
   var first = (key === 'code') ? 'Asc' : 'Desc';
   _divEstSort = (_divEstSort === key + first) ? key + (first === 'Asc' ? 'Desc' : 'Asc') : key + first;
   try { localStorage.setItem(DIV_EST_SORT_LS, _divEstSort); } catch (e) { hush('dividend-est', e); }
@@ -554,7 +555,9 @@ function _divStockMetrics(s) {
   var _recsAsc = ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [{ code: s.code }])
     .slice().sort(function (a, b) { return (a.exDate || '') < (b.exDate || '') ? -1 : 1; });
   if (!_recsAsc[0].code) _recsAsc[0] = Object.assign({ code: s.code }, _recsAsc[0]);
-  var annPerShare = repPS * (12 / _divInferStep(_recsAsc));
+  // step＝除息間隔月數（月配 1／雙月 2／季 3／半年 6／年 12），與配息資料頁的手動覆寫同一個來源
+  var step = _divInferStep(_recsAsc);
+  var annPerShare = repPS * (12 / step);
   // 預估年殖利率＝單次配息(每股) × 配息頻率 ÷ 現價（例：00988B 月配、0.157、現價 20 → 9.42%）
   var yld = (price && annPerShare) ? annPerShare / price * 100 : null;
   // 成本殖利率：分母換成持股成本均價（同持股庫存、同「本月除息個股」那張表）。
@@ -570,7 +573,7 @@ function _divStockMetrics(s) {
   var ex = s.soldOut ? null : ((typeof _divRecMap !== 'undefined' && _divRecMap[s.code]) || [])
     .filter(function (r) { return r.exDate && r.exDate.slice(0, 7) === _ym; })
     .sort(function (a, b) { return a.exDate < b.exDate ? -1 : 1; })[0];
-  return { price: price, yld: yld, cyld: cyld, ex: ex };
+  return { price: price, yld: yld, cyld: cyld, ex: ex, step: step };
 }
 
 function renderDividendEst() {
@@ -631,7 +634,9 @@ function renderDividendEst() {
     if (sKey === 'code') return sAsc ? byCode : -byCode;
     // 沒有值的一律墊底（升冪降冪都是）：把「讀不到成本」的檔排到最前面沒有意義，
     // 同值時以代碼固定次序，每次重繪的順序才一樣。
-    var va = met[a.code][sKey], vb = met[b.code][sKey];
+    // 頻率用「年配息次數」（12 ÷ 間隔月數）比大小：降冪＝月配在上，升冪＝年配在上
+    var get = function (c) { return sKey === 'freq' ? (12 / met[c].step) : met[c][sKey]; };
+    var va = get(a.code), vb = get(b.code);
     if (va == null && vb == null) return byCode;
     if (va == null) return 1;
     if (vb == null) return -1;
@@ -644,6 +649,7 @@ function renderDividendEst() {
   html += '<div class="divest-stocks"><div class="divest-hrow">' +
     '<span class="sort-th' + sOn('code') + '" onclick="divEstSort(\'code\')" title="點擊排序">代碼<span class="sort-ind">' + sArrow('code') + '</span></span>' +
     '<span>名稱</span>' +
+    '<span class="sort-th' + sOn('freq') + '" onclick="divEstSort(\'freq\')" title="依除息日間隔的中位數推算；配息資料頁手動覆寫過的以覆寫為準。點擊排序">配息頻率<span class="sort-ind">' + sArrow('freq') + '</span></span>' +
     '<span class="num">現價</span>' +
     '<span class="num sort-th' + sOn('yld') + '" onclick="divEstSort(\'yld\')" title="每股配息 × 年配息次數 ÷ 現價：現在買進的預估年報酬。點擊排序">預估年殖利率<span class="sort-ind">' + sArrow('yld') + '</span></span>' +
     '<span class="num sort-th' + sOn('cyld') + '" onclick="divEstSort(\'cyld\')" title="每股配息 × 年配息次數 ÷ 持股成本均價：手上這批持股的配息報酬。點擊排序">成本殖利率<span class="sort-ind">' + sArrow('cyld') + '</span></span>' +
@@ -684,6 +690,10 @@ function renderDividendEst() {
     var cyldCol = (cyld == null || yld == null) ? 'var(--text3)'
       : (+cyld.toFixed(2) > +yld.toFixed(2) ? 'var(--up)'
         : (+cyld.toFixed(2) < +yld.toFixed(2) ? 'var(--down)' : 'var(--text)'));
+    // 頻率的中文名取自配息資料頁的 DIV_FREQ_NAME，兩頁用同一組字；
+    // 推不出間隔時退回「次/年」的數字，不留空白
+    var freqTxt = (typeof DIV_FREQ_NAME !== 'undefined' && DIV_FREQ_NAME[m.step]) ||
+      (m.step ? (12 / m.step) + ' 次/年' : '—');
     // 本月除息：欄位名在表頭，這裡只放日期與金額
     var exHtml = m.ex ? (md(m.ex.exDate) + ' 每股 <b>' +
       (m.ex.amount != null ? m.ex.amount.toFixed(4) : '待公告') + '</b>') : '';
@@ -692,6 +702,7 @@ function renderDividendEst() {
         '<span class="divest-scode">' + s.code + '</span>' +
         '<span class="divest-sname">' + s.name +
           (s.soldOut ? ' <span class="dexm-lent">(已出清)</span>' : '') + '</span>' +
+        '<span class="divest-freq">' + freqTxt + '</span>' +
         '<span class="num divest-px">' + (price != null ? price.toFixed(2) : '—') + '</span>' +
         '<span class="num divest-y">' + (yld != null ? yld.toFixed(2) + '%' : '—') + '</span>' +
         '<span class="num divest-y" style="color:' + cyldCol + '">' +
