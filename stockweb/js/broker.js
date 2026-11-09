@@ -49,14 +49,36 @@ async function fetchPositionDetail(detailId) {
 async function fetchSettlements() {
   return brokerPost('settlements', {});
 }
-// 交割日當天銀行在凌晨就批次扣款（實測 01:19），所以「日期 ≤ 今天」那筆錢已經進出完畢，
-// 不該再算進「待交割」。這裡只比日期不比時間：扣款時刻各行庫不同，拿單一觀測值當門檻沒有依據。
-// 代價是 00:00 到銀行實際扣款之間（實測約 1 小時多）會提早標成已扣款。
+// 交割扣款的時間門檻。
+//
+// 舊版只比日期：日期 ≤ 今天就算已扣款，等於把門檻設在 00:00。
+// 那是錯的 —— 00:00 不是銀行營業時間，凌晨看到的「合計待交割」會把當天那筆漏掉，
+// 拿來算「還有多少錢可以下單」就會算錯。舊註解記的「實測 01:19 已扣款」應該是券商帳務
+// 狀態的變更，不是銀行真的動錢；使用者對自己的銀行餘額的觀察優先於那筆記錄。
+//
+// 門檻取 10:00：依據是銀行營業時間，不是某一次觀測到的時刻。
+var SETTLE_PAID_HOUR = 10;
 function _brTwToday() {
   return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
 }
-function settleIsPaid(r, todayIso) {
-  return !!(r && r.date && r.date <= (todayIso || _brTwToday()));
+// 台北時間是否已過扣款門檻
+function settleHourPassed(nowMs) {
+  var t = new Date((nowMs == null ? Date.now() : nowMs) + 8 * 3600000);
+  return t.getUTCHours() >= SETTLE_PAID_HOUR;
+}
+// 三態：昨天以前一定已扣、明天以後一定未扣、今天看時間
+function settleIsPaid(r, todayIso, nowMs) {
+  if (!r || !r.date) return false;
+  var today = todayIso || _brTwToday();
+  if (r.date < today) return true;
+  if (r.date > today) return false;
+  return settleHourPassed(nowMs);
+}
+// 今天要扣、但還沒到 10:00 的那一筆（仍計入待交割，但要標出來，
+// 否則它看起來跟後天的 T+2 一樣，會漏掉「今天上午就會動」這件事）
+function settleIsDueToday(r, todayIso, nowMs) {
+  if (!r || !r.date) return false;
+  return r.date === (todayIso || _brTwToday()) && !settleHourPassed(nowMs);
 }
 // 台股整股 ROD 收盤即失效，但券商不會即時改狀態：實測 2026-09-30 收盤後 9 分鐘，
 // 一筆未成交的 ROD 仍回 status=Submitted、cancel_quantity=0。照它顯示的話，
@@ -79,13 +101,28 @@ function orderExpired(order, status, nowMs) {
 
 // 拆成 {paid, pending, paidRows, pendRows}，供交易資訊與頂欄共用同一套判定
 function splitSettlements(rows) {
-  var today = _brTwToday(), paid = 0, pending = 0, paidRows = [], pendRows = [];
+  var today = _brTwToday(), now = Date.now();
+  var paid = 0, pending = 0, dueToday = 0, paidRows = [], pendRows = [], dueRows = [];
   (rows || []).forEach(function (r) {
     var a = r.amount || 0;
-    if (settleIsPaid(r, today)) { paid += a; paidRows.push(r); }
-    else { pending += a; pendRows.push(r); }
+    if (settleIsPaid(r, today, now)) { paid += a; paidRows.push(r); return; }
+    pending += a; pendRows.push(r);
+    if (settleIsDueToday(r, today, now)) { dueToday += a; dueRows.push(r); }
   });
-  return { paid: paid, pending: pending, paidRows: paidRows, pendRows: pendRows, today: today };
+  return {
+    paid: paid, pending: pending, paidRows: paidRows, pendRows: pendRows,
+    dueToday: dueToday, dueRows: dueRows, today: today
+  };
+}
+// 距離下一個 10:00 還有幾毫秒（已過就回 null）。用來排自動重算：
+// 09:55 打開放著、0:05 畫面還是舊的的話，恰好是要看錢夠不夠下單的那段時間。
+function msUntilSettleHour(nowMs) {
+  var ms = (nowMs == null ? Date.now() : nowMs);
+  var t = new Date(ms + 8 * 3600000);
+  var mins = t.getUTCHours() * 60 + t.getUTCMinutes();
+  var target = SETTLE_PAID_HOUR * 60;
+  if (mins >= target) return null;
+  return (target - mins) * 60000 - t.getUTCSeconds() * 1000 + 5000;   // 過門檻 5 秒再算
 }
 // 今日委託／成交事件流水：[{StockOrder:{operation,order,status,contract}} | {StockDeal:{...}}]
 // 為什麼需要它：券商會在盤後把 order/trades 清空。實測 2026-09-30，14:35 還回 2 筆，

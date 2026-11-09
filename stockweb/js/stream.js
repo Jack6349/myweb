@@ -766,7 +766,8 @@ function renderDrawer() {
     sumPair('借出', t.lentShares.toLocaleString('zh-TW') + ' 股', 'var(--text2)') +
     sumPair('帳面現值', t.bookVal.toLocaleString('zh-TW'), 'var(--text2)') +
     // 合計待交割（T／T+1／T+2 應收付合計；正＝應收紅、負＝應付綠）。
-    // 交割日當天那筆銀行凌晨已扣款，不計入；各日明細見交易資訊「台幣交割」。
+    // 過了交割日當天 10:00 那筆已扣款，不計入；10:00 前仍計入。
+    // 各日明細見交易資訊「台幣交割」。
     (typeof _settleTot !== 'undefined' && _settleTot != null
       ? sumPair('合計待交割', (_settleTot > 0 ? '+' : '') + _settleTot.toLocaleString('zh-TW'),
                 cvar[colorClass(_settleTot)])
