@@ -78,25 +78,44 @@ function _wtIsWarrant(code, name) {
   name = name || '';
   return /[購售]/.test(name) || /[牛熊]\d+$/.test(name) || /^\d{6}$/.test(String(code));
 }
-async function _wtEnsureContracts() {
-  if (_wtIdx && _wtIdx.length) return _wtIdx;
+// force＝重新抓合約清單，不吃當日快取。
+//
+// 為什麼需要：這份清單是「要掃哪些標的」的來源，存一整天。如果第一次建立時
+// Shioaji 的合約還沒下載完（上櫃那批特別容易晚到），清單就會少幾檔，
+// 而且一整天的掃描都用那份短清單 —— 重新整理、重按篩選都救不回來。
+// 2026-11-09 實測：使用者端掃 27 檔、我這邊重建後 28 檔，差的那檔是 00989B（上櫃）。
+// 所以「重新篩選」要連清單一起重建，那顆按鈕的語意本來就是「全部重來」。
+async function _wtEnsureContracts(force) {
+  if (!force && _wtIdx && _wtIdx.length) return _wtIdx;
   var day = _divTwDate().iso;
-  try {
+  if (!force) try {
     var c = JSON.parse(localStorage.getItem(WT_CT_LS) || 'null');
     if (c && c.day === day && c.rows && c.rows.length) { _wtIdx = c.rows; return _wtIdx; }
   } catch (e) {}
   var rows = [];
   try {
-    var r = await fetch(API + '/api/v1/data/contracts', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ security_type: 'STK', page: 1, page_size: 50000 })
-    });
-    var j = await r.json();
-    (j.contracts || []).forEach(function (x) {
-      if (_wtIsWarrant(x.code, x.name)) return;
-      rows.push({ c: String(x.code), n: x.name || '', e: x.exchange || 'TSE' });
-    });
-  } catch (e) { console.warn('[watch contracts]', e); }
+    // 一定要翻頁：page_size 給 50000 不代表一次拿得完。
+    // 2026-11-09 實測 total=56502、max_page=2，原本只抓第 1 頁就等於丟掉 6502 筆，
+    // 而且丟掉的那批裡就有 00989B（上櫃）—— 債券篩選因此永遠掃不到它。
+    // 回傳順序在不同次查詢間會變，被切掉的是哪幾檔也跟著變，所以症狀時有時無
+    // （同一天掃出來一次 27 檔、一次 28 檔）。
+    var page = 1, maxPage = 1;
+    while (page <= maxPage && page <= 20) {        // 20 頁的上限只是防呆，正常是 2 頁
+      var r = await fetch(API + '/api/v1/data/contracts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ security_type: 'STK', page: page, page_size: 50000 })
+      });
+      var j = await r.json();
+      if (j && j.max_page > maxPage) maxPage = j.max_page;
+      var got = (j && j.contracts) || [];
+      if (!got.length) break;
+      got.forEach(function (x) {
+        if (_wtIsWarrant(x.code, x.name)) return;
+        rows.push({ c: String(x.code), n: x.name || '', e: x.exchange || 'TSE' });
+      });
+      page++;
+    }
+  } catch (e) { hush('watch', e); }
   if (rows.length) {
     _wtIdx = rows;
     try { localStorage.setItem(WT_CT_LS, JSON.stringify({ day: day, rows: rows })); } catch (e) {}
@@ -443,6 +462,10 @@ function _wtBondLoad() {
 async function wtScanBond() {
   if (_wtBusy) return;
   _wtBusy = true;
+  var info0 = document.getElementById('wt-bond-info');
+  if (info0) info0.textContent = '更新合約清單…';
+  // 先重建合約清單再掃：清單少一檔，後面做什麼都補不回來（見 _wtEnsureContracts 的註解）
+  try { await _wtEnsureContracts(true); } catch (e) { hush('watch', e); }
   var th = _wtBondTh(), pool = _wtBondPool(), ym = _divTwDate().iso.slice(0, 7);
   var info = document.getElementById('wt-bond-info');
   var cache = _wtDivCache(), rows = [], done = 0;
@@ -564,6 +587,10 @@ async function wtLoadAct(force) {
   if (_wtBusy) return;
   if (!force && _wtActLoadCache()) { renderWatchAct(); wtActRefreshPx(); return; }
   _wtBusy = true;
+  var info0 = document.getElementById('wt-act-info');
+  if (info0) info0.textContent = '更新合約清單…';
+  // 與債券篩選同理：清單少一檔就永遠掃不到那一檔（見 _wtEnsureContracts 的註解）
+  if (force) { try { await _wtEnsureContracts(true); } catch (e) { hush('watch', e); } }
   var pool = _wtActPool(), info = document.getElementById('wt-act-info'), rows = [];
   var ym = _divTwDate().iso.slice(0, 7), dcache = _wtDivCache(), fb = {};
   for (var b = 0; b < pool.length; b += WT_BATCH) {
