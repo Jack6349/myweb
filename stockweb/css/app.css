@@ -1939,3 +1939,12 @@ td.cost-even::after  { background: var(--text3); }
 .rb-dec { min-width: 1050px; }
 .rb-dec td { vertical-align: top; }
 .rb-hit { color: var(--up); font-weight: 700; }
+
+/* 跌深訊號板 — 隔夜費半條件卡 */
+.rb-sox { margin-bottom: 14px; }
+.rb-sox-off { font-size: 12.5px; color: var(--note); line-height: 1.8; margin: 9px 2px 12px; max-width: 900px; }
+.rb-sox-hd { font-size: 13px; color: var(--text2); line-height: 1.85; margin: 2px 2px 8px; max-width: 900px; }
+.rb-sox-hd.on { color: var(--text); border-left: 3px solid var(--accent2); padding-left: 9px; }
+.rb-table tr.rb-thin td { opacity: .72; }
+.rb-chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--text2); cursor: pointer; }
+.rb-chk input { margin: 0; }

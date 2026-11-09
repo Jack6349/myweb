@@ -74,7 +74,8 @@ var SET_SECTIONS = [
   { id: 'rebound', title: '跌深反彈', rows: [
     { key: 'rebound', title: '跌深反彈訊號', bodyId: 'params-rebound-body',
       desc: '什麼叫「跌深」（大盤回看幾個交易日、累計跌幅多少）、要統計持有幾天、取幾年歷史。'
-          + '跌深訊號板用這組參數判定現在是否觸發，並算出各檔歷史上的反彈勝率與中位數',
+          + '跌深訊號板用這組參數判定現在是否觸發，並算出各檔歷史上的反彈勝率與中位數。'
+          + '另含隔夜費半條件卡的門檻（費半自身日報酬的第幾百分位算大漲）',
       render: function () { if (typeof renderReboundParams === 'function') renderReboundParams(); },
       status: function () { return (typeof rbCfgStatus === 'function') ? rbCfgStatus() : null; } }
   ] },

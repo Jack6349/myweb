@@ -25,16 +25,22 @@ function _rbCfg() {
     .filter(function (x) { return x > 0 && x <= 120; })
     .sort(function (a, b) { return a - b; });
   if (!holds.length) holds = [5, 10, 20];
+  var sp = parseFloat(localStorage.getItem('rb_soxpct'));
   return {
     look: (isNaN(n) || n < 1 || n > 60) ? 5 : n,
     drop: (isNaN(d) || d <= 0 || d > 50) ? 5 : d,
     years: (isNaN(y) || y < 1 || y > 10) ? 2 : y,
-    holds: holds.slice(0, 5)
+    holds: holds.slice(0, 5),
+    // 費半門檻不寫死成百分比，寫成「費半自身日報酬的第 N 百分位」：
+    // 百分位是資料算出來的，换成幾 % 會隨市況變，寫死成 3% 就是憑空訂數字。
+    soxPct: (isNaN(sp) || sp < 50 || sp > 99.9) ? 90 : sp,
+    soxOn: localStorage.getItem('rb_soxon') !== '0'
   };
 }
 function rbCfgStatus() {
   var c = _rbCfg();
-  return c.look + ' 日累計跌 ≥ ' + c.drop + '%｜持有 ' + c.holds.join('/') + ' 日｜歷史 ' + c.years + ' 年';
+  return c.look + ' 日累計跌 ≥ ' + c.drop + '%｜持有 ' + c.holds.join('/') + ' 日｜歷史 ' + c.years + ' 年'
+    + (c.soxOn ? '｜隔夜費半第 ' + c.soxPct + ' 百分位' : '｜不含隔夜費半');
 }
 
 // ── 手動標記：Firestore stock_prefs/{uid}.reboundSys，未登入或失敗退回 localStorage ──
@@ -95,25 +101,37 @@ async function _rbSeries(sym, years) {
   var key = sym + '|' + years;
   if (_rbBars[key]) return _rbBars[key];
   var syms = /^\d/.test(String(sym)) ? [sym + '.TW', sym + '.TWO'] : [sym];
-  var out = [];
+  var out = [], _rbMeta = null, tzo = 8 * 3600000;
   for (var i = 0; i < syms.length && !out.length; i++) {
     try {
       var j = await _esVia('https://query1.finance.yahoo.com/v8/finance/chart/' +
         encodeURIComponent(syms[i]) + '?interval=1d&range=' + years + 'y', 40000);
       var res = j && j.chart && j.chart.result && j.chart.result[0];
+      _rbMeta = (res && res.meta) || null;
+      // 日期一律用「交易所當地日」：台股 +8、費半 −5。
+      // 寫死 +8 的話美股會被推到隔天，與隔夜對應就錯一天。
+      if (_rbMeta && typeof _rbMeta.gmtoffset === 'number') tzo = _rbMeta.gmtoffset * 1000;
       var ts = (res && res.timestamp) || [];
       var cl = (res && res.indicators && res.indicators.quote[0].close) || [];
       var acl = ((res && res.indicators && res.indicators.adjclose && res.indicators.adjclose[0]) || {}).adjclose || null;
       for (var k = 0; k < ts.length; k++) {
         if (cl[k] == null) continue;
         out.push({
-          d: new Date(ts[k] * 1000 + 8 * 3600000).toISOString().slice(0, 10),
+          d: new Date(ts[k] * 1000 + tzo).toISOString().slice(0, 10),
           c: cl[k], a: (acl && acl[k] != null) ? acl[k] : cl[k]
         });
       }
     } catch (e) { hush('rebound', e); }
   }
   out.sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+  // Yahoo 的日線陣列有時最後一根 close 是 null（^TWII 常發生），收盤價只在 meta 裡。
+  // 不補的話觸發判定會漏掉最新一個交易日，變成拿前天的位置在做今天的判斷。
+  if (_rbMeta && _rbMeta.regularMarketPrice > 0 && _rbMeta.regularMarketTime) {
+    var md = new Date(_rbMeta.regularMarketTime * 1000 + tzo).toISOString().slice(0, 10);
+    if (!out.length || md > out[out.length - 1].d) {
+      out.push({ d: md, c: _rbMeta.regularMarketPrice, a: _rbMeta.regularMarketPrice });
+    }
+  }
   if (out.length) _rbBars[key] = out;
   return out;
 }
@@ -180,6 +198,81 @@ function _rbFwd(bars, dates, h) {
   };
 }
 
+// ══════ 隔夜費半條件機率 ══════
+// 問的不是「跌深之後抱 N 日」（那是下面主表），是「昨夜費半大漲，台股今天漲多少」。
+// 兩個時間尺度不同（單日 vs 數週），所以做成獨立區塊、不併進主表的同一列，
+// 否則會讓人以為兩個數字可以相加。
+//
+// 為什麼用費半而不用台指期夜盤：這一頁所有資料都走 Yahoo，離線（券商未連）也能看；
+// 夜盤期貨 Yahoo 沒有，要接本機伺服器，接了這一頁就綁死在伺服器開著。
+// 代價是「夜盤漲幅 → 現貨開盤」這一層滑移無法量化，寫在六欄的「不能告訴你」裡。
+
+function _rbQuant(sorted, p) {
+  if (!sorted.length) return null;
+  var i = p / 100 * (sorted.length - 1), lo = Math.floor(i), hi = Math.min(lo + 1, sorted.length - 1);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+}
+function _rbRank(sorted, v) {
+  if (!sorted.length) return null;
+  var n = 0;
+  for (var i = 0; i < sorted.length; i++) if (sorted[i] <= v) n++;
+  return n / sorted.length * 100;
+}
+// 二分搜：給定台股交易日 d，回「日期小於 d 的最後一個美股交易日」。
+// 台股 13:30 收盤時美股当天還沒開，所以同一個日期的美股盤算「隔夜」、落在隔天的台股。
+function _rbPrevFn(dates) {
+  return function (d) {
+    var lo = 0, hi = dates.length - 1, ans = null;
+    while (lo <= hi) {
+      var m = (lo + hi) >> 1;
+      if (dates[m] < d) { ans = dates[m]; lo = m + 1; } else hi = m - 1;
+    }
+    return ans;
+  };
+}
+// 費半日報酬分布與門檻。指數沒有配息，用未還原收盤。
+function _rbSoxCalc(bars, pct) {
+  if (!bars || bars.length < 60) return null;
+  var rets = {}, dates = [];
+  for (var i = 1; i < bars.length; i++) {
+    if (!(bars[i - 1].c > 0)) continue;
+    rets[bars[i].d] = (bars[i].c / bars[i - 1].c - 1) * 100;
+    dates.push(bars[i].d);
+  }
+  if (dates.length < 60) return null;
+  var sorted = dates.map(function (d) { return rets[d]; }).sort(function (a, b) { return a - b; });
+  var thr = _rbQuant(sorted, pct);
+  var lastD = dates[dates.length - 1];
+  var hit = dates.filter(function (d) { return rets[d] >= thr; });
+  return {
+    rets: rets, dates: dates, sorted: sorted, thr: thr, n: sorted.length,
+    hit: hit.length, prev: _rbPrevFn(dates),
+    last: { d: lastD, r: rets[lastD], rank: _rbRank(sorted, rets[lastD]) }
+  };
+}
+// 一檔在「前一夜費半 ≥ 門檻」的那些台股交易日，當日漲跌的分布。
+// 個股用還原收盤（除息日不該被當成下跌），大盤用未還原。
+function _rbSoxFwd(bars, sox, useAdj) {
+  if (!bars || !sox) return null;
+  var rs = [], ds = [];
+  for (var i = 1; i < bars.length; i++) {
+    var u = sox.prev(bars[i].d);
+    // 這一根美股盤必須落在前一個台股收盤之後，否則是前天已經反應過的那一根
+    if (u == null || u < bars[i - 1].d) continue;
+    if (!(sox.rets[u] >= sox.thr)) continue;
+    var p0 = useAdj ? bars[i - 1].a : bars[i - 1].c, p1 = useAdj ? bars[i].a : bars[i].c;
+    if (!(p0 > 0) || !(p1 > 0)) continue;
+    rs.push((p1 / p0 - 1) * 100); ds.push(bars[i].d);
+  }
+  if (!rs.length) return null;
+  var up = rs.filter(function (r) { return r > 0; }).length;
+  return {
+    n: rs.length, up: up / rs.length * 100, med: _rbMed(rs), dates: ds,
+    avg: rs.reduce(function (a, b) { return a + b; }, 0) / rs.length,
+    min: Math.min.apply(null, rs), max: Math.max.apply(null, rs)
+  };
+}
+
 // ── 標的：持股中代號結尾為 A 的（category.js：A＝主動股票型）──
 // 不用名稱判斷，因為合約名稱要等行情載入；主動債券型（結尾 D）不列，
 // 跌深反彈講的是股票型的回彈，債券型的價格動因是殖利率不是這個。
@@ -226,7 +319,15 @@ async function startRebound(force) {
     if (info) info.textContent = '抓取 ' + codes[i] + ' 日線…（' + (i + 1) + '/' + codes.length + '）';
     series[codes[i]] = await _rbSeries(codes[i], cfg.years);
   }
-  _rbData = { cfg: cfg, codes: codes, idx: idx, series: series, trig: _rbTriggers(idx, cfg) };
+  var sox = null;
+  if (cfg.soxOn) {
+    if (info) info.textContent = '抓取費半指數日線…';
+    for (var sa = 0; sa < 2 && !sox; sa++) {
+      try { sox = _rbSoxCalc(await _rbSeries('^SOX', cfg.years), cfg.soxPct); }
+      catch (e) { hush('rebound', e); }
+    }
+  }
+  _rbData = { cfg: cfg, codes: codes, idx: idx, series: series, sox: sox, trig: _rbTriggers(idx, cfg) };
   if (info) info.textContent = '資料日 ' + idx[idx.length - 1].d + '（Yahoo 日線，' + cfg.years + ' 年）';
   rbRender();
 }
@@ -310,8 +411,143 @@ function rbRender() {
   var sysEps = t.eps.filter(function (e) { return !!marks[e.start]; }).length;
   var usableEps = t.eps.length - sysEps;
 
+  html += _rbSoxHtml(view);
   html += (view === 'ana') ? _rbAnaHtml(dates, usableEps, sysEps) : _rbDecHtml(dates, usableEps, sysEps);
   wrap.innerHTML = html;
+}
+
+// ── 隔夜費半條件卡 ──
+// 決策視圖：未達門檻收成一行，達門檻才展表。分析視圖：一律展表。
+// 本卡不受「系統性」標記影響：那些標記是標在跌深事件上的，跟隔夜費半是兩組条件。
+function _rbSoxHtml(view) {
+  var cfg = _rbData.cfg;
+  if (!cfg.soxOn) return '';
+  var sox = _rbData.sox;
+  if (!sox) {
+    return '<div class="rb-caveat nb-keep">費半（^SOX）日線取不到（代理服務無回應或樣本不足），'
+      + '隔夜條件卡略過；下方主表不受影響。</div>';
+  }
+  var L = sox.last, on = L.r >= sox.thr;
+  var idx = _rbData.idx, lastTw = idx[idx.length - 1];
+  var twChg = idx.length > 1 ? (lastTw.c / idx[idx.length - 2].c - 1) * 100 : null;
+  // 費半最後一根落在台股最後一根的後面 → 台股還沒反應（同一日期的美股盤在台股收盤之後）
+  var pending = L.d >= lastTw.d;
+
+  var head = '最近一次費半收盤（' + L.d + '）<b style="color:' + _rbCol(L.r) + '">'
+    + _rbPct(L.r, 2) + '</b>，落在自身近 ' + cfg.years + ' 年第 '
+    + (L.rank == null ? '—' : L.rank.toFixed(1)) + ' 百分位；'
+    + '門檻是第 ' + cfg.soxPct + ' 百分位，換算後 <b>' + _rbPct(sox.thr, 2) + '</b>（'
+    + sox.n + ' 個交易日中 ' + sox.hit + ' 天達標）。';
+
+  if (!on && view !== 'ana') {
+    return '<div class="rb-sox rb-sox-off nb-keep">隔夜費半未達門檻。' + head + '</div>';
+  }
+
+  var rows = _rbData.codes.map(function (c) {
+    return { c: c, s: _rbSoxFwd(_rbData.series[c] || [], sox, true) };
+  }).filter(function (r) { return r.s; });
+  rows.sort(function (a, b) { return b.s.med - a.s.med; });
+  var twS = _rbSoxFwd(idx, sox, false);
+
+  var html = '<div class="rb-sox">';
+  html += '<div class="sec-title">隔夜費半大漲之後，台股當天</div>';
+  html += '<div class="rb-sox-hd' + (on ? ' on' : '') + '">'
+    + (on ? '已達門檻。' : '未達門檻。') + head;
+  if (on && pending) {
+    html += '<br>台股還沒反應這一根：最後一個台股交易日是 ' + lastTw.d
+      + '，大盤收 <b style="color:' + _rbCol(twChg) + '">' + _rbPct(twChg, 2) + '</b>。'
+      + '大盤那一根反應的是更前一夜的費半，不是這一夜的 —— '
+      + '如果大盤那一根本身已經大漲，這一夜的漲幅被吃掉多少，這張表答不出來。';
+  } else if (on) {
+    html += '<br>台股已經反應過這一根（最後一個台股交易日 ' + lastTw.d
+      + ' 比費半這一根晚），下表是歷史分布，不是尚未發生的當天。';
+  }
+  html += '</div>';
+
+  if (!rows.length) {
+    html += '<div class="rb-caveat nb-keep">這組門檻下沒有任何一檔有樣本：'
+      + '要麼門檻太嚴（第 ' + cfg.soxPct + ' 百分位），要麼這幾檔上市後還沒碰過。'
+      + '參數設定 → 跌深反彈訊號 調低百分位。</div></div>';
+    return html;
+  }
+
+  var ana = (view === 'ana');
+  html += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
+    + '<th>代號 / 名稱</th><th class="num">樣本</th><th class="num">上漲機率</th>'
+    + '<th class="num">中位數</th>' + (ana ? '<th class="num">平均</th>' : '')
+    + '<th class="num">最低</th><th class="num">最高</th></tr></thead><tbody>';
+  var line = function (code, name, st, isIdx) {
+    var thin = st.n < 20;
+    var cls = [];
+    if (isIdx) cls.push('rb-sysrow');
+    if (thin) cls.push('rb-thin');
+    return '<tr' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>'
+      + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span>'
+      + (thin ? '<div class="rb-sub3 rs-dim">樣本不足 20 天，只能當量級看</div>' : '') + '</td>'
+      + '<td class="num rs-dim">' + st.n + ' 天</td>'
+      + '<td class="num" style="font-weight:700">' + st.up.toFixed(0) + '%</td>'
+      + '<td class="num" style="color:' + _rbCol(st.med) + ';font-weight:700">' + _rbPct(st.med, 2) + '</td>'
+      + (ana ? '<td class="num" style="color:' + _rbCol(st.avg) + '">' + _rbPct(st.avg, 2) + '</td>' : '')
+      + '<td class="num" style="color:' + _rbCol(st.min) + '">' + _rbPct(st.min, 2) + '</td>'
+      + '<td class="num" style="color:' + _rbCol(st.max) + '">' + _rbPct(st.max, 2) + '</td></tr>';
+  };
+  rows.forEach(function (r) { html += line(r.c, _rbName(r.c), r.s, false); });
+  if (twS) html += line('大盤', '加權指數', twS, true);
+  html += '</tbody></table></div>';
+
+  var thin = rows.filter(function (r) { return r.s.n < 20; });
+  html += '<div class="rb-caveat">樣本是「前一夜費半 ≥ ' + _rbPct(sox.thr, 2)
+    + ' 的那些台股交易日」，每一天算一次，彼此不重疊（跟下方主表不同，'
+    + '主表的觸發日會連續落在同一段修正裡）。'
+    + (thin.length ? '樣本不足 20 天的有 ' + thin.length + ' 檔（'
+        + thin.map(function (r) { return r.c + ' ' + r.s.n + ' 天'; }).join('、')
+        + '），它們的「最低～最高」隨時會被下一天改寫，只能當參考量級。' : '')
+    + '「費半大漲 ＋ 台股剛跌深」的雙條件本卡不算：近 ' + cfg.years
+    + ' 年同時滿足兩者的日子只有個位數，n 這麼小寫上去會被當成機率，比不寫更糟。</div>';
+
+  if (ana && twS) {
+    html += '<div class="rb-caveat rs-dim">符合條件的台股交易日（' + twS.n + ' 天）：'
+      + twS.dates.join('、') + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// 隔夜費半條件卡的六欄
+function _rbSoxSixHtml() {
+  if (!_rbData.cfg.soxOn || !_rbData.sox) return '';
+  var cfg = _rbData.cfg, sox = _rbData.sox;
+  return '<dt>隔夜費半 · 定義</dt><dd>每一個台股交易日往前找「日期小於它的最後一個費半交易日」'
+    + '（台股 13:30 收盤時美股當天還沒開，所以同一日期的美股盤算隔夜）。'
+    + '該費半日漲幅 ≥ 門檻的挑出來，統計各檔在對應台股交易日的當日漲跌'
+    + '（<code>還原收盤 ÷ 前一日還原收盤 − 1</code>）。'
+    + '門檻不寫死成百分比，寫成費半自身日報酬的第 ' + cfg.soxPct
+    + ' 百分位（近 ' + cfg.years + ' 年 ' + sox.n + ' 個交易日算出來是 ' + _rbPct(sox.thr, 2)
+    + '），因為「幾 % 算大漲」本身會隨市況變。</dd>'
+    + '<dt>隔夜費半 · 比較基準</dt><dd>表尾那一列是大盤。'
+    + '個別 ETF 的中位數要跟大盤比，才分得出「它自己彈得多」與「只是跟著大盤漲」。'
+    + '第二個基準是各檔互相比，回答同樣一個隔夜消息下哪一檔幅度大。'
+    + '沒有跟「任意一天」的平均漲幅比，所以這張表不證明「費半大漲雔天進場比較好」。</dd>'
+    + '<dt>隔夜費半 · 白話意義</dt><dd>費半昨晚大漲，歷史上這一檔雔天通常漲多少、漲的機率有多高。'
+    + '用來估量級：今天是「漲一點點」還是「漲一大段」。</dd>'
+    + '<dt>隔夜費半 · 機制</dt><dd>這幾檔重押台股半導體供應鏈，費半是同一條供應鏈的海外定價。'
+    + '傳導路徑：<code>費半收盤 → 台積電 ADR 與夜盤期貨先反應 → 雔日台股開盤缺口</code>。'
+    + '主動式 ETF 的持股集中度比大盤高，同一個隔夜消息到它們身上會放大；'
+    + '放大是雙向的，所以「最低」那一欄有幾檔是負的 —— 費半大漲雔天台股開高走低是發生過的。</dd>'
+    + '<dt>隔夜費半 · 行動含義</dt><dd>它說的是幅度，不是進出。'
+    + '配下方主表的部位欄一起看：若今天往上跳，已經越過停利門檻的那幾檔會越跨越多；'
+    + '若你在分段接，這一欄告訴你「今天挂原價大概挂不到」。'
+    + '要挂多少、要買幾張，這一頁不算。</dd>'
+    + '<dt>隔夜費半 · 不能告訴你什麼</dt><dd>四件事。'
+    + '一、不能分辨這波漲幅是不是前一天已經吃掉了。連續兩根費半大漲時，'
+    + '第二根的反應通常比第一根小，表上兩種日子混在同一組樣本裡。'
+    + '卡頭會列出大盤前一個交易日的漲幅，讓你自己判斷是第幾根。'
+    + '二、隔夜漲幅不等於開盤漲幅，開高走低也算在這組樣本裡；'
+    + '台指期夜盤才是更貼近開盤的指標，但 Yahoo 沒有夜盤歷史，'
+    + '這一層滑移本頁無法量化。'
+    + '三、只說當天，不說後面幾天會不會吐回去 —— 那是下方主表在回答的。'
+    + '四、持股含外國成分的主動式 ETF 不受 10% 漲停限制（資料裡出現過單日超過 10% 的樣本），'
+    + '「最高」那一欄沒有制度上的天花板，相對地下檔也沒有保護。</dd>';
 }
 
 // ══════════ 部位（沿用既有基準，不另外算一份）══════════
@@ -500,7 +736,7 @@ function _rbDecHtml(dates, usableEps, sysEps) {
     + '各檔段數差這麼多是因為上市日差很多：' + _rbHistLine() + '。'
     + '歷史最短的那幾檔只涵蓋一段多頭，它們的勝率不是「長期統計」，是「這幾個月的樣子」。</div>';
 
-  html += '<div class="detail-note"><dl>' + _rbPosSixHtml() + _rbSixHtml() + '</dl></div>';
+  html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbPosSixHtml() + _rbSixHtml() + '</dl></div>';
   return html;
 }
 
@@ -555,7 +791,7 @@ function _rbAnaHtml(dates, usableEps, sysEps) {
   html += '<div class="rb-caveat">勾起來的事件從上方統計排除。目前 ' + usableEps + ' 段納入、' + sysEps + ' 段排除。'
     + '標記存在 ' + (_rbMStore === 'firestore' ? 'Firestore（已登入）' : '本機瀏覽器（未登入）') + '。</div>';
 
-  html += '<div class="detail-note"><dl>' + _rbSixHtml() + _rbMethodHtml() + '</dl></div>';
+  html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbSixHtml() + _rbMethodHtml() + '</dl></div>';
   return html;
 }
 
@@ -627,7 +863,7 @@ function _rbMethodHtml() {
     + '被觸及的比例）、不設定停利停損門檻（那在停損停利頁，這裡只顯示設好的門檻與差距）、'
     + '不算要接多少或賣幾張、不給傾向。列完位置與分布就停。</dd>'
     + '<dt>資料來源</dt><dd>部位欄位來自券商庫存與即時報價（與持股庫存頁同一份，經 invMetrics）。'
-    + '統計欄位來自 Yahoo Finance 日線（^TWII 與各檔，經 GAS 代理），取 ' + cfg.years + ' 年。'
+    + '統計欄位來自 Yahoo Finance 日線（^TWII、^SOX 與各檔，經 GAS 代理），取 ' + cfg.years + ' 年。'
     + '大盤用未還原收盤（指數無配息），個股用還原收盤。'
     + '盤中最後一根是當日快照、不是定盤，收盤前的觸發判定會變動。</dd>'
     + '<dt>重疊樣本</dt><dd>同一段修正會連續好幾天都達門檻，每一天都算一次樣本，'
@@ -638,6 +874,12 @@ function _rbMethodHtml() {
 }
 
 // ══════════ 參數設定頁的區塊（設定留在本模組，settings.js 只負責擺放）══════════
+// 百分位换算成幾 %：只在訊號板已算過時附上，不為了顯示一個數字去重抓行情
+function _rbSoxThrTxt() {
+  var sox = _rbData && _rbData.sox;
+  if (!sox) return '';
+  return '（目前≈ ' + _rbPct(sox.thr, 2) + '）';
+}
 function renderReboundParams() {
   var el = document.getElementById('params-rebound-body');
   if (!el) return;
@@ -654,6 +896,10 @@ function renderReboundParams() {
     '<span class="set-lb">持有天數</span><span class="set-inline">' +
       '<input id="rb-holds" type="text" class="al-in rb-holds-in" value="' + c.holds.join(',') +
       '" oninput="rbCfgChanged()"><span class="set-unit">交易日，逗號分隔</span></span>' +
+    '<span class="set-lb">隔夜費半條件卡</span><span class="set-inline">' +
+      '<label class="rb-chk"><input id="rb-soxon" type="checkbox"' + (c.soxOn ? ' checked' : '') +
+      ' onchange="rbCfgChanged()"><span>在訊號板上顯示</span></label></span>' +
+    '<span class="set-lb">費半門檻百分位</span>' + inp('rb-soxpct', c.soxPct, '1', '百分位' + _rbSoxThrTxt(), 50, 99.9) +
     '</div>' +
     '<div class="set-hint">目前：' + rbCfgStatus() + '。'
       + '改完到 跌深訊號板 按「↻ 重新整理」重算（會重抓日線）。<br>'
@@ -663,7 +909,12 @@ function renderReboundParams() {
       + '持有天數是你打算抱多久，表上每一個天數各算一欄。<br>'
       + '改回看天數或跌幅門檻會動到事件的切分位置：系統性標記是記在「事件起始日」上的，'
       + '切分一變，舊的標記就可能對不上新的事件、變成沒有作用。'
-      + '改完請到訊號板的分析視圖確認事件清單上的勾還在正確的那一段。</div>';
+      + '改完請到訊號板的分析視圖確認事件清單上的勾還在正確的那一段。<br>'
+      + '費半門檻填的是百分位、不是百分比：填 90 代表「費半自身最大的 10% 漲幅」。'
+      + '寫死成幾 % 的話，波動大的年份會天天觸發、波動小的年份永遠不觸發。'
+      + '百分位調高樣本變少但事件更極端，調低樣本變多但混進一般上漲日。'
+      + '這一卡用費半而不用台指期夜盤：Yahoo 沒有夜盤歷史，'
+      + '接本機伺服器的話這一頁就不能離線看。</div>';
 }
 function rbCfgChanged() {
   var g = function (id) { var el = document.getElementById(id); return el ? el.value : null; };
@@ -674,6 +925,10 @@ function rbCfgChanged() {
   var hs = String(g('rb-holds') || '').split(',').map(function (x) { return parseInt(x, 10); })
     .filter(function (x) { return x > 0 && x <= 120; });
   if (hs.length) localStorage.setItem('rb_holds', hs.join(','));
+  var sp = parseFloat(g('rb-soxpct'));
+  if (!isNaN(sp) && sp >= 50 && sp <= 99.9) localStorage.setItem('rb_soxpct', sp);
+  var so = document.getElementById('rb-soxon');
+  if (so) localStorage.setItem('rb_soxon', so.checked ? '1' : '0');
   // 參數變了，已算好的結果就過期了；下次進頁重抓，不在這裡順手重抓（使用者可能還在打字）
   _rbData = null;
   var hint = document.querySelector('#params-rebound-body .set-hint');
