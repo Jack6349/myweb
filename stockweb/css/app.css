@@ -1913,3 +1913,25 @@ td.cost-even::after  { background: var(--text3); }
 .tx-open-sum b { font-weight: 700; }
 /* 開盤前的預約單說明：接在「今日無委託」下方，字小一階 */
 .tx-empty-note { margin-top: 6px; font-size: 11.5px; color: var(--text3); line-height: 1.5; }
+
+/* ── 跌深訊號板 ── */
+/* pv-tabs 原本是抽屜右上角的，這裡要左對齊、自己一行 */
+.rb-tabs { float: none; display: flex; margin: 0 0 12px; }
+.rb-verdict { align-items: flex-start; }
+.rb-lamp { font-size: 34px; line-height: 1.1; flex: 0 0 auto; }
+.rb-sub { font-size: 13px; color: var(--text2); margin-top: 5px; line-height: 1.75; }
+.rb-sysbox { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text2);
+  background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--text3);
+  border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; cursor: pointer; }
+.rb-sysbox:hover { color: var(--text); }
+.rb-sysbox.on { border-left-color: var(--up); background: color-mix(in srgb, var(--up) 7%, transparent); color: var(--text); }
+.rb-sysbox input { cursor: pointer; }
+.rb-table { max-width: 1200px; width: auto; min-width: 560px; }
+.rb-table th.rb-grp { text-align: center; border-left: 1px solid var(--border); }
+.rb-table th.rb-sub2 { font-size: 11px; font-weight: 400; color: var(--text2); }
+.rb-eps { min-width: 520px; }
+.rb-eps input { cursor: pointer; }
+.rb-table tr.rb-sysrow td { background: color-mix(in srgb, var(--up) 7%, transparent); color: var(--text3); }
+.rb-caveat { font-size: 12.5px; color: var(--note); line-height: 1.8; margin: 9px 2px 0; max-width: 900px; }
+.rb-pgrid { display: grid; grid-template-columns: max-content max-content; gap: 9px 14px; align-items: center; }
+.rb-holds-in { width: 90px; }

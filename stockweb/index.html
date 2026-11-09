@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=300">
+<link rel="stylesheet" href="css/app.css?v=301">
 </head>
 <body>
 
@@ -48,6 +48,7 @@
   <button data-view="risk" onclick="openRiskReport()">加減碼報告</button>
   <button data-view="topconst" onclick="openTopConst()">成分股曝險</button>
   <button data-view="watch" onclick="openWatch()">關注股票</button>
+  <button data-view="rebound" onclick="openRebound()">跌深訊號板</button>
   <button data-view="params" onclick="openParams()">參數設定</button>
 </nav>
 
@@ -118,6 +119,11 @@
       <div class="func-icon">⭐</div>
       <div class="func-name">關注股票</div>
       <div class="func-desc">非持股的觀察清單，代碼或名稱搜尋加入，現價/漲跌盤中即時，可查成份股與除息紀錄</div>
+    </div>
+    <div class="func-card" onclick="openRebound()">
+      <div class="func-icon">🪃</div>
+      <div class="func-name">跌深訊號板</div>
+      <div class="func-desc">大盤跌深時，手上主動式 ETF 歷史上接下來的反彈勝率與中位數；系統性事件手動標記後排除</div>
     </div>
     <div class="func-card" onclick="openParams()">
       <div class="func-icon">⚙️</div>
@@ -279,6 +285,15 @@
     <div id="risk-wrap"></div>
   </div>
 
+  <!-- 跌深訊號板 -->
+  <div id="rebound-view" style="display:none">
+    <div class="tr-toolbar">
+      <button class="btn-query" onclick="startRebound(true)">↻ 重新整理</button>
+      <span id="rebound-info" style="font-size:13px;color:var(--text2)"></span>
+    </div>
+    <div id="rebound-wrap"></div>
+  </div>
+
   <!-- 交易資訊畫面（子頁籤：交易帳務＝原三框 / 出借行情＝TWSE 借券資料） -->
   <div id="txinfo-view" style="display:none">
     <div id="tx-error" class="stream-error" style="display:none"></div>
@@ -418,11 +433,11 @@
 
 <script type="module" src="js/firebase-init.js?v=10"></script>
 <script src="js/auth.js?v=10"></script>
-<script src="js/hush.js?v=5"></script>
+<script src="js/hush.js?v=6"></script>
 <script src="js/note.js?v=5"></script>
 <script src="js/broker.js?v=22"></script>
 <script src="js/fill-toast.js?v=7"></script>
-<script src="js/stream.js?v=97"></script>
+<script src="js/stream.js?v=98"></script>
 <script src="js/nav-usage.js?v=2"></script>
 <script src="js/daily-refresh.js?v=1"></script>
 <script src="js/category.js?v=2"></script>
@@ -436,7 +451,7 @@
 <script src="js/cost-override.js?v=3"></script>
 <script src="js/lent-log.js?v=2"></script>
 <script src="js/params.js?v=6"></script>
-<script src="js/settings.js?v=8"></script>
+<script src="js/settings.js?v=9"></script>
 <script src="js/retire.js?v=8"></script>
 <script src="js/topconst.js?v=9"></script>
 <script src="js/style-drift.js?v=20"></script>
@@ -456,6 +471,7 @@
 <script src="js/nav-premium.js?v=9"></script>
 <script src="js/swap-scan.js?v=7"></script>
 <script src="js/risk-score.js?v=39"></script>
+<script src="js/rebound.js?v=4"></script>
 <script src="js/news.js?v=61"></script>
 <script src="js/trend.js?v=34"></script>
 <script src="js/signals.js?v=30"></script>

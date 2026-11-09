@@ -17,7 +17,7 @@ var STREAM_OTHER_N = 15; // 即時行情下段「其他主要成分股」檔數�
 // 查詢走 cost-override.js 的 coGet(code, 入帳日)，回每股認購價。
 
 // ── 檢視切換 ──
-var VIEW_TITLES = { stream: '即時行情', inv: '持股庫存', divest: '股利估算', divmeta: '配息資料', txinfo: '交易資訊', live: '即時持股', news: '新聞情勢', trend: '趨勢評估', signals: '籌碼淨值', alerts: '停損停利', risk: '加減碼報告', params: '參數設定', topconst: '成分股曝險', watch: '關注股票' };
+var VIEW_TITLES = { stream: '即時行情', inv: '持股庫存', divest: '股利估算', divmeta: '配息資料', txinfo: '交易資訊', live: '即時持股', news: '新聞情勢', trend: '趨勢評估', signals: '籌碼淨值', alerts: '停損停利', risk: '加減碼報告', rebound: '跌深訊號板', params: '參數設定', topconst: '成分股曝險', watch: '關注股票' };
 var _curView = 'home';
 function showView(name) {
   // 離開成分股曝險卡片 → 退訂該卡片新訂閱的 tick
@@ -28,7 +28,7 @@ function showView(name) {
   if (_curView === 'watch' && name !== 'watch' && typeof stopWatch === 'function') stopWatch();
   _curView = name;
   document.getElementById('home-cards').style.display = name === 'home' ? 'grid' : 'none';
-  ['stream', 'inv', 'divest', 'divmeta', 'txinfo', 'live', 'news', 'trend', 'signals', 'alerts', 'risk', 'params', 'topconst', 'watch'].forEach(function (v) {
+  ['stream', 'inv', 'divest', 'divmeta', 'txinfo', 'live', 'news', 'trend', 'signals', 'alerts', 'risk', 'rebound', 'params', 'topconst', 'watch'].forEach(function (v) {
     document.getElementById(v + '-view').style.display = v === name ? 'block' : 'none';
   });
   document.getElementById('crumb').textContent = VIEW_TITLES[name] || '';
@@ -66,6 +66,7 @@ function openNews() { showView('news'); if (typeof startNews === 'function') sta
 function openTrend() { showView('trend'); if (typeof startTrend === 'function') startTrend(); }
 function openSignals() { showView('signals'); if (typeof startSignals === 'function') startSignals(); }
 function openAlerts() { showView('alerts'); if (typeof startAlerts === 'function') startAlerts(); }
+function openRebound() { showView('rebound'); if (typeof startRebound === 'function') startRebound(); }
 function openParams() { showView('params'); if (typeof startParams === 'function') startParams(); }
 function openTopConst() {
   showView('topconst');
