@@ -726,16 +726,32 @@ function closeDetailModal() {
 // ── 合計待交割（券商 settlements：T／T+1／T+2 應收付合計）→ 顯示在頂欄「獲利率」後面，全站可見 ──
 // 與交易資訊「台幣交割」同源；正＝應收、負＝應付（銀行扣款）。
 // 更新時機：行情引擎啟動（ensureFeed）、進入持股庫存、成交後庫存重抓（refreshPositions）。
-var _settleTot = null, _invSettleBusy = false;
+var _settleTot = null, _invSettleBusy = false, _settleFlipTimer = null;
+// 跨過 10:00 自動重算：不排的話 09:55 打開放著、10:05 看到的合計是錯的，
+// 而那正是要看錢夠不夠下單的時段。裝置休眠會讓計時器延遲，
+// 但 loadInvSettle 本身還會在行情啟動、進庫存頁、成交後被叫到，不會永遠停在舊值。
+function _scheduleSettleFlip() {
+  if (_settleFlipTimer) { clearTimeout(_settleFlipTimer); _settleFlipTimer = null; }
+  if (typeof msUntilSettleHour !== 'function') return;
+  var ms = msUntilSettleHour();
+  if (ms == null) return;
+  _settleFlipTimer = setTimeout(function () {
+    _settleFlipTimer = null;
+    loadInvSettle();
+    if (document.getElementById('tx-settle-body') && typeof loadSettleBox === 'function') loadSettleBox();
+  }, ms);
+}
 async function loadInvSettle() {
   if (_invSettleBusy || typeof fetchSettlements !== 'function') return;
   _invSettleBusy = true;
   try {
     var rows = await fetchSettlements();
-    // 交割日當天那筆銀行凌晨已扣，錢已經不在帳上，算進「待交割」會重複計算
+    // 過了扣款門檻（交割日當天 10:00）那筆錢已經不在帳上，算進「待交割」會重複計算；
+    // 還沒到 10:00 的則仍在帳上，不計入的話凌晨看會少算
     var sp = splitSettlements(rows);
     _settleTot = (rows && rows.length) ? Math.round(sp.pending) : null;
     if (typeof renderTopbarTotals === 'function') renderTopbarTotals();
+    if (sp.dueRows && sp.dueRows.length) _scheduleSettleFlip();
   } catch (e) {
     console.warn('[待交割]', e);
   } finally { _invSettleBusy = false; }

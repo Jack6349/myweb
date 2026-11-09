@@ -24,12 +24,14 @@ async function loadSettleBox() {
     rows.forEach(function (r) {
       var amt = r.amount || 0;
       var paid = settleIsPaid(r, sp.today);
+      var due = settleIsDueToday(r, sp.today);
       var cls = amt > 0 ? 'up' : (amt < 0 ? 'down' : '');
       var d = (r.date || '').slice(5).replace('-', '/');
       var tl = r.T === 0 ? 'T' : 'T+' + r.T;
-      html += '<tr' + (paid ? ' class="tx-settle-paid"' : '') + '>' +
-        '<td class="tx-sd">' + d + '<span class="tx-st">' + tl + '</span>' +
-        (paid ? '<span class="tx-paid">已扣款</span>' : '') + '</td>' +
+      var pill = paid ? '<span class="tx-paid">已扣款</span>'
+        : (due ? '<span class="tx-due">今日 ' + SETTLE_PAID_HOUR + ':00 交割</span>' : '');
+      html += '<tr' + (paid ? ' class="tx-settle-paid"' : (due ? ' class="tx-settle-due"' : '')) + '>' +
+        '<td class="tx-sd">' + d + '<span class="tx-st">' + tl + '</span>' + pill + '</td>' +
         '<td class="num ' + cls + '">' + (amt === 0 ? '0' : amt.toLocaleString('zh-TW')) + '</td></tr>';
     });
     var tot = sp.pending;
@@ -37,9 +39,14 @@ async function loadSettleBox() {
     html += '<tr class="tx-settle-total"><td>合計待交割</td><td class="num ' + tcls + '">' +
       (tot === 0 ? '0' : tot.toLocaleString('zh-TW')) + '</td></tr></table>' +
       '<div class="detail-note nb">負數＝應付（銀行扣款）、正數＝應收。' +
-      (sp.paidRows.length
-        ? '交割日當天銀行凌晨就已扣款，該列標「已扣款」並<b>不計入</b>合計（本次已扣 ' +
-          sp.paid.toLocaleString('zh-TW') + '）。'
+      '扣款門檻是交割日當天 ' + SETTLE_PAID_HOUR + ':00（銀行營業時間）：' +
+      '過了 ' + SETTLE_PAID_HOUR + ':00 標「已扣款」並<b>不計入</b>合計，' +
+      '未到標「今日 ' + SETTLE_PAID_HOUR + ':00 交割」並<b>仍計入</b>合計 —— ' +
+      '凌晨看的時候那筆錢還在帳上。' +
+      (sp.paidRows.length ? '本次已扣 ' + sp.paid.toLocaleString('zh-TW') + '。' : '') +
+      (sp.dueRows.length
+        ? '<b>今日 ' + SETTLE_PAID_HOUR + ':00 待交割 ' + sp.dueToday.toLocaleString('zh-TW') +
+          '</b>，已含在合計裡；過了 ' + SETTLE_PAID_HOUR + ':00 會自動移出。'
         : '') + '</div>';
     el.innerHTML = html;
   } catch (e) { el.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>'; }
