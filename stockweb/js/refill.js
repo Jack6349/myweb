@@ -481,9 +481,29 @@ function _rfAmtCell(code) {
 
 function _rfMd(iso) { return iso ? iso.slice(5).replace('-', '/') : '—'; }
 
+// ── 未填息個股的排序 ──
+// 與股利估算、月份總覽同一套互動：點標題排序，再點一次換升降，選擇記在 localStorage。
+// 預設 gapAsc（距填息由小到大，最接近填息的在上），與原本的固定排序相同，不改既有行為。
+// 可排序：代號／除息日／價差／貼息／距填息。名稱、配息、基準價、現價排了沒有決策意義。
+var RF_PEND_SORT_LS = 'refill_pend_sort_v1';
+var _rfPendSort = (function () {
+  try { var v = localStorage.getItem(RF_PEND_SORT_LS); if (/^(code|ex|diff|days|gap)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  return 'gapAsc';
+})();
+function rfPendSort(key) {
+  // 預設方向依「第一下就想看到的那一端」：
+  //   貼息天數 → 降冪（貼最久的在上，那是最該注意的）
+  //   其餘     → 升冪：距填息最近的在上；價差因為一律是負數，升冪等於跌最多的在上；
+  //              代號由小到大、除息日由早到晚。
+  var first = (key === 'days') ? 'Desc' : 'Asc';
+  _rfPendSort = (_rfPendSort === key + first) ? key + (first === 'Asc' ? 'Desc' : 'Asc') : key + first;
+  try { localStorage.setItem(RF_PEND_SORT_LS, _rfPendSort); } catch (e) { hush('refill', e); }
+  renderRefill();
+}
+
 // 未填息個股：逐檔填息中 pending 的每一次除息（同一檔可有多列：月配多次未填，各自基準價不同）
 // 現價：盤中有即時報價用即時價，否則用 Yahoo 最近收盤（與明細同源）；距填息％＝(基準價－現價)÷基準價
-// 今天剛除息、尚無收盤資料（waiting）者不列。排序：距填息％由小到大（最接近填息的在上）。
+// 今天剛除息、尚無收盤資料（waiting）者不列。
 function _rfPendingHtml(rows) {
   var list = [];
   rows.forEach(function (r) {
@@ -496,14 +516,38 @@ function _rfPendingHtml(rows) {
       list.push({ code: r.code, name: r.name, ex: e.exDate, amt: e.amount, base: e.base, px: px, diff: px - e.base, days: e.days, gap: gap });
     });
   });
-  list.sort(function (a, b) { return a.gap - b.gap || (a.ex < b.ex ? -1 : 1); });
+  // 同值時一律以「除息日較早」固定次序，每次重繪的順序才一樣
+  var pAsc = /Asc$/.test(_rfPendSort), pKey = _rfPendSort.replace(/(Asc|Desc)$/, '');
+  list.sort(function (a, b) {
+    var tie = a.ex < b.ex ? -1 : (a.ex > b.ex ? 1 : 0);
+    var va, vb;
+    if (pKey === 'code') {
+      var c = String(a.code).localeCompare(String(b.code), undefined, { numeric: true });
+      return c ? (pAsc ? c : -c) : tie;
+    }
+    if (pKey === 'ex') { return tie ? (pAsc ? tie : -tie) : 0; }
+    va = a[pKey]; vb = b[pKey];
+    if (va === vb) return tie;
+    return pAsc ? va - vb : vb - va;
+  });
 
   var h = '<div class="sec-title">未填息個股' + (list.length ? '<span class="rf-cmnote">' + list.length + ' 筆</span>' : '') + '</div>';
   if (!list.length) return h + '<div class="rf-cal-empty">目前無未填息個股。</div>';
+  var pArrow = function (k) { return _rfPendSort === k + 'Asc' ? '▲' : (_rfPendSort === k + 'Desc' ? '▼' : '↕'); };
+  var pOn = function (k) { return pKey === k ? ' sorted' : ''; };
+  var pTh = function (k, lab, cls, tip) {
+    return '<th class="' + (cls || '') + ' sort-th' + pOn(k) + '" onclick="rfPendSort(\'' + k + '\')"' +
+      ' title="' + (tip ? tip + '（點擊排序）' : '點擊排序') + '">' + lab +
+      '<span class="sort-ind">' + pArrow(k) + '</span></th>';
+  };
   h += '<div class="inv-table-wrap"><table class="inv-table swap-table rf-pend"><thead><tr>' +
-    '<th>代號</th><th>名稱</th><th>除息日</th><th class="num">配息</th><th class="num">基準價</th>' +
-    '<th class="num" title="盤中為即時價，否則為最近收盤">現價</th><th class="num" title="現價－基準價">價差</th>' +
-    '<th class="num" title="除息後經過的交易日數">貼息</th><th class="num" title="(基準價－現價)÷基準價">距填息</th></tr></thead><tbody>';
+    pTh('code', '代號') + '<th>名稱</th>' + pTh('ex', '除息日') +
+    '<th class="num">配息</th><th class="num">基準價</th>' +
+    '<th class="num" title="盤中為即時價，否則為最近收盤">現價</th>' +
+    pTh('diff', '價差', 'num', '現價－基準價') +
+    pTh('days', '貼息', 'num', '除息後經過的交易日數') +
+    pTh('gap', '距填息', 'num', '(基準價－現價)÷基準價') +
+    '</tr></thead><tbody>';
   list.forEach(function (x) {
     h += '<tr>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + x.code + '\')">' + x.code + '</span></td>' +
@@ -516,7 +560,7 @@ function _rfPendingHtml(rows) {
       '<td class="num">' + x.days + ' 天</td>' +
       // 距填息不上色：它跟左邊的「價差」是同一件事的兩種寫法（價差 -2.3 元＝距填息 2.3%），
       // 原本一個綠一個紅，同一列把同一個事實標成兩種顏色。而且這張表整張都是未填息的，
-      // 顏色分不出任何東西；要比遠近看數字即可（本表已依距填息由小到大排序）。
+      // 顏色分不出任何東西；要比遠近看數字即可（表頭可點排序，預設距填息由小到大）。
       '<td class="num">' + x.gap.toFixed(2) + '%</td>' +
     '</tr>';
   });
