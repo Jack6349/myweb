@@ -112,13 +112,15 @@ async function _rbSeries(sym, years) {
       // 寫死 +8 的話美股會被推到隔天，與隔夜對應就錯一天。
       if (_rbMeta && typeof _rbMeta.gmtoffset === 'number') tzo = _rbMeta.gmtoffset * 1000;
       var ts = (res && res.timestamp) || [];
-      var cl = (res && res.indicators && res.indicators.quote[0].close) || [];
+      var qt = (res && res.indicators && res.indicators.quote[0]) || {};
+      var cl = qt.close || [], op = qt.open || [], hg = qt.high || [], lw = qt.low || [];
       var acl = ((res && res.indicators && res.indicators.adjclose && res.indicators.adjclose[0]) || {}).adjclose || null;
       for (var k = 0; k < ts.length; k++) {
         if (cl[k] == null) continue;
         out.push({
           d: new Date(ts[k] * 1000 + tzo).toISOString().slice(0, 10),
-          c: cl[k], a: (acl && acl[k] != null) ? acl[k] : cl[k]
+          c: cl[k], a: (acl && acl[k] != null) ? acl[k] : cl[k],
+          o: op[k] == null ? null : op[k], h: hg[k] == null ? null : hg[k], l: lw[k] == null ? null : lw[k]
         });
       }
     } catch (e) { hush('rebound', e); }
@@ -129,7 +131,7 @@ async function _rbSeries(sym, years) {
   if (_rbMeta && _rbMeta.regularMarketPrice > 0 && _rbMeta.regularMarketTime) {
     var md = new Date(_rbMeta.regularMarketTime * 1000 + tzo).toISOString().slice(0, 10);
     if (!out.length || md > out[out.length - 1].d) {
-      out.push({ d: md, c: _rbMeta.regularMarketPrice, a: _rbMeta.regularMarketPrice });
+      out.push({ d: md, c: _rbMeta.regularMarketPrice, a: _rbMeta.regularMarketPrice, o: null, h: null, l: null });
     }
   }
   if (out.length) _rbBars[key] = out;
@@ -250,6 +252,40 @@ function _rbSoxCalc(bars, pct) {
     last: { d: lastD, r: rets[lastD], rank: _rbRank(sorted, rets[lastD]) }
   };
 }
+// 達標日的「日內形狀」：全日漲幅拆成開盤前（跳空）與開盤後（盤中）兩段。
+// 為什麼要拆：掛限價買進能不能成交，看的是日內最低價有沒有碰到掛價，
+// 跟收盤對收盤是兩個問題。漲幅如果全在跳空，掛在跳空之下等於等回檔。
+//
+// 開高低是未還原價，所以跟「昨收」比的時候跨除息日會把配息算成跳空缺口。
+// 除息日的判定不自己維護清單，用資料算：還原係數（adjclose ÷ close）在前後兩根之間
+// 變了，那一根就是除息日，整根排掉。
+function _rbSoxGap(bars, sox) {
+  if (!bars || !sox) return null;
+  var gap = [], oc = [], hi = [], lo = [], cc = [], fade = 0, n = 0, exdiv = 0;
+  for (var i = 1; i < bars.length; i++) {
+    var b = bars[i], p = bars[i - 1];
+    if (b.o == null || b.h == null || b.l == null) continue;   // meta 補的那根沒有日內價
+    if (!(p.c > 0) || !(b.o > 0)) continue;
+    var u = sox.prev(b.d);
+    if (u == null || u < p.d) continue;
+    if (!(sox.rets[u] >= sox.thr)) continue;
+    var f0 = p.a / p.c, f1 = b.a / b.c;
+    if (Math.abs(f1 - f0) > 1e-6 * Math.max(f0, f1)) { exdiv++; continue; }
+    n++;
+    gap.push((b.o / p.c - 1) * 100);
+    oc.push((b.c / b.o - 1) * 100);
+    hi.push((b.h / p.c - 1) * 100);
+    lo.push((b.l / p.c - 1) * 100);
+    cc.push((b.c / p.c - 1) * 100);
+    if (b.c < b.o) fade++;
+  }
+  if (!n) return null;
+  return {
+    n: n, exdiv: exdiv, gap: _rbMed(gap), oc: _rbMed(oc),
+    hi: _rbMed(hi), lo: _rbMed(lo), cc: _rbMed(cc), fade: fade / n * 100
+  };
+}
+
 // 一檔在「前一夜費半 ≥ 門檻」的那些台股交易日，當日漲跌的分布。
 // 個股用還原收盤（除息日不該被當成下跌），大盤用未還原。
 function _rbSoxFwd(bars, sox, useAdj) {
@@ -444,10 +480,10 @@ function _rbSoxHtml(view) {
   }
 
   var rows = _rbData.codes.map(function (c) {
-    return { c: c, s: _rbSoxFwd(_rbData.series[c] || [], sox, true) };
+    return { c: c, s: _rbSoxFwd(_rbData.series[c] || [], sox, true), g: _rbSoxGap(_rbData.series[c] || [], sox) };
   }).filter(function (r) { return r.s; });
   rows.sort(function (a, b) { return b.s.med - a.s.med; });
-  var twS = _rbSoxFwd(idx, sox, false);
+  var twS = _rbSoxFwd(idx, sox, false), twG = _rbSoxGap(idx, sox);
 
   var html = '<div class="rb-sox">';
   html += '<div class="sec-title">隔夜費半大漲之後，台股當天</div>';
@@ -480,9 +516,10 @@ function _rbSoxHtml(view) {
   var ana = (view === 'ana');
   html += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
     + '<th>代號 / 名稱</th><th class="num">樣本</th><th class="num">上漲機率</th>'
-    + '<th class="num">中位數</th>' + (ana ? '<th class="num">平均</th>' : '')
+    + '<th class="num">中位數</th><th class="num">其中開盤跳空</th>'
+    + (ana ? '<th class="num">平均</th>' : '')
     + '<th class="num">最低</th><th class="num">最高</th></tr></thead><tbody>';
-  var line = function (code, name, st, isIdx) {
+  var line = function (code, name, st, g, isIdx) {
     var thin = st.n < 20;
     var cls = [];
     if (isIdx) cls.push('rb-sysrow');
@@ -493,13 +530,28 @@ function _rbSoxHtml(view) {
       + '<td class="num rs-dim">' + st.n + ' 天</td>'
       + '<td class="num" style="font-weight:700">' + st.up.toFixed(0) + '%</td>'
       + '<td class="num" style="color:' + _rbCol(st.med) + ';font-weight:700">' + _rbPct(st.med, 2) + '</td>'
+      + '<td class="num" style="color:' + _rbCol(g ? g.gap : null) + '">' + (g ? _rbPct(g.gap, 2) : '—')
+        + (g ? '<div class="rb-sub3 rs-dim">開盤後 ' + _rbPct(g.oc, 2) + '</div>' : '') + '</td>'
       + (ana ? '<td class="num" style="color:' + _rbCol(st.avg) + '">' + _rbPct(st.avg, 2) + '</td>' : '')
       + '<td class="num" style="color:' + _rbCol(st.min) + '">' + _rbPct(st.min, 2) + '</td>'
       + '<td class="num" style="color:' + _rbCol(st.max) + '">' + _rbPct(st.max, 2) + '</td></tr>';
   };
-  rows.forEach(function (r) { html += line(r.c, _rbName(r.c), r.s, false); });
-  if (twS) html += line('大盤', '加權指數', twS, true);
+  rows.forEach(function (r) { html += line(r.c, _rbName(r.c), r.s, r.g, false); });
+  if (twS) html += line('大盤', '加權指數', twS, twG, true);
   html += '</tbody></table></div>';
+  // 掛限價買進的人要看的是這一句，不是中位數
+  var withG = rows.filter(function (r) { return r.g; });
+  if (withG.length) {
+    var mostGap = withG.slice().sort(function (a, b) { return b.g.gap - a.g.gap; })[0];
+    var allFlat = withG.every(function (r) { return Math.abs(r.g.oc) < 0.5; });
+    html += '<div class="rb-caveat">中位數那一欄是收盤對收盤，但掛限價買進能不能成交看的是日內價。'
+      + '這些漲幅幾乎全部在開盤跳空：' + mostGap.c + ' 全日 '
+      + _rbPct(mostGap.g.cc, 2) + ' 裡有 ' + _rbPct(mostGap.g.gap, 2) + ' 是開盤就給完的，'
+      + '開盤後到收盤 ' + _rbPct(mostGap.g.oc, 2) + '。'
+      + (allFlat ? '各檔的「開盤後」中位數都在 0 附近 —— ' : '')
+      + '掛在跳空幅度之下不是「在那個位置買」，是「等它從開盤跌回來」；'
+      + '中位的日子不會跌回去。完整的開高低收分布在分析視圖。</div>';
+  }
 
   var thin = rows.filter(function (r) { return r.s.n < 20; });
   html += '<div class="rb-caveat">樣本是「前一夜費半 ≥ ' + _rbPct(sox.thr, 2)
@@ -511,12 +563,84 @@ function _rbSoxHtml(view) {
     + '「費半大漲 ＋ 台股剛跌深」的雙條件本卡不算：近 ' + cfg.years
     + ' 年同時滿足兩者的日子只有個位數，n 這麼小寫上去會被當成機率，比不寫更糟。</div>';
 
-  if (ana && twS) {
-    html += '<div class="rb-caveat rs-dim">符合條件的台股交易日（' + twS.n + ' 天）：'
-      + twS.dates.join('、') + '</div>';
+  if (ana) {
+    var gr = rows.filter(function (r) { return r.g; });
+    if (gr.length) {
+      var ex = gr.reduce(function (a, r) { return a + r.g.exdiv; }, 0);
+      html += '<div class="sec-title">達標日的日內形狀（皆為中位數）</div>'
+        + '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
+        + '<th>代號 / 名稱</th><th class="num">樣本</th>'
+        + '<th class="num">開盤跳空</th><th class="num">開盤→收盤</th>'
+        + '<th class="num">日內最高</th><th class="num">日內最低</th>'
+        + '<th class="num">全日收盤</th><th class="num">開盤後下跌的日子</th>'
+        + '</tr></thead><tbody>';
+      var gline = function (code, name, g, isIdx) {
+        return '<tr' + (isIdx ? ' class="rb-sysrow"' : '') + '>'
+          + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span></td>'
+          + '<td class="num rs-dim">' + g.n + ' 天</td>'
+          + '<td class="num" style="color:' + _rbCol(g.gap) + ';font-weight:700">' + _rbPct(g.gap, 2) + '</td>'
+          + '<td class="num" style="color:' + _rbCol(g.oc) + ';font-weight:700">' + _rbPct(g.oc, 2) + '</td>'
+          + '<td class="num" style="color:' + _rbCol(g.hi) + '">' + _rbPct(g.hi, 2) + '</td>'
+          + '<td class="num" style="color:' + _rbCol(g.lo) + '">' + _rbPct(g.lo, 2) + '</td>'
+          + '<td class="num" style="color:' + _rbCol(g.cc) + '">' + _rbPct(g.cc, 2) + '</td>'
+          + '<td class="num rs-dim">' + g.fade.toFixed(0) + '%</td></tr>';
+      };
+      gr.slice().sort(function (a, b) { return b.g.gap - a.g.gap; })
+        .forEach(function (r) { html += gline(r.c, _rbName(r.c), r.g, false); });
+      if (twG) html += gline('大盤', '加權指數', twG, true);
+      html += '</tbody></table></div>'
+        + '<div class="rb-caveat">開高低都是未還原價，所以跟「昨收」相比時跨除息日會把配息算成跳空缺口。'
+        + '除息日用還原係數（還原收盤 ÷ 收盤）是否變動判定並整根排除，'
+        + '不自己維護除息日清單；本次共排掉 ' + ex + ' 日。'
+        + '「開盤→收盤」是同一天的兩個價相除，沒有這個問題。</div>';
+    }
+    if (twS) {
+      html += '<div class="rb-caveat rs-dim">符合條件的台股交易日（' + twS.n + ' 天）：'
+        + twS.dates.join('、') + '</div>';
+    }
   }
   html += '</div>';
   return html;
+}
+
+// 日內形狀（開盤跳空）的六欄
+function _rbGapSixHtml() {
+  if (!_rbData.cfg.soxOn || !_rbData.sox) return '';
+  var gs = _rbData.codes.map(function (c) { return _rbSoxGap(_rbData.series[c] || [], _rbData.sox); })
+    .filter(Boolean);
+  if (!gs.length) return '';
+  var fmin = Math.min.apply(null, gs.map(function (g) { return g.fade; }));
+  var fmax = Math.max.apply(null, gs.map(function (g) { return g.fade; }));
+  return '<dt>開盤跳空 · 定義</dt><dd><code>開盤跳空 ＝ 當日開盤 ÷ 前一日收盤 − 1</code>；'
+    + '<code>開盤→收盤 ＝ 當日收盤 ÷ 當日開盤 − 1</code>；'
+    + '<code>全日收盤 ＝ 當日收盤 ÷ 前一日收盤 − 1</code>。'
+    + '都只取達標日（前一夜費半 ≥ 門檻）的中位數。'
+    + '開高低是未還原價，跨除息日會把配息算成跳空，'
+    + '所以除息日整根排掉 —— 判定方式是還原係數（還原收盤 ÷ 收盤）'
+    + '在前後兩根之間有沒有變，不自己維護除息日清單。</dd>'
+    + '<dt>開盤跳空 · 比較基準</dt><dd>兩個。一是「跳空」跟「開盤後」互比，'
+    + '回答漲幅是哪一段給的；二是「日內最低」跟你的掛價比，回答限價買進能不能成交。'
+    + '主表那一欄中位數是收盤對收盤，跟成交與否無關。</dd>'
+    + '<dt>開盤跳空 · 白話意義</dt><dd>這一天的漲幅是開盤就跳上去的，'
+    + '還是開盤後慢慢走上去的。</dd>'
+    + '<dt>開盤跳空 · 機制</dt><dd>隤夜費半的資訊在台股開盤前就已經全部公開，'
+    + '集合競價一次反應完；開盤之後沒有新的隤夜資訊進來，'
+    + '所以盤中的中位數接近 0。這不是「盤中不會動」，'
+    + '是「盤中的漲跟跌差不多抵掉」 —— 開盤後下跌的日子有 '
+    + fmin.toFixed(0) + '%～' + fmax.toFixed(0) + '%。</dd>'
+    + '<dt>開盤跳空 · 行動含意</dt><dd>掛限價買進時，掛價要跟「日內最低」比，'
+    + '不是跟「收盤」比。掛在跳空幅度之下，成交的前提是它從開盤跌回來，'
+    + '而中位的日子不會。反過來，掛到能吃到開盤的位置，'
+    + '成本就已經含了跳空那一段，當天幾乎不會再走 —— 要赚的是後面幾天，'
+    + '那是主表（跌深後持有 N 日）在回答的。</dd>'
+    + '<dt>開盤跳空 · 不能告訴你什麼</dt><dd>四件事。'
+    + '一、只給中位數的形狀，不給路徑。開盤後下跌的日子有 '
+    + fmin.toFixed(0) + '%～' + fmax.toFixed(0) + '%，「開盤後 ≈ 0」是中位數，不是每天都 0。'
+    + '二、不算「某個掛價的成交率」。那要逐檔逐價位掃一遍，本頁沒做，'
+    + '要評估具體掛價得另外算。'
+    + '三、開盤跳空用的是集合競價的成交價，它不保證你那個數量排得進去；'
+    + '這幾檔成交量不大，張數大的時候實際成交價會比表上差。'
+    + '四、連續第二根訊號時跳空會不會變小，樣本不足判斷不出來（見前一項說明）。</dd>';
 }
 
 // 隔夜費半條件卡的六欄
@@ -542,8 +666,8 @@ function _rbSoxSixHtml() {
     + '放大是雙向的，所以「最低」那一欄有幾檔是負的 —— 費半大漲雔天台股開高走低是發生過的。</dd>'
     + '<dt>隔夜費半 · 行動含義</dt><dd>它說的是幅度，不是進出。'
     + '配下方主表的部位欄一起看：若今天往上跳，已經越過停利門檻的那幾檔會越跨越多；'
-    + '若你在分段接，這一欄告訴你「今天挂原價大概挂不到」。'
-    + '要挂多少、要買幾張，這一頁不算。</dd>'
+    + '若你在分段接，這一欄告訴你「今天掛原價大概掛不到」。'
+    + '要掛多少、要買幾張，這一頁不算。</dd>'
     + '<dt>隔夜費半 · 不能告訴你什麼</dt><dd>四件事。'
     + '一、分不出第二根會不會比第一根弱。表上把兩種日子混在同一組樣本裡；'
     + '拆開算過，連續第二根的日子各檔只有 1～2 天、大盤 4 天，'
@@ -744,7 +868,7 @@ function _rbDecHtml(dates, usableEps, sysEps) {
     + '各檔段數差這麼多是因為上市日差很多：' + _rbHistLine() + '。'
     + '歷史最短的那幾檔只涵蓋一段多頭，它們的勝率不是「長期統計」，是「這幾個月的樣子」。</div>';
 
-  html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbPosSixHtml() + _rbSixHtml() + '</dl></div>';
+  html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbGapSixHtml() + _rbPosSixHtml() + _rbSixHtml() + '</dl></div>';
   return html;
 }
 
@@ -799,7 +923,7 @@ function _rbAnaHtml(dates, usableEps, sysEps) {
   html += '<div class="rb-caveat">勾起來的事件從上方統計排除。目前 ' + usableEps + ' 段納入、' + sysEps + ' 段排除。'
     + '標記存在 ' + (_rbMStore === 'firestore' ? 'Firestore（已登入）' : '本機瀏覽器（未登入）') + '。</div>';
 
-  html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbSixHtml() + _rbMethodHtml() + '</dl></div>';
+  html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbGapSixHtml() + _rbSixHtml() + _rbMethodHtml() + '</dl></div>';
   return html;
 }
 
