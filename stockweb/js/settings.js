@@ -71,6 +71,13 @@ var SET_SECTIONS = [
       desc: '只列出自動來源（MoneyDJ／CMoney）抓不到、需手動維護清單的 ETF（境外或主動式）',
       render: function (first) { if (typeof renderConstImport === 'function') renderConstImport(!first); } }
   ] },
+  { id: 'rebound', title: '跌深反彈', rows: [
+    { key: 'rebound', title: '跌深反彈訊號', bodyId: 'params-rebound-body',
+      desc: '什麼叫「跌深」（大盤回看幾個交易日、累計跌幅多少）、要統計持有幾天、取幾年歷史。'
+          + '跌深訊號板用這組參數判定現在是否觸發，並算出各檔歷史上的反彈勝率與中位數',
+      render: function () { if (typeof renderReboundParams === 'function') renderReboundParams(); },
+      status: function () { return (typeof rbCfgStatus === 'function') ? rbCfgStatus() : null; } }
+  ] },
   { id: 'tick', title: '逐筆變動', rows: [
     { key: 'touch-sel', title: '掛單參考：顯示哪幾檔', bodyId: 'params-touch-body',
       desc: '勾選的標的會在即時持股頁下方列出「掛高 X 元在 10 分鐘內被觸及的比例」，用來決定限價單掛多遠。'
