@@ -1,4 +1,4 @@
-// 股利總管 Web — 跌深訊號板
+// 股利總管 Web — 進場訊號板
 //
 // 這一頁回答一件事：大盤跌深之後，手上的主動式 ETF 歷史上接下來會不會彈、機率多少。
 // 不回答停利（那在停損停利頁，門檻一到就提醒），也不回答成交機率（那在即時持股頁的掛單參考）。
@@ -366,6 +366,7 @@ async function startRebound(force) {
   }
   _rbData = { cfg: cfg, codes: codes, idx: idx, series: series, sox: sox, trig: _rbTriggers(idx, cfg) };
   if (typeof ovPrepare === 'function') { try { await ovPrepare(); } catch (e) { hush('rebound', e); } }
+  if (typeof bsPrepare === 'function') { try { await bsPrepare(force); } catch (e) { hush('rebound', e); } }
   if (info) info.textContent = '資料日 ' + idx[idx.length - 1].d + '（Yahoo 日線，' + cfg.years + ' 年）';
   rbRender();
 }
@@ -375,7 +376,7 @@ function rbView(v) {
   rbRender();
 }
 function _rbViewSel() {
-  try { if (localStorage.getItem(RB_VIEW_LS) === 'ana') return 'ana'; } catch (e) {}
+  try { var v = localStorage.getItem(RB_VIEW_LS); if (v === 'ana' || v === 'bond') return v; } catch (e) {}
   return 'dec';
 }
 
@@ -409,7 +410,14 @@ function rbRender() {
   var html = '<div class="pv-tabs rb-tabs">' +
     '<button class="pv-tab' + (view === 'dec' ? ' on' : '') + '" onclick="rbView(\'dec\')">決策</button>' +
     '<button class="pv-tab' + (view === 'ana' ? ' on' : '') + '" onclick="rbView(\'ana\')">分析</button>' +
+    '<button class="pv-tab' + (view === 'bond' ? ' on' : '') + '" onclick="rbView(\'bond\')">債券</button>' +
     '</div>';
+  // 債券頁籤問的不是「會漲多少」而是「掛這個價成不成交」，
+  // 整頁另外渲染，不共用上方的跌深判定卡。
+  if (view === 'bond') {
+    wrap.innerHTML = html + ((typeof bsHtml === 'function') ? bsHtml() : '');
+    return;
+  }
 
   // ── 判定卡（兩個視圖都在最上面）──
   var lamp, lcol, ltxt;
@@ -1037,7 +1045,7 @@ function renderReboundParams() {
     '<span class="set-lb">費半門檻百分位</span>' + inp('rb-soxpct', c.soxPct, '1', '百分位' + _rbSoxThrTxt(), 50, 99.9) +
     '</div>' +
     '<div class="set-hint">目前：' + rbCfgStatus() + '。'
-      + '改完到 跌深訊號板 按「↻ 重新整理」重算（會重抓日線）。<br>'
+      + '改完到 進場訊號板 按「↻ 重新整理」重算（會重抓日線）。<br>'
       + '回看天數與跌幅門檻決定「什麼叫跌深」：改嚴（天數短、跌幅大）樣本變少但事件更極端，'
       + '改鬆樣本變多但混進一般回檔。歷史長度拉長樣本變多，但愈早的市場結構跟現在差愈多 —— '
       + '主動式 ETF 多半 2025 下半年之後才上市，拉超過上市日也補不出資料。'
