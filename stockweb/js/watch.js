@@ -263,6 +263,7 @@ function renderWatch() {
   var keep = _wtOpen ? wrap.querySelector('.es-detail[data-code="' + _wtOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
+  if (typeof wtFitWrap === 'function') wtFitWrap();   // 先定表格要不要捲動，明細才量得到正確的可視寬
   if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
 }
 var _wtOpen = null;   // 目前展開明細的代號（一次一列）
@@ -732,6 +733,7 @@ function renderWatchBond() {
   var keep = _wtBondOpen ? wrap.querySelector('.es-detail[data-code="' + _wtBondOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
+  if (typeof wtFitWrap === 'function') wtFitWrap();   // 先定表格要不要捲動，明細才量得到正確的可視寬
   if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
   _wtPickInfo();
 }
@@ -809,6 +811,7 @@ function renderWatchAct() {
   var keep = _wtActOpen ? wrap.querySelector('.es-detail[data-code="' + _wtActOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
+  if (typeof wtFitWrap === 'function') wtFitWrap();   // 先定表格要不要捲動，明細才量得到正確的可視寬
   if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
   _wtPickInfo();
 }
