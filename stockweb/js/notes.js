@@ -107,6 +107,7 @@ function ntToggle() {
   }
   ntRender();
   if (_ntOpen && !_ntLoaded) ntLoad().then(ntRender);
+  if (_ntOpen) _ntFillNames();
 }
 function ntClose() { _ntOpen = false; ntRender(); }
 
@@ -131,16 +132,69 @@ function ntSubChanged() {
     tx.setAttribute('data-auto', auto);
   }
 }
-function _ntCodeOpts() {
-  var set = {};
-  var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
-  Object.keys(m).forEach(function (c) { if (m[c] > 0) set[c] = 1; });
-  if (typeof _wtLoad === 'function') { try { (_wtLoad() || []).forEach(function (c) { set[c] = 1; }); } catch (e) {} }
-  return Object.keys(set).sort().map(function (c) {
-    var n = (typeof _contracts !== 'undefined' && _contracts[c] && _contracts[c].name) || '';
-    return '<option value="' + c + '">' + n + '</option>';
-  }).join('');
+// 代碼候選：持股在前、關注在後，各自標出來。
+// 換股是「賣掉持股的某一檔、換成關注清單裡的某一檔」，
+// 兩邊都要選得到，而且要分得出來哪一檔是哪一邊。
+//
+// 名稱來源三道：行情快取（只有持股）→ 關注頁的合約索引 → 該索引的每日快取。
+// 沒有第二、三道的話，關注但未持有的那幾檔只有一串代碼，換股時根本認不出來。
+function _ntNameMap() {
+  var m = {};
+  var idx = (typeof _wtIdx !== 'undefined' && _wtIdx) || null;
+  if (!idx) {
+    try {
+      var c = JSON.parse(localStorage.getItem('watch_contracts_v1') || 'null');
+      idx = (c && c.rows) || null;
+    } catch (e) {}
+  }
+  (idx || []).forEach(function (x) { if (x && x.c) m[String(x.c)] = x.n || ''; });
+  return m;
 }
+function _ntCodeOpts() {
+  var held = {}, watch = {};
+  var sm = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  Object.keys(sm).forEach(function (c) { if (sm[c] > 0) held[c] = 1; });
+  if (typeof _wtLoad === 'function') {
+    try { (_wtLoad() || []).forEach(function (c) { if (!held[c]) watch[c] = 1; }); } catch (e) {}
+  }
+  var nm = _ntNameMap();
+  var label = function (c) {
+    return (typeof _contracts !== 'undefined' && _contracts[c] && _contracts[c].name) || nm[c] || '';
+  };
+  var opt = function (c, tag) {
+    var n = label(c);
+    return '<option value="' + c + '">' + (n ? n + ' ' : '') + tag + '</option>';
+  };
+  return Object.keys(held).sort().map(function (c) { return opt(c, '（持股）'); }).join('')
+    + Object.keys(watch).sort().map(function (c) { return opt(c, '（關注）'); }).join('');
+}
+// 關注但未持有的那幾檔，如果三道來源都沒名稱，就逐檔補查一次合約。
+// 不去觸發關注頁的全市場索引（五萬多筆、要翻頁），這裡最多就關注清單那幾檔。
+// 查到的寫回共用的合約快取，別頁也用得到。
+var _ntNameTried = false;
+async function _ntFillNames() {
+  if (_ntNameTried || typeof fetchContract !== 'function') return;
+  _ntNameTried = true;
+  var nm = _ntNameMap(), need = [];
+  var sm = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  try {
+    (typeof _wtLoad === 'function' ? (_wtLoad() || []) : []).forEach(function (c) {
+      if (sm[c] > 0) return;
+      if ((typeof _contracts !== 'undefined' && _contracts[c] && _contracts[c].name) || nm[c]) return;
+      if (need.indexOf(c) < 0) need.push(c);
+    });
+  } catch (e) { return; }
+  if (!need.length) return;
+  var got = 0;
+  for (var i = 0; i < need.length && i < 40; i++) {
+    try {
+      var ct = await fetchContract(need[i]);
+      if (ct && ct.name) { _contracts[need[i]] = ct; got++; }
+    } catch (e) { hush('notes', e); }
+  }
+  if (got && _ntOpen) ntRender();
+}
+
 async function ntAdd() {
   var g = function (id) { var e = document.getElementById(id); return e ? String(e.value || '').trim() : ''; };
   var cat = g('nt-cat'), sub = g('nt-sub'), page = g('nt-page'), code = g('nt-code'), text = g('nt-text');
@@ -218,7 +272,7 @@ function ntRender() {
       _ntPages().map(function (p) {
         return '<option value="' + p.t + '"' + (p.t === cur ? ' selected' : '') + '>' + p.t + '</option>';
       }).join('') + '</select>' +
-    '<input id="nt-code" class="nt-in nt-code" list="nt-codes" placeholder="代碼（可空白）" autocomplete="off">' +
+    '<input id="nt-code" class="nt-in nt-code" list="nt-codes" placeholder="代碼：持股＋關注（可空白）" autocomplete="off">' +
     '<datalist id="nt-codes">' + _ntCodeOpts() + '</datalist>' +
     '<input id="nt-text" class="nt-in nt-text" placeholder="代辦事項" autocomplete="off">' +
     '<button class="btn-query" onclick="ntAdd()">加入</button>' +
