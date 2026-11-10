@@ -2019,3 +2019,11 @@ td.cost-even::after  { background: var(--text3); }
 .es-tr-flat { background: rgba(160,170,190,.16); color: var(--text2); }
 .es-tr-wav { background: rgba(245,216,122,.16); color: var(--accent2); }
 .es-trn { display: inline-block; min-width: 3.4em; text-align: right; margin-left: 5px; font-size: 10.5px; color: var(--text3); }
+
+/* 債券頁籤：掛單成交率 */
+.bs-side { margin-top: 12px; }
+.bs-hi { color: var(--down); font-weight: 700; }
+.bs-mid { color: var(--accent2); font-weight: 700; }
+.bs-lo { color: var(--text3); }
+.bs-sub { display: block; font-size: 10.5px; color: var(--text2); line-height: 1.4; }
+.bs-all { display: block; font-size: 10px; color: var(--text3); line-height: 1.3; }

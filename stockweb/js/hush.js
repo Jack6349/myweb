@@ -34,7 +34,7 @@ var HUSH_NAME = {
   params: '參數設定', settings: '參數設定', chart: '線圖', pvhist: '總現值走勢',
   'etf-screen': 'ETF 篩選', 'style-drift': '風格漂移', 'lent-log': '出借紀錄',
   'fill-toast': '委託提示', sbl: '借券', order: '下單', retire: '退休現金流',
-  rebound: '跌深訊號板'
+  rebound: '進場訊號板'
 };
 
 // 記一筆。lv 預設 1（黃）；畫面會停住或顯示錯誤內容的傳 2（紅）。
