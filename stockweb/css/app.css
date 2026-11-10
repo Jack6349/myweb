@@ -1992,7 +1992,7 @@ td.cost-even::after  { background: var(--text3); }
 .nt-in { background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 5px;
   padding: 4px 6px; font-size: 12.5px; }
 .nt-text { flex: 1 1 260px; min-width: 180px; }
-.nt-code { width: 150px; }
+.nt-code { width: 190px; }
 .nt-table { font-size: 12.5px; }
 .nt-table .nt-ck { width: 28px; text-align: center; }
 .nt-table .nt-tx { white-space: normal; }
