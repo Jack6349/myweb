@@ -687,7 +687,7 @@ function renderTopbarTotals() {
     tt('今日', t.wpct == null ? '—' : fmtPct(t.wpct), cvar[wcls]);
   if (btn) {
     btn.hidden = false;
-    btn.textContent = (_dwOpen ? '▴' : '▾') + ' 更多';
+    btn.textContent = (_dwOpen ? '▴' : '▾') + ' 總覽';
     btn.className = 'dw-btn' + (_dwOpen ? ' on' : '');
   }
   if (pbtn) {
