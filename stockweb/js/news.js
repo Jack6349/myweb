@@ -781,8 +781,17 @@ async function loadTxfIntra(ref) {
   var j = await r.json();
   if (!j || !j.datetime || !j.datetime.length) throw new Error('無台指期分K');
   var ms = j.datetime.map(function (x) { return Date.parse(x); });
-  var st = 0;
-  for (var i = 1; i < ms.length; i++) { if (ms[i] - ms[i - 1] > 120000) st = i; }
+  // 盤別看「最後一根的時刻」，不再用「間隔超過 2 分鐘就是換盤」。
+  // 凌晨成交稀疏，每隔幾分鐘就會斷一次：2026-11-11 03:19→03:22 斷 3 分鐘，
+  // 舊邏輯把 03:22 當成新一盤起點，03:22 < 14:00 就標成「日盤」，
+  // 分時圖也只剩後面那十幾根，整段夜盤走勢被砍掉。
+  // 夜盤 15:00～次日 05:00、日盤 08:45～13:45，兩者不重疊，時刻就分得出來。
+  var isNight = function (x) { var v = x.slice(11, 16); return v >= '15:00' || v <= '05:00'; };
+  var night = isNight(j.datetime[j.datetime.length - 1]);
+  var st = ms.length - 1;
+  // 往回走到同一盤的起點；盤與盤之間至少隔 75 分鐘（日盤收到夜盤開），
+  // 盤內再怎麼疏也不會斷 3 小時，用它當分界不會誤切。
+  while (st > 0 && isNight(j.datetime[st - 1]) === night && ms[st] - ms[st - 1] <= 3 * 3600000) st--;
   var t = [], c = [], avg = [], cv = 0, ca = 0;
   for (var k = st; k < j.datetime.length; k++) {
     t.push(j.datetime[k].slice(11, 16));
@@ -791,8 +800,7 @@ async function loadTxfIntra(ref) {
     avg.push(cv > 0 ? ca / cv : j.Close[k]);   // 開盤第一根若無量，先用收盤頂著
   }
   if (c.length < 3) return (_txfIntra = null);
-  // 盤別看區塊第一根的時刻：夜盤 15:01 起（跨午夜仍屬同一盤），日盤 08:46 起
-  var sess = (t[0] >= '14:00') ? '夜盤' : '日盤';
+  var sess = night ? '夜盤' : '日盤';
   var last = c[c.length - 1];
   _txfIntra = { sess: sess, t: t, c: c, avg: avg, ref: ref, last: last,
     day: j.datetime[st].slice(0, 10), pct: (last - ref) / ref * 100 };
