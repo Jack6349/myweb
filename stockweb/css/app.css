@@ -1354,12 +1354,13 @@ td.cost-even::after  { background: var(--text3); }
 .es-row { cursor: pointer; }
 .es-row-open > td { background: rgba(245,216,122,.07); }
 .es-drow > td { padding: 0 !important; background: var(--bg); }
-.es-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 12px 14px; white-space: normal; cursor: default;
+.es-detail { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); gap: 16px; padding: 12px 14px; white-space: normal; cursor: default;
   position: sticky; left: 0; box-sizing: border-box; }   /* 寬度由 JS 設為可視寬度，左右捲動時留在畫面內 */
 .es-dl .divest-hist { min-height: 220px; }
 .es-evt-t { font-size: 12px; }
 .es-psvg { display: block; }
-@media (max-width: 900px) { .es-detail { grid-template-columns: 1fr; } }
+/* 加了兩欄之後，配息紀錄在窄視窗擠不下（會長出內捲軸）→ 提高上下排的門檻 */
+@media (max-width: 1200px) { .es-detail { grid-template-columns: 1fr; } }
 .es-evt-t .es-fut td { color: var(--accent2); }
 .es-dr .es-evt { max-height: 300px; overflow-y: auto; }
 .es-dhead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
@@ -1971,3 +1972,9 @@ td.cost-even::after  { background: var(--text3); }
 .tx-tif, .tx-dealn { display: block; font-size: 10px; color: var(--text3); line-height: 1.4; }
 /* ETF 評比：代號後的配息頻率（代號欄是文字欄，不影響數字對齊） */
 .es-freq { margin-left: 5px; font-size: 11px; color: var(--text3); }
+
+/* 配息紀錄：現價寫在表上方一次；「距現價」的百分比固定寬度，金額才上下對齊 */
+.es-nowpx { font-size: 12.5px; color: var(--text2); margin: 0 0 6px 2px; }
+.es-nowpx b { color: var(--text); font-size: 14px; }
+.es-nowpx-n { margin-left: 10px; font-size: 11px; color: var(--text3); }
+.es-gappct { display: inline-block; min-width: 5.2em; text-align: right; margin-left: 6px; font-size: .82em; }

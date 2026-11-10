@@ -256,7 +256,7 @@ async function _esBarsOf(code, mkt) {
   var bars = [];
   for (var i = 0; i < syms.length && !bars.length; i++) {
     try {
-      var j = await _esVia('https://query1.finance.yahoo.com/v8/finance/chart/' + syms[i] + '?interval=1d&range=1y', 30000);
+      var j = await _esVia('https://query1.finance.yahoo.com/v8/finance/chart/' + syms[i] + '?interval=1d&range=2y', 30000);
       var res = j.chart && j.chart.result && j.chart.result[0];
       var ts = (res && res.timestamp) || [], cl = (res && res.indicators.quote[0].close) || [];
       for (var k = 0; k < ts.length; k++) if (cl[k] != null) bars.push([new Date(ts[k] * 1000 + 8 * 3600000).toISOString().slice(0, 10), cl[k]]);
@@ -816,9 +816,23 @@ function _esRecTable(code, recs, base, bars) {
   var perYear = step ? 12 / step : null;
   var md = function (iso) { return iso ? iso.slice(2).replace(/-/g, '/') : '—'; };
   var dim = function (t) { return '<span class="dm-dim">' + t + '</span>'; };
-  var h = '<table class="detail-table es-evt-t"><thead><tr><th>除息日</th><th>發放日</th><th class="num">每股配息</th>' +
+  // 現價：整張表同一個數字，寫在表頭一次；每一列改放「距現價」（金額與 %），那個每列不同。
+  var mr = (typeof esMetricsFor === 'function') ? esMetricsFor(code) : null;
+  var nowPx = (mr && mr.px > 0) ? mr.px
+    : ((typeof _rows !== 'undefined' && _rows[code] && _rows[code].close > 0) ? _rows[code].close : null);
+  var h = '<div class="es-nowpx">現價 <b>' + (nowPx != null ? nowPx.toFixed(2) : '—') + '</b>'
+    + '<span class="es-nowpx-n">「距現價」是現價減除息當日收盤，紅＝現在比那天高</span></div>'
+    + '<table class="detail-table es-evt-t"><thead><tr><th>除息日</th><th>發放日</th><th class="num">每股配息</th>' +
+    '<th class="num" title="除息當天的收盤價（日線，近兩年）">除息當日收盤</th>' +
+    '<th class="num" title="現價 − 除息當日收盤，右側為同一個差距的百分比">距現價</th>' +
     '<th class="num" title="當次殖利率：每股配息 ÷ 除息前收盤">當次配</th>' +
     '<th class="num" title="年化殖利率：每股配息 × 年配息次數 ÷ 除息前收盤">年化配</th><th>填息</th></tr></thead><tbody>';
+  // 除息當日收盤：日線裡該日的收盤（除息日一定是交易日，找不到就是超出日線範圍）
+  var exClose = function (ex) {
+    if (!bars || !bars.length) return null;
+    for (var k = 0; k < bars.length; k++) if (bars[k][0] === ex) return bars[k][1];
+    return null;
+  };
   list.slice().reverse().forEach(function (r) {
     var b = base[r.exDate], bp = b && b.base;
     var amt = r.amount;
@@ -832,11 +846,23 @@ function _esRecTable(code, recs, base, bars) {
       : (f.wait ? dim('待收盤資料')
       : (f.pending ? '<span class="up">貼息中 ' + f.days + ' 天　距 ' + f.gap.toFixed(2) + '%</span>'
       : '<span class="down">已填息（' + f.days + ' 天）</span>'))));
+    var exc = fut ? null : exClose(r.exDate);
+    var gap = (exc > 0 && nowPx != null) ? nowPx - exc : null;
+    var gapTd = gap == null
+      ? '<td class="num">' + dim('—') + '</td>'
+      : '<td class="num ' + (gap > 0 ? 'up' : (gap < 0 ? 'down' : '')) + '">'
+        + (gap > 0 ? '+' : (gap < 0 ? '−' : '')) + Math.abs(gap).toFixed(2)
+        + '<span class="es-gappct">' + (gap > 0 ? '+' : (gap < 0 ? '−' : ''))
+        + Math.abs(gap / exc * 100).toFixed(2) + '%</span></td>';
     h += '<tr' + (fut ? ' class="es-fut"' : '') + '><td>' + md(r.exDate) + '</td><td>' + (r.payDate ? md(r.payDate) : dim('—')) + '</td>' +
       '<td class="num">' + (amt != null ? amt.toFixed(3) : dim('待公告')) + '</td>' +
+      '<td class="num">' + (exc > 0 ? exc.toFixed(2) : dim('—')) + '</td>' + gapTd +
       '<td class="num">' + (y1 != null ? y1.toFixed(2) + '%' : dim('—')) + '</td>' +
       '<td class="num">' + (yA != null ? yA.toFixed(2) + '%' : dim('—')) + '</td><td>' + st + '</td></tr>';
   });
   return h + '</tbody></table>' +
-    '<div class="detail-note nb-keep">年配息 ' + (perYear ? perYear + ' 次' : '—') + '；殖利率以除息前收盤計（官方除權息結果表，近 12 個月內才有）；填息以一年日線判定。</div>';
+    '<div class="detail-note nb-keep">年配息 ' + (perYear ? perYear + ' 次' : '—') + '；殖利率以除息前收盤計（官方除權息結果表，近 12 個月內才有）。'
+    + '「除息當日收盤」與「填息」以近兩年日線判定，更早的紀錄超出範圍會是空的。'
+    + '「距現價」是現價減除息當日收盤，它跟「填息」不同：'
+    + '填息比的是除息「前」收盤且只看除息後第一次追上，距現價比的是今天。</div>';
 }
