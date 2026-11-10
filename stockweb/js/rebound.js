@@ -378,7 +378,7 @@ async function startRebound(force) {
     }
   }
   _rbData = { cfg: cfg, codes: codes, idx: idx, series: series, sox: sox, trig: _rbTriggers(idx, cfg) };
-  if (typeof ovPrepare === 'function') { try { await ovPrepare(); } catch (e) { hush('rebound', e); } }
+  if (typeof ovPrepare === 'function') { try { await ovPrepare(force); } catch (e) { hush('rebound', e); } }
   if (typeof bsPrepare === 'function') { try { await bsPrepare(force); } catch (e) { hush('rebound', e); } }
   if (info) info.textContent = '資料日 ' + idx[idx.length - 1].d + '（Yahoo 日線，' + cfg.years + ' 年）';
   rbRender();

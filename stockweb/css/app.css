@@ -2039,3 +2039,4 @@ td.cost-even::after  { background: var(--text3); }
 .bs-slash { color: var(--text3); margin: 0 3px; font-size: 11px; }
 /* 窄視窗收起「已領配息」：累計值、盤中不跳，是頂欄五項裡最不急著看的 */
 @media (max-width: 1460px) { .topbar-totals .tt-div { display: none; } }
+.ov-at { display: inline-block; margin-left: 10px; font-size: 11px; color: var(--text3); }

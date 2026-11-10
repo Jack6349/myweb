@@ -16,7 +16,7 @@
 
 var OV_URL = 'data/night-txf.json';
 var OV_REC_LS = 'overnight_rec_v1';      // 命中率紀錄（預測 vs 實際）
-var _ovNight = null, _ovToday = null, _ovBusy = false, _ovRec = null;
+var _ovNight = null, _ovToday = null, _ovBusy = false, _ovRec = null, _ovAt = null;
 
 // ── 夜盤資料 ──
 async function ovLoadNight() {
@@ -221,7 +221,39 @@ function _ovVolX(bars, i) {
   var m = a.reduce(function (x, y) { return x + y; }, 0) / a.length;
   return m > 0 ? bars[i].v / m : null;
 }
+// 費半要跟總覽抽屉抽同一份價。
+// 舊寫法用日線的最後一根，那一根盤中會更新、但更得比即時價慢：
+// 2026-11-11 04:05 實例，總覽 −1.10%、推估卡 −0.72%，兩邊對不起來。
+// 這裡改走 5 分鐘分時（基準為 chartPreviousClose，與總覽完全同一個定義），
+// 抽不到再退回日線。
+var _ovSoxLive = null;          // { r, at, open }
+
+async function _ovLoadSoxLive() {
+  if (_ovSoxLive) return _ovSoxLive;
+  var url = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ESOX?interval=5m&range=1d';
+  var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
+  var j = await r.json();
+  var res = j.chart && j.chart.result && j.chart.result[0];
+  if (!res) throw new Error('sox intra');
+  var m = res.meta || {}, ts = res.timestamp || [];
+  var cl = (res.indicators && res.indicators.quote && res.indicators.quote[0]
+            && res.indicators.quote[0].close) || [];
+  var ref = m.chartPreviousClose, lastC = null, lastT = null;
+  for (var i = cl.length - 1; i >= 0; i--) {
+    if (cl[i] != null && ts[i] != null) { lastC = cl[i]; lastT = ts[i]; break; }
+  }
+  if (!(ref > 0) || !(lastC > 0)) throw new Error('sox intra empty');
+  // 標台灣時間，與卡上夜盤的時刻同一個時區才比得起來
+  _ovSoxLive = {
+    r: (lastC / ref - 1) * 100,
+    at: new Date((lastT + 8 * 3600) * 1000).toISOString().slice(11, 16),
+    open: (m.marketState === 'REGULAR')
+  };
+  return _ovSoxLive;
+}
+
 function _ovSox() {
+  if (_ovSoxLive) return _ovSoxLive.r;
   var s = _rbData && _rbData.sox;
   return (s && s.last) ? s.last.r : 0;
 }
@@ -291,10 +323,18 @@ function ovHitHtml() {
 }
 
 // ── 畫面 ──
-async function ovPrepare() {
+// force＝按了「重新整理」。不清快取的話夜盤會停在進頁那一刻：
+// 2026-11-11 實例，抽屉已經是 04:05 的價，推估卡還寫 03:49。
+async function ovPrepare(force) {
   if (_ovBusy) return;
   _ovBusy = true;
-  try { await ovLoadNight(); await ovTodayNight(); } finally { _ovBusy = false; }
+  if (force) { _ovToday = null; _ovNight = null; _ovSoxLive = null; }
+  try {
+    await ovLoadNight();
+    await ovTodayNight();
+    try { await _ovLoadSoxLive(); } catch (e) { hush('overnight-sox', e); }
+  } finally { _ovBusy = false; }
+  _ovAt = new Date(Date.now() + 8 * 3600000).toISOString().slice(11, 16);
 }
 function ovHtml(view) {
   if (!_rbData || !_ovNight) return '';
@@ -319,7 +359,12 @@ function ovHtml(view) {
     '（以 ' + (t.base || '—') + ' 日盤收盤為基準'
       + (t.at ? '，最後一根 ' + t.at : '')
       + (t.src === 'live' ? '，券商即時' : '，資料檔') + '）　' +
-    '隔夜費半 <b style="color:' + _rbCol(sox) + '">' + pct(sox) + '</b>' +
+    '隔夜費半 <b style="color:' + _rbCol(sox) + '">' + pct(sox) + '</b>'
+    + (_ovSoxLive
+        ? '（' + _ovSoxLive.at
+            + (_ovSoxLive.open ? '，美股還在盤中，收盤前還會變' : '，已收盤，這是最終值') + '）'
+        : '（日線收盤值，即時價抓不到）')
+    + (_ovAt ? '<span class="ov-at">兩者皆為 ' + _ovAt + ' 抓取，按「重新整理」重抓</span>' : '') +
     '<br>價格以 <b>' + (rows[0] ? rows[0].basePrev : '') + '</b> 的收盤為基準，已對齊可掛的升降單位，直接抄進委託單即可。' +
     '<b>掛限價買進看「預估日內最低」</b>——掛在它之下，成交的前提是當天比預估弱。' +
     (hasAct
