@@ -655,14 +655,24 @@ function renderTopbarTotals() {
   var btn = document.getElementById('dw-btn');
   var pbtn = document.getElementById('pv-btn');
   if (!el) return;
-  var hide = function () {
+  var hide = function (keepBtns) {
     el.innerHTML = '';
+    if (keepBtns) return;                        // 只收損益表，按鈕留著
     if (btn) btn.hidden = true;
     if (pbtn) pbtn.hidden = true;
     if (_dwOpen) { _dwOpen = false; renderDrawer(); }
     if (typeof _pvOpen !== 'undefined' && _pvOpen) { _pvOpen = false; if (typeof pvRender === 'function') pvRender(); }
   };
-  if (_curView === 'risk') { hide(); return; }   // 加減碼報告頁：讓位給台指期徽章
+  // 加減碼報告頁：損益表讓位給台指期徽章，但三顆按鈕留著——
+  // 只剩「記事」一顆會讓人以為別的功能壞了。
+  if (_curView === 'risk' && _sharesMap && Object.keys(_sharesMap).length) {
+    hide(true);
+    if (btn) { btn.hidden = false; btn.textContent = (_dwOpen ? '▴' : '▾') + ' 總覽'; btn.className = 'dw-btn' + (_dwOpen ? ' on' : ''); }
+    if (pbtn) { pbtn.hidden = false; pbtn.textContent = ((typeof _pvOpen !== 'undefined' && _pvOpen) ? '▴' : '▾') + ' 走勢'; pbtn.className = 'dw-btn' + ((typeof _pvOpen !== 'undefined' && _pvOpen) ? ' on' : ''); }
+    renderDrawer();
+    return;
+  }
+  if (_curView === 'risk') { hide(); return; }
   if (!_sharesMap || !Object.keys(_sharesMap).length) { hide(); return; }
   var t = portfolioTotals();
   if (!t.grandTotal) { hide(); return; }
