@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=305">
+<link rel="stylesheet" href="css/app.css?v=306">
 </head>
 <body>
 
@@ -300,6 +300,7 @@
     <div class="tx-subtabs">
       <button id="tx-subtab-account" class="tx-subtab active" onclick="txShowTab('account')">交易帳務</button>
       <button id="tx-subtab-sbl" class="tx-subtab" onclick="txShowTab('sbl')">出借行情</button>
+      <button id="tx-subtab-year" class="tx-subtab" onclick="txShowTab('year')">年度損益</button>
     </div>
     <div id="tx-tab-account">
     <div class="tx-grid">
@@ -339,6 +340,19 @@
         <div id="sbl-banner" class="sbl-banner" style="display:none"></div>
         <div id="sbl-body"></div>
         <div class="detail-note nb-keep">來源：TWSE 借券成交明細（近 20 交易日區間，<b>僅計競價成交</b>，量加權）＋融券借券賣出餘額（上市，盤後）。排除「議借」——那是法人間私下議定（ETF 造市/對沖等），費率可低至 0.05% 且量體極大，混入會嚴重扭曲加權值、對散戶出借無參考價值；該檔若另有議借成交，滑鼠移到費率欄可看對照。費率是「有人借才會產生」的流量資料，多數個股整天無成交，故取區間行情並標示最近成交日；餘額則是累積未還的存量，兩者常不同步屬正常。費率為市場整體行情、不分券商，實拿需扣券商分成，僅供手動掛出借參考；上櫃標的餘額暫不提供。<br>「借出數量」自動偵測（出借中股數＝建倉明細−庫存彙總）；「借出費率％」手動輸入（券商無費率 API），存於本機瀏覽器；年收(元)＝借出股數×現價×費率%概算，實際依每日收盤價計息並扣券商分成。<br>估年收＝以市場競價費率計，已出借者用出借股數（與年收同基準可直接比）、未出借者用總庫存；年增＝估年收−年收。回本(天)＝空窗天數×(現有費率÷費率差)，即召回後以市場費率重新出借、多久補回空窗期損失（與市值無關）。<b>試算僅供參考，不構成投資建議</b>：實際還需考量該檔流動性（你的張數佔市場成交量比重過高可能長期借不出去）、召回期間是否計息、券商分成與召回規則。</div>
+      </div>
+    </div>
+
+    <!-- 年度損益（券商 profitloss_sum：已實現損益逐檔彙總） -->
+    <div id="tx-tab-year" style="display:none">
+      <div class="tx-box">
+        <div class="tx-box-head"><span class="sub-title">年度損益（已實現，逐檔彙總）</span></div>
+        <div class="tr-toolbar">
+          <label>起始<input type="date" id="yp-begin"></label>
+          <label>結束<input type="date" id="yp-end"></label>
+          <button class="btn-query" onclick="loadYearPnl()">查詢</button>
+        </div>
+        <div id="yp-body"></div>
       </div>
     </div>
   </div>
@@ -435,7 +449,7 @@
 <script src="js/auth.js?v=10"></script>
 <script src="js/hush.js?v=6"></script>
 <script src="js/note.js?v=5"></script>
-<script src="js/broker.js?v=23"></script>
+<script src="js/broker.js?v=24"></script>
 <script src="js/fill-toast.js?v=7"></script>
 <script src="js/stream.js?v=99"></script>
 <script src="js/nav-usage.js?v=2"></script>
@@ -447,8 +461,9 @@
 <script src="js/touch.js?v=5"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=27"></script>
-<script src="js/sbl.js?v=12"></script>
-<script src="js/cost-override.js?v=3"></script>
+<script src="js/sbl.js?v=13"></script>
+<script src="js/yearpnl.js?v=1"></script>
+<script src="js/cost-override.js?v=4"></script>
 <script src="js/lent-log.js?v=2"></script>
 <script src="js/params.js?v=6"></script>
 <script src="js/settings.js?v=10"></script>

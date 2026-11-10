@@ -1952,3 +1952,11 @@ td.cost-even::after  { background: var(--text3); }
 /* 交割日當天、尚未到扣款門檻（10:00）的那一列 */
 .tx-settle-due .num { font-weight: 700; }
 .tx-due { color: var(--accent2); font-size: 11px; margin-left: 6px; border: 1px solid var(--accent2); border-radius: 4px; padding: 0 4px; }
+
+/* 年度損益（交易資訊子頁籤） */
+.yp-table th:first-child, .yp-table td:first-child { white-space: normal; }
+.yp-sub { font-size: 10.5px; font-weight: 400; line-height: 1.5; margin-top: 2px; color: var(--text3); }
+.yp-warn { color: var(--accent2); }
+.yp-fix { font-size: 12.5px; color: var(--note); line-height: 1.8; margin: 8px 2px; padding-left: 9px; border-left: 3px solid var(--border); }
+.yp-fix.yp-bad { border-left-color: var(--accent2); color: var(--text2); }
+.yp-table tr.yp-total td { border-top: 2px solid var(--border); font-weight: 700; }

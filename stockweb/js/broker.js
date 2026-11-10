@@ -181,6 +181,13 @@ async function fetchOrderTrades() {
 async function fetchProfitLoss(beginDate, endDate) {
   return brokerPost('profit_loss', { begin_date: beginDate, end_date: endDate, unit: 'Common' });
 }
+// 已實現損益彙總（逐檔；與 profit_loss 同一批資料，合計相同）
+// 該端點不吃 unit 參數，quantity 回的是股數（含零股）。
+// 回 {profitloss_sum: [...]}，不是裸陣列 —— 跟 profit_loss 不同。
+async function fetchProfitLossSum(beginDate, endDate) {
+  var r = await brokerPost('profitloss_sum', { begin_date: beginDate, end_date: endDate });
+  return (r && r.profitloss_sum) || [];
+}
 // 單筆已實現損益明細（需先呼叫過 profit_loss）
 async function fetchProfitLossDetail(detailId) {
   return brokerPost('profit_loss_detail', { detail_id: detailId, unit: 'Common' });
