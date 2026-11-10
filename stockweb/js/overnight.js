@@ -403,6 +403,10 @@ function ovHtml(view) {
         : '') +
     '<br>價格以 <b>' + (rows[0] ? rows[0].basePrev : '') + '</b> 的收盤為基準，已對齊可掛的升降單位，直接抄進委託單即可。' +
     '<b>掛限價買進看「預估日內最低」</b>——掛在它之下，成交的前提是當天比預估弱。' +
+    '<br><b>要看的是「典型範圍」，不是預估收盤那一個數字。</b>' +
+    '兩個訊號只說明得了一半上下的起伏（見「說明力」欄），' +
+    '預估收盤只是這個範圍的中心，不是一個會到的價。' +
+    '範圍越寬的那幾檔，掛價要留的餘裕就越大。' +
     (hasAct
       ? '<br><b style="color:var(--accent2)">這一夜已經開過盤了</b>：' + _ovToday.d
         + ' 的 K 線已存在，右邊列出實際值可以當場對答案。'
@@ -413,8 +417,8 @@ function ovHtml(view) {
     '<th>代號 / 名稱</th><th class="num">前收</th>' +
     '<th class="num" title="當天開盤價的推估">預估開盤</th>' +
     '<th class="num" title="當天盤中最低價的推估。掛限價買進要跟這個比，不是跟收盤比">預估日內最低</th>' +
-    '<th class="num" title="當天收盤價的推估">預估收盤</th>' +
-    '<th class="num" title="收盤推估上下各一個典型偏移，約三分之二的日子落在這個範圍">典型範圍</th>' +
+    '<th class="num" title="範圍的中心。別把它當成一個會到的價">預估收盤</th>' +
+    '<th class="num" title="收盤推估上下各一個典型偏移，約三分之二的日子落在這個範圍。這是要看的數字">典型範圍</th>' +
     (hasAct ? '<th class="num" title="那一天實際的收盤與日內最低">實際收盤</th>'
             + '<th class="num">實際日內最低</th>' : '') +
     '<th class="num" title="市價相對預估淨值：正數代表買貴了。開高跳空當下容易跑到溢價">折溢價</th>' +
@@ -426,8 +430,8 @@ function ovHtml(view) {
       '<td class="num rs-dim">' + _ovPx(r.base) + '</td>' +
       '<td class="num">' + _ovPx(r.oPx) + '<span class="ov-sub">' + pct(r.oPct) + '</span></td>' +
       '<td class="num ov-key">' + _ovPx(r.lPx) + '<span class="ov-sub">' + pct(r.lPct) + '</span></td>' +
-      '<td class="num" style="font-weight:700">' + _ovPx(r.cPx) + '<span class="ov-sub">' + pct(r.cPct) + '</span></td>' +
-      '<td class="num rs-dim">' + _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) + '</td>' +
+      '<td class="num">' + _ovPx(r.cPx) + '<span class="ov-sub">' + pct(r.cPct) + '</span></td>' +
+      '<td class="num ov-range">' + _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) + '</td>' +
       (hasAct ? '<td class="num" style="color:' + _rbCol(r.act ? r.act.cPct : null) + ';font-weight:700">'
           + (r.act ? _ovPx(r.act.c) : '—')
           + (r.act ? '<span class="ov-sub">' + pct(r.act.cPct) + '</span>' : '') + '</td>'
