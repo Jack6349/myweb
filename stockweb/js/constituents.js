@@ -310,6 +310,14 @@ function constEst(code) {
 function openConstituents(code) {
   _constPop = String(code);
   _constEnsureTimers(); // 盤中彈窗加密到 3 秒
+  // detail-modal 是全站共用的。其他開窗的地方都是「先寫標題與內容、再顯示」，
+  // 這裡原本是倒過來的：先顯示，再讓 renderConstPop 沒資料就 return，
+  // 結果視窗會把上一個彈窗（例如線圖）的 DOM 原封不動再開一次。
+  var c = (typeof _contracts !== 'undefined' && _contracts[_constPop]) || null;
+  var title = document.getElementById('detail-title');
+  var body = document.getElementById('detail-body');
+  if (title) title.textContent = _constPop + ' ' + ((c && c.name) || '') + ' — 成份股現價與漲跌';
+  if (body) body.innerHTML = '<div class="modal-loading">載入成份股…</div>';
   document.getElementById('detail-modal').style.display = 'flex';
   renderConstPop();
   refreshConstMissing(code); // 開窗即補抓該檔仍缺的報價（美股首載偶被限流漏抓）
@@ -343,9 +351,15 @@ async function refreshConstMissing(code) {
 }
 function renderConstPop() {
   var m = _constMap[_constPop];
-  if (!m) return;
   var title = document.getElementById('detail-title');
   var body = document.getElementById('detail-body');
+  // 沒資料不能靜默返回：這個視窗是共用的，不寫就是把上一個彈窗留在裡面。
+  // 也要講出「為什麼沒東西」，否則使用者只知道按了沒反應。
+  if (!m) {
+    if (body) body.innerHTML = '<div class="modal-loading">這一檔還沒有成份股資料。'
+      + '清單在「成分股曝險」頁匯入／更新，匯入後這裡才會有內容。</div>';
+    return;
+  }
   var c = (typeof _contracts !== 'undefined' && _contracts[_constPop]) || null;
   title.textContent = _constPop + ' ' + ((c && c.name) || '') + ' — 成份股現價與漲跌';
   var rows = m.rows.slice().sort(function (a, b) { return b.weight - a.weight; });
