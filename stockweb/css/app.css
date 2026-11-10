@@ -2040,3 +2040,5 @@ td.cost-even::after  { background: var(--text3); }
 /* 窄視窗收起「已領配息」：累計值、盤中不跳，是頂欄五項裡最不急著看的 */
 @media (max-width: 1460px) { .topbar-totals .tt-div { display: none; } }
 .ov-at { display: inline-block; margin-left: 10px; font-size: 11px; color: var(--text3); }
+/* 典型範圍才是這張表的主數字：兩個訊號只說明得了一半的起伏，點估值是區間的中心而已 */
+.rb-table td.ov-range { color: var(--text); font-weight: 700; }
