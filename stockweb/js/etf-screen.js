@@ -390,6 +390,7 @@ async function _esLoadExtra() {
   if (!rk) return;
   var codes = rk.short.map(function (r) { return r.code; });
   if (typeof divMetaLoad === 'function') { divMetaLoad(codes).then(renderEtfScreen).catch(function (e) { hush('etf-screen', e); }); }
+  _esLoadFreq().then(renderEtfScreen).catch(function (e) { hush('etf-screen', e); });
   await _esEnsureFill(rk.short);
   renderEtfScreen();
 }
@@ -449,6 +450,50 @@ async function esWatchToggle(code) {
   setTimeout(function () { if (/關注清單/.test(_esMsg)) { _esMsg = ''; renderEtfScreen(); } }, 4000);
 }
 
+// 配息頻率標籤（接在代號後）。
+// 月份一律取自「實際除息紀錄」，不用公開說明書上的月份——
+// 那是收益評價月，比除息早約一個月，直接顯示會被誤認為除息月（配息資料頁已踩過）。
+// 取最近一個完整週期（季配 4 次、半年配 2 次、年配 1 次），
+// 固定用「近 13 個月」的話一半的年配檔會落空。
+// 月配不列月份：紀錄本身不齊（有的近 13 月只出現 4 個月），列出來反而像漏配。
+var _esFreq = null, _esMix = null, _esFreqBusy = false;
+async function _esLoadFreq() {
+  if (_esFreq || _esFreqBusy) return;
+  _esFreqBusy = true;
+  var get = function (u) {
+    return fetch(u, { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+  };
+  try {
+    var r = await Promise.all([get('data/etf-freq.json'), get('data/etf-div-mix.json')]);
+    _esFreq = (r[0] && r[0].map) || {};
+    _esMix = (r[1] && r[1].map) || {};
+  } catch (e) { hush('etf-screen', e); _esFreq = _esFreq || {}; _esMix = _esMix || {}; }
+  _esFreqBusy = false;
+}
+function _esFreqTag(code) {
+  if (!_esFreq) return '';
+  var f = _esFreq[String(code)];
+  if (!f) return '';
+  var s = f.s, t = f.t || '';
+  var wrap = function (txt, tip) { return '<span class="es-freq" title="' + tip + '">(' + txt + ')</span>'; };
+  if (s === 1) return wrap('月配', '配息頻率：月配（來源 MoneyDJ）');
+  if (!s || 12 % s) return t ? wrap(t, '配息頻率：' + t + '（來源 MoneyDJ）') : '';
+  var recs = (_esMix && _esMix[String(code)]) || [];
+  var need = 12 / s;
+  var use = recs.slice().sort(function (a, b) { return a.ex < b.ex ? -1 : 1; }).slice(-need);
+  if (!use.length) return wrap(t, '配息頻率：' + t + '。近三年沒有實際除息紀錄，無法列出月份');
+  var got = {};
+  use.forEach(function (x) { got[+x.ex.slice(5, 7)] = 1; });
+  var last = +use[use.length - 1].ex.slice(5, 7), all = [];
+  for (var k = 0; k < need; k++) all.push(((last - 1 + k * s) % 12) + 1);
+  all.sort(function (a, b) { return a - b; });
+  var txt = all.map(function (m) { return got[m] ? String(m) : m + '?'; }).join(',');
+  if (need === 1) txt += '月';
+  var tip = t + '。月份取自實際除息紀錄（最近 ' + use.length + ' 次，最後一次 '
+    + use[use.length - 1].ex + '）' + (txt.indexOf('?') >= 0 ? '；帶 ? 的是依頻率推估、還沒發生過' : '');
+  return wrap(txt, tip);
+}
+
 function renderEtfScreen() {
   var wrap = document.getElementById('wt-screen-wrap');
   if (!wrap || wrap.style.display === 'none') return;
@@ -485,7 +530,7 @@ function renderEtfScreen() {
     var v = r[c[0]];
     switch (c[2]) {
       case 'int': return v;
-      case 'code': return '<span class="code-link" title="' + (r.name || '').replace(/"/g, '&quot;') + '（點代號看線圖，點列展開配息明細）" onclick="openChartPop(\'' + v + '\')">' + v + '</span>' +
+      case 'code': return '<span class="code-link" title="' + (r.name || '').replace(/"/g, '&quot;') + '（點代號看線圖，點列展開配息明細）" onclick="openChartPop(\'' + v + '\')">' + v + '</span>' + _esFreqTag(v) +
         (held[v] > 0 ? '<span class="es-tag es-held" title="目前持有">持</span>' : '') + (watched[v] ? '<span class="es-tag es-watch" title="已在關注清單">關</span>' : '');
       case 'txt': return v || '';
       case 'f1': return v == null ? dim('—') : '<b>' + v.toFixed(1) + '</b>';

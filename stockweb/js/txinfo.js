@@ -232,16 +232,17 @@ async function loadOrderBox() {
         '<td class="' + (buy ? 'up' : 'down') + '">' + (buy ? '買進' : '賣出') + '</td>' +
         '<td class="num">' + o.quantity + unit + '<span class="tx-gap"></span>' + _txPx(t).toFixed(2) +
           (_txModified(t) != null
-            ? ' <span class="tx-oldpx" title="原始委託價 ' + _txModified(t).toFixed(2) + '，已改價">' +
+            ? '<span class="tx-oldpx" title="原始委託價 ' + _txModified(t).toFixed(2) + '，已改價">原 ' +
               _txModified(t).toFixed(2) + '</span>'
-            : '') + tif + '</td>' +
+            : '') +
+          (tif ? '<span class="tx-tif">' + tif.trim() + '</span>' : '') + '</td>' +
         '<td class="num tx-ddcell">' + _txDdCell(t, code, avg, dq) + '</td>' +
         '<td class="num tx-pnl"' + (dq ? ' data-code="' + code + '" data-avg="' + avg + '" data-sh="' + (dq * mult) + '" data-side="' + (buy ? 'B' : 'S') + '"' : '') + '>' +
           (dq ? _txPnlHtml(code, avg, dq * mult, buy) : '<span class="swap-dim">—</span>') + '</td>' +
         '<td class="num tx-px" data-code="' + code + '">' + _txPxHtml(code) + '</td>' +
         '<td class="num"' + (dealTitle ? ' title="' + dealTitle + '"' : '') + '>' +
           (dq ? '<span class="tx-deal">' + dq + unit + '<span class="tx-gap"></span>' + avg.toFixed(2) + '</span>' +
-            (deals.length > 1 ? ' ×' + deals.length : '') : '—') + '</td>' +
+            (deals.length > 1 ? '<span class="tx-dealn">分 ' + deals.length + ' 筆</span>' : '') : '—') + '</td>' +
         '<td>' + _stPill(t) + '</td>' +
         '<td class="num">' + _txAheadHtml(aheads[ti]) + '</td>' +
         '<td class="tx-dseq">' + ((o.ordno || '').trim() || '—') + '</td>' +
@@ -294,7 +295,7 @@ function _txPxHtml(code) {
 }
 // 成交欄的價差＝現價－成交均價：正紅（現價高於成交價）、負綠、0 黃
 // 差額 ＝ 現價 − 基準價。基準價有兩種：已成交的那部分用成交均價，
-// 還挂在簿上（或完全未成交）的用委託價。兩種混在同一欄，
+// 還掛在簿上（或完全未成交）的用委託價。兩種混在同一欄，
 // 用委託價算的必須標出來，否則看不出哪個是哪個。
 // 顏色汿用同一套：紅＝現價高於基準價（買單就是「還沒輪到你」）。
 function _txDiffHtml(code, base, byOrder) {

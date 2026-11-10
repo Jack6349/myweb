@@ -101,6 +101,59 @@ function _classify(rawCode) {
   return { kind: 'YH', key: 'YH:' + sym, ySym: sym };
 }
 
+// 清單正規化：持股與「關注清單按需抓」兩條路徑共用同一份
+function _constNorm(code, d) {
+  d = d || { source: null, holdings: [] };
+  var rows = (d.holdings || []).map(function (h) {
+    var w = parseFloat(h.weight);
+    if (isNaN(w) || w <= 0) return null;
+    return Object.assign({ code: String(h.code).trim(), name: h.name || '', weight: w }, _classify(h.code));
+  }).filter(Boolean);
+  var rawW = 0; rows.forEach(function (r) { rawW += r.weight; });
+  _constMap[String(code)] = { source: d.source, rows: rows, rawW: rawW, covW: 0, est: null, eligible: false };
+}
+// 台股成份股合約（取 exchange 供快照用；每日快取）
+async function _constCtrLoad() {
+  var ctrKey = 'const_ctr_v1';
+  var cc = null;
+  try { cc = JSON.parse(localStorage.getItem(ctrKey) || 'null'); } catch (e) {}
+  if (!cc || cc.day !== _constDay()) cc = { day: _constDay(), map: {} };
+  var twCodes = {};
+  Object.keys(_constMap).forEach(function (etf) {
+    _constMap[etf].rows.forEach(function (r) { if (r.kind === 'TW') twCodes[r.twCode] = true; });
+  });
+  for (var tc in twCodes) {
+    if (cc.map[tc] === undefined) {
+      try { var c = await fetchContract(tc); cc.map[tc] = { exchange: c.exchange }; }
+      catch (e) { cc.map[tc] = null; } // 查無合約（如已下市）→ 不列入覆蓋
+    }
+  }
+  try { localStorage.setItem(ctrKey, JSON.stringify(cc)); } catch (e) {}
+  _constCtr = cc.map;
+}
+// 按需補一檔：成份股原本只對「持股中」的 ETF 抓，
+// 所以關注清單裡未持有的 ETF 永遠沒資料（成分股曝險頁更新也沒用，它同樣只看持股）。
+// 這裡走與持股相同的順序：手動清單 → 每日快取 → MoneyDJ/CMoney，共用同一份快取。
+async function _constEnsure(code) {
+  code = String(code);
+  if (_constMap[code]) return !!(_constMap[code].rows || []).length;
+  var lsKey = 'const_list_v1', cache = null;
+  try { cache = JSON.parse(localStorage.getItem(lsKey) || 'null'); } catch (e) {}
+  if (!cache || cache.day !== _constDay()) cache = { day: _constDay(), map: {} };
+  var d = cache.map[code];
+  if (HOLDINGS_OVERRIDES[code] && !(d && (d.holdings || []).length)) d = HOLDINGS_OVERRIDES[code];
+  if (!d || !(d.holdings || []).length) {
+    try { d = await fetchEtfConstituents(code); }
+    catch (e) { hush('constituents', e); d = { source: null, holdings: [] }; }
+    cache.map[code] = d;
+    try { localStorage.setItem(lsKey, JSON.stringify(cache)); } catch (e) {}
+  }
+  if (!(d.holdings || []).length) return false;
+  _constNorm(code, d);
+  await _constCtrLoad();
+  return true;
+}
+
 async function initConstituents() {
   if (_constInit) { _constEnsureTimers(); return; }
   _constInit = true;
@@ -139,34 +192,10 @@ async function initConstituents() {
     try { localStorage.setItem(lsKey, JSON.stringify(cache)); } catch (e) {}
 
     // 2) 正規化
-    etfs.forEach(function (code) {
-      var d = cache.map[code] || { source: null, holdings: [] };
-      var rows = (d.holdings || []).map(function (h) {
-        var w = parseFloat(h.weight);
-        if (isNaN(w) || w <= 0) return null;
-        return Object.assign({ code: String(h.code).trim(), name: h.name || '', weight: w }, _classify(h.code));
-      }).filter(Boolean);
-      var rawW = 0; rows.forEach(function (r) { rawW += r.weight; });
-      _constMap[code] = { source: d.source, rows: rows, rawW: rawW, covW: 0, est: null, eligible: false };
-    });
+    etfs.forEach(function (code) { _constNorm(code, cache.map[code]); });
 
     // 3) 台股成份股合約（取 exchange 供快照用；每日快取）
-    var ctrKey = 'const_ctr_v1';
-    var cc = null;
-    try { cc = JSON.parse(localStorage.getItem(ctrKey) || 'null'); } catch (e) {}
-    if (!cc || cc.day !== _constDay()) cc = { day: _constDay(), map: {} };
-    var twCodes = {};
-    Object.keys(_constMap).forEach(function (etf) {
-      _constMap[etf].rows.forEach(function (r) { if (r.kind === 'TW') twCodes[r.twCode] = true; });
-    });
-    for (var tc in twCodes) {
-      if (cc.map[tc] === undefined) {
-        try { var c = await fetchContract(tc); cc.map[tc] = { exchange: c.exchange }; }
-        catch (e) { cc.map[tc] = null; } // 查無合約（如已下市）→ 不列入覆蓋
-      }
-    }
-    try { localStorage.setItem(ctrKey, JSON.stringify(cc)); } catch (e) {}
-    _constCtr = cc.map;
+    await _constCtrLoad();
 
     // 4) 首輪抓價（開盤與否都抓一次，收盤後顯示最後一盤漲跌）＋ 啟動輪詢
     await Promise.allSettled([pollTwConst(true), pollUsConst(true)]);
@@ -307,7 +336,7 @@ function constEst(code) {
 }
 
 // ── 成份股彈窗 ──
-function openConstituents(code) {
+async function openConstituents(code) {
   _constPop = String(code);
   _constEnsureTimers(); // 盤中彈窗加密到 3 秒
   // detail-modal 是全站共用的。其他開窗的地方都是「先寫標題與內容、再顯示」，
@@ -319,6 +348,10 @@ function openConstituents(code) {
   if (title) title.textContent = _constPop + ' ' + ((c && c.name) || '') + ' — 成份股現價與漲跌';
   if (body) body.innerHTML = '<div class="modal-loading">載入成份股…</div>';
   document.getElementById('detail-modal').style.display = 'flex';
+  if (!_constMap[_constPop]) {
+    await _constEnsure(_constPop);
+    if (_constPop !== String(code)) return;   // 等的時候使用者已關窗或改開別檔，不要蓋掉新內容
+  }
   renderConstPop();
   refreshConstMissing(code); // 開窗即補抓該檔仍缺的報價（美股首載偶被限流漏抓）
 }
@@ -356,8 +389,8 @@ function renderConstPop() {
   // 沒資料不能靜默返回：這個視窗是共用的，不寫就是把上一個彈窗留在裡面。
   // 也要講出「為什麼沒東西」，否則使用者只知道按了沒反應。
   if (!m) {
-    if (body) body.innerHTML = '<div class="modal-loading">這一檔還沒有成份股資料。'
-      + '清單在「成分股曝險」頁匯入／更新，匯入後這裡才會有內容。</div>';
+    if (body) body.innerHTML = '<div class="modal-loading">查無這一檔的成份股清單。'
+      + '資料來源（MoneyDJ／CMoney）沒收錄，境外與新上市的主動式 ETF 常見。</div>';
     return;
   }
   var c = (typeof _contracts !== 'undefined' && _contracts[_constPop]) || null;
