@@ -9,20 +9,23 @@ var _sblCache = null; // { date, fee:{code:{w,max,vol}}, bal:{code:{today,prev}}
 // ── 子頁籤切換（交易帳務 / 出借行情）──
 // 子頁籤記在本機：重新整理或從別頁回來時停在上次的頁籤
 var TX_TAB_LS = 'txinfo_tab_v1';
+var TX_TABS = ['account', 'sbl', 'year'];
 function txRestoreTab() {
   var t = null;
   try { t = localStorage.getItem(TX_TAB_LS); } catch (e) {}
-  if (t === 'sbl') txShowTab('sbl');
+  if (TX_TABS.indexOf(t) > 0) txShowTab(t);
 }
 function txShowTab(tab) {
-  if (tab !== 'sbl') tab = 'account';
+  if (TX_TABS.indexOf(tab) < 0) tab = 'account';
   try { localStorage.setItem(TX_TAB_LS, tab); } catch (e) {}
-  var acc = tab === 'account';
-  document.getElementById('tx-tab-account').style.display = acc ? '' : 'none';
-  document.getElementById('tx-tab-sbl').style.display = acc ? 'none' : '';
-  document.getElementById('tx-subtab-account').classList.toggle('active', acc);
-  document.getElementById('tx-subtab-sbl').classList.toggle('active', !acc);
-  if (!acc && !_sblLoaded) startSbl();
+  TX_TABS.forEach(function (t) {
+    var pane = document.getElementById('tx-tab-' + t), btn = document.getElementById('tx-subtab-' + t);
+    if (pane) pane.style.display = (t === tab) ? '' : 'none';
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  // 進去才載：兩者都要打外部（TWSE／券商），不在進頁時一次全抓
+  if (tab === 'sbl' && !_sblLoaded) startSbl();
+  if (tab === 'year' && typeof startYearPnl === 'function') startYearPnl();
 }
 
 function _sblThr() {

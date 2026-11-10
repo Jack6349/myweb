@@ -56,6 +56,20 @@ function coGet(code, date) {
   return (typeof v === 'number' && v >= 0) ? v : null;
 }
 
+// 某代號設定過的所有認購價（去重）。年度損益用：
+// 彙總沒有日期，只有「該檔只設過一個單價」時才能確定地還原成本。
+function coPricesOf(code) {
+  var m = _coMap || _coLocal() || CO_SEED;
+  var e = m[String(code)];
+  if (!e) return [];
+  var out = [];
+  Object.keys(e).forEach(function (d) {
+    var v = e[d];
+    if (typeof v === 'number' && v >= 0 && out.indexOf(v) < 0) out.push(v);
+  });
+  return out;
+}
+
 async function coSet(code, date, px) {
   await coLoad();
   code = String(code).toUpperCase().trim();
