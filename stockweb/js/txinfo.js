@@ -198,7 +198,7 @@ async function loadOrderBox() {
     }
     var buyAmt = 0, sellAmt = 0, buyOpen = 0, sellOpen = 0;
     var html = '<div class="tx-otable-wrap"><table class="tx-otable"><thead><tr>' +
-      '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num" title="現價 － 成交均價。紅＝現價高於成交價，綠＝低於">差額</th><th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：(成交均價－現價)×股數×(1−手續費－交易稅)，正＝賣在現價之上。兩邊都扣賣出成本，同價為 0">損益<span class="sort-ind">↕</span></th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量、成交均價；與現價的差額在委託後面那一欄">成交</th>' +
+      '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num" title="現價 － 基準價。已成交部分的基準價是成交均價；&#10;未成交（含已取消、失敗）用委託價，標「對委託價」；&#10;部分成交兩個都列，小字那個是剩餘量。&#10;紅＝現價高於基準價（買單即尚未輪到），綠＝低於">差額</th><th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：(成交均價－現價)×股數×(1−手續費－交易稅)，正＝賣在現價之上。兩邊都扣賣出成本，同價為 0">損益<span class="sort-ind">↕</span></th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量、成交均價；與現價的差額在委託後面那一欄">成交</th>' +
       '<th class="sort-th" data-key="status" onclick="txSortCol(\'status\')">狀態<span class="sort-ind">↕</span></th>' + '<th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
       '<th>書號</th>' + '<th class="sort-th num" data-key="time" onclick="txSortCol(\'time\')">委託時間<span class="sort-ind">↕</span></th>' + '</tr></thead><tbody>';
     var aheads = await Promise.all(trades.map(function (t) { return _txAhead(t, trades).catch(function () { return null; }); }));
@@ -235,9 +235,7 @@ async function loadOrderBox() {
             ? ' <span class="tx-oldpx" title="原始委託價 ' + _txModified(t).toFixed(2) + '，已改價">' +
               _txModified(t).toFixed(2) + '</span>'
             : '') + tif + '</td>' +
-        '<td class="num tx-ddcell">' +
-          (dq ? '<span class="tx-dd" data-code="' + code + '" data-avg="' + avg + '">' + _txDiffHtml(code, avg) + '</span>'
-              : '<span class="swap-dim">—</span>') + '</td>' +
+        '<td class="num tx-ddcell">' + _txDdCell(t, code, avg, dq) + '</td>' +
         '<td class="num tx-pnl"' + (dq ? ' data-code="' + code + '" data-avg="' + avg + '" data-sh="' + (dq * mult) + '" data-side="' + (buy ? 'B' : 'S') + '"' : '') + '>' +
           (dq ? _txPnlHtml(code, avg, dq * mult, buy) : '<span class="swap-dim">—</span>') + '</td>' +
         '<td class="num tx-px" data-code="' + code + '">' + _txPxHtml(code) + '</td>' +
@@ -295,13 +293,38 @@ function _txPxHtml(code) {
   return '<span class="' + cls + '">' + (+px).toFixed(2) + pctTxt + '</span>';
 }
 // 成交欄的價差＝現價－成交均價：正紅（現價高於成交價）、負綠、0 黃
-function _txDiffHtml(code, avg) {
+// 差額 ＝ 現價 − 基準價。基準價有兩種：已成交的那部分用成交均價，
+// 還挂在簿上（或完全未成交）的用委託價。兩種混在同一欄，
+// 用委託價算的必須標出來，否則看不出哪個是哪個。
+// 顏色汿用同一套：紅＝現價高於基準價（買單就是「還沒輪到你」）。
+function _txDiffHtml(code, base, byOrder) {
   var px = _txPxOf(code);
-  if (px == null || !(avg > 0)) return '';
-  var d = Math.round((px - avg) * 100) / 100;
+  if (px == null || !(base > 0)) return '<span class="swap-dim">—</span>';
+  var d = Math.round((px - base) * 100) / 100;
   var cls = d > 0 ? 'up' : (d < 0 ? 'down' : 'tx-flat');
-  return '<span class="' + cls + '">' + (d > 0 ? '+' : '') + d.toFixed(2) + '</span>';
+  return '<span class="' + cls + '">' + (d > 0 ? '+' : '') + d.toFixed(2) + '</span>'
+    + (byOrder ? '<span class="tx-ddbase">對委託價</span>' : '');
 }
+// 差額那一格。無論是否成交都算：
+//   全部未成交（含已取消／失敗）→ 對委託價
+//   部分成交             → 主行對成交均價，小字再給剩餘量對委託價的那一個
+//   全部成交             → 只有成交均價
+// 部分成交只留一個的話，改過價或分批成交時兩者差很多，等於藏掉一半。
+// 委託價用 _txPx（改價後的有效價），與「委託」欄顯示的一致。
+function _txDdCell(t, code, avg, dq) {
+  var o = t.order || {}, s = t.status || {};
+  var ordPx = _txPx(t);
+  var openQ = (o.quantity || 0) - (s.deal_quantity || 0);
+  var span = function (base, byOrder) {
+    return '<span class="tx-dd" data-code="' + code + '" data-avg="' + base + '"'
+      + (byOrder ? ' data-basis="order"' : '') + '>' + _txDiffHtml(code, base, byOrder) + '</span>';
+  };
+  if (!dq) return span(ordPx, 1);
+  var h = span(avg, 0);
+  if (openQ > 0) h += '<div class="tx-dd2">' + span(ordPx, 1) + '</div>';
+  return h;
+}
+
 // 成交後損益（元）：費率與換股試算／總現值同基準
 //   買進：現價×股數×(1−賣出手續費與交易稅) − 成交均價×股數×(1＋買進手續費)  ← 等同持股庫存明細的未實現損益
 //   賣出：(成交均價 − 現價)×股數×(1−賣出手續費與交易稅)  ← 賣出實拿 vs 留到現在才賣實拿
@@ -375,7 +398,8 @@ async function _txPxTick() {
   var sumEl = document.getElementById('tx-pnl-sum');
   if (sumEl) { var sh2 = _txPnlSumHtml(); if (sumEl.innerHTML !== sh2) sumEl.innerHTML = sh2; }
   document.querySelectorAll('#tx-order-body .tx-dd[data-code]').forEach(function (sp) {
-    var html = _txDiffHtml(sp.getAttribute('data-code'), +sp.getAttribute('data-avg'));
+    var html = _txDiffHtml(sp.getAttribute('data-code'), +sp.getAttribute('data-avg'),
+                           sp.getAttribute('data-basis') === 'order');
     if (sp.innerHTML !== html) sp.innerHTML = html;
   });
 }
