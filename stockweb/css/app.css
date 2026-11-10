@@ -1963,4 +1963,6 @@ td.cost-even::after  { background: var(--text3); }
 
 /* 委託差額：部分成交時第二行是剩餘量對委託價的差額 */
 .tx-dd2 { margin-top: 1px; }
-.tx-ddbase { font-size: 10px; color: var(--text3); margin-left: 4px; }
+/* 基準標記另起一行放數字下方：inline 接在金額後面會把數字往左推，
+   備註長度不一的列就對不齊，整欄無法上下掃讀比大小。數字欄一律如此。 */
+.tx-ddbase { display: block; font-size: 10px; color: var(--text3); line-height: 1.4; margin-top: 1px; }
