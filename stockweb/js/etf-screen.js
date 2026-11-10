@@ -420,6 +420,7 @@ var ES_COLS = [
   ['y1', '單次配', 'pct', '單次殖利率：最近一次配息 ÷ 現價'],
   ['yEst', '預估年配', 'pct', '預估年殖利率：最近一次配息 × 年配息次數 ÷ 現價'],
   ['y12', '近12月配', 'pct', '近 12 個月殖利率：近 12 個月實際配息合計 ÷ 現價'],
+  ['n12', '已配次數', 'cnt', '近 12 個月內已除息次數。新上市的次數不足，「近 12 月配」會因此偏低'],
   ['fill', '填息率', 'fill', '近 12 個月：已填息次數 ÷ 除息次數（除息後收盤回到除息前收盤即算填息）'],
   ['fillDays', '平均填息', 'days', '已填息者平均花幾個交易日'],
   ['g6', '半年價格', 'sgn', '不含配息的價格變化：負值代表本金被侵蝕'],
@@ -511,27 +512,37 @@ function renderEtfScreen() {
   if (!_esBase) { wrap.innerHTML = h + '<div class="modal-loading">' + (_esMsg || '讀取中…') + '</div>'; return; }
 
   var rk = _esRank();
-  var rows = rk.top.slice();
+  // 新上市不再另列一張表：兩張表各自有內部捲軸，滑鼠停在哪裡決定捲到誰。
+  // 合一之後預設依「綜合」排，新上市沒分數會沉底，看起來跟分開差不多；
+  // 真正的差別在於改成依「預估年配」等欄位排序時，新舊會交錯直接比 —— 兩張表做不到。
+  var rows = rk.top.concat(rk.fresh);
   var key = _esSort.replace(/(Asc|Desc)$/, ''), asc = /Asc$/.test(_esSort);
+  // 新上市沒有名次，同值時用它做次序會拿到 undefined；給一個排在所有名次之後的值
+  var rnk = function (r) { return r.rank == null ? 9999 : r.rank; };
   if (key !== 'score') {
     rows.sort(function (a, b) {
       var va = a[key], vb = b[key];
-      if (va == null && vb == null) return a.rank - b.rank;
+      if (va == null && vb == null) return rnk(a) - rnk(b);
       if (va == null) return 1;
       if (vb == null) return -1;
       var c = typeof va === 'string' ? va.localeCompare(vb, undefined, { numeric: true }) : va - vb;
-      return (asc ? c : -c) || a.rank - b.rank;
+      return (asc ? c : -c) || rnk(a) - rnk(b);
     });
-  } else if (asc) rows.reverse();
+  } else {
+    rows.sort(function (a, b) { return rnk(a) - rnk(b); });
+    if (asc) rows.reverse();
+  }
 
   var dim = function (s) { return '<span class="dm-dim">' + s + '</span>'; };
   var sg = function (v, d) { if (v == null) return dim('—'); var cls = v > 0 ? 'up' : (v < 0 ? 'down' : ''); return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(d == null ? 2 : d) + '%</span>'; };
   var fmt = function (r, c) {
     var v = r[c[0]];
     switch (c[2]) {
-      case 'int': return v;
+      case 'int': return v == null ? dim('—') : v;   // 新上市沒有名次，不能讓它印出 undefined
       case 'code': return '<span class="code-link" title="' + (r.name || '').replace(/"/g, '&quot;') + '（點代號看線圖，點列展開配息明細）" onclick="openChartPop(\'' + v + '\')">' + v + '</span>' + _esFreqTag(v) +
-        (held[v] > 0 ? '<span class="es-tag es-held" title="目前持有">持</span>' : '') + (watched[v] ? '<span class="es-tag es-watch" title="已在關注清單">關</span>' : '');
+        (held[v] > 0 ? '<span class="es-tag es-held" title="目前持有">持</span>' : '') + (watched[v] ? '<span class="es-tag es-watch" title="已在關注清單">關</span>' : '')
+        // 不標的話，一排「—」會被讀成「這檔資料抓不到」，而不是「它還沒有一年歷史」
+        + (r.young ? '<span class="es-tag es-new-tag" title="上市未滿一年，無一年期報酬與填息紀錄，不列入排名">新</span>' : '');
       case 'txt': return v || '';
       case 'f1': return v == null ? dim('—') : '<b>' + v.toFixed(1) + '</b>';
       case 'f2': return v == null ? dim('—') : v.toFixed(2);
@@ -570,61 +581,25 @@ function renderEtfScreen() {
     '<dt>綜合分</dt><dd>各指標在同類中的<b>百分位</b>加權：' +
     '<code>一年含息 25 ＋ 近12月殖利率 25 ＋ 填息率 20 ＋ 一年價格 15 ＋ 規模 10 ＋ 內扣費用 5</code>。' +
     '填息率與費用只對前 ' + ES_TOP1 + ' 名計算。</dd>' +
-    '<dt>範圍</dt><dd>本類共 ' + rk.total + ' 檔，上市未滿一年 ' + rk.young + ' 檔不列入排名，取前 ' + ES_TOP + ' 名；' +
+    '<dt>範圍</dt><dd>本類共 ' + rk.total + ' 檔：排名前 ' + ES_TOP + ' 名，加上標「新」的 ' + rk.young + ' 檔全列。' +
     '已排除槓桿／反向與期貨商品型。</dd>' +
+    '<dt>標「新」的那幾檔怎麼看</dt><dd>上市未滿一年，缺一年期報酬與填息紀錄，' +
+    '綜合、名次、填息率、一年價格、一年含息、內扣這幾欄會是「—」，' +
+    '<b>那是沒有資格算，不是資料抓不到</b>。殖利率要看「預估年配」：' +
+    '「近 12 月配」會因為配息次數不足而偏低（旁邊的「已配次數」就是這個意思）。' +
+    '預設依綜合排序時它們會在最下面；改依預估年配或規模排，就會跟老牌的交錯比較。</dd>' +
     '<dt>讀法</dt><dd>含息報酬未計再投入；價格成長為負代表淨值被配息侵蝕。</dd>' +
     '<dt>資料來源</dt><dd>TWSE／TPEx 官方行情與除權息結果表、Yahoo 日線（填息）。歷史統計，非投資建議。</dd>' +
     '</dl></div>';
 
-  // ── 新上市 ETF（上市未滿一年，不排名）──
-  if (rk.fresh.length) {
-    var nk = _esNewSort.replace(/(Asc|Desc)$/, ''), nasc = /Asc$/.test(_esNewSort);
-    var fresh = rk.fresh.slice().sort(function (a, b) {
-      var va = a[nk], vb = b[nk];
-      if (va == null && vb == null) return 0;
-      if (va == null) return 1;
-      if (vb == null) return -1;
-      var c = typeof va === 'string' ? va.localeCompare(vb, undefined, { numeric: true }) : va - vb;
-      return nasc ? c : -c;
-    });
-    h += '<div class="sec-title es-new-title">新上市 ETF（上市未滿一年，不列入排名）<span class="rf-cmnote">' + fresh.length + ' 檔</span></div>' +
-      '<div class="inv-table-wrap"><table class="inv-table es-table es-new"><thead><tr>' + ES_NCOLS.map(function (c) {
-        var sortable = c[0] !== 'watch';
-        var on = sortable && _esNewSort.replace(/(Asc|Desc)$/, '') === c[0];
-        return '<th class="' + (c[0] === 'code' ? '' : 'num ') + (sortable ? 'sort-th' + (on ? ' sorted' : '') : '') + '"' +
-          (sortable ? ' onclick="esNewSortCol(\'' + c[0] + '\')"' : '') + (c[3] ? ' title="' + c[3] + '"' : '') + '>' + c[1] +
-          (sortable ? '<span class="sort-ind">' + (on ? (nasc ? '▲' : '▼') : '↕') + '</span>' : '') + '</th>';
-      }).join('') + '</tr></thead><tbody>';
-    fresh.forEach(function (r) {
-      var open = _esOpen === r.code;
-      h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="esRowClick(event,\'' + r.code + '\')">' + ES_NCOLS.map(function (c) {
-        return '<td class="' + (c[0] === 'code' ? 'inv-code' : (c[0] === 'watch' ? 'es-wcell' : 'num')) + '">' + fmt(r, c) + '</td>';
-      }).join('') + '</tr>';
-      if (open) h += '<tr class="es-drow"><td colspan="' + ES_NCOLS.length + '" class="es-dslot" data-code="' + r.code + '"></td></tr>';
-    });
-    h += '</tbody></table></div>' +
-      '<div class="detail-note"><dl>' +
-      '<dt>為何分開列</dt><dd>上市未滿一年，缺一年期報酬與填息紀錄，與老牌 ETF 混排不可比。</dd>' +
-      '<dt>看哪個欄位</dt><dd>殖利率看「預估年配」；近 12 月配會因配息次數不足而偏低。點列展開配息明細。</dd>' +
-      '</dl></div>';
-  }
   // 重繪時保留已展開的明細（圖已畫好、資料已載入），不重建 → 即時價格每 30 秒刷新也不會閃
   var keep = _esOpen ? wrap.querySelector('.es-detail[data-code="' + _esOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
   esMountDetail(wrap.querySelector('.es-dslot'), keep);
 }
-// 新上市 ETF 表排序（存本機，預設依預估年配由高到低）
-var ES_NSORT_LS = 'etf_screen_new_sort_v1';
-var _esNewSort = (function () {
-  try { var v = localStorage.getItem(ES_NSORT_LS); if (/^(code|px|y1|yEst|n12|g6|tr6|size|prem)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
-  return 'yEstDesc';
-})();
-function esNewSortCol(k) {
-  _esNewSort = (_esNewSort === k + 'Desc') ? k + 'Asc' : k + 'Desc';
-  try { localStorage.setItem(ES_NSORT_LS, _esNewSort); } catch (e) {}
-  renderEtfScreen();
-}
+// 新上市 ETF 已併入主表，ES_NCOLS 僅供關注頁籤參考欄位定義使用
+try { localStorage.removeItem('etf_screen_new_sort_v1'); } catch (e) {}   // 舊的排序記憶已無用
 var ES_NCOLS = [
   ['watch', '關注', 'watch', '加入／移出關注清單'],
   ['code', '代號', 'code', ''],

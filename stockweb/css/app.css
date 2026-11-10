@@ -2007,3 +2007,4 @@ td.cost-even::after  { background: var(--text3); }
 /* 隔夜推估：價格為主、百分比為輔。小字固定寬度，價格才上下對齊 */
 .ov-sub { display: inline-block; min-width: 4.8em; text-align: right; margin-left: 6px; font-size: .8em; color: var(--text3); }
 .rb-table td.ov-key { color: var(--accent2); font-weight: 700; }
+.es-tag.es-new-tag { background: rgba(120,180,245,.2); color: #8fc4ff; }
