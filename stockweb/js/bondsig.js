@@ -92,16 +92,23 @@ function bsHtml() {
     return '<div class="modal-loading">HYG 日線取不到（代理服務無回應）。'
       + '<button class="btn-query" onclick="startRebound(true)">重試</button></div>';
   }
-  var L = _bsHyg.last, up = L && L.r > 0;
-  // 今天偏哪一邊，就拿那一組樣本當主要數字——這是 HYG 在這裡唯一的用途
-  var sel = up ? function (v) { return v != null && v > 0; } : function (v) { return v != null && v < 0; };
+  var L = _bsHyg.last;
+  // 今天偏哪一邊，就拿那一組樣本當主要數字——這是 HYG 在這裡唯一的用途。
+  // 平盤或取不到時不該歸到任一邊，改用全部日子；門檻用「剛好為零」，不自己訂一個平盤區間。
+  var dir = (!L || L.r == null || L.r === 0) ? 0 : (L.r > 0 ? 1 : -1);
+  var up = dir > 0;
+  var sel = dir === 0 ? function () { return true; }
+    : (up ? function (v) { return v != null && v > 0; } : function (v) { return v != null && v < 0; });
   var selAll = function () { return true; };
   var h = '<div class="rb-sox">';
   h += '<div class="sec-title">債券：掛單價差的成交率</div>';
   h += '<div class="rb-sox-hd on">隔夜 HYG <b style="color:' + _rbCol(L ? L.r : null) + '">'
     + (L ? ((L.r > 0 ? '+' : '−') + Math.abs(L.r).toFixed(2) + '%') : '—') + '</b>（' + (L ? L.d : '—') + '）。'
-    + '下表是<b>' + (up ? 'HYG 上漲' : 'HYG 下跌') + '的那些日子</b>的成交率 —— 今天偏這一邊，用同方向的樣本才有參考價值；'
-    + '括號內是不分條件的全部日子。<br>'
+    + (dir === 0
+        ? '下表是<b>全部日子</b>的成交率：HYG 平盤或取不到，沒有方向可以挑樣本。'
+        : '下表是<b>' + (up ? 'HYG 上漲' : 'HYG 下跌') + '的那些日子</b>的成交率 —— 今天偏這一邊，用同方向的樣本才有參考價值；'
+          + '括號內是不分條件的全部日子。')
+    + '<br>'
     + '價格已對齊升降單位，直接抄進委託單。<b>買進看日內最低有沒有跌到你的掛價，賣出看日內最高有沒有漲到。</b>'
     + '這裡不預測漲跌，只回答「掛在這個價位，歷史上多少比例的日子碰得到」。</div>';
 
