@@ -92,7 +92,8 @@ async function ovTodayNight() {
     var drive = (nd > lastDayDate) ? nd
       : new Date(Date.parse(lastDayDate) + 86400000).toISOString().slice(0, 10);
     _ovToday = { d: drive, pct: (cl[nIdx] / baseClose - 1) * 100, src: 'live',
-                 base: lastDayDate, at: dt[nIdx].slice(11, 16), pending: pending };
+                 base: lastDayDate, at: dt[nIdx].slice(11, 16), pending: pending,
+                 bp: baseClose, np: cl[nIdx] };
   } catch (e) { hush('overnight', e); _ovToday = fallback(); }
   return _ovToday;
 }
@@ -252,6 +253,31 @@ async function _ovLoadSoxLive() {
   return _ovSoxLive;
 }
 
+// 卡上的夜盤漲幅與總覽永遠差一點，因為兩邊的基準不同：
+//   這裡＝前一交易日日盤 13:45 的最後成交價
+//   總覽＝期交所參考價（結算價），與券商 App 一致
+// 2026-11-11 實測：成交價兩邊都是 42,522，但基準 42,623 vs 42,646，
+// 算出 −0.24% 與 −0.29%。不是其中一邊沒重抓。
+//
+// 為何不改成跟總覽同一個基準：這一卡的系數是用 446 天「對前一日日盤
+// 收盤」迴歸出來的，而參考價沒有歷史資料可以重新迴歸。
+// 此外現貨市場自己的漲跌也是對前一日收盤，要推現貨就該用收盤當基準。
+// 所以兩個數字並列、各標各自的基準，不讓使用者自己猜哪一個是舊的。
+var _ovRef = null;              // { pct, px, at }
+
+async function _ovLoadRef() {
+  if (_ovRef) return _ovRef;
+  var r = await fetch(API + '/api/v1/data/snapshots', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contracts: [{ security_type: 'FUT', exchange: 'TAIFEX', code: 'TXFR1' }] })
+  });
+  if (!r.ok) throw new Error('snapshot HTTP ' + r.status);
+  var a = await r.json(), q = a && a[0];
+  if (!q || q.close == null || q.change_price == null) throw new Error('snapshot empty');
+  _ovRef = { pct: q.change_rate, px: q.close - q.change_price, at: (q.datetime || '').slice(11, 16) };
+  return _ovRef;
+}
+
 function _ovSox() {
   if (_ovSoxLive) return _ovSoxLive.r;
   var s = _rbData && _rbData.sox;
@@ -328,11 +354,12 @@ function ovHitHtml() {
 async function ovPrepare(force) {
   if (_ovBusy) return;
   _ovBusy = true;
-  if (force) { _ovToday = null; _ovNight = null; _ovSoxLive = null; }
+  if (force) { _ovToday = null; _ovNight = null; _ovSoxLive = null; _ovRef = null; }
   try {
     await ovLoadNight();
     await ovTodayNight();
     try { await _ovLoadSoxLive(); } catch (e) { hush('overnight-sox', e); }
+    try { await _ovLoadRef(); } catch (e) { hush('overnight-ref', e); }
   } finally { _ovBusy = false; }
   _ovAt = new Date(Date.now() + 8 * 3600000).toISOString().slice(11, 16);
 }
@@ -355,8 +382,9 @@ function ovHtml(view) {
   };
   var h = '<div class="rb-sox">';
   h += '<div class="sec-title">隔夜推估（明天的價格）</div>';
-  h += '<div class="rb-sox-hd on">台指期夜盤 <b style="color:' + _rbCol(t.pct) + '">' + pct(t.pct) + '</b>' +
-    '（以 ' + (t.base || '—') + ' 日盤收盤為基準'
+  var nf = function (v) { return v == null ? '—' : Math.round(v).toLocaleString('zh-TW'); };
+  h += '<div class="rb-sox-hd on">台指期夜盤 <b style="color:' + _rbCol(t.pct) + '">' + pct(t.pct) + '</b>'
+    + '（' + nf(t.np) + '，對 ' + (t.base || '—') + ' 日盤收盤 ' + nf(t.bp)
       + (t.at ? '，最後一根 ' + t.at : '')
       + (t.src === 'live' ? '，券商即時' : '，資料檔') + '）　' +
     '隔夜費半 <b style="color:' + _rbCol(sox) + '">' + pct(sox) + '</b>'
@@ -364,7 +392,15 @@ function ovHtml(view) {
         ? '（' + _ovSoxLive.at
             + (_ovSoxLive.open ? '，美股還在盤中，收盤前還會變' : '，已收盤，這是最終值') + '）'
         : '（日線收盤值，即時價抓不到）')
-    + (_ovAt ? '<span class="ov-at">兩者皆為 ' + _ovAt + ' 抓取，按「重新整理」重抓</span>' : '') +
+    + (_ovAt ? '<span class="ov-at">兩者皆為 ' + _ovAt + ' 抓取，按「重新整理」重抓</span>' : '')
+    + (_ovRef && _ovRef.pct != null
+        ? '<br><b>跟總覽的百分比不一樣是正常的</b>：總覽與券商 App 顯示 '
+            + pct(_ovRef.pct) + '，那是對期交所參考價 ' + nf(_ovRef.px)
+            + '；這裡對的是日盤收盤 ' + nf(t.bp)
+            + '。成交價兩邊同一個，差的是分母。'
+            + '這一卡用收盤，因為要推的 ETF 本身的漲跌也是對前一日收盤，'
+            + '而且系數是用這個基準迴歸出來的。'
+        : '') +
     '<br>價格以 <b>' + (rows[0] ? rows[0].basePrev : '') + '</b> 的收盤為基準，已對齊可掛的升降單位，直接抄進委託單即可。' +
     '<b>掛限價買進看「預估日內最低」</b>——掛在它之下，成交的前提是當天比預估弱。' +
     (hasAct
