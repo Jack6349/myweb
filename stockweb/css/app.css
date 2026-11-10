@@ -1983,3 +1983,23 @@ td.cost-even::after  { background: var(--text3); }
 /* 關注按鈕：未關注給淺橘底色，掃一眼就知道哪幾檔還沒加入 */
 .es-wbtn.off { background: rgba(245, 166, 35, .18); border-color: rgba(245, 166, 35, .55); color: var(--text); }
 .es-wbtn.off:hover { background: rgba(245, 166, 35, .3); }
+
+/* 記事（頂欄抽屜） */
+.nt-dw { max-width: 1100px; }
+.nt-badge { display: inline-block; margin-left: 5px; min-width: 16px; padding: 0 4px; border-radius: 8px;
+  background: var(--accent2); color: #1b2436; font-size: 11px; font-weight: 700; text-align: center; }
+.nt-form, .nt-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 2px 8px; }
+.nt-in { background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 5px;
+  padding: 4px 6px; font-size: 12.5px; }
+.nt-text { flex: 1 1 260px; min-width: 180px; }
+.nt-code { width: 150px; }
+.nt-table { font-size: 12.5px; }
+.nt-table .nt-ck { width: 28px; text-align: center; }
+.nt-table .nt-tx { white-space: normal; }
+.nt-cat { display: inline-block; margin-right: 5px; padding: 0 5px; border-radius: 4px;
+  background: rgba(245,216,122,.14); color: var(--accent2); font-size: 11px; }
+.nt-page { color: var(--accent); cursor: pointer; text-decoration: underline dotted; }
+.nt-ok { border-color: rgba(120,200,140,.55); }
+.nt-del { border-color: rgba(230,120,120,.55); }
+.nt-done { margin-top: 10px; }
+.nt-done > summary { cursor: pointer; font-size: 12.5px; color: var(--text2); padding: 4px 2px; }

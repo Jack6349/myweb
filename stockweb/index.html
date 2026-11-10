@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=312">
+<link rel="stylesheet" href="css/app.css?v=313">
 </head>
 <body>
 
@@ -24,6 +24,7 @@
   <div class="topbar-right">
     <button id="pv-btn" class="dw-btn" hidden onclick="pvToggle()" title="總現值走勢">▾ 走勢</button>
     <button id="dw-btn" class="dw-btn" hidden onclick="toggleDrawer()" title="盤勢、部位與配置">▾ 總覽</button>
+    <button id="nt-btn" class="dw-btn" onclick="ntToggle()" title="待辦與觀察事項">▾ 記事</button>
     <span id="stream-info" class="stream-info"></span>
     <span id="conn-status" class="conn-status">連線檢查中…</span>
     <!-- 安燈：被吞掉的錯誤有幾件。沒事時整個不顯示（見 js/hush.js） -->
@@ -55,6 +56,7 @@
 <!-- 頂欄抽屜：零高度的定位容器，抽屜浮在內容上方，展開時下方表格不位移 -->
 <div class="dw-anchor"><div id="dw" class="dw" hidden></div></div>
 <div class="dw-anchor"><div id="pv" class="dw pv-dw" hidden></div></div>
+<div class="dw-anchor"><div id="nt" class="dw nt-dw" hidden></div></div>
 
 <div class="main-area">
 
@@ -476,6 +478,7 @@
 <script src="js/etf-new.js?v=3"></script>
 <script src="js/chart.js?v=39"></script>
 <script src="js/pvhist.js?v=25"></script>
+<script src="js/notes.js?v=1"></script>
 <script src="js/order.js?v=4"></script>
 <script src="js/div-mix.js?v=7"></script>
 <script src="js/div-meta.js?v=15"></script>
