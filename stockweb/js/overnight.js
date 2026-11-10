@@ -49,19 +49,50 @@ async function ovTodayNight() {
     if (!r.ok) throw new Error('kbars HTTP ' + r.status);
     var j = await r.json();
     var dt = j.datetime || [], cl = j.Close || [];
-    var day = {}, night = {};
+    // 要的是「還沒被任何現貨盤消化掉的那一夜」：
+    // 找最後一個已收盤的日盤當基準，再取它之後的最後一根夜盤價。
+    //
+    // 舊寫法用「最後兩個日盤日期」配對，永遠指到上一夜——而上一夜早就被
+    // 上一個日盤反應完了。2026-11-11 03:36 實例：推估卡顯示 +2.70%（是 11/09 夜、
+    // 11/10 日盤已經漲 +2.52% 反應過），而總覽顯示的今晚這一盤是 −0.47%。
+    var lastDayIdx = -1, lastDayDate = null;
     for (var i = 0; i < dt.length; i++) {
-      var d = dt[i].slice(0, 10), hm = dt[i].slice(11, 16);
-      if (hm >= '08:45' && hm <= '13:45') day[d] = cl[i];
-      else if (hm >= '15:00') night[d + '|1'] = cl[i];
-      else if (hm <= '05:00') night[d + '|0'] = cl[i];
+      var hm = dt[i].slice(11, 16);
+      if (hm >= '08:45' && hm <= '13:45') { lastDayIdx = i; lastDayDate = dt[i].slice(0, 10); }
     }
-    var ds = Object.keys(day).sort();
-    if (ds.length < 2) throw new Error('日盤資料不足');
-    var D = ds[ds.length - 1], P = ds[ds.length - 2];
-    var px = night[D + '|0'] || night[P + '|1'];
-    if (!(px > 0) || !(day[P] > 0)) throw new Error('夜盤資料不足');
-    _ovToday = { d: D, pct: (px / day[P] - 1) * 100, src: 'live' };
+    if (lastDayIdx < 0) throw new Error('日盤資料不足');
+    var baseClose = cl[lastDayIdx];
+    // 日盤收盤之後的最後一根夜盤（夜盤 15:00～次日 05:00，可跨午夜）
+    var nIdx = -1;
+    for (var k = lastDayIdx + 1; k < dt.length; k++) {
+      var h2 = dt[k].slice(11, 16);
+      if (h2 >= '15:00' || h2 <= '05:00') nIdx = k;
+    }
+    var pending = nIdx >= 0;          // 這一夜還沒開過盤
+    if (!pending) {
+      // 今天日盤已收、今晚還沒開：退回「驅動這一個日盤的那一夜」，卡頭會標成已開過盤
+      var pIdx = -1;
+      for (var q = lastDayIdx - 1; q >= 0; q--) {
+        var h3 = dt[q].slice(11, 16);
+        if (h3 >= '08:45' && h3 <= '13:45') break;
+        if (h3 >= '15:00' || h3 <= '05:00') { if (pIdx < 0) pIdx = q; }
+      }
+      var prevDayIdx = -1;
+      for (var q2 = lastDayIdx - 1; q2 >= 0; q2--) {
+        var h4 = dt[q2].slice(11, 16);
+        if (h4 >= '08:45' && h4 <= '13:45') { prevDayIdx = q2; break; }
+      }
+      if (pIdx < 0 || prevDayIdx < 0) throw new Error('夜盤資料不足');
+      nIdx = pIdx; baseClose = cl[prevDayIdx]; lastDayDate = dt[prevDayIdx].slice(0, 10);
+    }
+    if (!(cl[nIdx] > 0) || !(baseClose > 0)) throw new Error('夜盤資料不足');
+    // d＝這一夜要驅動的那個交易日。夜盤跨午夜後就是那一天；
+    // 還沒跨午夜（像晚上 20:00）則是基準日的隔天。
+    var nd = dt[nIdx].slice(0, 10);
+    var drive = (nd > lastDayDate) ? nd
+      : new Date(Date.parse(lastDayDate) + 86400000).toISOString().slice(0, 10);
+    _ovToday = { d: drive, pct: (cl[nIdx] / baseClose - 1) * 100, src: 'live',
+                 base: lastDayDate, at: dt[nIdx].slice(11, 16), pending: pending };
   } catch (e) { hush('overnight', e); _ovToday = fallback(); }
   return _ovToday;
 }
@@ -122,8 +153,14 @@ function _ovPx(v) { return v == null ? '—' : v.toFixed(2); }
 function ovEstimate(code) {
   var d = _rbData, sox = d && d.sox;
   if (!d || !_ovNight) return null;
-  var bars = (d.series[code] || []).filter(function (b) { return b.o > 0 && b.l > 0 && b.c > 0; });
-  if (bars.length < 45) return null;
+  // raw：只要有收盤就算數，用來挑基準價。
+  // bars：還要有日內高低才能跑迴歸（開盤、最低那兩條）。
+  // 兩者不能混用：Yahoo 單日線最後一根的收盤有時是 null、由 meta 補上的，
+  // 那一根沒有日內高低，若一起濾掉會讓基準價退到前一天——
+  // 2026-11-11 實例：00981A 基準價變成 11/09 的 23.06，而不是 11/10 的 24.27。
+  var raw = (d.series[code] || []).filter(function (b) { return b.c > 0; });
+  var bars = raw.filter(function (b) { return b.o > 0 && b.l > 0; });
+  if (bars.length < 45 || !raw.length) return null;
   var X1 = [], X2 = [], Yo = [], Yl = [], Yc = [];
   for (var i = 1; i < bars.length; i++) {
     var dd = bars[i].d, pc = bars[i - 1].c;
@@ -148,16 +185,16 @@ function ovEstimate(code) {
   // 基準價＝那一夜「之前」的最後一個收盤，不是最新收盤。
   // 盤中時最新一根就是今天，而今天反映的正是這一夜——用它當基準等於把答案當題目。
   var bi = -1;
-  for (var k2 = bars.length - 1; k2 >= 0; k2--) { if (bars[k2].d < t.d) { bi = k2; break; } }
+  for (var k2 = raw.length - 1; k2 >= 0; k2--) { if (raw[k2].d < t.d) { bi = k2; break; } }
   if (bi < 0) return null;
-  var base = bars[bi].c;
+  var base = raw[bi].c;
   // 那一天的 K 已經存在 → 這不是預測，是可以當場對答案的紀錄
-  var act = (bi + 1 < bars.length && bars[bi + 1].d === t.d) ? bars[bi + 1] : null;
+  var act = (bi + 1 < raw.length && raw[bi + 1].d === t.d) ? raw[bi + 1] : null;
   var mk = function (p) { return p == null ? null : ovTick(base * (1 + p / 100)); };
   var pc2 = ev(fc);
   return {
-    code: code, n: fc.n, base: base, basePrev: bars[bi].d,
-    prem: _ovPrem(code), volX: _ovVolX(bars, act ? bi + 1 : bi),
+    code: code, n: fc.n, base: base, basePrev: raw[bi].d,
+    prem: _ovPrem(code), volX: _ovVolX(raw, act ? bi + 1 : bi),
     act: act ? { o: act.o, l: act.l, c: act.c,
                  cPct: (act.c / base - 1) * 100, lPct: (act.l / base - 1) * 100 } : null,
     oPct: ev(fo), lPct: ev(fl), cPct: pc2,
@@ -279,7 +316,9 @@ function ovHtml(view) {
   var h = '<div class="rb-sox">';
   h += '<div class="sec-title">隔夜推估（明天的價格）</div>';
   h += '<div class="rb-sox-hd on">台指期夜盤 <b style="color:' + _rbCol(t.pct) + '">' + pct(t.pct) + '</b>' +
-    '（' + t.d + (t.src === 'live' ? '，券商即時' : '，資料檔') + '）　' +
+    '（以 ' + (t.base || '—') + ' 日盤收盤為基準'
+      + (t.at ? '，最後一根 ' + t.at : '')
+      + (t.src === 'live' ? '，券商即時' : '，資料檔') + '）　' +
     '隔夜費半 <b style="color:' + _rbCol(sox) + '">' + pct(sox) + '</b>' +
     '<br>價格以 <b>' + (rows[0] ? rows[0].basePrev : '') + '</b> 的收盤為基準，已對齊可掛的升降單位，直接抄進委託單即可。' +
     '<b>掛限價買進看「預估日內最低」</b>——掛在它之下，成交的前提是當天比預估弱。' +
