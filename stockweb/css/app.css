@@ -816,7 +816,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-warn { color: var(--accent2); font-size: 12px; }
 .swap-dim { color: var(--text3); font-size: 12px; font-weight: 400; }
 /* 改價後的原始委託價：劃掉摆在新價後面，看得出改過而不會誤讀成現在的價 */
-.tx-oldpx { color: var(--text3); font-size: 11px; text-decoration: line-through; margin-left: 2px; }
+.tx-oldpx { display: block; color: var(--text3); font-size: 10px; text-decoration: line-through; line-height: 1.4; }
 /* 章節標題後面的合計：跟標題同一行，字級較小不跟標題搶對比 */
 .divest-sec-sum { margin-left: 14px; font-size: 14px; font-weight: 600; color: var(--sum);
   letter-spacing: normal; }
@@ -1966,3 +1966,8 @@ td.cost-even::after  { background: var(--text3); }
 /* 基準標記另起一行放數字下方：inline 接在金額後面會把數字往左推，
    備註長度不一的列就對不齊，整欄無法上下掃讀比大小。數字欄一律如此。 */
 .tx-ddbase { display: block; font-size: 10px; color: var(--text3); line-height: 1.4; margin-top: 1px; }
+
+/* 委託表：少數列才有的備註另起一行，多數列不受影響、數字維持同一條對齊線 */
+.tx-tif, .tx-dealn { display: block; font-size: 10px; color: var(--text3); line-height: 1.4; }
+/* ETF 評比：代號後的配息頻率（代號欄是文字欄，不影響數字對齊） */
+.es-freq { margin-left: 5px; font-size: 11px; color: var(--text3); }
