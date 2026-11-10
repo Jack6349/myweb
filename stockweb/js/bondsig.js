@@ -77,8 +77,10 @@ function bsFill(code, sel) {
 }
 
 function _bsPx(v, d) { return v == null ? '—' : v.toFixed(d == null ? 2 : d); }
-function _bsRate(v) {
+// on＝這個方向就是今天的方向，標重；另一邊淡化但仍然讀得到
+function _bsRate(v, on) {
   if (v == null) return '<span class="dm-dim">—</span>';
+  if (!on) return '<span class="bs-off">' + v.toFixed(0) + '%</span>';
   var cls = v >= 60 ? 'bs-hi' : (v >= 30 ? 'bs-mid' : 'bs-lo');
   return '<span class="' + cls + '">' + v.toFixed(0) + '%</span>';
 }
@@ -104,10 +106,10 @@ function bsHtml() {
   h += '<div class="sec-title">債券：掛單價差的成交率</div>';
   h += '<div class="rb-sox-hd on">隔夜 HYG <b style="color:' + _rbCol(L ? L.r : null) + '">'
     + (L ? ((L.r > 0 ? '+' : '−') + Math.abs(L.r).toFixed(2) + '%') : '—') + '</b>（' + (L ? L.d : '—') + '）。'
-    + (dir === 0
-        ? '下表是<b>全部日子</b>的成交率：HYG 平盤或取不到，沒有方向可以挑樣本。'
-        : '下表是<b>' + (up ? 'HYG 上漲' : 'HYG 下跌') + '的那些日子</b>的成交率 —— 今天偏這一邊，用同方向的樣本才有參考價值；'
-          + '括號內是不分條件的全部日子。')
+    + '每一格兩個數字是<b>「HYG 跌的日子 ／ HYG 漲的日子」</b>的成交率，'
+    + (dir === 0 ? '今天 HYG 平盤或取不到，兩邊都不標重。'
+                 : '粗體那個是今天的方向（' + (up ? 'HYG 上漲' : 'HYG 下跌') + '）。')
+    + '兩邊都列是為了讓你看得到「萬一明天反過來，這個掛價變成多少」。'
     + '<br>'
     + '價格已對齊升降單位，直接抄進委託單。<b>買進看日內最低有沒有跌到你的掛價，賣出看日內最高有沒有漲到。</b>'
     + '這裡不預測漲跌，只回答「掛在這個價位，歷史上多少比例的日子碰得到」。</div>';
@@ -120,26 +122,27 @@ function bsHtml() {
     BS_OFFS.forEach(function (k) {
       h += '<th class="num">' + (k === 0 ? '平盤' : (isBuy ? '−' : '＋') + (k * 0.01).toFixed(2)) + '</th>';
     });
-    h += '<th class="num">樣本</th></tr></thead><tbody>';
+    h += '<th class="num" title="左為 HYG 下跌的日數、右為上漲">樣本 跌／漲</th></tr></thead><tbody>';
     codes.forEach(function (c) {
-      var a = bsFill(c, sel), b = bsFill(c, selAll);
+      var dn = bsFill(c, function (v) { return v != null && v < 0; });
+      var upS = bsFill(c, function (v) { return v != null && v > 0; });
+      var b = bsFill(c, selAll);
       if (!b) {
         h += '<tr><td><span class="tx-ocode">' + c + '</span><span class="tx-oname">' + _rbName(c) + '</span></td>'
           + '<td class="num rs-dim" colspan="' + (BS_OFFS.length + 2) + '">樣本不足 25 日，不列成交率</td></tr>';
         return;
       }
-      var arr = a || b, all = b;
+      var base = dn || upS || b;
       h += '<tr><td><span class="tx-ocode">' + c + '</span><span class="tx-oname">' + _rbName(c) + '</span></td>'
-        + '<td class="num rs-dim">' + _bsPx(arr.last) + '</td>';
+        + '<td class="num rs-dim">' + _bsPx(base.last) + '</td>';
       BS_OFFS.forEach(function (k, idx) {
-        var px = arr.last + (isBuy ? -1 : 1) * k * arr.tick;
-        var v = (isBuy ? arr.buy : arr.sell)[idx];
-        var va = (isBuy ? all.buy : all.sell)[idx];
-        h += '<td class="num">' + _bsRate(v)
-          + '<span class="bs-sub">' + _bsPx(px) + '</span>'
-          + '<span class="bs-all">(' + va.toFixed(0) + '%)</span></td>';
+        var px = base.last + (isBuy ? -1 : 1) * k * base.tick;
+        var pick = function (z) { return z ? (isBuy ? z.buy : z.sell)[idx] : null; };
+        h += '<td class="num">'
+          + _bsRate(pick(dn), dir < 0) + '<span class="bs-slash">／</span>' + _bsRate(pick(upS), dir > 0)
+          + '<span class="bs-sub">' + _bsPx(px) + '</span></td>';
       });
-      h += '<td class="num rs-dim">' + arr.n + ' 日</td></tr>';
+      h += '<td class="num rs-dim">' + (dn ? dn.n : 0) + ' ／ ' + (upS ? upS.n : 0) + ' 日</td></tr>';
     });
     h += '</tbody></table></div>';
   });
@@ -152,7 +155,8 @@ function bsNoteHtml() {
   return '<dt>定義</dt><dd>買進成交率＝歷史上有多少比例的日子，<b>日內最低價</b>跌到「前一日收盤 − N 個升降單位」'
     + '或更低；賣出成交率看的是<b>日內最高價</b>有沒有漲到「前一日收盤 ＋ N」。'
     + '50 元以下的升降單位是 0.01，表上的價格已經對齊，可以直接抄進委託單。'
-    + '主要數字取自與今天同方向的那組樣本（隔夜 HYG 漲或跌），括號內是不分條件的全部日子。</dd>'
+    + '每一格兩個數字是「HYG 跌的日子／HYG 漲的日子」，粗體是今天的方向。'
+    + '兩邊都列，是因為你要決定的往往不是「今天掛多少」而是「要不要等反方向那一天」。</dd>'
     + '<dt>比較基準</dt><dd>兩個。一是同一檔的不同掛價互相比，回答「多掛遠一點，成交率掉多少」；'
     + '二是同一個掛價在「HYG 漲」與「HYG 跌」的日子互相比，回答「今天這個方向，值不值得掛遠一點」。'
     + '不跟股票那幾頁比——波動量級差十倍，混在一起看會誤判。</dd>'

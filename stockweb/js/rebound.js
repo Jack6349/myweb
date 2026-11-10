@@ -337,9 +337,22 @@ async function startRebound(force) {
   await rbMarksLoad(force);
 
   var cfg = _rbCfg(), codes = _rbCodes();
-  if (!codes.length) {
+  var bonds = (typeof bsCodes === 'function') ? bsCodes() : [];
+  if (!codes.length && !bonds.length) {
     _rbData = null;
-    wrap.innerHTML = '<div class="modal-loading">持股中沒有主動式股票型 ETF（代號結尾 A），這一頁沒有標的可統計</div>';
+    wrap.innerHTML = '<div class="modal-loading">持股中沒有主動式股票型 ETF（結尾 A）也沒有債券型（結尾 B、D），這一頁沒有標的可統計</div>';
+    return;
+  }
+  // 只有債券的話，股票那兩個頁籤本來就沒東西可算，但不該因此整頁擋掉——
+  // 債券頁籤是獨立的，只需要 HYG 與債券自己的日線。
+  if (!codes.length) {
+    if (force) _rbBars = {};
+    if (typeof bsPrepare === 'function') { try { await bsPrepare(force); } catch (e) { hush('rebound', e); } }
+    _rbData = { cfg: cfg, codes: [], idx: [], series: {}, sox: null, bondOnly: true,
+                trig: { days: [], eps: [], own: {}, cum: {} } };
+    try { localStorage.setItem(RB_VIEW_LS, 'bond'); } catch (e) {}
+    if (info) info.textContent = '只有債券型標的，股票那兩個頁籤無資料';
+    rbRender();
     return;
   }
   if (force) _rbBars = {};
@@ -400,6 +413,19 @@ function rbRender() {
   var wrap = document.getElementById('rebound-wrap');
   if (!wrap || !_rbData) return;
   var cfg = _rbData.cfg, idx = _rbData.idx, t = _rbData.trig, marks = _rbMarks || {};
+  // 債券頁籤不用大盤日線，要在讀 idx 之前分流；
+  // 只有債券時 idx 是空的，跳不過去會損在這一行。
+  var vsel = _rbViewSel();
+  if (vsel === 'bond' || _rbData.bondOnly) {
+    var bonly = !!_rbData.bondOnly;
+    wrap.innerHTML = '<div class="pv-tabs rb-tabs">' +
+      (bonly ? '' :
+        '<button class="pv-tab" onclick="rbView(\'dec\')">決策</button>' +
+        '<button class="pv-tab" onclick="rbView(\'ana\')">分析</button>') +
+      '<button class="pv-tab on" onclick="rbView(\'bond\')">債券</button></div>' +
+      ((typeof bsHtml === 'function') ? bsHtml() : '');
+    return;
+  }
   var last = idx[idx.length - 1], lastCum = t.cum[last.d];
   var lastEp = t.eps.length ? t.eps[t.eps.length - 1] : null;
   // 正在觸發中＝最後一筆資料日本身就是觸發日
@@ -412,12 +438,7 @@ function rbRender() {
     '<button class="pv-tab' + (view === 'ana' ? ' on' : '') + '" onclick="rbView(\'ana\')">分析</button>' +
     '<button class="pv-tab' + (view === 'bond' ? ' on' : '') + '" onclick="rbView(\'bond\')">債券</button>' +
     '</div>';
-  // 債券頁籤問的不是「會漲多少」而是「掛這個價成不成交」，
-  // 整頁另外渲染，不共用上方的跌深判定卡。
-  if (view === 'bond') {
-    wrap.innerHTML = html + ((typeof bsHtml === 'function') ? bsHtml() : '');
-    return;
-  }
+
 
   // ── 判定卡（兩個視圖都在最上面）──
   var lamp, lcol, ltxt;
