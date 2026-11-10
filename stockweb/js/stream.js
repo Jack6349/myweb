@@ -681,8 +681,8 @@ function renderTopbarTotals() {
   var cvar = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
   var pcls = t.withDiv == null ? 'flat' : colorClass(t.withDiv);
   var wcls = t.wpct == null ? 'flat' : colorClass(t.wpct);
-  var tt = function (lb, v, c) {
-    return '<span class="tt"><span class="tt-lb">' + lb + '</span><span class="tt-v" style="color:' + c + '">' + v + '</span></span>';
+  var tt = function (lb, v, c, cls) {
+    return '<span class="tt' + (cls ? ' ' + cls : '') + '"><span class="tt-lb">' + lb + '</span><span class="tt-v" style="color:' + c + '">' + v + '</span></span>';
   };
   // 損益表四項：投入、現值、已領配息、損益（前三項加得起來就是第四項）。
   // 第五項「今日」是當日漲跌，與前面的累計不同期間，標籤寫明以免混讀。
@@ -692,7 +692,8 @@ function renderTopbarTotals() {
   el.innerHTML =
     tt('原始成本', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', 'var(--text2)') +
     tt('現值(含借出)', t.curVal.toLocaleString('zh-TW') + noPxTag, 'var(--accent2)') +
-    tt('已領配息', t.div == null ? '—' : t.div.toLocaleString('zh-TW'), 'var(--text2)') +
+    // 窄視窗時收起來：它是累計值、盤中不跳，是這五項裡最不急著看的
+    tt('已領配息', t.div == null ? '—' : t.div.toLocaleString('zh-TW'), 'var(--text2)', 'tt-div') +
     tt('損益', pl, cvar[pcls]) +
     tt('今日', t.wpct == null ? '—' : fmtPct(t.wpct), cvar[wcls]);
   if (btn) {
