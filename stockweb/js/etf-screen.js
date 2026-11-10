@@ -412,6 +412,7 @@ function _esFillTxt(r) {
 }
 var ES_COLS = [
   // key, 標題, 格式, 說明
+  ['watch', '關注', 'watch', '加入／移出關注清單（與「關注股票」頁籤同一份清單）'],
   ['rank', '#', 'int', '綜合排名'],
   ['code', '代號', 'code', ''],
   ['score', '綜合', 'f1', '各指標同類百分位加權：一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5'],
@@ -427,8 +428,7 @@ var ES_COLS = [
   ['tr12', '一年含息', 'sgn', '（現價＋期間配息）÷ 一年前收盤 − 1：最公平的總成績'],
   ['size', '規模', 'size', '基金規模（億元）：受益權單位數 × 淨值'],
   ['fee', '內扣', 'fee', '管理費＋保管費（年率，級距制取最低級距）'],
-  ['prem', '折溢價', 'sgn', '市價相對預估淨值；正＝溢價（買貴了）'],
-  ['watch', '關注', 'watch', '加入／移出關注清單（與「關注股票」頁籤同一份清單）']
+  ['prem', '折溢價', 'sgn', '市價相對預估淨值；正＝溢價（買貴了）']
 ];
 
 // 加入／移出關注清單：停留在評比頁（不跳頁），背景重新載入關注清單（補合約、報價、訂閱）
@@ -542,9 +542,11 @@ function renderEtfScreen() {
       case 'sgn': return sg(v);
       case 'size': return v == null ? dim('—') : Math.round(v).toLocaleString('zh-TW');
       case 'fee': return v == null ? dim('—') : v.toFixed(2) + '%';
+      // 按鈕上的字是「按下去會發生什麼」，不是「現在是什麼狀態」。
+      // 「✓ 已關注」讀起來像狀態標示，讓人不確定點下去會不會取消。
       case 'watch': return watched[r.code]
-        ? '<button class="swap-mini es-wbtn on" title="點一下移出關注清單" onclick="esWatchToggle(\'' + r.code + '\')">✓ 已關注</button>'
-        : '<button class="swap-mini es-wbtn" title="加入關注清單" onclick="esWatchToggle(\'' + r.code + '\')">＋ 關注</button>';
+        ? '<button class="swap-mini es-wbtn on" title="取消關注" onclick="esWatchToggle(\'' + r.code + '\')">－ 關注</button>'
+        : '<button class="swap-mini es-wbtn off" title="加入關注清單" onclick="esWatchToggle(\'' + r.code + '\')">＋ 關注</button>';
     }
     return '';
   };
@@ -624,6 +626,7 @@ function esNewSortCol(k) {
   renderEtfScreen();
 }
 var ES_NCOLS = [
+  ['watch', '關注', 'watch', '加入／移出關注清單'],
   ['code', '代號', 'code', ''],
   ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）'],
   ['y1', '單次配', 'pct', '單次殖利率：最近一次配息 ÷ 現價'],
@@ -632,8 +635,7 @@ var ES_NCOLS = [
   ['g6', '半年價格', 'sgn', '不含配息的價格變化（上市未滿半年顯示 —）'],
   ['tr6', '半年含息', 'sgn', '（現價＋期間配息）÷ 半年前收盤 − 1（上市未滿半年顯示 —）'],
   ['size', '規模', 'size', '基金規模（億元）：受益權單位數 × 淨值'],
-  ['prem', '折溢價', 'sgn', '市價相對預估淨值；正＝溢價（買貴了）'],
-  ['watch', '關注', 'watch', '加入／移出關注清單']
+  ['prem', '折溢價', 'sgn', '市價相對預估淨值；正＝溢價（買貴了）']
 ];
 var _esOpen = null;
 function esRowClick(ev, code) {
@@ -740,16 +742,36 @@ function _esFitDetail(slot, det, tries) {
     if ((tries || 0) < 30) setTimeout(function () { if (det.isConnected) _esFitDetail(slot, det, (tries || 0) + 1); }, 100);   // 不用 rAF：分頁在背景時 rAF 不會執行
     return;
   }
-  var w = (vis - 2) + 'px';
+  // 跟「表格實際寬度」對齊，不跟外框：外框可能比表格寬（右邊空一塊），
+  // 也可能比表格窄（表格畫到框外）。取兩者較小者：跟表格齊頭，又不超出畫面。
+  var tbl = box.querySelector('table');
+  var tw = tbl ? Math.ceil(tbl.getBoundingClientRect().width) : 0;
+  var w = (Math.max(Math.min(tw || vis, vis), 200) - 2) + 'px';
   if (det.style.width === w) return;
   det.style.width = w;
   // 寬度變了 → 配息圖依新寬度重畫（紀錄已載入才畫，否則等 _esLoadDetail 畫）
   var he = det.querySelector('.divest-hist'), code = det.getAttribute('data-code');
   if (he && he.querySelector('svg') && typeof _divHistDraw === 'function') _divHistDraw(he, code);
 }
-window.addEventListener('resize', function () {
-  document.querySelectorAll('.es-detail').forEach(function (d) { var sl = d.closest('.es-dslot'); if (sl) _esFitDetail(sl, d); });
-});
+// 關注股票的三張表：表格真的比容器寬才開橫向捲動。
+// 寫死斷點的話，欄位一增加就會出現「表格畫到框外、明細對不齊」。
+function wtFitWrap() {
+  document.querySelectorAll('.wt-wrap').forEach(function (w) {
+    var t = w.querySelector('table');
+    if (!t) return;
+    w.classList.remove('wt-scroll');
+    if (t.scrollWidth > w.clientWidth + 1) w.classList.add('wt-scroll');
+  });
+}
+// 順序要緊：先決定表格要不要捲動（會改變容器的可視寬），
+// 等版面重排完再量明細的寬度，否則量到的是舊值。
+function wtRefit() {
+  if (typeof wtFitWrap === 'function') wtFitWrap();
+  setTimeout(function () {
+    document.querySelectorAll('.es-detail').forEach(function (d) { var sl = d.closest('.es-dslot'); if (sl) _esFitDetail(sl, d); });
+  }, 0);
+}
+window.addEventListener('resize', wtRefit);
 // 名稱來源：評比資料（官方短名）→ 合約 → 關注清單的合約索引
 function _esNameOf(code) {
   var c0 = _esBase && _esBase.c0[code];

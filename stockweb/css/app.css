@@ -994,7 +994,7 @@ td.cost-even::after  { background: var(--text3); }
 .wt-note { font-size: 12px; color: var(--accent2); margin-bottom: 8px; }
 /* 1000 → 1200（＋20%）：寬螢幕上右邊本來就空著一大塊，而展開的配息紀錄被擠到要橫向捲。
    寬度上限留著是因為這三張表欄位不多，撐滿 1800 會讓每欄之間拉開到難以對讀。 */
-.wt-table { max-width: 1200px; }
+/* 不再寫死上限：欄位會隨功能增加，固定寬度迫使表格畫出框外、與展開明細對不齊 */
 /* 這三張表（關注清單、債券 ETF、主動式 ETF）不要內層捲軸。
    容器撐滿版面時捲軸停在離表格 700px 的地方，像頁面多長出一條；把容器縮到表格寬度，
    捲軸就貼到表格右緣、切在欄位旁邊，更難看。兩種都不對，所以整條拿掉：
@@ -1002,14 +1002,15 @@ td.cost-even::after  { background: var(--text3); }
    overflow 一併改成 visible，否則 sticky 表頭會以這個容器為準，而它已經不垂直捲動，
    表頭就完全不黏了。代價是視窗窄於表格時由頁面橫向捲動，不是容器自己捲。
    表頭改黏在 --h-chrome（頂欄 54 ＋ 導覽列 65），正好停在導覽列下緣。 */
-.wt-wrap { max-width: 1200px; max-height: none; overflow: visible; }
+.wt-wrap { max-height: none; overflow: visible; }
+.wt-wrap.wt-scroll { overflow-x: auto; }
 /* 視窗放不下這 1200px 時要讓表格自己橫捲。
    上面那段註解寫的「由頁面橫向捲動」已經不成立了：html/body 現在是 overflow-x: clip
    （為了吃掉滿版列用 50vw 造成的幾 px 溢出），頁面不再橫捲，放不下的部分會直接被切掉看不到。
    實測 1009px 視窗、表格 1198px，右邊 189px 完全碰不到。
    代價：一旦 overflow-x 不是 visible，overflow-y 會跟著算成 auto，sticky 表頭在這個寬度下
    就不黏了。看不到資料比表頭不黏嚴重，所以只在窄視窗換這個取捨。 */
-@media (max-width: 1280px) { .wt-wrap { overflow-x: auto; } }
+/* 橪向捲動改由「表格是否真的比容器寬」決定（見 wtFitWrap），不再用固定斷點 */
 /* 只挑外層那張表自己的表頭。用後代選取器（.wt-wrap .inv-table th）會連展開列裡面
    那張配息紀錄表的 th 一起選到 —— 它是外層 .inv-table 的後代，於是它的 sticky
    也被設成 top:119px，表頭就黏在自己捲動區往下 119px 的地方，看起來像插在資料中間。
@@ -1978,3 +1979,7 @@ td.cost-even::after  { background: var(--text3); }
 .es-nowpx b { color: var(--text); font-size: 14px; }
 .es-nowpx-n { margin-left: 10px; font-size: 11px; color: var(--text3); }
 .es-gappct { display: inline-block; min-width: 5.2em; text-align: right; margin-left: 6px; font-size: .82em; }
+
+/* 關注按鈕：未關注給淺橘底色，掃一眼就知道哪幾檔還沒加入 */
+.es-wbtn.off { background: rgba(245, 166, 35, .18); border-color: rgba(245, 166, 35, .55); color: var(--text); }
+.es-wbtn.off:hover { background: rgba(245, 166, 35, .3); }
