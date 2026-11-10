@@ -2008,3 +2008,11 @@ td.cost-even::after  { background: var(--text3); }
 .ov-sub { display: inline-block; min-width: 4.8em; text-align: right; margin-left: 6px; font-size: .8em; color: var(--text3); }
 .rb-table td.ov-key { color: var(--accent2); font-weight: 700; }
 .es-tag.es-new-tag { background: rgba(120,180,245,.2); color: #8fc4ff; }
+
+/* ETF 評比：配息走向 */
+.es-tr { display: inline-block; padding: 0 5px; border-radius: 4px; font-size: 11.5px; }
+.es-tr-up { background: rgba(230,110,110,.18); color: #ff9b9b; }
+.es-tr-dn { background: rgba(110,200,140,.18); color: #7fd6a2; }
+.es-tr-flat { background: rgba(160,170,190,.16); color: var(--text2); }
+.es-tr-wav { background: rgba(245,216,122,.16); color: var(--accent2); }
+.es-trn { display: inline-block; min-width: 3.4em; text-align: right; margin-left: 5px; font-size: 10.5px; color: var(--text3); }

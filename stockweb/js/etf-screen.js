@@ -204,7 +204,7 @@ function _esMetrics(base) {
       size: (L.units && L.nav) ? L.units * L.nav / 1e8 : null, nav: L.nav, prem0: L.prem,
       lastAmt: last ? last.amt : null, step: step, sum6: sum(d6s), sum12: sum(d12s), n12: d12s.length,
       c6: c6 ? c6.c : null, c12: c12 ? c12.c : null,
-      young: !c12, events: d12s
+      young: !c12, events: d12s, day: today
     };
     _esDerive(r, px, true);
     rows.push(r);
@@ -212,11 +212,69 @@ function _esMetrics(base) {
   return rows;
 }
 
+// 殖利率的三個角度。三欄分母一律用現價，所以欄位之間可以直接比。
+//
+// 預估：最近一期（含已公告未除息）× 一年期數。看的是趨勢，不是樂觀值。
+//   舊版用「最近一次已除息」，會忽略已經公告、確定會發的那一筆——
+//   00989B 已公告 0.066、上一期 0.088，舊版顯示 10.56%，新版 7.92%。
+//
+// 保守：取樣區間內最低一期 × 一年期數。回答「每一期都像最差那一期時，
+//   用現在的價格買進是多少」。分母不用「當時股價」：那個價格買不到，
+//   而且實測十檔全部被墊高（最多 +3.3pp），墊高的幅度只反映股價漲了多少。
+//
+// 取樣區間隨頻率變：頻率越低間隔越久，而且實測年配 41 檔裡 40 檔是市值型、
+// 高股息一檔都沒有；月配 57 檔裡市值型只有 2 檔。配息是不是主訴求不同，
+// 該看多長的區間也不同。
+var ES_WINM = { 1: 24, 2: 12, 4: 12, 6: 6, 12: 6 };   // 一年期數 → 取樣月數
+function _esPerYear(code, step) {
+  var f = _esFreq && _esFreq[code];
+  if (f && f.s && 12 % f.s === 0) return 12 / f.s;
+  return (step && 12 % step === 0) ? 12 / step : null;
+}
+// 區間內的配息序列（舊→新），最後接上已公告未除息的那一筆
+function _esDivSeq(code, per, todayIso) {
+  var recs = (_esMix && _esMix[code]) || [];
+  var wm = ES_WINM[per] || 12;
+  var cut = _esIso(Date.parse(todayIso) - Math.round(wm * 30.44) * 86400000);
+  var all = recs.filter(function (x) { return x && x.amt > 0; })
+    .sort(function (a, b) { return a.ex < b.ex ? -1 : 1; });
+  var win = all.filter(function (x) { return x.ex >= cut; });
+  if (!win.length) win = all;                       // 上市未滿區間：用全部已配
+  var seq = win.map(function (x) { return x.amt; });
+  var nx = (_esNext && _esNext[code]) || null;
+  if (nx && nx.amt > 0 && nx.ex && nx.ex > todayIso) seq.push(nx.amt);
+  return seq;
+}
+// 配息走向：最低值落在哪一期 ＋ 降息次數。
+// 不用「最新÷最低」的倍數：實測 14 檔裡 12 檔的最低就是最舊那一期，
+// 那個倍數算出來是「累積成長幅度」而不是波動；更糟的是正在下調的檔（最新即最低）
+// 會算出 1.00 倍，跟最穩的 00900 一模一樣，在最該警覺的情境下指向反方向。
+function _esTrend(seq) {
+  if (!seq || seq.length < 2) return null;
+  var mx = Math.max.apply(null, seq), mn = Math.min.apply(null, seq);
+  if (!(mn > 0)) return null;
+  var lo = seq.indexOf(mn), down = 0;
+  for (var i = 1; i < seq.length; i++) if (seq[i] < seq[i - 1]) down++;
+  if (mx / mn <= 1.05) return '持平';
+  if (lo === seq.length - 1) return '下調';
+  if (!down) return '成長';
+  return '波動';
+}
+
 // 與價格有關的指標（現價變動時重算；排名用開頁時的價格，避免盤中每 30 秒名次跳動）
 function _esDerive(r, px, init) {
   r.px = px;
   r.y1 = r.lastAmt ? r.lastAmt / px * 100 : null;
-  r.yEst = (r.lastAmt && r.step) ? r.lastAmt * (12 / r.step) / px * 100 : null;
+  var per = _esPerYear(r.code, r.step);
+  var nx = (_esNext && _esNext[r.code]) || null;
+  var ann = (nx && nx.amt > 0 && nx.ex && nx.ex > r.day) ? nx.amt : null;
+  var base1 = ann != null ? ann : r.lastAmt;
+  r.annAmt = ann;
+  r.yEst = (base1 && per) ? base1 * per / px * 100 : null;
+  var seq = per ? _esDivSeq(r.code, per, r.day) : null;
+  r.seqN = seq ? seq.length : 0;
+  r.yCons = (seq && seq.length && per) ? Math.min.apply(null, seq) * per / px * 100 : null;
+  r.trend = seq ? _esTrend(seq) : null;
   r.y12 = r.n12 ? r.sum12 / px * 100 : 0;
   r.g6 = r.c6 ? (px / r.c6 - 1) * 100 : null;
   r.g12 = r.c12 ? (px / r.c12 - 1) * 100 : null;
@@ -418,7 +476,9 @@ var ES_COLS = [
   ['score', '綜合', 'f1', '各指標同類百分位加權：一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5'],
   ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）；殖利率、成長率、折溢價跟著現價重算，排名維持開頁時的計算'],
   ['y1', '單次配', 'pct', '單次殖利率：最近一次配息 ÷ 現價'],
-  ['yEst', '預估年配', 'pct', '預估年殖利率：最近一次配息 × 年配息次數 ÷ 現價'],
+  ['yEst', '預估年配', 'pct', '趨勢：最近一期（含已公告未除息）× 一年期數 ÷ 現價。配息調高調低都會立刻反映'],
+  ['yCons', '保守年配', 'pct', '風險：取樣區間內最低一期 × 一年期數 ÷ 現價。&#10;回答「每一期都像最差那一期時，用現在的價格買進是多少」。&#10;區間：年配 2 年、半年配與季配 1 年、雙月配與月配 6 個月'],
+  ['trend', '配息走向', 'trend', '穩定性：依區間內最低值的位置與降息次數判定。&#10;下調＝最新一期就是最低、持平＝最高與最低差 5% 以內、&#10;成長＝只升不降、波動＝有升有降。小字是區間內的配息期數'],
   ['y12', '近12月配', 'pct', '近 12 個月殖利率：近 12 個月實際配息合計 ÷ 現價'],
   ['n12', '已配次數', 'cnt', '近 12 個月內已除息次數。新上市的次數不足，「近 12 月配」會因此偏低'],
   ['fill', '填息率', 'fill', '近 12 個月：已填息次數 ÷ 除息次數（除息後收盤回到除息前收盤即算填息）'],
@@ -457,7 +517,7 @@ async function esWatchToggle(code) {
 // 取最近一個完整週期（季配 4 次、半年配 2 次、年配 1 次），
 // 固定用「近 13 個月」的話一半的年配檔會落空。
 // 月配不列月份：紀錄本身不齊（有的近 13 月只出現 4 個月），列出來反而像漏配。
-var _esFreq = null, _esMix = null, _esFreqBusy = false;
+var _esFreq = null, _esMix = null, _esNext = null, _esFreqBusy = false;
 async function _esLoadFreq() {
   if (_esFreq || _esFreqBusy) return;
   _esFreqBusy = true;
@@ -465,9 +525,10 @@ async function _esLoadFreq() {
     return fetch(u, { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
   };
   try {
-    var r = await Promise.all([get('data/etf-freq.json'), get('data/etf-div-mix.json')]);
+    var r = await Promise.all([get('data/etf-freq.json'), get('data/etf-div-mix.json'), get('data/etf-div-next.json')]);
     _esFreq = (r[0] && r[0].map) || {};
     _esMix = (r[1] && r[1].map) || {};
+    _esNext = (r[2] && r[2].map) || {};
   } catch (e) { hush('etf-screen', e); _esFreq = _esFreq || {}; _esMix = _esMix || {}; }
   _esFreqBusy = false;
 }
@@ -550,6 +611,9 @@ function renderEtfScreen() {
       case 'fill': return v == null ? (_esFillBusy[r.code] || (_esMsg && /填息/.test(_esMsg)) ? '<span class="const-spin"></span>' : dim('—')) : _esFillTxt(r);
       case 'days': return v == null ? dim('—') : v.toFixed(1) + ' 天';
       case 'cnt': return v == null ? dim('—') : v + ' 次';
+      case 'trend': return v == null ? dim('—')
+        : '<span class="es-tr es-tr-' + ({ '成長': 'up', '持平': 'flat', '波動': 'wav', '下調': 'dn' })[v] + '">' + v + '</span>'
+          + '<span class="es-trn">' + (r.seqN || 0) + ' 期</span>';
       case 'sgn': return sg(v);
       case 'size': return v == null ? dim('—') : Math.round(v).toLocaleString('zh-TW');
       case 'fee': return v == null ? dim('—') : v.toFixed(2) + '%';
