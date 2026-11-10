@@ -147,7 +147,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .crumb:empty::before { content: none; }
 /* 頂欄常駐四項總計（小一級字，避免擁擠；窄螢幕可捲動） */
 /* 損益表五項比原本四項寬，間距收緊並放寬上限；仍保留 overflow-x 當最後防線 */
-.topbar-totals { display: inline-flex; align-items: baseline; gap: 12px; margin-left: 16px; overflow-x: auto; max-width: 66vw; min-width: 0; vertical-align: middle; }
+/* 標題與麨包屑不可收縮：不寫的話窗口一窄，它們會被壓成兩、三行（實測 1150 寬時
+   「股利總管 Web」被壓成 59px 寬、高 87px）。該讓步的是損益表，它本來就會橫向捲動。 */
+.topbar-home, .crumb, .topbar-txf { flex: 0 0 auto; white-space: nowrap; }
+.topbar-totals { display: inline-flex; align-items: baseline; gap: 12px; margin-left: 16px; overflow-x: auto;
+  max-width: 66vw; min-width: 0; flex: 1 1 auto; vertical-align: middle; scrollbar-width: thin; }
+.topbar-totals::-webkit-scrollbar { height: 6px; }
 .topbar-totals:empty { display: none; }
 /* 台指期即時徽章（加減碼報告頁，標題後方） */
 .topbar-txf { display: inline-flex; align-items: baseline; gap: 6px; margin-left: 16px; vertical-align: middle; }
@@ -159,7 +164,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .topbar-totals .tt-v { font-size: 14px; font-weight: 700; letter-spacing: normal; font-variant-numeric: tabular-nums; }
 /* 右側不讓它被擠：標題那側的損益表已經有橫向捲動，
    該讓步的是那一側。不寫的話按鈕會被壓成 40px 寬、文字折成兩行突出頂欄。 */
-.topbar-right { display: flex; align-items: center; gap: 18px; flex: 0 0 auto; }
+/* 間距：三顆按鈕自成一組（較緊），與左邊的當日數據、右邊的狀態訊息各拉開 */
+.topbar-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.topbar-right > #pv-btn { margin-left: 10px; }
+.topbar-right > #stream-info, .topbar-right > #conn-status { margin-left: 6px; }
 .conn-status { font-size: 13px; color: var(--text2); }
 .conn-status.ok { color: var(--down); }
 .conn-status.off { color: var(--up); }
