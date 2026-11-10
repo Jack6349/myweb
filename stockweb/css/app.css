@@ -2003,3 +2003,7 @@ td.cost-even::after  { background: var(--text3); }
 .nt-del { border-color: rgba(230,120,120,.55); }
 .nt-done { margin-top: 10px; }
 .nt-done > summary { cursor: pointer; font-size: 12.5px; color: var(--text2); padding: 4px 2px; }
+
+/* 隔夜推估：價格為主、百分比為輔。小字固定寬度，價格才上下對齊 */
+.ov-sub { display: inline-block; min-width: 4.8em; text-align: right; margin-left: 6px; font-size: .8em; color: var(--text3); }
+.rb-table td.ov-key { color: var(--accent2); font-weight: 700; }

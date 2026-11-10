@@ -113,14 +113,15 @@ async function _rbSeries(sym, years) {
       if (_rbMeta && typeof _rbMeta.gmtoffset === 'number') tzo = _rbMeta.gmtoffset * 1000;
       var ts = (res && res.timestamp) || [];
       var qt = (res && res.indicators && res.indicators.quote[0]) || {};
-      var cl = qt.close || [], op = qt.open || [], hg = qt.high || [], lw = qt.low || [];
+      var cl = qt.close || [], op = qt.open || [], hg = qt.high || [], lw = qt.low || [], vo = qt.volume || [];
       var acl = ((res && res.indicators && res.indicators.adjclose && res.indicators.adjclose[0]) || {}).adjclose || null;
       for (var k = 0; k < ts.length; k++) {
         if (cl[k] == null) continue;
         out.push({
           d: new Date(ts[k] * 1000 + tzo).toISOString().slice(0, 10),
           c: cl[k], a: (acl && acl[k] != null) ? acl[k] : cl[k],
-          o: op[k] == null ? null : op[k], h: hg[k] == null ? null : hg[k], l: lw[k] == null ? null : lw[k]
+          o: op[k] == null ? null : op[k], h: hg[k] == null ? null : hg[k], l: lw[k] == null ? null : lw[k],
+          v: vo[k] == null ? null : vo[k]
         });
       }
     } catch (e) { hush('rebound', e); }
@@ -364,6 +365,7 @@ async function startRebound(force) {
     }
   }
   _rbData = { cfg: cfg, codes: codes, idx: idx, series: series, sox: sox, trig: _rbTriggers(idx, cfg) };
+  if (typeof ovPrepare === 'function') { try { await ovPrepare(); } catch (e) { hush('rebound', e); } }
   if (info) info.textContent = '資料日 ' + idx[idx.length - 1].d + '（Yahoo 日線，' + cfg.years + ' 年）';
   rbRender();
 }
@@ -447,6 +449,7 @@ function rbRender() {
   var sysEps = t.eps.filter(function (e) { return !!marks[e.start]; }).length;
   var usableEps = t.eps.length - sysEps;
 
+  html += (typeof ovHtml === 'function') ? ovHtml(view) : '';
   html += _rbSoxHtml(view);
   html += (view === 'ana') ? _rbAnaHtml(dates, usableEps, sysEps) : _rbDecHtml(dates, usableEps, sysEps);
   wrap.innerHTML = html;
