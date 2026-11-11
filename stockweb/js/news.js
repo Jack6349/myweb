@@ -620,6 +620,15 @@ window.addEventListener('blur', _mspkClear);
 //
 // 均價線用當盤累計算術平均，不是 VWAP：實測只有 ^IXIC 與 HYG 有成交量，
 // ^SOX／^VIX／^TNX 的 volume 全為 0，算不出 VWAP。五格用同一個定義才不會各說各話。
+// 分時序列有沒有真的在動。沒動就不該畫分時——一條直線看起來像只有一個值。
+// 2026-11-12 實測 ^TNX：Yahoo 給了 41 個 5 分鐘點，41 個全是 4.998，
+// 因為殖利率指數的盤中報價更新極疏。這種時候退回日線，
+// 至少看得到近一個月的走勢，而不是一条無資訊的平線。
+function _intraVaries(i) {
+  if (!i || !i.c || i.c.length < 3) return false;
+  var hi = Math.max.apply(null, i.c), lo = Math.min.apply(null, i.c);
+  return hi > lo;
+}
 var MACRO_INTRA_SYMS = ['^IXIC', '^SOX', '^VIX', '^TNX', 'HYG'];
 async function fetchYahooIntra(sym) {
   var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?interval=5m&range=1d';
@@ -840,7 +849,8 @@ function _macroCellHtml(m, intra) {
       _macroAtHtml(m.asOf) + '</span>' +
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
       '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + cumTxt + '</span>' +
-      ((intra && m.intra) ? _intraSparkHtml({ t: m.intra.t, c: m.intra.c, avg: m.intra.avg,
+      ((intra && m.intra && _intraVaries(m.intra))
+      ? _intraSparkHtml({ t: m.intra.t, c: m.intra.c, avg: m.intra.avg,
       ref: m.intra.ref, fmt: m.fmt, note: '當盤分時（' + (m.intra.tz || '當地') + '）　灰線＝當盤累計平均' })
       : _macroSparkHtml(m)) + '</div>';
   }
