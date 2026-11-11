@@ -449,14 +449,23 @@ async function startEtfScreen(force) {
     _esMsg = '讀取失敗：' + e.message + '（稍後按「↻ 重新整理」再試）';
   } finally { _esBusy = false; renderEtfScreen(); }
 }
-// 前 30 名的填息與費用（切換分類時也會呼叫）
+// 前 30 名的費用，加上「表上看得到的每一列」的填息（切換分類時也會呼叫）
 async function _esLoadExtra() {
   var rk = _esRank();
   if (!rk) return;
   var codes = rk.short.map(function (r) { return r.code; });
   if (typeof divMetaLoad === 'function') { divMetaLoad(codes).then(renderEtfScreen).catch(function (e) { hush('etf-screen', e); }); }
   _esLoadFreq().then(renderEtfScreen).catch(function (e) { hush('etf-screen', e); });
-  await _esEnsureFill(rk.short);
+  // 填息要算「表上列出來的那些」，不是「前 30 名」。
+  // 舊寫法只排 short，標「新」的幾列永遠沒算過，表上是空的。
+  // 空值分成 X 與 — 之後這件事更嚴重：沒算過會被標成「日線抽不到」，
+  // 那是講錯話——根本沒去抽。實測高息類 00408A、00406A、00400A、00998A 四檔中招。
+  var seen = {}, need = [];
+  rk.short.concat(rk.top, rk.fresh).forEach(function (r) {
+    if (seen[r.code]) return;
+    seen[r.code] = 1; need.push(r);
+  });
+  await _esEnsureFill(need);
   renderEtfScreen();
 }
 function esSetGroup(k) {
@@ -472,6 +481,41 @@ function esSortCol(key) {
 }
 
 // 填息率顯示：「(4/4) 100%」次數在前、比例固定寬度靠右，各列的 % 才會上下對齊
+// ═════ 空值有兩種，要分得出來 ═════
+//   X ＝資料源沒給。Yahoo 日線抽不到、資料檔沒這檔。重新整理有機會會有。
+//   — ＝資料拿到了，但這個數字在這個情況下算不出來。樣本不足或不適用，重抓也沒用。
+//
+// 兩者混用的話，「只配過一期所以比不出走向」會被讀成「系統壞了」，
+// 使用者會去按重新整理——而那件事按幾次都不會變。
+function esGap(tip) {   // X：抽不到
+  return '<span class="na-gap" title="' + (tip || '資料源沒給這筆資料') + '">✕</span>';
+}
+function esDash(tip) {  // —：算不出來
+  return '<span class="dm-dim"' + (tip ? ' title="' + tip + '"' : '') + '>—</span>';
+}
+// 填息的兩欄：沒除息事件是不適用，有事件卻沒結果就是日線抽不到
+function esFillNA(r) {
+  if (!r.events || !r.events.length) return esDash('近 12 個月沒有除息，沒有可算的樣本');
+  // 算過了、有結果物但 n＝0：日線是抽到了，是除息日沒落在可取得的範圍內
+  // （剛上市的檔常見）。這是算不出來，不是抽不到，按重新整理也不會變。
+  var f = (typeof _esFill !== 'undefined' && _esFill[r.code]) || null;
+  if (f) return esDash('除息日不在可取得的日線範圍內，算不出填息');
+  return esGap('Yahoo 日線抽不到，按「重新整理」再試');
+}
+function esFillDaysNA(r) {
+  var f = (typeof _esFill !== 'undefined' && _esFill[r.code]) || null;
+  // 算得出填息率但沒一次填成功：沒樣本可平均，不是抽不到
+  if (f && !f.filled) return esDash('這段期間沒有一次填息，沒有天數可平均');
+  return esFillNA(r);
+}
+// 保守年配與配息走向：頻率資料檔沒這檔是抽不到，有檔但期數不足是算不出來
+function esSeqNA(r, needTwo) {
+  var has = (typeof _esFreq !== 'undefined' && _esFreq && _esFreq[String(r.code)]);
+  if (!has) return esGap('配息頻率資料檔沒收錄這檔');
+  if (needTwo && r.seqN === 1) return esDash('只有 1 期紀錄，比不出走向');
+  return esDash('沒有可用的配息紀錄可算');
+}
+
 function _esFillTxt(r) {
   return '<span class="dm-dim">(' + r.fillN + ')</span><span class="es-fpct">' + r.fill.toFixed(0) + '%</span>';
 }
@@ -484,7 +528,7 @@ var ES_COLS = [
   ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）；殖利率、成長率、折溢價跟著現價重算，排名維持開頁時的計算'],
   ['y1', '單次配', 'amtpct', '最近一期每股配息金額（含已公告未除息）與它的單次殖利率。&#10;兩個數字是同一筆錢，與「預估年配」同一個基準。&#10;金額標黃色＝已公告、還沒除息'],
   ['yEst', '預估年配', 'pct', '趨勢：最近一期（含已公告未除息）× 一年期數 ÷ 現價。配息調高調低都會立刻反映'],
-  ['yCons', '保守年配', 'pct', '風險：取樣區間內最低一期 × 一年期數 ÷ 現價。&#10;回答「每一期都像最差那一期時，用現在的價格買進是多少」。&#10;區間：年配 2 年、半年配與季配 1 年、雙月配與月配 6 個月'],
+  ['yCons', '保守年配', 'cons', '風險：取樣區間內最低一期 × 一年期數 ÷ 現價。&#10;回答「每一期都像最差那一期時，用現在的價格買進是多少」。&#10;區間：年配 2 年、半年配與季配 1 年、雙月配與月配 6 個月'],
   ['trend', '配息走向', 'trend', '穩定性：依區間內最低值的位置與降息次數判定。&#10;下調＝最新一期就是最低、持平＝最高與最低差 5% 以內、&#10;成長＝只升不降、波動＝有升有降。小字是區間內的配息期數'],
   ['y12', '近12月配', 'pct', '近 12 個月殖利率：近 12 個月實際配息合計 ÷ 現價'],
   ['n12', '已配次數', 'cnt', '近 12 個月內已除息次數。新上市的次數不足，「近 12 月配」會因此偏低'],
@@ -615,15 +659,17 @@ function renderEtfScreen() {
       case 'f1': return v == null ? dim('—') : '<b>' + v.toFixed(1) + '</b>';
       case 'f2': return v == null ? dim('—') : v.toFixed(2);
       case 'pct': return v == null ? dim('—') : v.toFixed(2) + '%';
+      case 'cons': return v == null ? esSeqNA(r, false) : v.toFixed(2) + '%';
       // 金額固定寬度右對齊，整欄才排得齊；每一列都有，所以不拆行
       case 'amtpct': return v == null ? dim('—')
         : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '"'
             + (r.y1Ann ? ' title="已公告、還沒除息"' : '') + '>'
             + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + v.toFixed(2) + '%';
-      case 'fill': return v == null ? (_esFillBusy[r.code] || (_esMsg && /填息/.test(_esMsg)) ? '<span class="const-spin"></span>' : dim('—')) : _esFillTxt(r);
-      case 'days': return v == null ? dim('—') : v.toFixed(1) + ' 天';
+      case 'fill': return v == null ? (_esFillBusy[r.code] || (_esMsg && /填息/.test(_esMsg)) ? '<span class="const-spin"></span>' : esFillNA(r)) : _esFillTxt(r);
+      case 'days': return v == null
+        ? (_esFillBusy[r.code] ? '<span class="const-spin"></span>' : esFillDaysNA(r)) : v.toFixed(1) + ' 天';
       case 'cnt': return v == null ? dim('—') : v + ' 次';
-      case 'trend': return v == null ? dim('—')
+      case 'trend': return v == null ? esSeqNA(r, true)
         : '<span class="es-tr es-tr-' + ({ '成長': 'up', '持平': 'flat', '波動': 'wav', '下調': 'dn' })[v] + '">' + v + '</span>'
           + '<span class="es-trn">' + (r.seqN || 0) + ' 期</span>';
       case 'sgn': return sg(v);
@@ -656,11 +702,15 @@ function renderEtfScreen() {
     '<div class="detail-note"><dl>' +
     '<dt>綜合分</dt><dd>各指標在同類中的<b>百分位</b>加權：' +
     '<code>一年含息 25 ＋ 近12月殖利率 25 ＋ 填息率 20 ＋ 一年價格 15 ＋ 規模 10 ＋ 內扣費用 5</code>。' +
-    '填息率與費用只對前 ' + ES_TOP1 + ' 名計算。</dd>' +
+    '內扣費用只對前 ' + ES_TOP1 + ' 名計算；填息率表上每一列都算。</dd>' +
     '<dt>單次配</dt><dd>左邊是<b>最近一期每股配息金額</b>（含已公告未除息），' +
       '右邊是它除以現價的單次殖利率。兩個數字是同一筆錢，' +
       '與「預估年配」同一個基準（那一欄就是這個金額×一年期數）。' +
       '金額標黃色代表已公告、還沒除息。</dd>' +
+    '<dt>空格的兩種意思</dt><dd><span class="na-gap">✕</span> 是<b>資料源沒給</b>' +
+      '（日線抽不到、資料檔沒收錄這檔），按「重新整理」有機會會有；' +
+      '<span class="dm-dim">—</span> 是<b>資料拿到了但算不出來</b>（樣本不足、不適用），重抓也不會變。' +
+      '滑過去會說是哪一種。</dd>' +
     '<dt>範圍</dt><dd>本類共 ' + rk.total + ' 檔：排名前 ' + ES_TOP + ' 名，加上標「新」的 ' + rk.young + ' 檔全列。' +
     '已排除槓桿／反向與期貨商品型。</dd>' +
     '<dt>標「新」的那幾檔怎麼看</dt><dd>上市未滿一年，缺一年期報酬與填息紀錄，' +
@@ -778,8 +828,9 @@ function esWatchCells(code) {
       : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '">'
         + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + r.y1.toFixed(2) + '%'),
     yEst: pct(r.yEst), y12: pct(r.y12),
-    fill: r.fill == null ? (_esFillBusy[r.code] ? '<span class="const-spin"></span>' : dim('—')) : _esFillTxt(r),
-    fillDays: r.fillDays == null ? dim('—') : r.fillDays.toFixed(1) + ' 天',
+    fill: r.fill == null ? (_esFillBusy[r.code] ? '<span class="const-spin"></span>' : esFillNA(r)) : _esFillTxt(r),
+    fillDays: r.fillDays == null
+      ? (_esFillBusy[r.code] ? '<span class="const-spin"></span>' : esFillDaysNA(r)) : r.fillDays.toFixed(1) + ' 天',
     g6: sg(r.g6), g12: sg(r.g12), tr6: sg(r.tr6), tr12: sg(r.tr12),
     size: r.size == null ? dim('—') : Math.round(r.size).toLocaleString('zh-TW'),
     fee: r.fee == null ? dim('—') : r.fee.toFixed(2) + '%',

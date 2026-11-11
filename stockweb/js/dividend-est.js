@@ -802,6 +802,9 @@ function renderDividendEst() {
     '近 12 個月內已賣出、但除息日當時仍持有的批次照算（依券商已實現損益明細）。</dd>' +
     '<dt>月份總覽</dt><dd>本月（上月除息、本月發放）起 12 個月。跨到明年的月份以今年各次配息投影，' +
     '每股金額取最近一次已知值、張數用目前持股。</dd>' +
+    '<dt>空格的兩種意思</dt><dd><span class="na-gap">✕</span> 是<b>資料源沒給</b>，' +
+      '按「重新整理」有機會會有；<span class="dm-dim">—</span> 是<b>資料拿到了但算不出來</b>' +
+      '（樣本不足、不適用），重抓也不會變。滑過去會說是哪一種。</dd>' +
     '<dt>已出清的檔</dt><dd>個股明細只留「還有錢沒入帳」的：' +
       '<code>現在持股為 0</code>且<code>今年每一筆有領息權的配息發放日都已經過了</code>，' +
       '兩者同時成立才不列。除息日當天持有就有領息權，而入帳是 20 到 40 天後，' +
@@ -856,30 +859,34 @@ function _divEsStatHtml(code) {
     return '<span class="dvs-i"' + (tip ? ' title="' + tip + '"' : '') + '>'
       + '<span class="dvs-lb">' + lb + '</span><span class="dvs-v">' + v + '</span></span>';
   };
+  // 整檔都沒指標：評比資料裡沒這檔，是抽不到（X）不是算不出來
+  var gap = function (t) { return (typeof esGap === 'function') ? esGap(t) : dim('✕'); };
   if (!r) {
-    return '<div class="dvs-row">' + cell('單次配', _divEsBusy ? wait : dim('—'))
-      + cell('保守年配', _divEsBusy ? wait : dim('—'))
-      + cell('配息走向', _divEsBusy ? wait : dim('—')) + '</div>';
+    var g = _divEsBusy ? wait : gap('評比資料沒收錄這檔，按「重新整理」再試');
+    return '<div class="dvs-row">' + cell('單次配', g)
+      + cell('保守年配', g) + cell('配息走向', g) + '</div>';
   }
-  var pct = function (v) { return v == null ? dim('—') : v.toFixed(2) + '%'; };
-  var amt = r.y1Amt == null ? dim('—')
+  var seqNA = function (two) {
+    return (typeof esSeqNA === 'function') ? esSeqNA(r, two) : dim('—');
+  };
+  var amt = r.y1Amt == null ? gap('查無配息紀錄')
     : '<span class="dvs-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '"'
       + (r.y1Ann ? ' title="已公告、還沒除息"' : '') + '>' + r.y1Amt.toFixed(4) + '</span>';
-  // 只配過一期的推不出走向（實測 00404A、00999A）。
-  // 光一個「—」會被讀成「資料抽不到」，標出原因才分得出來。
-  var trend = r.trend == null
-    ? '<span class="dm-dim" title="'
-        + (r.seqN === 1 ? '只有 1 期紀錄，比不出走向'
-                        : '配息紀錄不足，比不出走向') + '">—</span>'
+  // 只配過一期的推不出走向（實測 00404A、00999A）——那是算不出來（—），
+  // 跟「頻率資料檔沒這檔」（X）是兩回事，esSeqNA 替兩者分流。
+  var trend = r.trend == null ? seqNA(true)
     : '<span class="es-tr es-tr-' + ({ '成長': 'up', '持平': 'flat', '波動': 'wav', '下調': 'dn' })[r.trend] + '">'
       + r.trend + '</span><span class="es-trn">' + (r.seqN || 0) + ' 期</span>';
   var fillBusy = (typeof _esFillBusy !== 'undefined' && _esFillBusy[code]) || _divEsBusy;
-  var fill = r.fill == null ? (fillBusy ? wait : dim('—'))
+  var fill = r.fill == null
+    ? (fillBusy ? wait : ((typeof esFillNA === 'function') ? esFillNA(r) : dim('—')))
     : '<span class="dm-dim">(' + r.fillN + ')</span><span class="es-fpct">' + r.fill.toFixed(0) + '%</span>';
-  var fd = r.fillDays == null ? (fillBusy ? wait : dim('—')) : r.fillDays.toFixed(1) + ' 天';
+  var fd = r.fillDays == null
+    ? (fillBusy ? wait : ((typeof esFillDaysNA === 'function') ? esFillDaysNA(r) : dim('—')))
+    : r.fillDays.toFixed(1) + ' 天';
   return '<div class="dvs-row">'
     + cell('單次配', amt, '最近一期每股配息金額（含已公告未除息）。黃色＝已公告、還沒除息')
-    + cell('保守年配', pct(r.yCons), '取樣區間內最低一期 × 一年期數 ÷ 現價：每一期都像最差那一期時的水準')
+    + cell('保守年配', r.yCons == null ? seqNA(false) : r.yCons.toFixed(2) + '%', '取樣區間內最低一期 × 一年期數 ÷ 現價：每一期都像最差那一期時的水準')
     + cell('配息走向', trend, '下調＝最新一期就是最低、持平＝最高與最低差 5% 以內、成長＝只升不降、波動＝有升有降')
     + '</div><div class="dvs-row">'
     + cell('填息率', fill, '近 12 個月：已填息次數 ÷ 除息次數（除息後收盤回到除息前收盤即算填息）')
