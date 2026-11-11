@@ -611,7 +611,7 @@ function pvSpcSvg(data) {
   return head + s;
 }
 
-// 均線跟着零線切色：零線之上紅、之下綠，跨零的那一段在交點精確切開。
+// 均線跟著零線切色：零線之上紅、之下綠，跨零的那一段在交點精確切開。
 // 整條一色會讓「現在是正是負」讀不出來，與下方直條的讀法也對不起來。
 function _pvMmaPath(mvals, x, y, zeroV) {
   var up = '', dn = '', yz = y(zeroV);

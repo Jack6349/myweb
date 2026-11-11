@@ -222,7 +222,7 @@ function _rbRank(sorted, v) {
   return n / sorted.length * 100;
 }
 // 二分搜：給定台股交易日 d，回「日期小於 d 的最後一個美股交易日」。
-// 台股 13:30 收盤時美股当天還沒開，所以同一個日期的美股盤算「隔夜」、落在隔天的台股。
+// 台股 13:30 收盤時美股當天還沒開，所以同一個日期的美股盤算「隔夜」、落在隔天的台股。
 function _rbPrevFn(dates) {
   return function (d) {
     var lo = 0, hi = dates.length - 1, ans = null;

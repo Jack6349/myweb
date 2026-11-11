@@ -2042,3 +2042,5 @@ td.cost-even::after  { background: var(--text3); }
 .ov-at { display: inline-block; margin-left: 10px; font-size: 11px; color: var(--text3); }
 /* 典型範圍才是這張表的主數字：兩個訊號只說明得了一半的起伏，點估值是區間的中心而已 */
 .rb-table td.ov-range { color: var(--text); font-weight: 700; }
+/* 已出清且領完的檔不再列：數字變少時標一句，否則看起來像壞了 */
+.divest-dropnote { margin: 2px 0 8px; font-size: 12px; color: var(--text3); }

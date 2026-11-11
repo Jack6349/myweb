@@ -664,7 +664,7 @@ function renderDividendEst() {
   html += '<div class="divest-divider"></div>' + _rfCalHtml();
 
   // ── 個股明細（可折疊）──
-  html += '<div class="divest-divider"></div><div class="sec-title">個股明細</div>';
+  var _stkTitle = '<div class="divest-divider"></div><div class="sec-title">個股明細</div>';
   // 先把表頭的三個數字算出來，排序才有東西可排；渲染迴圈改成讀這份結果。
   var met = {};
   stocks.forEach(function (s) { met[s.code] = _divStockMetrics(s); });
@@ -682,10 +682,37 @@ function renderDividendEst() {
     if (vb == null) return -1;
     return va === vb ? byCode : (sAsc ? va - vb : vb - va);
   });
+  // 已出清且沒有待收息的→不列。
+  //
+  // 不能只看「現在持股為 0」就刪：除息日當天持有就有領息權，
+  // 實際入帳是 20 到 40 天後，所以賣掉之後還有一筆在路上是常態。
+  // 00989B 就踩在這條線上：2026-11-06 到 11-10 賣光、月配，
+  // 11 月那筆發放日在月底。那筆刪掉使用者會以為錢不存在。
+  //
+  // 刪的範圍只限這一區：已領到的是今年實際的配息收入，
+  // 所以月份總覽與年估總額用的仍是未過濾的 stocks，
+  // 連那邊一起清掉的話，今年的總額會憑空變小，跟銀行餘額對不起來。
+  var _todayIso = _divTwDate().iso;
+  var _pendingPay = function (st) {
+    return (st.res.months || []).some(function (mo) {
+      // 沒公告發放日時退回狀態（發放日已過＝已領，未來＝預估）
+      return mo.payDate ? mo.payDate >= _todayIso : mo.status === 'est';
+    });
+  };
+  var _dropped = 0;
+  sorted = sorted.filter(function (st) {
+    if (!st.soldOut || _pendingPay(st)) return true;
+    _dropped++;
+    return false;
+  });
   var sArrow = function (k) { return _divEstSort === k + 'Asc' ? '▲' : (_divEstSort === k + 'Desc' ? '▼' : '↕'); };
   var sOn = function (k) { return sKey === k ? ' sorted' : ''; };
   // 表頭列：欄位名只出現一次。原本每一列自己寫「預估年殖利率」「成本殖利率」，
   // 每列字數不同，所以上下永遠對不齊。說明搬到表頭的 title。
+  html += _stkTitle + (_dropped
+    ? '<div class="divest-dropnote">已出清且配息全數入帳的 ' + _dropped
+        + ' 檔不再列。已領金額仍計入下方月份總覽與年估總額。</div>'
+    : '');
   html += '<div class="divest-stocks"><div class="divest-hrow">' +
     '<span class="sort-th' + sOn('code') + '" onclick="divEstSort(\'code\')" title="點擊排序">代碼<span class="sort-ind">' + sArrow('code') + '</span></span>' +
     '<span>名稱</span>' +
@@ -772,6 +799,11 @@ function renderDividendEst() {
     '近 12 個月內已賣出、但除息日當時仍持有的批次照算（依券商已實現損益明細）。</dd>' +
     '<dt>月份總覽</dt><dd>本月（上月除息、本月發放）起 12 個月。跨到明年的月份以今年各次配息投影，' +
     '每股金額取最近一次已知值、張數用目前持股。</dd>' +
+    '<dt>已出清的檔</dt><dd>個股明細只留「還有錢沒入帳」的：' +
+      '<code>現在持股為 0</code>且<code>今年每一筆有領息權的配息發放日都已經過了</code>，' +
+      '兩者同時成立才不列。除息日當天持有就有領息權，而入帳是 20 到 40 天後，' +
+      '所以賣掉之後還有一筆在路上是常態，那種會留著。' +
+      '不列的檔其已領金額仍計入月份總覽與年估總額——那是今年實際的收入。</dd>' +
     '<dt>資料來源</dt><dd>上市 ETF＝TWSE e添富；上櫃／債券 ETF＝Yahoo 歷史推估。</dd>' +
     '</dl></div>';
   wrap.innerHTML = html;
