@@ -2058,3 +2058,13 @@ td.cost-even::after  { background: var(--text3); }
 .na-gap { color: var(--text3); opacity: .75; cursor: help; font-size: .9em; }
 /* 關注清單 22 欄：欄距 8px→4px，1920 就從捲動 116px 變成剛好塞得下 */
 .wt-table td, .wt-table th { padding-left: 4px; padding-right: 4px; }
+/* 評比表 25 列加上展開明細就超過 .inv-table-wrap 的高度上限，冒出一條跟頁面捲軸
+   並列的內層垂直捲軸（實測可視 603、內容 1013）。與新上市那張同一個解法：
+   解掉高度上限讓頁面自己捲，橫向仍由 overflow:auto 把關。 */
+.es-wrap { max-height: none; }
+/* 波動度符號：接在走向標籤後。※（波動大）要看得出來，其餘淡化不搶視線 */
+.es-vol { display: inline-block; min-width: 1.1em; margin-left: 4px; text-align: center; cursor: help; }
+.es-vol-0 { color: var(--text3); }
+.es-vol-s { color: var(--text2); }
+.es-vol-b { color: var(--accent2); font-weight: 700; }
+.es-vol-na { color: var(--text3); opacity: .7; }
