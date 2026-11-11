@@ -21,7 +21,7 @@ async function renderConstImport(force) {
 
     // 自動抓取結果（constituents.js 的每日快取）：抓得到的不用匯入、不顯示
     var cache = null;
-    try { cache = JSON.parse(localStorage.getItem('const_list_v1') || 'null'); } catch (e) {}
+    try { cache = JSON.parse(localStorage.getItem('const_list_v2') || 'null'); } catch (e) {}
     var rows = [];
     etfs.forEach(function (code) {
       var d = cache && cache.map && cache.map[code];

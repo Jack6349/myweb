@@ -137,7 +137,7 @@ async function _constCtrLoad() {
 async function _constEnsure(code) {
   code = String(code);
   if (_constMap[code]) return !!(_constMap[code].rows || []).length;
-  var lsKey = 'const_list_v1', cache = null;
+  var lsKey = 'const_list_v2', cache = null;
   try { cache = JSON.parse(localStorage.getItem(lsKey) || 'null'); } catch (e) {}
   if (!cache || cache.day !== _constDay()) cache = { day: _constDay(), map: {} };
   var d = cache.map[code];
@@ -159,7 +159,7 @@ async function initConstituents() {
   _constInit = true;
   try {
     // 1) 成份股清單（每日快取）
-    var lsKey = 'const_list_v1';
+    var lsKey = 'const_list_v2';
     var cache = null;
     try { cache = JSON.parse(localStorage.getItem(lsKey) || 'null'); } catch (e) {}
     if (!cache || cache.day !== _constDay()) cache = { day: _constDay(), map: {} };
@@ -377,7 +377,14 @@ async function refreshConstMissing(code) {
       });
     } catch (e) { console.warn('[const usquote missing]', e); }
   })());
-  if (hasTwMissing && _twMarketLive()) jobs.push(pollTwConst(false));
+  // 不能加 _twMarketLive()：那一段把收盤後的台股成份股報價全擋掉了。
+  // 2026-11-11 18:37 實測 00934：清單 50 檔都在、合約也都查得到，
+  // 但報價覆蓋率 0%、漲跌全是「—」，因為這行直接跳過不抓。
+  // 美股那一支沒有這個閘，所以持美股的 00402A 同一時刻是 98.4%。
+  //
+  // 台股快照走本機券商連線，沒有 GAS 配額問題，盤外抓一次拿到的是最後收盤。
+  // 該櫜的是「定時輪詢」（收盤價不會變，每 3 秒重抓沒意義），不是開窗時的這一次。
+  if (hasTwMissing) jobs.push(pollTwConst(false));
   if (!jobs.length) return;
   await Promise.allSettled(jobs);
   _constRecompute();
