@@ -750,10 +750,19 @@ function toggleDrawer() {
 }
 // 只換盤勢那一列：抽屜其他部分跟著行情 tick 重繪，盤勢不該跟著跑
 function renderDrawerMacro() {
+  if (typeof _dwTab !== 'undefined' && _dwTab === 'pos') return;   // 部位頁沒有盤勢容器
   var m = document.getElementById('dw-macro');
   if (m && typeof macroDrawerHtml === 'function') m.innerHTML = macroDrawerHtml();
   var a = document.getElementById('dw-macro-at');
   if (a && typeof macroFetchHtml === 'function') a.innerHTML = macroFetchHtml();
+}
+var _dwTab = (function () {
+  try { var v = localStorage.getItem('dw_tab_v1'); return v === 'pos' ? 'pos' : 'mkt'; } catch (e) { return 'mkt'; }
+})();
+function dwTab(k) {
+  _dwTab = (k === 'pos') ? 'pos' : 'mkt';
+  try { localStorage.setItem('dw_tab_v1', _dwTab); } catch (e) {}
+  renderDrawer();
 }
 function renderDrawer() {
   var d = document.getElementById('dw');
@@ -762,12 +771,20 @@ function renderDrawer() {
   if (!_dwOpen) { d.innerHTML = ''; return; }   // 收起時不留 DOM，盤中不跟著重繪
   var t = portfolioTotals();
   var cvar = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
-  // 盤勢放最上面：抽屜一展開先看到市場，再往下才是自己的部位與配置
+  // 兩個頁籤而不是上下三段：八個盤勢格擠在一排，每格的圖只有 26px 高，
+  // 橫軸改成時間刻度之後更需要寬度才看得出「還剩多少」。
+  // 部位與配置移到第二頁，第一頁的格子就放得下。
   var h = '<button class="dw-close" onclick="toggleDrawer()" title="收起">✕</button>';
-  h += '<div class="dw-sec">盤勢<span id="dw-macro-at">' +
-    (typeof macroFetchHtml === 'function' ? macroFetchHtml() : '') +
-    '</span></div><div id="dw-macro" class="macro-row">' +
-    (typeof macroDrawerHtml === 'function' ? macroDrawerHtml() : '') + '</div>';
+  h += '<div class="dw-tabs">' +
+    '<button class="dw-tab' + (_dwTab === 'pos' ? '' : ' on') + '" onclick="dwTab(\'mkt\')">盤勢</button>' +
+    '<button class="dw-tab' + (_dwTab === 'pos' ? ' on' : '') + '" onclick="dwTab(\'pos\')">部位與配置</button>' +
+    '<span id="dw-macro-at">' + (typeof macroFetchHtml === 'function' ? macroFetchHtml() : '') + '</span></div>';
+  if (_dwTab !== 'pos') {
+    h += '<div id="dw-macro" class="macro-row">' +
+      (typeof macroDrawerHtml === 'function' ? macroDrawerHtml() : '') + '</div>';
+    d.innerHTML = h;
+    return;
+  }
   h += '<div class="dw-sec">部位</div><div class="dw-row">' +
     sumPair('資本損益(不含配息)', t.profit == null ? '—'
       : (t.profit >= 0 ? '+' : '') + t.profit.toLocaleString('zh-TW') +
@@ -786,7 +803,8 @@ function renderDrawer() {
     '</div>';
   h += '<div class="dw-sec">配置</div><div id="dw-cats"></div>';
   d.innerHTML = h;
-  if (typeof renderInvCats === 'function') renderInvCats(document.getElementById('dw-cats'), true);
+  var cat = document.getElementById('dw-cats');
+  if (cat && typeof renderInvCats === 'function') renderInvCats(cat, true);
 }
 
 function renderSummaries() {
