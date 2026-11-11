@@ -48,6 +48,7 @@ async function startEtfNew(force) {
     renderEtfNew();
     await enPrices();
     renderEtfNew();
+    await enExtra(force);
   } catch (e) {
     wrap.innerHTML = '<div class="modal-loading">載入失敗：' + e.message +
       '（本機排程 etf-new.py 還沒跑過時會是這個狀態）</div>';
@@ -78,6 +79,113 @@ function _enChgCell(r) {
     Math.abs(p.chgPct).toFixed(2) + '%</span>';
 }
 
+// ── 內扣、規模、折溢價、上市以來報酬 ──
+//
+// 新上市沒有歷史，評比那 20 欄裡只有這幾個擐得住（實測 14 檔）：
+//   有值：現價、規模 3～120 億、折溢價 −1.28%～+0.38%
+//   全零：單次配、預估年配、保守年配、配息走向、填息率、半年與一年的價格與含息
+//   近12月配與已配次數雖然有值，但 12 檔全是 0，列出來反而會被讀成「這檔配 0」
+//
+// 內扣是公開說明書的固定條款，上市第一天就有，不需要任何歷史，
+// 而且實測 0.44% 到 1.55%、差 3.5 倍——沒績效可比時它是唯一分得出高下的硬數字。
+// 評比頁的內扣只載前 30 名，新上市檔從來沒載到，所以這裡另外載一次。
+var _enBars = {};           // code -> { days, r0 }  上市以來報酬的起點與天數
+var _enExtraDone = false;
+
+async function _enBarsOf(code, market) {
+  var syms = market === '上櫃' ? [code + '.TWO', code + '.TW'] : [code + '.TW', code + '.TWO'];
+  for (var i = 0; i < syms.length; i++) {
+    try {
+      var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(syms[i]) + '?interval=1d&range=1y';
+      var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
+      var j = await r.json();
+      var res = j.chart && j.chart.result && j.chart.result[0];
+      if (!res) continue;
+      var cl = ((res.indicators && res.indicators.quote && res.indicators.quote[0]
+                 && res.indicators.quote[0].close) || []).filter(function (x) { return x != null; });
+      if (cl.length) return { days: cl.length, r0: cl[0] };
+    } catch (e) { hush('etf-new', e); }
+  }
+  return null;
+}
+
+async function enExtra(force) {
+  if (!_enData || (_enExtraDone && !force)) return;
+  if (force) { _enBars = {}; }
+  var codes = _enData.listed.map(function (x) { return x.code; });
+  // 內扣規格（每日快取）
+  if (typeof divMetaLoad === 'function') { try { await divMetaLoad(codes); } catch (e) { hush('etf-new', e); } }
+  renderEtfNew();
+  // 規模與折溢價：跟評比頁同一份當日資料，不重複抓
+  if (typeof _esGetBase === 'function') { try { await _esGetBase(false); } catch (e) { hush('etf-new', e); } }
+  renderEtfNew();
+  // 上市以來報酬：逐檔抓 Yahoo 日線，四條並行
+  var q = _enData.listed.filter(function (x) { return !x.upcoming && !_enBars[x.code]; });
+  var worker = async function () {
+    while (q.length) {
+      var x = q.shift();
+      var b = await _enBarsOf(x.code, x.market);
+      _enBars[x.code] = b || { days: 0, r0: null };
+      renderEtfNew();
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  _enExtraDone = true;
+  renderEtfNew();
+}
+
+// 空值兩種：✕＝資料源沒給，—＝拿到了但算不出來（與評比、主動式頁籤同一套）
+function _enGap(t) { return '<span class="na-gap" title="' + t + '">✕</span>'; }
+function _enDash(t) { return '<span class="swap-dim"' + (t ? ' title="' + t + '"' : '') + '>—</span>'; }
+
+function _enFee(r) {
+  if (r.upcoming) return _enDash('還沒掛牌');
+  var m = (typeof _divMeta !== 'undefined' && _divMeta[r.code]) || null;
+  if (!m) return _enGap('官方 ETF 規格抓不到');
+  var mg = (typeof _divFeePct === 'function') ? _divFeePct(m.mgmt) : null;
+  var cu = (typeof _divFeePct === 'function') ? _divFeePct(m.cust) : null;
+  if (mg == null || cu == null) return _enGap('規格裡沒有經理費或保管費');
+  return (mg + cu).toFixed(2) + '%';
+}
+function _enEs(r, key) {
+  if (r.upcoming) return _enDash('還沒掛牌，沒有淨值與規模資料');
+  var m = (typeof esMetricsFor === 'function') ? esMetricsFor(r.code) : null;
+  if (!m) return _enGap('評比資料還沒收錄這檔（剛掛牌的次日才會有）');
+  var v = m[key];
+  if (v == null) return _enDash('算不出來');
+  if (key === 'size') return Math.round(v).toLocaleString('zh-TW');
+  var cls = v > 0 ? 'up' : (v < 0 ? 'down' : '');
+  return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '%</span>';
+}
+// 上市以來：起點是第一根日線收盤，終點是券商即時價。
+// 一定要配「天數」看：15 天與 55 天的報酬不能直接比。
+function _enSince(r) {
+  if (r.upcoming) return _enDash('還沒掛牌');
+  var b = _enBars[r.code];
+  if (!b) return '<span class="const-spin"></span>';
+  if (!b.days || !(b.r0 > 0)) return _enGap('Yahoo 日線抓不到');
+  // 上市第一天：起點就是今天那一根，算出來永遠是 ±0.00%。
+  // 那不是「沒漲沒跌」而是「沒有可比的起點」，打成 0 會讓人誤以為是前者。
+  if (b.days < 2) return _enDash('上市第一天，沒有可比的起點（今日漲跌看左邊那欄）');
+  var p = _enPx[r.code];
+  var px = (p && p.close > 0) ? p.close : null;
+  if (!px) return _enDash('沒有現價可當終點');
+  var v = (px / b.r0 - 1) * 100;
+  var cls = v > 0 ? 'up' : (v < 0 ? 'down' : '');
+  return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '%</span>';
+}
+function _enDays(r) {
+  if (r.upcoming) return _enDash('還沒掛牌');
+  var b = _enBars[r.code];
+  if (!b) return '<span class="const-spin"></span>';
+  return b.days ? b.days : _enGap('Yahoo 日線抓不到');
+}
+function _enSinceVal(r) {
+  var b = _enBars[r.code], p = _enPx[r.code];
+  if (!b || !(b.r0 > 0) || !p || !(p.close > 0)) return null;
+  return (p.close / b.r0 - 1) * 100;
+}
+
 // ── 排序 ──
 // 未上市的沒有價格也沒有漲跌，不管升冪降冪一律排最後，否則它們會佔住榜首或榜尾。
 var _enSort = 'listDesc';
@@ -92,6 +200,18 @@ function _enSortVal(r, key) {
   var p = _enPx[r.code] || {};
   if (key === 'px') return p.close;
   if (key === 'chg') return p.chgPct;
+  if (key === 'since') return _enSinceVal(r);
+  if (key === 'days') { var b = _enBars[r.code]; return (b && b.days) ? b.days : null; }
+  if (key === 'fee') {
+    var m = (typeof _divMeta !== 'undefined' && _divMeta[r.code]) || null;
+    if (!m || typeof _divFeePct !== 'function') return null;
+    var mg = _divFeePct(m.mgmt), cu = _divFeePct(m.cust);
+    return (mg != null && cu != null) ? mg + cu : null;
+  }
+  if (key === 'size' || key === 'prem') {
+    var em = (typeof esMetricsFor === 'function') ? esMetricsFor(r.code) : null;
+    return em ? em[key] : null;
+  }
   return null;
 }
 function _enSorted(list) {
@@ -122,7 +242,7 @@ var EN_SHOW = ['發行公司', '成立日期', '上市日期', '投資標的', '
 
 function _enDetailHtml(r) {
   var d = r.detail || {};
-  var h = '<tr class="en-detail"><td colspan="7"><div class="en-box">';
+  var h = '<tr class="en-detail"><td colspan="12"><div class="en-box">';
   h += '<div class="en-sec">投資特色</div>';
   h += d['投資策略']
     ? '<div class="en-text">' + d['投資策略'] + '</div>'
@@ -196,8 +316,11 @@ function renderEtfNew() {
   h += '<div class="sec-title">已上市上櫃</div>';
   h += '<div class="inv-table-wrap en-wrap"><table class="inv-table en-table"><thead><tr>' +
     '<th class="num">關注</th>' + _enTh('code', '代號') + '<th>名稱</th>' +
+    _enTh('type', '類型') + _enTh('list', '上市日') +
     _enTh('px', '現價', 'num') + _enTh('chg', '今日漲跌', 'num') +
-    _enTh('type', '類型') + _enTh('list', '上市日') + '</tr></thead><tbody>';
+    _enTh('since', '上市以來', 'num') + _enTh('days', '天數', 'num') +
+    _enTh('fee', '內扣', 'num') + _enTh('size', '規模', 'num') +
+    _enTh('prem', '折溢價', 'num') + '</tr></thead><tbody>';
   _enSorted(d.listed).forEach(function (r) {
     var on = list.indexOf(r.code) >= 0;
     h += '<tr class="en-row" onclick="enToggle(\'' + r.code + '\')">' +
@@ -208,10 +331,16 @@ function renderEtfNew() {
         ' onclick="event.stopPropagation();openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-name">' + r.name +
         '<span class="en-caret">' + (_enOpen[r.code] ? '▼' : '▶') + '</span></td>' +
+      '<td>' + (r.type || '—') + '<span class="swap-dim"> ' + r.market + '</span></td>' +
+      '<td>' + r.listDate + (r.upcoming ? ' <span class="dexm-lent">(待掛牌)</span>' : '') + '</td>' +
       '<td class="num">' + _enPxCell(r) + '</td>' +
       '<td class="num">' + _enChgCell(r) + '</td>' +
-      '<td>' + (r.type || '—') + '<span class="swap-dim"> ' + r.market + '</span></td>' +
-      '<td>' + r.listDate + (r.upcoming ? ' <span class="dexm-lent">(待掛牌)</span>' : '') + '</td></tr>';
+      '<td class="num">' + _enSince(r) + '</td>' +
+      '<td class="num' + (function () { var b = _enBars[r.code];
+        return (b && b.days && b.days < 60) ? ' swap-warn' : ''; })() + '">' + _enDays(r) + '</td>' +
+      '<td class="num">' + _enFee(r) + '</td>' +
+      '<td class="num">' + _enEs(r, 'size') + '</td>' +
+      '<td class="num">' + _enEs(r, 'prem') + '</td></tr>';
     if (_enOpen[r.code]) h += _enDetailHtml(r);
   });
   h += '</tbody></table></div>';
@@ -224,6 +353,19 @@ function renderEtfNew() {
   h += '<div class="detail-note"><dl>' +
     '<dt>清單</dt><dd>證交所 ISIN 公開資訊的 ETF 分類，上市日在近 ' + d.windowDays +
       ' 天內。已核准、還沒掛牌的也會列出，標「待掛牌」。</dd>' +
+    '<dt>為什麼只有這幾欄</dt><dd>新上市沒有歷史，ETF 評比那一頁的配息與報酬欄位' +
+      '在這幾檔上全是空的或全是 0（實測 14 檔），列出來反而會被讀成' +
+      '「這檔配 0」而不是「這檔還沒開始配」，所以不列。' +
+      '留下來的四欄都不需要歷史：' +
+      '<b>內扣</b>是公開說明書的固定條款，上市第一天就有（實測 0.44%～1.55%，差 3.5 倍）；' +
+      '<b>規模</b>實測 3～120 億，過小有清算門檻的風險；' +
+      '<b>折溢價</b>新上市初期市價容易脱離淨值；' +
+      '<b>上市以來</b>是唯一算得出來的報酬。</dd>' +
+    '<dt>上市以來與天數要一起看</dt><dd>起點是第一根日線收盤，終點是券商即時價。' +
+      '<b>15 天的報酬與 55 天的報酬不能直接比</b>，天數不足 60 天的標警示色。</dd>' +
+    '<dt>空格的兩種意思</dt><dd><span class="na-gap">✕</span> 是<b>資料源沒給</b>，' +
+      '按「重新整理」有機會會有；<span class="swap-dim">—</span> 是<b>資料拿到了但算不出來</b>' +
+      '（例如還沒掛牌），重抓也不會變。滑過去會說是哪一種。</dd>' +
     '<dt>投資特色</dt><dd>MoneyDJ 的「投資策略」整段原文，未經改寫。</dd>' +
     '<dt>收益分配</dt><dd>日期與金額取 Yahoo 台股配息頁，不以官方公告為主來源：公告會落後一到兩週，' +
       '今天的實例是 00408A 與 00991B 的除息日兩邊一致，但證交所的金額欄仍是空的，Yahoo 已有 0.21 與 0.067。' +
