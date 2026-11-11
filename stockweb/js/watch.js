@@ -245,9 +245,9 @@ function renderWatch() {
     return;
   }
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
-    '<th></th><th></th>' + _wtTh('code', '代號') + '<th>名稱</th>' + _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num') +
+    '<th></th><th></th>' + _wtTh('code', '代號') + _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num') +
     (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
-  var ncol = 7 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);
+  var ncol = 6 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);
   _wtSorted(list).forEach(function (code) {
     h += '<tr id="wt-tr-' + code + '" class="es-row' + (_wtOpen === code ? ' es-row-open' : '') + '" onclick="wtRowClick(event,\'' + code + '\')">' + _wtRowHtml(code) + '</tr>';
     if (_wtOpen === code) h += '<tr class="es-drow"><td colspan="' + ncol + '" class="es-dslot" data-code="' + code + '"></td></tr>';
@@ -256,6 +256,8 @@ function renderWatch() {
     '<div class="detail-note"><dl>' +
     '<dt>展開</dt><dd>點列或〔明細〕看歷年配息、近 12 個月填息與一年走勢，一次一列。</dd>' +
     '<dt>即時性</dt><dd>現價與漲跌盤中即時（進頁訂閱、離開退訂）。</dd>' +
+    '<dt>名稱怎麼看</dt><dd>名稱欄拿掉了（它是最寬的文字欄，而〔明細〕裡已經有）。' +
+      '滑過代號也會顯示名稱。</dd>' +
     '<dt>兩個排名欄的差別</dt><dd>〔評比排名〕是 ETF 評比表上的「#」，' +
       '只有同類<b>前 30 名</b>有（二輪分數，含填息率與內扣費用），第 21～30 名標「未入表」；' +
       '〔類別排名〕是一輪分數在同類<b>全部</b> ETF 裡的名次，每一檔都有。' +
@@ -291,8 +293,7 @@ function _wtRowHtml(code) {
   })();
   return '<td>' + (isEtf ? '<button class="btn-detail" onclick="openConstituents(\'' + code + '\')">成份股</button>' : '') + '</td>' +
     '<td><button class="btn-detail' + (_wtOpen === code ? ' active' : '') + '" onclick="wtToggleDetail(\'' + code + '\')">明細 ' + (_wtOpen === code ? '▼' : '▶') + '</button></td>' +
-    '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
-    '<td class="inv-name">' + name + '</td>' +
+    '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"><span class="code-link" title="' + (name ? name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖') + '" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt) + '　' + fmtPct(chgPct)) + '</td>' +
     (typeof esWatchCells === 'function' ? esWatchCells(code) : '') +      // ETF 評比指標（etf-screen.js）
