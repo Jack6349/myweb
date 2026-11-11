@@ -139,20 +139,37 @@ function constituentSymbol(code) {
   return code;
 }
 
+// MoneyDJ 優先（台股），殘缺或空則改問 CMoney（外資）。
+//
+// 舊寫法只要 MoneyDJ 回了東西就直接採用，回殘缺清單時永遠問不到第二個來源：
+// 2026-11-11 實測 00988A——MoneyDJ 9 檔、權重合計 25.2%；CMoney 31 檔、90.6%。
+// 同一批 ETF 裡其餘十一檔的 MoneyDJ 權重合計都在 84.8%～99.9%，
+// 跟 25.2% 中間沒有任何樣本，所以「不到一半」是安全的分界：
+// 權重合計連一半都不到，那不是一個投資組合，是抓殘了。
+//
+// 健全的檔仍然只打一次 GAS，不會因為這個修正增加配額消耗。
+var CONST_PARTIAL_W = 50;
+function _ctWeight(h) {
+  return (h || []).reduce(function (a, b) { return a + (+b.weight || 0); }, 0);
+}
 async function fetchEtfConstituents(code) {
-  // MoneyDJ 優先（台股），空則 CMoney（外資）
+  var best = { source: null, holdings: [] }, bw = 0;
   try {
     var r1 = await fetch(TREND_GAS + '?holdings=' + encodeURIComponent(code));
     var j1 = await r1.json();
-    if (j1.stat === 'OK' && j1.holdings && j1.holdings.length) return { source: 'MoneyDJ', holdings: j1.holdings };
+    if (j1.stat === 'OK' && j1.holdings && j1.holdings.length) {
+      best = { source: 'MoneyDJ', holdings: j1.holdings };
+      bw = _ctWeight(j1.holdings);
+    }
   } catch (e) { hush('trend', e); }
+  if (bw >= CONST_PARTIAL_W) return best;
   try {
     var r2 = await fetch(TREND_GAS + '?cmconstituent=' + encodeURIComponent(code));
     var j2 = await r2.json();
     var h = j2.holdings || j2.constituents || [];
-    if (h.length) return { source: 'CMoney', holdings: h };
+    if (h.length && _ctWeight(h) > bw) return { source: 'CMoney', holdings: h };
   } catch (e) { hush('trend', e); }
-  return { source: null, holdings: [] };
+  return best;
 }
 
 async function showConstituentTrend(code, name) {

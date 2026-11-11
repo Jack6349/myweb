@@ -174,7 +174,7 @@ var SET_CACHE = [
   ['macro_snap_v1', '盤勢快照'], ['pv_hist_v3', '總現值走勢'], ['refill_px_v1', '填息價格'],
   ['refill_cal_v2', '填息行事曆'], ['divest_px_v1', '配息價格'], ['divest_etfmeta_v1', 'ETF 基本資料'],
   ['divest_offhist_v2', '官方配息歷史'], ['divest_soldlots_v1', '已出清批次'],
-  ['tdcc_hist_v1', '集保分布'], ['news_fred_v1', 'FRED 總經'], ['const_list_v1', '成份股清單'],
+  ['tdcc_hist_v1', '集保分布'], ['news_fred_v1', 'FRED 總經'], ['const_list_v2', '成份股清單'],
   ['nav_usage_v1', '淨值用量'], ['etf_screen_v1', 'ETF 篩選']
 ];
 function _setBytes(n) {
