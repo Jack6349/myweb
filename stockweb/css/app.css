@@ -2068,3 +2068,8 @@ td.cost-even::after  { background: var(--text3); }
 .es-vol-s { color: var(--text2); }
 .es-vol-b { color: var(--accent2); font-weight: 700; }
 .es-vol-na { color: var(--text3); opacity: .7; }
+/* 評比排名前的配息頻率標記。這一欄的寬度由表頭四個字決定，內容最寬只有「14」，
+   所以塞一個字進去是零成本（實測表格最小寬 1581 → 1581） */
+.es-fq { display: inline-block; min-width: 1.2em; margin-right: 5px; text-align: center;
+         color: var(--text2); font-size: 11.5px; cursor: help; }
+.es-fq-0 { color: var(--text3); opacity: .7; }
