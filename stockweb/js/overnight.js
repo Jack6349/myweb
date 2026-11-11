@@ -465,15 +465,15 @@ function ovHtml(view) {
     rows.slice().sort(function (a, b) { return a.sd - b.sd; }).forEach(function (r) {
       var cell = function (sd, med, n) {
         if (sd == null) return '<td class="num rs-dim">樣本不足</td>';
-        return '<td class="num">' + (med >= 0 ? '+' : '−') + Math.abs(med).toFixed(2) +
+        return '<td class="num">' + (med >= 0 ? '+' : '−') + Math.abs(med).toFixed(2) + ' pp' +
           '<span class="ov-sub">上下 ' + sd.toFixed(2) + '　' + n + ' 天</span></td>';
       };
       h += '<tr><td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span></td>' +
-        '<td class="num" style="font-weight:700">' + r.sd.toFixed(2) + '</td>' +
+        '<td class="num" style="font-weight:700">' + r.sd.toFixed(2) + ' pp</td>' +
         cell(r.sdUp, r.medUp, r.nUp) + cell(r.sdDn, r.medDn, r.nDn) + '</tr>';
     });
     h += '</tbody></table></div>' +
-      '<div class="rb-caveat">數字單位是百分點。「整體上下差」小的那幾檔照劇本走，大的那幾檔同樣的夜盤漲幅、' +
+      '<div class="rb-caveat">「整體上下差」小的那幾檔照劇本走，大的那幾檔同樣的夜盤漲幅、' +
       '結果散得多很多——這跟「會漲多少」無關，跟「掛價要留多少餘裕」直接相關。' +
       '每一欄的主數字是偏移的中位數（正＝實際比推估高），小字是上下差與天數。</div>';
   }
