@@ -246,8 +246,8 @@ function renderWatch() {
   }
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
     '<th></th><th></th>' + _wtTh('code', '代號') + '<th>名稱</th>' + _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num') +
-    '<th class="num">成份股漲跌</th>' + (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
-  var ncol = 8 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);
+    (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
+  var ncol = 7 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);
   _wtSorted(list).forEach(function (code) {
     h += '<tr id="wt-tr-' + code + '" class="es-row' + (_wtOpen === code ? ' es-row-open' : '') + '" onclick="wtRowClick(event,\'' + code + '\')">' + _wtRowHtml(code) + '</tr>';
     if (_wtOpen === code) h += '<tr class="es-drow"><td colspan="' + ncol + '" class="es-dslot" data-code="' + code + '"></td></tr>';
@@ -256,6 +256,10 @@ function renderWatch() {
     '<div class="detail-note"><dl>' +
     '<dt>展開</dt><dd>點列或〔明細〕看歷年配息、近 12 個月填息與一年走勢，一次一列。</dd>' +
     '<dt>即時性</dt><dd>現價與漲跌盤中即時（進頁訂閱、離開退訂）。</dd>' +
+    '<dt>兩個排名欄的差別</dt><dd>〔評比排名〕是 ETF 評比表上的「#」，' +
+      '只有同類<b>前 30 名</b>有（二輪分數，含填息率與內扣費用），第 21～30 名標「未入表」；' +
+      '〔類別排名〕是一輪分數在同類<b>全部</b> ETF 裡的名次，每一檔都有。' +
+      '兩者都跟評比頁同一套算法，數字對得起來。</dd>' +
     '<dt>各欄</dt><dd>〔成份股〕僅 ETF 提供；ETF 指標欄與「ETF 評比」同源（每日更新，算法見該頁說明），個股不適用；' +
     '〔除息紀錄〕近 ' + WT_YEARS + ' 年（上市 ETF＝e添富、其餘＝Yahoo，個股可能查無）。</dd>' +
     '<dt>儲存</dt><dd>清單存於本機瀏覽器。</dd>' +
@@ -282,8 +286,6 @@ function _wtRowHtml(code) {
   var ccls = chgPct == null ? 'flat' : colorClass(chgPct);
   var lim = (typeof limitState === 'function') ? limitState(code, price) : '';
   var isEtf = (typeof isEtfCode === 'function') && isEtfCode(code);
-  var cm = (typeof constEst === 'function') ? constEst(code) : null;
-  var estCls = (cm && cm.est != null) ? colorClass(cm.est) : 'flat';
   var name = (c && c.name) || (function () {
     var f = (_wtIdx || []).filter(function (x) { return x.c === code; })[0]; return f ? f.n : '';
   })();
@@ -293,8 +295,6 @@ function _wtRowHtml(code) {
     '<td class="inv-name">' + name + '</td>' +
     '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt) + '　' + fmtPct(chgPct)) + '</td>' +
-    '<td class="num inv-cchg ' + estCls + '"' + (cm ? ' title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
-      (cm && cm.est != null ? fmtPct(cm.est) : '—') + '</td>' +
     (typeof esWatchCells === 'function' ? esWatchCells(code) : '') +      // ETF 評比指標（etf-screen.js）
     '<td><button class="swap-mini" onclick="wtRemove(\'' + code + '\')">移除</button></td>';
 }

@@ -481,6 +481,77 @@ function esSortCol(key) {
 }
 
 // 填息率顯示：「(4/4) 100%」次數在前、比例固定寬度靠右，各列的 % 才會上下對齊
+// ═════ 評比排名（關注清單要用）═════
+//
+// 評比頁的「#」是二輪分數在「同類前 30 名」裡的名次，與已有的「類別排名」
+// 不同：後者是一輪分數在同類全部 ETF 裡的名次，每一檔都有。
+// 評比排名只有前 30 名有，其餘是「—」。
+//
+// 要跟評比頁算出同一個名次，二輪的填息率與內扣費用就必須到齊。
+// 沒到齊就算，出來的名次會跟評比頁不一樣——兩頁數字對不起來比沒數字更糟。
+// 所以 esRankPrep 先把關注清單所屬分類的前 30 名補齊（與評比頁共用當日快取）。
+var _esRankAll = null, _esRankAllKey = '';
+
+function _esRankKey() {
+  return (_esBase ? (_esBase.d0 || '?') : '-') + '|'
+    + Object.keys((typeof _esFill !== 'undefined' && _esFill) || {}).length + '|'
+    + Object.keys((typeof _divMeta !== 'undefined' && _divMeta) || {}).length;
+}
+
+function esRankAll() {
+  if (!_esBase) return {};
+  var key = _esRankKey();
+  if (_esRankAll && _esRankAllKey === key) return _esRankAll;
+  var rows = _esMetrics(_esBase), map = {};
+  ES_GROUPS.forEach(function (g) {
+    var rank = rows.filter(function (r) { return r.grp === g.key && !r.young; });
+    ['tr12', 'y12', 'g12', 'size'].forEach(function (k) { _esPct(rank, k, 1); });
+    _esScore(rank, ES_W1);
+    rank.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+    var short = rank.slice(0, ES_TOP1);
+    short.forEach(function (r) {
+      var f = (typeof _esFill !== 'undefined' && _esFill[r.code]) || null;
+      r.fill = f && f.n ? f.filled / f.n * 100 : null;
+      var m = (typeof _divMeta !== 'undefined' && _divMeta[r.code]) || {};
+      var mg = (typeof _divFeePct === 'function') ? _divFeePct(m.mgmt) : null;
+      var cu = (typeof _divFeePct === 'function') ? _divFeePct(m.cust) : null;
+      r.fee = (mg != null && cu != null) ? mg + cu : null;
+    });
+    _esPct(short, 'fill', 1);
+    _esPct(short, 'fee', -1);
+    _esScore(short, ES_W2);
+    short.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+    short.forEach(function (r, i) {
+      map[r.code] = { rank: i + 1, label: g.label, listed: i < ES_TOP };
+    });
+  });
+  _esRankAll = map; _esRankAllKey = key;
+  return map;
+}
+
+// 把這些代號所屬分類的前 30 名補齊，排名才跟評比頁一致
+async function esRankPrep(codes) {
+  if (!_esBase) return;
+  var rows = _esMetrics(_esBase), want = {};
+  (codes || []).forEach(function (c) {
+    var r = rows.filter(function (x) { return x.code === String(c); })[0];
+    if (r) want[r.grp] = 1;
+  });
+  var need = [], seen = {};
+  ES_GROUPS.forEach(function (g) {
+    if (!want[g.key]) return;
+    var rank = rows.filter(function (r) { return r.grp === g.key && !r.young; });
+    ['tr12', 'y12', 'g12', 'size'].forEach(function (k) { _esPct(rank, k, 1); });
+    _esScore(rank, ES_W1);
+    rank.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+    rank.slice(0, ES_TOP1).forEach(function (r) { if (!seen[r.code]) { seen[r.code] = 1; need.push(r); } });
+  });
+  if (!need.length) return;
+  var ncodes = need.map(function (r) { return r.code; });
+  if (typeof divMetaLoad === 'function') { try { await divMetaLoad(ncodes); } catch (e) { hush('etf-screen', e); } }
+  try { await _esEnsureFill(need); } catch (e) { hush('etf-screen', e); }
+}
+
 // ═════ 空值有兩種，要分得出來 ═════
 //   X ＝資料源沒給。Yahoo 日線抽不到、資料檔沒這檔。重新整理有機會會有。
 //   — ＝資料拿到了，但這個數字在這個情況下算不出來。樣本不足或不適用，重抓也沒用。
@@ -752,10 +823,14 @@ function esRowClick(ev, code) {
 // ══════════ 關注清單共用：ETF 評比指標欄位 ══════════
 // 指標與評比頁同源（_esBase，當日快取）；「類別排名」＝第一輪分數（一年含息、近12月殖利率、一年價格、規模）在同類全部 ETF 中的名次。
 // 填息率、內扣費用：關注清單中的 ETF 另外補算（Yahoo 日線／官方規格，同樣有快取）。
-var _esAllMap = null, _esAllMapBase = null;
+var _esAllMap = null, _esAllMapBase = null, _esAllMapFreq = false;
 function esMetricsFor(code) {
   if (!_esBase) return null;
-  if (_esAllMapBase !== _esBase) {
+  // 頻率檔是非同步載的。先算好再載到的話，保守年配與配息走向
+  // 會永遠停在 null（實測關注清單：單次配有值、這兩欄全空）。
+  // 所以快取鍵要含「頻率檔載了沒」，載到之後重算一次。
+  var fq = !!(typeof _esFreq !== 'undefined' && _esFreq);
+  if (_esAllMapBase !== _esBase || _esAllMapFreq !== fq) {
     var rows = _esMetrics(_esBase), map = {};
     ES_GROUPS.forEach(function (g) {
       var grp = rows.filter(function (r) { return r.grp === g.key; });
@@ -766,7 +841,7 @@ function esMetricsFor(code) {
       rank.forEach(function (r, i) { r.grpRank = i + 1; r.grpN = rank.length; });
       grp.forEach(function (r) { r.grpLabel = g.label; map[r.code] = r; });
     });
-    _esAllMap = map; _esAllMapBase = _esBase;
+    _esAllMap = map; _esAllMapBase = _esBase; _esAllMapFreq = fq;
   }
   var r = _esAllMap[String(code)];
   if (!r) return null;
@@ -786,20 +861,29 @@ async function esWatchPrep(codes) {
   try {
     await _esGetBase(false);
     if (typeof renderWatch === 'function') renderWatch();
+    try { await _esLoadFreq(); } catch (e) { hush('etf-screen', e); }
     var etfs = (codes || []).map(esMetricsFor).filter(Boolean);
     if (!etfs.length) return;
     if (typeof divMetaLoad === 'function') divMetaLoad(etfs.map(function (r) { return r.code; })).then(function () { if (typeof renderWatch === 'function') renderWatch(); }).catch(function (e) { hush('etf-screen', e); });
+    // 保守年配與配息走向要配息頻率與歷次金額那幾份資料檔，
+    // 沒載的話兩欄全是 ✕（跟股利估算那邊踩過同一個坑）
+    _esLoadFreq().then(function () { if (typeof renderWatch === 'function') renderWatch(); }).catch(function (e) { hush('etf-screen', e); });
     await _esEnsureFill(etfs);
+    if (typeof renderWatch === 'function') renderWatch();
+    // 排名要跟評比頁一致，就得把所屬分類的前 30 名補齊
+    await esRankPrep(etfs.map(function (r) { return r.code; }));
     if (typeof renderWatch === 'function') renderWatch();
   } catch (e) { console.warn('[關注清單 ETF 指標]', e); }
   finally { _esWatchBusy = false; }
 }
-var ES_WCOLS = ['score', 'y1', 'yEst', 'y12', 'fill', 'fillDays', 'g6', 'g12', 'tr6', 'tr12', 'size', 'fee', 'prem'];
+var ES_WCOLS = ['rank', 'score', 'y1', 'yEst', 'yCons', 'trend', 'y12', 'fill', 'fillDays',
+                'g6', 'g12', 'tr6', 'tr12', 'size', 'fee', 'prem'];
 function esWatchHeads() {
   return ES_WCOLS.map(function (k) {
     var c = ES_COLS.filter(function (x) { return x[0] === k; })[0];
-    var label = k === 'score' ? '類別排名' : c[1];
-    var tip = k === 'score' ? '在同類 ETF 中的名次（一年含息、近12月殖利率、一年價格、規模加權；上市未滿一年不排名）' : c[3];
+    var label = k === 'score' ? '類別排名' : (k === 'rank' ? '評比排名' : c[1]);
+    var tip = k === 'score' ? '在同類 ETF 中的名次（一年含息、近12月殖利率、一年價格、規模加權；上市未滿一年不排名）'
+      : (k === 'rank' ? 'ETF 評比表上的名次，與那一頁的「#」同一個數字。&#10;只有同類前 30 名有，其餘為「—」。&#10;與左邊「類別排名」的差別：那一欄是在同類全部 ETF 裡的名次，每一檔都有' : c[3]);
     var on = typeof _wtSort !== 'undefined' && _wtSort.replace(/(Asc|Desc)$/, '') === k;
     var asc = on && /Asc$/.test(_wtSort);
     return '<th class="num sort-th' + (on ? ' sorted' : '') + '" onclick="wtSortCol(\'' + k + '\')"' + (tip ? ' title="' + tip + '"' : '') + '>' + label +
@@ -808,9 +892,19 @@ function esWatchHeads() {
 }
 // 關注清單排序用的數值：類別排名越前面越好 → 取負名次，降冪時第 1 名在最上
 function esWatchSortVal(code, key) {
+  // 排名是「小的在前」，跟其他欄相反，取負號讓降冪預設（第 1 名在上）一致
+  if (key === 'rank') {
+    var m = (typeof esRankAll === 'function') ? esRankAll()[String(code)] : null;
+    return m ? -m.rank : null;
+  }
   var r = esMetricsFor(code);
   if (!r) return null;
   if (key === 'score') return r.grpRank ? -r.grpRank : null;
+  // 配息走向是文字，排序要按「好到壞」而不是筆畫：成長 > 持平 > 波動 > 下調
+  if (key === 'trend') {
+    var ord = { '成長': 4, '持平': 3, '波動': 2, '下調': 1 };
+    return r.trend ? ord[r.trend] : null;
+  }
   return r[key] == null ? null : r[key];
 }
 function esWatchCells(code) {
@@ -822,12 +916,23 @@ function esWatchCells(code) {
   }
   var sg = function (v) { if (v == null) return dim('—'); var cls = v > 0 ? 'up' : (v < 0 ? 'down' : ''); return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '%</span>'; };
   var pct = function (v) { return v == null ? dim('—') : v.toFixed(2) + '%'; };
+  var rkAll = (typeof esRankAll === 'function') ? esRankAll() : {};
+  var rk = rkAll[String(r.code)];
   var cell = {
+    // 評比表只列前 20 名，第 21～30 名有名次但那一頁上看不到，標起來免得找不到
+    rank: rk ? ('<b>' + rk.rank + '</b>' + (rk.listed ? '' : dim('（未入表）')))
+      : (r.young ? esDash('上市未滿一年，不列入評比排名')
+                 : esDash('沒進同類前 30 名，評比表沒給名次')),
     score: r.grpRank ? r.grpLabel + ' <b>' + r.grpRank + '</b>' + dim('/' + r.grpN) : dim(r.grpLabel + '（未滿一年）'),
     y1: (r.y1 == null ? dim('—')
       : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '">'
         + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + r.y1.toFixed(2) + '%'),
-    yEst: pct(r.yEst), y12: pct(r.y12),
+    yEst: pct(r.yEst),
+    yCons: r.yCons == null ? esSeqNA(r, false) : r.yCons.toFixed(2) + '%',
+    trend: r.trend == null ? esSeqNA(r, true)
+      : '<span class="es-tr es-tr-' + ({ '成長': 'up', '持平': 'flat', '波動': 'wav', '下調': 'dn' })[r.trend] + '">'
+        + r.trend + '</span><span class="es-trn">' + (r.seqN || 0) + ' 期</span>',
+    y12: pct(r.y12),
     fill: r.fill == null ? (_esFillBusy[r.code] ? '<span class="const-spin"></span>' : esFillNA(r)) : _esFillTxt(r),
     fillDays: r.fillDays == null
       ? (_esFillBusy[r.code] ? '<span class="const-spin"></span>' : esFillDaysNA(r)) : r.fillDays.toFixed(1) + ' 天',
