@@ -2078,3 +2078,14 @@ td.cost-even::after  { background: var(--text3); }
 .es-grp { display: inline-block; min-width: 3.6em; text-align: right; color: var(--text2); }
 .es-grpn { display: inline-block; min-width: 3.4em; text-align: right; }
 .es-rkn { display: inline-block; min-width: 2.4em; text-align: right; }
+/* 總覽抽屜改兩個頁籤：盤勢獨佔第一頁，格子才放得大、分時圖才看得出盤走到哪 */
+.dw-tabs { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.dw-tab { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
+  font-size: 13px; padding: 5px 14px; border-radius: 8px; cursor: pointer; font-family: var(--font); }
+.dw-tab.on { background: var(--accent2); border-color: var(--accent2); color: #1b2736; font-weight: 600; }
+.dw-tabs .macro-fetch { margin-left: auto; }
+/* 盤勢頁只剩八格，一排四個、圖加高（原本 26px，時間刻度的留白看不出來） */
+.dw .macro-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.dw .macro-cell { padding: 10px 12px; gap: 7px; }
+.dw .macro-spark { height: 48px; }
+@media (max-width: 900px) { .dw .macro-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

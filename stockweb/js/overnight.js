@@ -222,7 +222,7 @@ function _ovVolX(bars, i) {
   var m = a.reduce(function (x, y) { return x + y; }, 0) / a.length;
   return m > 0 ? bars[i].v / m : null;
 }
-// 費半要跟總覽抽屉抽同一份價。
+// 費半要跟總覽抽屜抽同一份價。
 // 舊寫法用日線的最後一根，那一根盤中會更新、但更得比即時價慢：
 // 2026-11-11 04:05 實例，總覽 −1.10%、推估卡 −0.72%，兩邊對不起來。
 // 這裡改走 5 分鐘分時（基準為 chartPreviousClose，與總覽完全同一個定義），
@@ -350,7 +350,7 @@ function ovHitHtml() {
 
 // ── 畫面 ──
 // force＝按了「重新整理」。不清快取的話夜盤會停在進頁那一刻：
-// 2026-11-11 實例，抽屉已經是 04:05 的價，推估卡還寫 03:49。
+// 2026-11-11 實例，抽屜已經是 04:05 的價，推估卡還寫 03:49。
 async function ovPrepare(force) {
   if (_ovBusy) return;
   _ovBusy = true;

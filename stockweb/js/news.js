@@ -650,7 +650,12 @@ async function fetchYahooIntra(sym) {
   var avg = [], sum = 0;
   for (var k = 0; k < c.length; k++) { sum += c[k]; avg.push(sum / (k + 1)); }
   var ref = (m.chartPreviousClose != null) ? m.chartPreviousClose : null;
-  return { t: t, c: c, avg: avg, ref: ref, tz: m.exchangeTimezoneName || '' };
+  // 每一檔的交易時段 Yahoo 自己會給，不用寫死：
+  // ^IXIC／HYG 09:30–16:00（紐約）、^TNX 07:20–14:00、^VIX 02:00–15:15（苝加哥）
+  var hm = function (ts) { return new Date((ts + off) * 1000).toISOString().slice(11, 16); };
+  var rg = m.currentTradingPeriod && m.currentTradingPeriod.regular;
+  var span = (rg && rg.start && rg.end) ? { from: hm(rg.start), to: hm(rg.end) } : null;
+  return { t: t, c: c, avg: avg, ref: ref, span: span, tz: m.exchangeTimezoneName || '' };
 }
 
 // ── 加權指數的當日分時（抽屜第一格）──
@@ -689,6 +694,7 @@ async function loadTwIdxIntra() {
   for (var k = 0; k < c.length; k++) { sum += c[k]; avg.push(sum / (k + 1)); }
   var last = c[c.length - 1];
   _twIdxIntra = { day: day, t: t, c: c, avg: avg, ref: prevClose, last: last,
+    span: { from: '09:00', to: '13:30' },
     pct: prevClose ? (last - prevClose) / prevClose * 100 : null };
   return _twIdxIntra;
 }
@@ -706,7 +712,29 @@ function _intraSparkHtml(o) {
   if (ref < lo) lo = ref;
   var pad = (hi - lo) * 0.08 || Math.abs(ref) * 0.001 || 1;
   hi += pad; lo -= pad;
-  var x = function (k) { return k / (n - 1) * MSPK_W; };
+  // 橫軸用「整盤有多長」當分母，不是「拿到幾個點」。
+  //
+  // 舊寫法 x = k/(n-1)，最後一點永遠貼右緣——盤中看起來跟收盤後一模一樣，
+  // 看不出這一盤還剩多少。2026-11-12 紐約 12:47 實測：
+  // ^IXIC／^SOX／HYG 才走完 50.5%、^TNX 63.0%、^VIX 71.9%，三個不同的位置
+  // 全被畫成一樣滿。改成時間刻度後，線走到哪停到哪，右側留白。
+  //
+  // span 是該標的的盤別窗（HH:MM），由各自的資料來源給：
+  // Yahoo 各檔的交易時段寫在回應的 meta 裡（連 ^VIX 跨到苝加哥時間都正確），
+  // 台股與台指期則是固定的。沒給 span 就沒事，退回舊行為。
+  var x;
+  if (o.span && o.span.from && o.span.to && o.t && o.t.length === n) {
+    var mn = function (hm) { return (+hm.slice(0, 2)) * 60 + (+hm.slice(3, 5)); };
+    var s0 = mn(o.span.from), tot = mn(o.span.to) - s0;
+    if (tot <= 0) tot += 1440;                        // 夜盤跨午夜
+    x = function (k) {
+      var v = mn(o.t[k]) - s0;
+      if (v < 0) v += 1440;
+      return Math.max(0, Math.min(1, v / tot)) * MSPK_W;
+    };
+  } else {
+    x = function (k) { return k / (n - 1) * MSPK_W; };
+  }
   var y = function (p) { return (hi - p) * MSPK_H / (hi - lo); };
   var yRef = y(ref), upLn = '', dnLn = '', upFl = '', dnFl = '';
   var seg = function (xa, ya, xb, yb, red) {
@@ -732,7 +760,9 @@ function _intraSparkHtml(o) {
       y(c[p]).toFixed(1) + '|' + (dp > 0 ? '+' : '') + dp.toFixed(2));
   }
   var tip = o.note + '　基準線＝參考價 ' + _fmtNum(ref, fmt) +
-    '　（此處比的是參考價，與其他格的近一個月不同基準）';
+    '　（此處比的是參考價，與其他格的近一個月不同基準）' +
+    (o.span && o.span.from ? '　橫軸＝' + o.span.from + '～' + o.span.to
+      + '，右側留白是還沒走完的那一段' : '');
   return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '"' +
     ' data-pts="' + pts.join(';') + '">' +
     '<svg viewBox="0 0 ' + MSPK_W + ' ' + MSPK_H + '" preserveAspectRatio="none">' +
@@ -759,7 +789,7 @@ function _twIdxCellHtml() {
     '<span class="macro-at">分時 ' + at + '</span></span>' +
     '<span class="macro-price">' + _fmtNum(o.last, 0) + '</span>' +
     '<span class="macro-chg ' + _chgCls(o.pct) + '">' + (_chgTxt(o.pct) || '—') + '</span>' +
-    _intraSparkHtml({ t: o.t, c: o.c, avg: o.avg, ref: o.ref, fmt: 0,
+    _intraSparkHtml({ t: o.t, c: o.c, avg: o.avg, ref: o.ref, span: o.span, fmt: 0,
       note: o.day + ' 當日分時　灰線＝當日累計平均指數' }) + '</div>';
 }
 
@@ -812,6 +842,7 @@ async function loadTxfIntra(ref) {
   var sess = night ? '夜盤' : '日盤';
   var last = c[c.length - 1];
   _txfIntra = { sess: sess, t: t, c: c, avg: avg, ref: ref, last: last,
+    span: night ? { from: '15:00', to: '05:00' } : { from: '08:45', to: '13:45' },
     day: j.datetime[st].slice(0, 10), pct: (last - ref) / ref * 100 };
   return _txfIntra;
 }
@@ -850,7 +881,7 @@ function _macroCellHtml(m, intra) {
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
       '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + cumTxt + '</span>' +
       ((intra && m.intra && _intraVaries(m.intra))
-      ? _intraSparkHtml({ t: m.intra.t, c: m.intra.c, avg: m.intra.avg,
+      ? _intraSparkHtml({ t: m.intra.t, c: m.intra.c, avg: m.intra.avg, span: m.intra.span,
       ref: m.intra.ref, fmt: m.fmt, note: '當盤分時（' + (m.intra.tz || '當地') + '）　灰線＝當盤累計平均' })
       : _macroSparkHtml(m)) + '</div>';
   }
@@ -984,7 +1015,7 @@ function _nightFutCellHtml() {
   // 名稱跟著盤別走，不再固定寫「夜盤」。分 K 抓不到時退回原本的純數字顯示。
   var o = _txfIntra;
   var nm = '台指期' + (o ? o.sess : '');
-  var spark = o ? _intraSparkHtml({ t: o.t, c: o.c, avg: o.avg, ref: o.ref, fmt: 0,
+  var spark = o ? _intraSparkHtml({ t: o.t, c: o.c, avg: o.avg, ref: o.ref, span: o.span, fmt: 0,
     note: o.day.slice(5).replace(/-/g, '/') + ' ' + o.sess + ' 分時　灰線＝VWAP（累計成交金額 ÷ 累計口數）' }) : '';
   return '<div class="macro-cell"><span class="macro-nm"><span class="macro-name">' + nm + '</span>' +
     (_nightFut.time ? '<span class="macro-at">成交 ' + _nightFut.time + '</span>' : '') + '</span>' +
