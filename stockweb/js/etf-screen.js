@@ -328,10 +328,32 @@ function _esVolMark(r) {
 // 走向標籤＋波動符號＋期數，三頁共用同一個寫法
 var ES_TR_CLS = { '連升': 'up', '轉升': 'up', '固定': 'flat',
                   '連平': 'flat', '轉降': 'dn', '連降': 'dn' };
+// 小字要讓人看出「這個狀態持續了幾期」，不是只有取樣區間有幾期。
+// 00934 [0.25,0.25,0.3,0.3,0.33,0.5,0.5] 尾端只平 1 期（上期才剛升到 0.5）
+// 00929 [0.13,0.26,0.38,0.38,0.38,0.38,0.38] 尾端平 4 期（停在 0.38 很久了）
+// 兩檔舊寫法都是「連平※7 期」，完全分不出來。
+//
+// 連升／連平／連降標「N/總 期」；轉升／轉降的 N 恒為 1、固定的 N 就是全部，
+// 兩者都不重複印，只留總期數。
+function _esTrendRun(seq, trend) {
+  if (!seq || seq.length < 2) return null;
+  var n = seq.length, k = 0, i;
+  if (trend === '連升') { for (i = n - 1; i > 0; i--) { if (seq[i] > seq[i - 1]) k++; else break; } }
+  else if (trend === '連降') { for (i = n - 1; i > 0; i--) { if (seq[i] < seq[i - 1]) k++; else break; } }
+  else if (trend === '連平') { for (i = n - 1; i > 0; i--) { if (seq[i] === seq[i - 1]) k++; else break; } }
+  else return null;
+  return k;
+}
 function esTrendHtml(r) {
   if (!r || !r.trend) return null;
+  var tot = r.seqN || 0;
+  var run = r.trendRun;
+  var num = (run != null)
+    ? '<span class="es-trn" title="這個狀態已經持續 ' + run + ' 期，取樣區間共 ' + tot + ' 期">'
+        + run + '/' + tot + ' 期</span>'
+    : '<span class="es-trn" title="取樣區間的配息期數">' + tot + ' 期</span>';
   return '<span class="es-tr es-tr-' + (ES_TR_CLS[r.trend] || 'flat') + '">' + r.trend + '</span>'
-    + _esVolMark(r) + '<span class="es-trn">' + (r.seqN || 0) + ' 期</span>';
+    + _esVolMark(r) + num;
 }
 
 // 與價格有關的指標（現價變動時重算；排名用開頁時的價格，避免盤中每 30 秒名次跳動）
@@ -356,6 +378,7 @@ function _esDerive(r, px, init) {
   r.volSd = seq ? _esVolSd(seq) : null;
   r.yCons = (seq && seq.length && per) ? Math.min.apply(null, seq) * per / px * 100 : null;
   r.trend = seq ? _esTrend(seq) : null;
+  r.trendRun = seq ? _esTrendRun(seq, r.trend) : null;   // 要等 trend 定了才算得出來
   r.y12 = r.n12 ? r.sum12 / px * 100 : 0;
   r.g6 = r.c6 ? (px / r.c6 - 1) * 100 : null;
   r.g12 = r.c12 ? (px / r.c12 - 1) * 100 : null;
