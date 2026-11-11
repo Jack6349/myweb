@@ -2073,3 +2073,8 @@ td.cost-even::after  { background: var(--text3); }
 .es-fq { display: inline-block; min-width: 1.2em; margin-right: 5px; text-align: center;
          color: var(--text2); font-size: 11.5px; cursor: help; }
 .es-fq-0 { color: var(--text3); opacity: .7; }
+/* 排名兩欄：每個組成各自固定寬、各自右對齊，有名次與沒名次的列才排得齊。
+   分類不論有沒有名次都同一個字色——它是輔助資訊，亮度不該跟著變。 */
+.es-grp { display: inline-block; min-width: 3.6em; text-align: right; color: var(--text2); }
+.es-grpn { display: inline-block; min-width: 3.4em; text-align: right; }
+.es-rkn { display: inline-block; min-width: 2.4em; text-align: right; }
