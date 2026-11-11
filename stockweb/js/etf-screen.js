@@ -845,6 +845,16 @@ function esMetricsFor(code) {
   }
   var r = _esAllMap[String(code)];
   if (!r) return null;
+  // 價格要用最新的。_esBase 是當日快取（收盤前是前一日收盤），
+  // 而關注清單的「現價」欄走訂閱即時報價，兩者不同源。
+  // 2026-11-11 實例：00406A 列上寫 7.96，配息紀錄卻用 7.65 算「距現價」，
+  // 連單次配的 1.80% 也是用 7.65 除的——跟旁邊顯示的現價對不起來。
+  // 這裡拿得到即時價就重算一次（只重算跟價格有關的欄位，
+  // 排名與分數不動，與評比頁盤中的做法一致）。
+  var live = (_esLive && _esLive[String(code)] > 0) ? _esLive[String(code)]
+    : ((typeof _rows !== 'undefined' && _rows[String(code)] && _rows[String(code)].close > 0)
+        ? _rows[String(code)].close : null);
+  if (live && r.px !== live) _esDerive(r, live);
   var f = _esFill[r.code];
   r.fill = f && f.n ? f.filled / f.n * 100 : null;
   r.fillN = f ? f.filled + '/' + f.n : null;
@@ -1056,9 +1066,11 @@ function _esRecTable(code, recs, base, bars) {
   var md = function (iso) { return iso ? iso.slice(2).replace(/-/g, '/') : '—'; };
   var dim = function (t) { return '<span class="dm-dim">' + t + '</span>'; };
   // 現價：整張表同一個數字，寫在表頭一次；每一列改放「距現價」（金額與 %），那個每列不同。
+  // 即時優先，抓不到才退回當日快取。順序反了的話收盤後會停在前一日收盤。
   var mr = (typeof esMetricsFor === 'function') ? esMetricsFor(code) : null;
-  var nowPx = (mr && mr.px > 0) ? mr.px
-    : ((typeof _rows !== 'undefined' && _rows[code] && _rows[code].close > 0) ? _rows[code].close : null);
+  var nowPx = (typeof _rows !== 'undefined' && _rows[code] && _rows[code].close > 0) ? _rows[code].close
+    : ((_esLive && _esLive[String(code)] > 0) ? _esLive[String(code)]
+      : ((mr && mr.px > 0) ? mr.px : null));
   var h = '<div class="es-nowpx">現價 <b>' + (nowPx != null ? nowPx.toFixed(2) : '—') + '</b>'
     + '<span class="es-nowpx-n">「距現價」是現價減除息當日收盤，紅＝現在比那天高</span></div>'
     + '<table class="detail-table es-evt-t"><thead><tr><th>除息日</th><th>發放日</th><th class="num">每股配息</th>' +
