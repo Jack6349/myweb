@@ -377,9 +377,22 @@ function _rbSoxFwd(bars, sox, useAdj) {
 // ── 標的：持股中代號結尾為 A 的（category.js：A＝主動股票型）──
 // 不用名稱判斷，因為合約名稱要等行情載入；主動債券型（結尾 D）不列，
 // 跌深反彈講的是股票型的回彈，債券型的價格動因是殖利率不是這個。
+// 持股中的主動式 ETF＋已關注清單。
+// 關注清單不限 A 結尾：要看的是「這個價掋下去會不會成交」，
+// 這件事跟標的是不是主動式無關，只要有足夠的日線就算得出來。
 function _rbCodes() {
   var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
-  return Object.keys(m).filter(function (c) { return m[c] > 0 && /A$/.test(c); }).sort();
+  var out = Object.keys(m).filter(function (c) { return m[c] > 0 && /A$/.test(c); });
+  var seen = {};
+  out.forEach(function (c) { seen[c] = 1; });
+  var w = (typeof _wtLoad === 'function') ? (_wtLoad() || []) : [];
+  w.forEach(function (c) { c = String(c); if (!seen[c]) { seen[c] = 1; out.push(c); } });
+  return out.sort();
+}
+// 持股中嗎（關注但未持有的要標「—」）
+function _rbHeld(c) {
+  var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  return m[String(c)] > 0;
 }
 function _rbName(c) {
   return (typeof _contracts !== 'undefined' && _contracts[c] && _contracts[c].name) || '';

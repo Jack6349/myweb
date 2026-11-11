@@ -148,6 +148,17 @@ function ovTick(p) {
   var u = p < 50 ? 0.01 : 0.05;
   return Math.round(Math.round(p / u) * u * 100) / 100;
 }
+// 持股成本均價（與持股庫存同一個來源）。
+// 只在關注清單、沒有持股的回 null，表上標「—」——
+// 標 0 會被讀成「成本是零」，跟「沒有這筆持股」是兩回事。
+function _ovCost(code) {
+  var ps = (typeof _positions !== 'undefined' && _positions) || [];
+  for (var i = 0; i < ps.length; i++) {
+    if (String(ps[i].code) === String(code) && ps[i].price > 0) return ps[i].price;
+  }
+  return null;
+}
+
 function _ovPx(v) { return v == null ? '—' : v.toFixed(2); }
 
 // 一檔的三個推估：開盤跳空、日內最低、收盤。都相對前一日收盤。
@@ -197,6 +208,8 @@ function ovEstimate(code) {
   return {
     code: code, n: fc.n, base: base, basePrev: raw[bi].d,
     basePx: base,   // 偏移度要把百分點換回元
+    cost: _ovCost(code),                                   // 持股成本均價，沒持股為 null
+    baseChg: (bi > 0 && raw[bi - 1].c > 0) ? (base / raw[bi - 1].c - 1) * 100 : null,
     prem: _ovPrem(code), volX: _ovVolX(raw, act ? bi + 1 : bi),
     act: act ? { o: act.o, l: act.l, c: act.c,
                  cPct: (act.c / base - 1) * 100, lPct: (act.l / base - 1) * 100 } : null,
@@ -411,7 +424,9 @@ function ovHtml(view) {
       : '') + '</div>';
 
   h += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>' +
-    '<th>代號 / 名稱</th><th class="num">前收</th>' +
+    '<th>代號 / 名稱</th>' +
+    '<th class="num" title="持股的成本均價；只關注、沒持有的為「—」。字色是前收對成本的損益">成本均價</th>' +
+    '<th class="num" title="字色是前收自己的漲跌（對再前一日）">前收</th>' +
     '<th class="num" title="當天開盤價的推估">預估開盤</th>' +
     '<th class="num" title="當天盤中最低價的推估。掛限價買進要跟這個比，不是跟收盤比">預估日內最低</th>' +
     '<th class="num" title="範圍的中心。別把它當成一個會到的價">預估收盤</th>' +
@@ -424,15 +439,22 @@ function ovHtml(view) {
     '<th class="num">樣本</th></tr></thead><tbody>';
   rows.forEach(function (r) {
     h += '<tr><td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span></td>' +
-      '<td class="num rs-dim">' + _ovPx(r.base) + '</td>' +
-      '<td class="num">' + _ovPx(r.oPx) + '<span class="ov-sub">' + pct(r.oPct) + '</span></td>' +
-      '<td class="num ov-key">' + _ovPx(r.lPx) + '<span class="ov-sub">' + pct(r.lPct) + '</span></td>' +
-      '<td class="num">' + _ovPx(r.cPx) + '<span class="ov-sub">' + pct(r.cPct) + '</span></td>' +
+      '<td class="num">' + (r.cost > 0
+          ? '<span style="color:' + _rbCol(r.base > 0 ? (r.base / r.cost - 1) * 100 : null) + '">'
+            + _ovPx(r.cost) + '</span>'
+          : '<span class="dm-dim" title="只在關注清單，沒有持股">—</span>') + '</td>' +
+      '<td class="num" style="color:' + _rbCol(r.baseChg) + '">' + _ovPx(r.base) + '</td>' +
+      '<td class="num">' + _ovPx(r.oPx)
+        + '<span class="ov-sub" style="color:' + _rbCol(r.oPct) + '">' + pct(r.oPct) + '</span></td>' +
+      '<td class="num ov-key">' + _ovPx(r.lPx)
+        + '<span class="ov-sub" style="color:' + _rbCol(r.lPct) + '">' + pct(r.lPct) + '</span></td>' +
+      '<td class="num">' + _ovPx(r.cPx)
+        + '<span class="ov-sub" style="color:' + _rbCol(r.cPct) + '">' + pct(r.cPct) + '</span></td>' +
       '<td class="num ov-range">' + _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) + '</td>' +
       (hasAct ? '<td class="num" style="color:' + _rbCol(r.act ? r.act.cPct : null) + ';font-weight:700">'
           + (r.act ? _ovPx(r.act.c) : '—')
           + (r.act ? '<span class="ov-sub">' + pct(r.act.cPct) + '</span>' : '') + '</td>'
-        + '<td class="num">' + (r.act ? _ovPx(r.act.l) : '—')
+        + '<td class="num" style="color:' + _rbCol(r.act ? r.act.lPct : null) + '">' + (r.act ? _ovPx(r.act.l) : '—')
           + (r.act ? '<span class="ov-sub">' + pct(r.act.lPct) + '</span>' : '') + '</td>' : '') +
       '<td class="num" style="color:' + (r.prem == null ? 'var(--text3)' : _rbCol(r.prem)) + '">'
         + (r.prem == null ? '—' : pct(r.prem)) + '</td>' +
