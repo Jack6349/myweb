@@ -265,6 +265,20 @@ function _esChanges(seq) {
   }
   return out;
 }
+// 「同一個金額已經配了幾期」。數期數不是數變動次數：
+// 舊寫法數「平的變動次數」，與分母的「總期數」單位不同，
+// 00934 的 0.5 明明配了兩期（ 10/19 與 11/17）卻寫 1/7，使用者還要自己加一。
+function _esHold(seq) {
+  if (!seq || seq.length < 1) return null;
+  var k = 1;
+  for (var i = seq.length - 1; i > 0; i--) { if (seq[i] === seq[i - 1]) k++; else break; }
+  return k;
+}
+// 停多久算「不再是走勢進行中」？門檻取資料自己的節奏：
+// 198 檔裡有調整紀錄的，調整間隔的 p25/p50/p75 全都是 1——
+// 一檔 ETF 只要還在調整階段，幾乎每一期都在動。
+// 所以同一個金額配到第 3 期，就是已經打破它自己的節奏。
+var ES_HOLD_SETTLED = 3;
 function _esTrend(seq) {
   if (!seq || seq.length < 2) return null;
   var mx = Math.max.apply(null, seq), mn = Math.min.apply(null, seq);
@@ -274,15 +288,11 @@ function _esTrend(seq) {
   if (!ch.length) return '固定';
   var dir = ch[ch.length - 1], k = 0;
   for (var i = ch.length - 1; i >= 0 && ch[i] === dir; i--) k++;
+  // 停得夠久就不再是「走勢進行中」，但停之前往哪邊走仍然要講——
+  // 升到高點鎸住，跟降到底才不動，是兩回事。
+  if (_esHold(seq) >= ES_HOLD_SETTLED) return dir > 0 ? '升後平' : '降後平';
   if (dir > 0) return k >= 2 ? '連升' : '轉升';
   return k >= 2 ? '連降' : '轉降';
-}
-// 距最近一次調整已經過了幾期（0＝這一期剛調）
-function _esStall(seq) {
-  if (!seq || seq.length < 2) return null;
-  var k = 0;
-  for (var i = seq.length - 1; i > 0; i--) { if (seq[i] === seq[i - 1]) k++; else break; }
-  return k;
 }
 
 // 波動度：每期「變動率」的標準差。
@@ -340,6 +350,7 @@ function _esVolMark(r) {
 
 // 走向標籤＋波動符號＋期數，三頁共用同一個寫法
 var ES_TR_CLS = { '連升': 'up', '轉升': 'up', '固定': 'flat',
+                  '升後平': 'flat', '降後平': 'flat',
                   '轉降': 'dn', '連降': 'dn' };
 // 小字要讓人看出「停了多久」，不是只有取樣區間有幾期。
 // 00934 [0.25,0.25,0.3,0.3,0.33,0.5,0.5]  剛升完停 1 期
@@ -353,12 +364,14 @@ function esTrendHtml(r) {
   // 小字：距最近一次調整幾期 ／ 取樣區間共幾期。
   // 00934（1/7）與 00929（4/7）走勢都是升，差在停了多久。
   var num;
-  if (r.trend === '固定' || r.stall == null) {
-    num = '<span class="es-trn" title="取樣區間的配息期數">' + tot + ' 期</span>';
+  if (r.trend === '固定' || r.hold == null) {
+    num = '<span class="es-trn" title="取樣區間的配息期數；固定代表每一期都是同一個金額">'
+      + tot + ' 期</span>';
   } else {
-    num = '<span class="es-trn" title="'
-      + (r.stall === 0 ? '這一期剛調整過' : '距最近一次調整已經 ' + r.stall + ' 期沒動')
-      + '，取樣區間共 ' + tot + ' 期">' + r.stall + '/' + tot + ' 期</span>';
+    num = '<span class="es-trn" title="現在這個金額已經配了 ' + r.hold
+      + ' 期（含已公告未除息），取樣區間共 ' + tot + ' 期。'
+      + '配到第 ' + ES_HOLD_SETTLED + ' 期就改標「升後平」或「降後平」">'
+      + r.hold + '/' + tot + ' 期</span>';
   }
   return '<span class="es-tr es-tr-' + (ES_TR_CLS[r.trend] || 'flat') + '">' + r.trend + '</span>'
     + _esVolMark(r) + num;
@@ -386,7 +399,7 @@ function _esDerive(r, px, init) {
   r.volSd = seq ? _esVolSd(seq) : null;
   r.yCons = (seq && seq.length && per) ? Math.min.apply(null, seq) * per / px * 100 : null;
   r.trend = seq ? _esTrend(seq) : null;
-  r.stall = seq ? _esStall(seq) : null;                  // 距最近一次調整幾期
+  r.hold = seq ? _esHold(seq) : null;                    // 同一個金額已配幾期
   r.y12 = r.n12 ? r.sum12 / px * 100 : 0;
   r.g6 = r.c6 ? (px / r.c6 - 1) * 100 : null;
   r.g12 = r.c12 ? (px / r.c12 - 1) * 100 : null;
@@ -726,10 +739,10 @@ var ES_COLS = [
   ['trend', '配息走向', 'trend',
     '看最近一次實際調整的方向，持平的期數不打斷走勢：&#10;'
     + '連升＝最近兩次以上調整都是升、轉升＝只最近一次是升、&#10;'
-    + '固定＝每一期同一個數字、轉降＝只最近一次是降、連降＝最近兩次以上都是降。&#10;'
-    + '後面的符號是波動度：· 從未調整、～ 波動小、※ 波動大（前四分之一）、— 期數不足。&#10;'
-    + '小字是「距最近一次調整幾期／取樣區間共幾期」：&#10;'
-    + '連升 1/7 是剛升完停一期，連升 4/7 是升完停了四期'],
+    + '升後平＝升過，但同一個金額已經配 3 期以上（超過全市場的調整節奏）、&#10;'
+    + '固定＝每一期同一個數字、降後平、轉降、連降同理。&#10;'
+    + '小字＝現在這個金額已配幾期／取樣區間共幾期。&#10;'
+    + '後面的符號是波動度：· 從未調整、～ 小、※ 大（前四分之一）、— 期數不足'],
   ['y12', '近12月配', 'pct', '近 12 個月殖利率：近 12 個月實際配息合計 ÷ 現價'],
   ['n12', '已配次數', 'cnt', '近 12 個月內已除息次數。新上市的次數不足，「近 12 月配」會因此偏低'],
   ['fill', '填息率', 'fill', '近 12 個月：已填息次數 ÷ 除息次數（除息後收盤回到除息前收盤即算填息）'],
@@ -909,11 +922,14 @@ function renderEtfScreen() {
       '<b>標籤</b>看最近一次<b>實際調整</b>的方向，持平的期數不打斷走勢：'
       '<code>連升＝最近兩次以上都是升、轉升＝只最近一次是升、'
       '固定＝每期同一個數字、轉降、連降同理</code>。'
-      '階梯式調升的檔（升一次、持一到兩期、再升）不會因為採在平台上就被標成停滞。<br>'
-      '<b>小字</b>是「距最近一次調整幾期／取樣區間共幾期」。'
-      '00934（0.25→0.25→0.30→0.30→0.33→0.50→0.50）是 <b>連升 1/7</b>，剛升完停一期；'
-      '00929（0.13→0.26→0.38→0.38→0.38→0.38→0.38）是 <b>連升 4/7</b>，升完停了四期。'
-      '都是升勢，差在停了多久。<br>'
+      '階梯式調升的檔（升一次、持一期、再升）不會因為採在平台上就被標成停滞。<br>'
+      '<b>停得夠久就不再是走勢</b>：同一個金額配到第 3 期改標「升後平」或「降後平」。'
+      '這個 3 不是自訂的：實測有調整紀錄的檔，調整間隔的四分位全部是 1——'
+      '還在調整階段就幾乎每期都在動，所以配到第 3 期已經是打破自己的節奏。'
+      '升後平與降後平分開，是因為升到高點鎸住跟降到底才不動是兩回事。<br>'
+      '<b>小字</b>是「現在這個金額已配幾期／取樣區間共幾期」，兩邊都是期數。'
+      '00934（0.25→0.25→0.30→0.30→0.33→0.50→0.50）是 <b>連升 2/7</b>：0.50 配了兩期；'
+      '00406A（0.128→0.138→0.138→0.138）是 <b>升後平 3/4</b>：0.138 配了三期，已經停了。<br>'
       '<b>符號</b>是波動度，用每期變動率的標準差（不是金額的，否則金額大的會被誤判）：'
       '<span class="es-vol es-vol-0">·</span> 從未調整、'
       '<span class="es-vol es-vol-s">～</span> 波動小、'
@@ -1060,7 +1076,8 @@ function esWatchSortVal(code, key) {
   if (key === 'score') return r.grpRank ? -r.grpRank : null;
   // 配息走向是文字，排序要按「好到壞」而不是筆畫：成長 > 持平 > 波動 > 下調
   if (key === 'trend') {
-    var ord = { '連升': 5, '轉升': 4, '固定': 3, '轉降': 2, '連降': 1 };
+    var ord = { '連升': 7, '轉升': 6, '升後平': 5, '固定': 4,
+                '降後平': 3, '轉降': 2, '連降': 1 };
     return r.trend ? ord[r.trend] : null;
   }
   return r[key] == null ? null : r[key];
