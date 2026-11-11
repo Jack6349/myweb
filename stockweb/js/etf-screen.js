@@ -923,7 +923,10 @@ function esWatchCells(code) {
     rank: rk ? ('<b>' + rk.rank + '</b>' + (rk.listed ? '' : dim('（未入表）')))
       : (r.young ? esDash('上市未滿一年，不列入評比排名')
                  : esDash('沒進同類前 30 名，評比表沒給名次')),
-    score: r.grpRank ? r.grpLabel + ' <b>' + r.grpRank + '</b>' + dim('/' + r.grpN) : dim(r.grpLabel + '（未滿一年）'),
+    // 「高股息（未滿一年）」整整擐寬這一欄 115px，而它只是在說「沒排名」。
+    // 改成 —，分類與原因滑過去就看得到。
+    score: r.grpRank ? r.grpLabel + ' <b>' + r.grpRank + '</b>' + dim('/' + r.grpN)
+      : esDash('上市未滿一年，不列入類別排名（分類：' + r.grpLabel + '）'),
     y1: (r.y1 == null ? dim('—')
       : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '">'
         + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + r.y1.toFixed(2) + '%'),
