@@ -189,12 +189,14 @@ function ovEstimate(code) {
   for (var k2 = raw.length - 1; k2 >= 0; k2--) { if (raw[k2].d < t.d) { bi = k2; break; } }
   if (bi < 0) return null;
   var base = raw[bi].c;
+  // 偏移度要把百分點換回元，把基準價帶出去
   // 那一天的 K 已經存在 → 這不是預測，是可以當場對答案的紀錄
   var act = (bi + 1 < raw.length && raw[bi + 1].d === t.d) ? raw[bi + 1] : null;
   var mk = function (p) { return p == null ? null : ovTick(base * (1 + p / 100)); };
   var pc2 = ev(fc);
   return {
     code: code, n: fc.n, base: base, basePrev: raw[bi].d,
+    basePx: base,   // 偏移度要把百分點換回元
     prem: _ovPrem(code), volX: _ovVolX(raw, act ? bi + 1 : bi),
     act: act ? { o: act.o, l: act.l, c: act.c,
                  cPct: (act.c / base - 1) * 100, lPct: (act.l / base - 1) * 100 } : null,
@@ -391,36 +393,21 @@ function ovHtml(view) {
   var h = '<div class="rb-sox">';
   h += '<div class="sec-title">隔夜推估（明天的價格）</div>';
   var nf = function (v) { return v == null ? '—' : Math.round(v).toLocaleString('zh-TW'); };
+  // 標額區只留「現在是什麼狀況」的事實，解釋全改放到下方的說明裡。
+  // 舊版這一塊 418 字，而且用的是標額標記，全站的說明收合機制根本收不到它。
   h += '<div class="rb-sox-hd on">台指期夜盤 <b style="color:' + _rbCol(t.pct) + '">' + pct(t.pct) + '</b>'
-    + '（' + nf(t.np) + '，對 ' + (t.base || '—') + ' 日盤收盤 ' + nf(t.bp)
-      + (t.at ? '，最後一根 ' + t.at : '')
-      + (t.src === 'live' ? '，券商即時' : '，資料檔') + '）　' +
-    '隔夜費半 <b style="color:' + _rbCol(sox) + '">' + pct(sox) + '</b>'
+    + '（' + nf(t.np) + (t.at ? '，' + t.at : '') + '）　'
+    + '隔夜費半 <b style="color:' + _rbCol(sox) + '">' + pct(sox) + '</b>'
     + (_ovSoxLive
         ? '（' + _ovSoxLive.at
-            + (_ovSoxLive.open === true ? '，美股還在盤中，收盤前還會變'
-              : (_ovSoxLive.open === false ? '，已收盤，這是最終值'
-                : '，判不出是否已收盤')) + '）'
-        : '（日線收盤值，即時價抓不到）')
-    + (_ovAt ? '<span class="ov-at">兩者皆為 ' + _ovAt + ' 抓取，按「重新整理」重抓</span>' : '')
-    + (_ovRef && _ovRef.pct != null
-        ? '<br><b>跟總覽的百分比不一樣是正常的</b>：總覽與券商 App 顯示 '
-            + pct(_ovRef.pct) + '，那是對期交所參考價 ' + nf(_ovRef.px)
-            + '；這裡對的是日盤收盤 ' + nf(t.bp)
-            + '。成交價兩邊同一個，差的是分母。'
-            + '這一卡用收盤，因為要推的 ETF 本身的漲跌也是對前一日收盤，'
-            + '而且系數是用這個基準迴歸出來的。'
-        : '') +
-    '<br>價格以 <b>' + (rows[0] ? rows[0].basePrev : '') + '</b> 的收盤為基準，已對齊可掛的升降單位，直接抄進委託單即可。' +
-    '<b>掛限價買進看「預估日內最低」</b>——掛在它之下，成交的前提是當天比預估弱。' +
-    '<br><b>要看的是「典型範圍」，不是預估收盤那一個數字。</b>' +
-    '兩個訊號只說明得了一半上下的起伏（見「說明力」欄），' +
-    '預估收盤只是這個範圍的中心，不是一個會到的價。' +
-    '範圍越寬的那幾檔，掛價要留的餘裕就越大。' +
-    (hasAct
-      ? '<br><b style="color:var(--accent2)">這一夜已經開過盤了</b>：' + _ovToday.d
-        + ' 的 K 線已存在，右邊列出實際值可以當場對答案。'
-        + '下一個交易日的推估要等今晚 15:00 之後的夜盤開出來才有。'
+            + (_ovSoxLive.open === true ? '，盤中'
+              : (_ovSoxLive.open === false ? '，已收盤'
+                : '，盤別不明')) + '）'
+        : '（日線收盤值）')
+    + (_ovAt ? '<span class="ov-at">' + _ovAt + ' 抓取</span>' : '')
+    + (hasAct
+      ? '<br><b style="color:var(--accent2)">這一夜已經開過盤了</b>：'
+        + _ovToday.d + ' 的 K 線已存在，右邊是實際值。'
       : '') + '</div>';
 
   h += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>' +
@@ -455,21 +442,41 @@ function ovHtml(view) {
       '<td class="num rs-dim">' + r.n + ' 天</td></tr>';
   });
   h += '</tbody></table></div>';
+  // 解釋全部在這裡，收合後點了才看得到
+  h += '<div class="detail-note"><dl>'
+    + '<dt>要看哪一欄</dt><dd>看<b>典型範圍</b>，不是預估收盤那一個數字。'
+    + '兩個訊號只說明得了一半上下的起伏（見「說明力」欄），'
+    + '預估收盤只是範圍的中心。掛限價買進看「預估日內最低」。'
+    + '所有價格以 ' + (rows[0] ? rows[0].basePrev : '') + ' 的收盤為基準，已對齊升降單位。</dd>'
+    + (_ovRef && _ovRef.pct != null
+        ? '<dt>跟總覽的百分比不一樣</dt><dd>總覽與券商 App 顯示 '
+            + pct(_ovRef.pct) + '，對的是期交所參考價 ' + nf(_ovRef.px)
+            + '；這裡對的是 ' + (t.base || '—') + ' 日盤收盤 ' + nf(t.bp)
+            + '。成交價兩邊同一個，差的是分母。'
+            + '用收盤是因為要推的 ETF 漲跌也是對前一日收盤。</dd>'
+        : '')
+    + '</dl></div>';
 
   // 偏移度：這一檔照不照劇本走。跟「會漲多少」無關，跟「掛價要留多少餘裕」直接相關。
   if (view === 'ana') {
-    h += '<div class="sec-title">偏移度（實際與推估的差距）</div>' +
+    h += '<div class="sec-title">偏移度（實際與推估的差距，元）</div>' +
       '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>' +
       '<th>代號 / 名稱</th><th class="num">整體上下差</th>' +
       '<th class="num">夜盤上漲的日子</th><th class="num">夜盤下跌的日子</th></tr></thead><tbody>';
     rows.slice().sort(function (a, b) { return a.sd - b.sd; }).forEach(function (r) {
+      // 百分點對下單沒意義，換成這一檔的元：偏移×前收÷100。
+      // 「上下 0.11 元」才知道掛價要留多少餘裕。
+      var yuan = function (v) { return (r.basePx > 0) ? v * r.basePx / 100 : null; };
       var cell = function (sd, med, n) {
         if (sd == null) return '<td class="num rs-dim">樣本不足</td>';
-        return '<td class="num">' + (med >= 0 ? '+' : '−') + Math.abs(med).toFixed(2) + ' pp' +
-          '<span class="ov-sub">上下 ' + sd.toFixed(2) + '　' + n + ' 天</span></td>';
+        var m = yuan(med), d = yuan(sd);
+        return '<td class="num">' + (med >= 0 ? '+' : '−')
+          + (m == null ? Math.abs(med).toFixed(2) : Math.abs(m).toFixed(2)) + ' 元' +
+          '<span class="ov-sub">上下 ' + (d == null ? sd.toFixed(2) : d.toFixed(2)) + ' 元　' + n + ' 天</span></td>';
       };
       h += '<tr><td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span></td>' +
-        '<td class="num" style="font-weight:700">' + r.sd.toFixed(2) + ' pp</td>' +
+        '<td class="num" style="font-weight:700">'
+          + ((r.basePx > 0) ? (r.sd * r.basePx / 100).toFixed(2) + ' 元' : r.sd.toFixed(2)) + '</td>' +
         cell(r.sdUp, r.medUp, r.nUp) + cell(r.sdDn, r.medDn, r.nDn) + '</tr>';
     });
     h += '</tbody></table></div>' +

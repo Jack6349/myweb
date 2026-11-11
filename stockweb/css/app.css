@@ -2089,3 +2089,8 @@ td.cost-even::after  { background: var(--text3); }
 .dw .macro-cell { padding: 10px 12px; gap: 7px; }
 .dw .macro-spark { height: 48px; }
 @media (max-width: 900px) { .dw .macro-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* 成交率表：價格是要抄進委託單的數字，放主體；成交率降為輔助小字 */
+.rb-fpx { display: block; font-weight: 700; color: var(--text); }
+.rb-frate { display: block; font-size: 11px; margin-top: 1px; }
+/* 日內形狀：百分比底下補換算後的價格 */
+.rb-gsub { display: block; font-size: 11px; color: var(--text2); font-weight: 400; }
