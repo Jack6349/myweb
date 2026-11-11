@@ -282,6 +282,23 @@ var RB_FILL_OFFS = (function () {
   return a;
 })();
 
+// 成交率表與日內形狀表的排序。
+// 掋價格子排的是成交率（依價格排等於依前收排，重複），
+// 而且用的是「今天那一邊」的數字，與畫面標重的那一邊一致。
+var RB_FSORT_LS = 'rb_fsort_v1', RB_GSORT_LS = 'rb_gsort_v1';
+var _rbFSort = rbSortGet(RB_FSORT_LS, 'upDesc');
+var _rbGSort = rbSortGet(RB_GSORT_LS, 'gapDesc');
+function rbFSort(k) {
+  _rbFSort = rbSortNext(_rbFSort, k);
+  try { localStorage.setItem(RB_FSORT_LS, _rbFSort); } catch (e) {}
+  rbRender();
+}
+function rbGSort(k) {
+  _rbGSort = rbSortNext(_rbGSort, k);
+  try { localStorage.setItem(RB_GSORT_LS, _rbGSort); } catch (e) {}
+  rbRender();
+}
+
 function _rbFill(bars, sox, reg) {
   if (!bars || !sox || !reg) return null;
   var mk = function () { return { n: 0, hit: RB_FILL_OFFS.map(function () { return 0; }) }; };
@@ -626,12 +643,17 @@ function _rbSoxHtml(view) {
     + _rbPct(regNow, 2) + '</b>）。小字是<b>連跌後／上漲中</b>的成交率。</div>';
 
   html += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
-    + '<th>代號 / 名稱</th><th class="num">前收</th><th class="num">上漲機率</th>'
-    + '<th class="num" title="達標日的開盤跳空中位數；漲幅幾乎全在這裡給完">開盤跳空</th>';
-  RB_FILL_OFFS.forEach(function (k) {
-    html += '<th class="num">' + (k === 0 ? '平盤' : (k > 0 ? '＋' : '−') + Math.abs(k) + '%') + '</th>';
+    + rbSortTh(_rbFSort, 'rbFSort', 'code', '代號 / 名稱').replace('class="num ', 'class="')
+    + rbSortTh(_rbFSort, 'rbFSort', 'px', '前收')
+    + rbSortTh(_rbFSort, 'rbFSort', 'up', '上漲機率')
+    + rbSortTh(_rbFSort, 'rbFSort', 'gap', '開盤跳空', '達標日的開盤跳空中位數；漲幅幾乎全在這裡給完');
+  RB_FILL_OFFS.forEach(function (k, j) {
+    html += rbSortTh(_rbFSort, 'rbFSort', 'f' + j,
+      (k === 0 ? '平盤' : (k > 0 ? '＋' : '−') + Math.abs(k) + '%'),
+      '排序依' + (nowDn ? '連跌後' : '上漲中') + '的成交率（依價格排等於依前收排，重複）');
   });
-  html += '<th class="num" title="左為連跌後的天數、右為上漲中">樣本 跌／漲</th></tr></thead><tbody>';
+  html += rbSortTh(_rbFSort, 'rbFSort', 'n', '樣本 跌／漲', '左為連跌後的天數、右為上漲中；排序依今天那一邊')
+    + '</tr></thead><tbody>';
 
   var rate = function (v, on) {
     if (v == null) return '<span class="dm-dim">—</span>';
@@ -662,7 +684,22 @@ function _rbSoxHtml(view) {
     h += '<td class="num rs-dim">' + f.dn.n + ' ／ ' + f.up.n + ' 天</td></tr>';
     return h;
   };
-  rows.forEach(function (r) { html += fline(r.c, _rbName(r.c), r.s, r.g, fills[r.c], false); });
+  var fval = function (r, k) {
+    var f = fills[r.c];
+    if (k === 'code') return r.c;
+    if (k === 'px') return f ? f.last : null;
+    if (k === 'up') return r.s ? r.s.up : null;
+    if (k === 'gap') return r.g ? r.g.gap : null;
+    if (k === 'n') return f ? (nowDn ? f.dn.n : f.up.n) : null;
+    var m = /^f(\d+)$/.exec(k);
+    if (m && f) {
+      var g = nowDn ? f.dn : f.up;
+      return g.p ? g.p[+m[1]] : null;
+    }
+    return null;
+  };
+  rbSortRows(rows, _rbFSort, fval)
+    .forEach(function (r) { html += fline(r.c, _rbName(r.c), r.s, r.g, fills[r.c], false); });
   if (twS) html += fline('大盤', '加權指數', twS, twG, twF, true);
   html += '</tbody></table></div>';
 
@@ -674,10 +711,15 @@ function _rbSoxHtml(view) {
       var ex = gr.reduce(function (a, r) { return a + r.g.exdiv; }, 0);
       html += '<div class="sec-title">達標日的日內形狀（皆為中位數）</div>'
         + '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
-        + '<th>代號 / 名稱</th><th class="num">前收</th><th class="num">樣本</th>'
-        + '<th class="num">開盤跳空</th><th class="num">開盤→收盤</th>'
-        + '<th class="num">日內最高</th><th class="num">日內最低</th>'
-        + '<th class="num">全日收盤</th><th class="num">開盤後下跌的日子</th>'
+        + rbSortTh(_rbGSort, 'rbGSort', 'code', '代號 / 名稱').replace('class="num ', 'class="')
+        + rbSortTh(_rbGSort, 'rbGSort', 'px', '前收')
+        + rbSortTh(_rbGSort, 'rbGSort', 'n', '樣本')
+        + rbSortTh(_rbGSort, 'rbGSort', 'gap', '開盤跳空')
+        + rbSortTh(_rbGSort, 'rbGSort', 'oc', '開盤→收盤')
+        + rbSortTh(_rbGSort, 'rbGSort', 'hi', '日內最高')
+        + rbSortTh(_rbGSort, 'rbGSort', 'lo', '日內最低')
+        + rbSortTh(_rbGSort, 'rbGSort', 'cc', '全日收盤')
+        + rbSortTh(_rbGSort, 'rbGSort', 'fade', '開盤後下跌的日子')
         + '</tr></thead><tbody>';
       // 百分比不能抄進委託單：每一欄都把中位數換成價格（前收×(1+%)，對齊升降單位）。
       // 開盤→收盤是同一天兩個價相除，沒有「對前收」的基準，維持百分比。
@@ -702,7 +744,13 @@ function _rbSoxHtml(view) {
         var b = _rbData.series[c] || [];
         return b.length ? b[b.length - 1].c : null;
       };
-      gr.slice().sort(function (a, b) { return b.g.gap - a.g.gap; })
+      var gval = function (r, k) {
+        if (k === 'code') return r.c;
+        if (k === 'px') return lastC(r.c);
+        if (k === 'n') return r.g.n;
+        return r.g[k] == null ? null : r.g[k];
+      };
+      rbSortRows(gr, _rbGSort, gval)
         .forEach(function (r) { html += gline(r.c, _rbName(r.c), r.g, false, lastC(r.c)); });
       if (twG) html += gline('大盤', '加權指數', twG, true, idx[idx.length - 1].c);
       html += '</tbody></table></div>'

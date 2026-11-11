@@ -151,6 +151,74 @@ function ovTick(p) {
 // 持股成本均價（與持股庫存同一個來源）。
 // 只在關注清單、沒有持股的回 null，表上標「—」——
 // 標 0 會被讀成「成本是零」，跟「沒有這筆持股」是兩回事。
+// ═════ 進場訊號板的表格排序（三張表共用）═════
+//
+// 價格類欄位照排：掋單時要看預算、要算幾張買得起。
+// 但要知道實測的結果：依前收、依預估日內最低、依預估收盤排出來是同一個順序——
+// 這幾檔的預估漲跌都在幾個百分點之內，價格水準差好幾倍，把排序蓋過去了。
+// 成交率表的掋價格子更絕對：每格是前收 × (1+k%)，k 對整欄固定，
+// 依它的價格排必然等於依前收排，所以那幾欄排的是成交率。
+//
+// 沒值的一律墊底（升冪降冪都是），與全站其他表格一致。
+function rbSortGet(ls, def) {
+  try {
+    var v = localStorage.getItem(ls);
+    if (v && /(Asc|Desc)$/.test(v)) return v;
+  } catch (e) {}
+  return def;
+}
+function rbSortNext(cur, k) { return cur === k + 'Desc' ? k + 'Asc' : k + 'Desc'; }
+function rbSortTh(state, fn, k, label, tip) {
+  var on = state.replace(/(Asc|Desc)$/, '') === k, asc = on && /Asc$/.test(state);
+  return '<th class="num sort-th' + (on ? ' sorted' : '') + '" onclick="' + fn + '(\'' + k + '\')"'
+    + (tip ? ' title="' + tip + '"' : '') + '>' + label
+    + '<span class="sort-ind">' + (on ? (asc ? '\u25b2' : '\u25bc') : '\u2195') + '</span></th>';
+}
+function rbSortRows(rows, state, val) {
+  var k = state.replace(/(Asc|Desc)$/, ''), asc = /Asc$/.test(state);
+  var idx = {}; rows.forEach(function (r, i) { idx[r] = i; });
+  return rows.slice().sort(function (a, b) {
+    var x = val(a, k), y = val(b, k);
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    var c = (typeof x === 'string') ? x.localeCompare(y, undefined, { numeric: true }) : x - y;
+    return asc ? c : -c;
+  });
+}
+
+// 預設不綁在任何一欄：維持原本「預估收盤漲幅由大到小」的順序，
+// 點了欄位才改排。價格類欄位照排價格（掋單要算預算與張數）。
+var OV_SORT_LS = 'ov_sort_v1', OV_DSORT_LS = 'ov_dsort_v1';
+var _ovSort = rbSortGet(OV_SORT_LS, 'cPctDesc');
+var _ovDSort = rbSortGet(OV_DSORT_LS, 'sdAsc');
+function ovSort(k) {
+  _ovSort = rbSortNext(_ovSort, k);
+  try { localStorage.setItem(OV_SORT_LS, _ovSort); } catch (e) {}
+  if (typeof rbRender === 'function') rbRender();
+}
+function ovDSort(k) {
+  _ovDSort = rbSortNext(_ovDSort, k);
+  try { localStorage.setItem(OV_DSORT_LS, _ovDSort); } catch (e) {}
+  if (typeof rbRender === 'function') rbRender();
+}
+function _ovSortVal(r, k) {
+  if (k === 'code') return r.code;
+  if (k === 'range') return r.loPx;          // 範圍照價格排（下界）
+  if (k === 'actC') return r.act ? r.act.c : null;
+  if (k === 'actL') return r.act ? r.act.l : null;
+  return r[k] == null ? null : r[k];
+}
+function _ovDSortVal(r, k) {
+  if (k === 'code') return r.code;
+  // 偏移度按「元」排（使用者指定）：百分點 × 前收 ÷ 100
+  var y = function (v) { return (v == null || !(r.basePx > 0)) ? null : v * r.basePx / 100; };
+  if (k === 'sd') return y(r.sd);
+  if (k === 'medUp') return y(r.medUp);
+  if (k === 'medDn') return y(r.medDn);
+  return null;
+}
+
 function _ovCost(code) {
   var ps = (typeof _positions !== 'undefined' && _positions) || [];
   for (var i = 0; i < ps.length; i++) {
@@ -394,7 +462,9 @@ function ovHtml(view) {
   }
   var rows = _rbData.codes.map(ovEstimate).filter(Boolean);
   if (!rows.length) return '';
-  rows.sort(function (a, b) { return b.cPct - a.cPct; });
+  rows = (_ovSort === 'cPctDesc')
+    ? rows.slice().sort(function (a, b) { return b.cPct - a.cPct; })
+    : rbSortRows(rows, _ovSort, _ovSortVal);
   ovRecord(rows);
   var hasAct = rows.some(function (r) { return r.act; });
 
@@ -424,19 +494,19 @@ function ovHtml(view) {
       : '') + '</div>';
 
   h += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>' +
-    '<th>代號 / 名稱</th>' +
-    '<th class="num" title="持股的成本均價；只關注、沒持有的為「—」。跟右邊的前收比就是目前的損益">成本均價</th>' +
-    '<th class="num" title="字色是前收自己的漲跌（對再前一日）">前收</th>' +
-    '<th class="num" title="當天開盤價的推估">預估開盤</th>' +
-    '<th class="num" title="當天盤中最低價的推估。掛限價買進要跟這個比，不是跟收盤比">預估日內最低</th>' +
-    '<th class="num" title="範圍的中心。別把它當成一個會到的價">預估收盤</th>' +
-    '<th class="num" title="收盤推估上下各一個典型偏移，約三分之二的日子落在這個範圍。這是要看的數字">典型範圍</th>' +
-    (hasAct ? '<th class="num" title="那一天實際的收盤與日內最低">實際收盤</th>'
-            + '<th class="num">實際日內最低</th>' : '') +
-    '<th class="num" title="市價相對預估淨值：正數代表買貴了。開高跳空當下容易跑到溢價">折溢價</th>' +
-    '<th class="num" title="當日成交量 ÷ 近 20 日均量。跳空上去有沒有量跟上">量能</th>' +
-    '<th class="num" title="這兩個訊號說明得了多少起伏；1 是完全說中、0 是完全說不中">說明力</th>' +
-    '<th class="num">樣本</th></tr></thead><tbody>';
+    rbSortTh(_ovSort, 'ovSort', 'code', '代號 / 名稱').replace('class="num ', 'class="') +
+    rbSortTh(_ovSort, 'ovSort', 'cost', '成本均價', '持股的成本均價；只關注、沒持有的為「—」。跟右邊的前收比就是目前的損益') +
+    rbSortTh(_ovSort, 'ovSort', 'base', '前收', '字色是前收自己的漲跌（對再前一日）') +
+    rbSortTh(_ovSort, 'ovSort', 'oPx', '預估開盤', '當天開盤價的推估') +
+    rbSortTh(_ovSort, 'ovSort', 'lPx', '預估日內最低', '當天盤中最低價的推估。掛限價買進要跟這個比，不是跟收盤比') +
+    rbSortTh(_ovSort, 'ovSort', 'cPx', '預估收盤', '範圍的中心。別把它當成一個會到的價') +
+    rbSortTh(_ovSort, 'ovSort', 'range', '典型範圍', '收盤推估上下各一個典型偏移，約三分之二的日子落在這個範圍。排序依下界的價格') +
+    (hasAct ? rbSortTh(_ovSort, 'ovSort', 'actC', '實際收盤', '那一天實際的收盤')
+            + rbSortTh(_ovSort, 'ovSort', 'actL', '實際日內最低') : '') +
+    rbSortTh(_ovSort, 'ovSort', 'prem', '折溢價', '市價相對預估淨值：正數代表買貴了。開高跳空當下容易跑到溢價') +
+    rbSortTh(_ovSort, 'ovSort', 'volX', '量能', '當日成交量 ÷ 近 20 日均量。跳空上去有沒有量跟上') +
+    rbSortTh(_ovSort, 'ovSort', 'r2', '說明力', '這兩個訊號說明得了多少起伏；1 是完全說中、0 是完全說不中') +
+    rbSortTh(_ovSort, 'ovSort', 'n', '樣本') + '</tr></thead><tbody>';
   rows.forEach(function (r) {
     h += '<tr><td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span></td>' +
       // 成本均價是固定的事實，它沒有漲跌。紅綠在這一頁的意思是「今天動了多少」，
@@ -484,9 +554,11 @@ function ovHtml(view) {
   if (view === 'ana') {
     h += '<div class="sec-title">偏移度（實際與推估的差距，元）</div>' +
       '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>' +
-      '<th>代號 / 名稱</th><th class="num">整體上下差</th>' +
-      '<th class="num">夜盤上漲的日子</th><th class="num">夜盤下跌的日子</th></tr></thead><tbody>';
-    rows.slice().sort(function (a, b) { return a.sd - b.sd; }).forEach(function (r) {
+      rbSortTh(_ovDSort, 'ovDSort', 'code', '代號 / 名稱').replace('class="num ', 'class="') +
+      rbSortTh(_ovDSort, 'ovDSort', 'sd', '整體上下差', '排序依元') +
+      rbSortTh(_ovDSort, 'ovDSort', 'medUp', '夜盤上漲的日子', '排序依元') +
+      rbSortTh(_ovDSort, 'ovDSort', 'medDn', '夜盤下跌的日子', '排序依元') + '</tr></thead><tbody>';
+    rbSortRows(rows, _ovDSort, _ovDSortVal).forEach(function (r) {
       // 百分點對下單沒意義，換成這一檔的元：偏移×前收÷100。
       // 「上下 0.11 元」才知道掛價要留多少餘裕。
       var yuan = function (v) { return (r.basePx > 0) ? v * r.basePx / 100 : null; };
