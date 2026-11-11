@@ -785,6 +785,15 @@ function renderWatchAct() {
   if (!d || !d.rows.length) { h += '<div class="modal-loading">尚未載入報酬資料。</div>'; wrap.innerHTML = h; return; }
 
   var sh = function (k, label, cls, tip) { return _wtSortTh(_wtActSort, 'wtActSort', k, label, cls == null ? 'num' : cls, tip); };
+  // 空值兩種：整檔抽不到日K 是 X，有日K 但天數不足是 —
+  var gapX = function (t) { return '<span class="na-gap" title="' + t + '">✕</span>'; };
+  var na = function (r, tip) {
+    return r.days ? '<span class="flat" title="' + tip + '">—</span>'
+                  : gapX('Yahoo 日K 整檔抽不到，按「重新計算」再試');
+  };
+  var pctR = function (v, r, tip) {
+    return v == null ? na(r, tip) : '<span class="' + colorClass(v) + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%</span>';
+  };
   var pct = function (v) { return v == null ? '<span class="flat">—</span>' : '<span class="' + colorClass(v) + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%</span>'; };
   // 殖利率不套漲跌色：它不是漲跌，正負沒有意義，與 ETF 評比、新上市 ETF 的呈現一致
   var yld = function (v) { return v == null ? '<span class="flat">—</span>' : v.toFixed(2) + '%'; };
@@ -806,14 +815,15 @@ function renderWatchAct() {
         : '<input type="checkbox"' + (_wtPick[r.code] ? ' checked' : '') + ' onchange="wtPick(\'' + r.code + '\',this)">') + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-name">' + r.name + '</td>' +
-      '<td class="num">' + (r.px != null ? r.px.toFixed(2) : '—') + '</td>' +
+      '<td class="num">' + (r.px != null ? r.px.toFixed(2)
+        : gapX('券商快照與 Yahoo 都取不到價')) + '</td>' +
       '<td class="num"' + dtip(r) + '>' + yld(r.y1) + '</td>' +
       '<td class="num"' + dtip(r) + '>' + yld(r.yEst) + '</td>' +
-      '<td class="num">' + pct(r.r1) + '</td>' +
-      '<td class="num">' + pct(r.r3) + '</td>' +
-      '<td class="num"><b>' + pct(r.rAll) + '</b></td>' +
+      '<td class="num">' + pctR(r.r1, r, '上市不足 20 個交易日，沒有一個月前的錨點') + '</td>' +
+      '<td class="num">' + pctR(r.r3, r, '上市不足 60 個交易日，沒有三個月前的錨點') + '</td>' +
+      '<td class="num"><b>' + pctR(r.rAll, r, '沒有可用的起點收盤') + '</b></td>' +
       '<td class="num' + (r.days && r.days < 60 ? ' swap-warn' : '') + '">'
-        + (r.days ? r.days : '<span class="flat">—</span>') + '</td>' +
+        + (r.days ? r.days : gapX('Yahoo 日K 整檔抽不到')) + '</td>' +
     '</tr>';
     if (open) h += '<tr class="es-drow"><td colspan="10" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
@@ -824,6 +834,10 @@ function renderWatchAct() {
     '<dt>單次配／預估年配</dt><dd>最近一次配息 ÷ 現價，以及再乘上年配息次數。欄位定義與 ETF 評比、新上市 ETF 相同。' +
     '滑過數字可看除息日與每股金額。顯示「—」代表查無配息紀錄（未配息或資料未揭露）。</dd>' +
     '<dt>報酬</dt><dd>起點用 Yahoo 日收盤價，終點用現價。主動式 ETF 多未配息或配息少，<code>價格報酬 ≈ 總報酬</code>。</dd>' +
+    '<dt>空格的兩種意思</dt><dd><span class="na-gap">✕</span> 是<b>資料源沒給</b>' +
+      '（日K 整檔抽不到），按「重新計算」有機會會有；' +
+      '<span class="flat">—</span> 是<b>資料拿到了但算不出來</b>（天數不足、查無配息紀錄），' +
+      '重抓也不會變。滑過去會說是哪一種。</dd>' +
     '<dt>列入範圍</dt><dd>上市與上櫃的主動式股票型 ETF（代號結尾 A）<b>全數列入</b>，' +
       '抽不到資料的也列，欄位放「—」。這樣才分辨得出「沒這檔」與「這檔沒資料」。' +
       '主動式債券 ETF（結尾 D）在「債券 ETF」頁籤，不重複列在這裡。</dd>' +
