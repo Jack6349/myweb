@@ -2056,3 +2056,5 @@ td.cost-even::after  { background: var(--text3); }
 .dvs-amt { color: var(--text); }
 /* 空值兩種：✕＝資料源沒給（重抓有機會有）、—＝算不出來（重抓也不會變） */
 .na-gap { color: var(--text3); opacity: .75; cursor: help; font-size: .9em; }
+/* 關注清單 22 欄：欄距 8px→4px，1920 就從捲動 116px 變成剛好塞得下 */
+.wt-table td, .wt-table th { padding-left: 4px; padding-right: 4px; }
