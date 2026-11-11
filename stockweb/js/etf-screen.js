@@ -1082,10 +1082,14 @@ function esWatchCells(code) {
       + (rk ? ('<b>' + rk.rank + '</b>' + (rk.listed ? '' : dim('（未入表）')))
             : (r.young ? esDash('上市未滿一年，不列入評比排名')
                        : esDash('沒進同類前 30 名，評比表沒給名次'))),
-    // 「高股息（未滿一年）」整整擐寬這一欄 115px，而它只是在說「沒排名」。
-    // 改成 —，分類與原因滑過去就看得到。
+    // 沒排名的列只標分類，不標「—」。
+    // 舊寫法的「高股息（未滿一年）」擐寬這一欄到 115px所以改過 —，
+    // 但那把分類也一起藏掉了：主動式（代號結尾 A）大多上市未滿一年，
+    // 整欄看過去一排「—」，連它們是哪一類都不知道。
+    // 只印分類三個字（約 36px）遠窄於有排名時的「高股息 7/32」，不影響欄寬。
     score: r.grpRank ? r.grpLabel + ' <b>' + r.grpRank + '</b>' + dim('/' + r.grpN)
-      : esDash('上市未滿一年，不列入類別排名（分類：' + r.grpLabel + '）'),
+      : '<span class="dm-dim" title="上市未滿一年，缺一年期報酬與填息紀錄，不列入排名">'
+        + (r.grpLabel || '—') + '</span>',
     y1: (r.y1 == null ? dim('—')
       : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '">'
         + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + r.y1.toFixed(2) + '%'),
