@@ -565,11 +565,8 @@ function _rbSoxHtml(view) {
   // 費半最後一根落在台股最後一根的後面 → 台股還沒反應（同一日期的美股盤在台股收盤之後）
   var pending = L.d >= lastTw.d;
 
-  var head = '最近一次費半收盤（' + L.d + '）<b style="color:' + _rbCol(L.r) + '">'
-    + _rbPct(L.r, 2) + '</b>，落在自身近 ' + cfg.years + ' 年第 '
-    + (L.rank == null ? '—' : L.rank.toFixed(1)) + ' 百分位；'
-    + '門檻是第 ' + cfg.soxPct + ' 百分位，換算後 <b>' + _rbPct(sox.thr, 2) + '</b>（'
-    + sox.n + ' 個交易日中 ' + sox.hit + ' 天達標）。';
+  var head = '費半 <b style="color:' + _rbCol(L.r) + '">' + _rbPct(L.r, 2)
+    + '</b>（' + L.d + '），門檻 <b>' + _rbPct(sox.thr, 2) + '</b>。';
 
   if (!on && view !== 'ana') {
     return '<div class="rb-sox rb-sox-off nb-keep">隔夜費半未達門檻。' + head + '</div>';
@@ -588,17 +585,11 @@ function _rbSoxHtml(view) {
   if (on && pending) {
     // 台股上一個交易日對到的費半是否也達標 → 今天就是連續第二根
     var u2 = sox.prev(lastTw.d), prevHit = (u2 != null && sox.rets[u2] >= sox.thr);
-    html += '<br>這一根台股還沒反應過：最後一個台股交易日是 ' + lastTw.d
-      + '，它反應的是 ' + (u2 || '—') + ' 的費半'
-      + (u2 ? '（' + _rbPct(sox.rets[u2], 2) + '）' : '')
-      + '，大盤收 <b style="color:' + _rbCol(twChg) + '">' + _rbPct(twChg, 2) + '</b>。'
-      + '這一夜的漲幅一分都還沒進市場。<br>'
-      + (prevHit
-         ? '<b>今天是連續第二根以上</b>：上一個交易日對到的費半也達標，起點已經被墊高。'
-         : '<b>今天是訊號的第一根</b>：上一個交易日對到的費半未達標。');
+    html += '這一夜還沒進市場。'
+      + (prevHit ? '<b>連續第二根以上</b>（起點已被墊高）。'
+                 : '<b>訊號的第一根</b>。');
   } else if (on) {
-    html += '<br>台股已經反應過這一根（最後一個台股交易日 ' + lastTw.d
-      + ' 比費半這一根晚），下表是歷史分布，不是尚未發生的當天。';
+    html += '台股已反應過，下表是歷史分布。';
   }
   html += '</div>';
 
@@ -618,9 +609,8 @@ function _rbSoxHtml(view) {
   var twF = _rbFill(idx, sox, reg);
 
   html += '<div class="rb-sox-hd">現在是<b>' + (nowDn ? '連跌後' : '上漲中')
-    + '</b>（大盤近 ' + cfg.regWin + ' 日累計 <b style="color:' + _rbCol(regNow) + '">'
-    + _rbPct(regNow, 2) + '</b>）。每一格是<b>連跌後／上漲中</b>的成交率，'
-    + '粗體那一邊是今天；底下是對齊升降單位的價格，直接抄進委託單。</div>';
+    + '</b>（大盤近 ' + cfg.regWin + ' 日 <b style="color:' + _rbCol(regNow) + '">'
+    + _rbPct(regNow, 2) + '</b>）。小字是<b>連跌後／上漲中</b>的成交率。</div>';
 
   html += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
     + '<th>代號 / 名稱</th><th class="num">前收</th><th class="num">上漲機率</th>'
@@ -650,10 +640,11 @@ function _rbSoxHtml(view) {
       var px = pc * (1 + k / 100);
       var t = px < 50 ? 0.01 : 0.05;
       var ap = Math.round(px / t) * t;
-      h += '<td class="num">'
+      // 價格是要抄進委託單的那個數字，放主體；成交率降為輔助小字
+      h += '<td class="num"><span class="rb-fpx">' + ap.toFixed(2) + '</span>'
+        + '<span class="rb-frate">'
         + rate(f.dn.p ? f.dn.p[j] : null, nowDn) + '<span class="bs-slash">／</span>'
-        + rate(f.up.p ? f.up.p[j] : null, !nowDn)
-        + '<span class="bs-sub">' + ap.toFixed(2) + '</span></td>';
+        + rate(f.up.p ? f.up.p[j] : null, !nowDn) + '</span></td>';
     });
     h += '<td class="num rs-dim">' + f.dn.n + ' ／ ' + f.up.n + ' 天</td></tr>';
     return h;
@@ -670,25 +661,37 @@ function _rbSoxHtml(view) {
       var ex = gr.reduce(function (a, r) { return a + r.g.exdiv; }, 0);
       html += '<div class="sec-title">達標日的日內形狀（皆為中位數）</div>'
         + '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
-        + '<th>代號 / 名稱</th><th class="num">樣本</th>'
+        + '<th>代號 / 名稱</th><th class="num">前收</th><th class="num">樣本</th>'
         + '<th class="num">開盤跳空</th><th class="num">開盤→收盤</th>'
         + '<th class="num">日內最高</th><th class="num">日內最低</th>'
         + '<th class="num">全日收盤</th><th class="num">開盤後下跌的日子</th>'
         + '</tr></thead><tbody>';
-      var gline = function (code, name, g, isIdx) {
+      // 百分比不能抄進委託單：每一欄都把中位數換成價格（前收×(1+%)，對齊升降單位）。
+      // 開盤→收盤是同一天兩個價相除，沒有「對前收」的基準，維持百分比。
+      var gpx = function (pc, v) {
+        if (!(pc > 0) || v == null) return '';
+        var px = pc * (1 + v / 100), t = px < 50 ? 0.01 : 0.05;
+        return '<span class="rb-gsub">' + (Math.round(px / t) * t).toFixed(2) + '</span>';
+      };
+      var gline = function (code, name, g, isIdx, pc) {
         return '<tr' + (isIdx ? ' class="rb-sysrow"' : '') + '>'
           + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span></td>'
+          + '<td class="num rs-dim">' + (pc > 0 ? pc.toFixed(2) : '—') + '</td>'
           + '<td class="num rs-dim">' + g.n + ' 天</td>'
-          + '<td class="num" style="color:' + _rbCol(g.gap) + ';font-weight:700">' + _rbPct(g.gap, 2) + '</td>'
+          + '<td class="num" style="color:' + _rbCol(g.gap) + ';font-weight:700">' + _rbPct(g.gap, 2) + gpx(pc, g.gap) + '</td>'
           + '<td class="num" style="color:' + _rbCol(g.oc) + ';font-weight:700">' + _rbPct(g.oc, 2) + '</td>'
-          + '<td class="num" style="color:' + _rbCol(g.hi) + '">' + _rbPct(g.hi, 2) + '</td>'
-          + '<td class="num" style="color:' + _rbCol(g.lo) + '">' + _rbPct(g.lo, 2) + '</td>'
-          + '<td class="num" style="color:' + _rbCol(g.cc) + '">' + _rbPct(g.cc, 2) + '</td>'
+          + '<td class="num" style="color:' + _rbCol(g.hi) + '">' + _rbPct(g.hi, 2) + gpx(pc, g.hi) + '</td>'
+          + '<td class="num" style="color:' + _rbCol(g.lo) + '">' + _rbPct(g.lo, 2) + gpx(pc, g.lo) + '</td>'
+          + '<td class="num" style="color:' + _rbCol(g.cc) + '">' + _rbPct(g.cc, 2) + gpx(pc, g.cc) + '</td>'
           + '<td class="num rs-dim">' + g.fade.toFixed(0) + '%</td></tr>';
       };
+      var lastC = function (c) {
+        var b = _rbData.series[c] || [];
+        return b.length ? b[b.length - 1].c : null;
+      };
       gr.slice().sort(function (a, b) { return b.g.gap - a.g.gap; })
-        .forEach(function (r) { html += gline(r.c, _rbName(r.c), r.g, false); });
-      if (twG) html += gline('大盤', '加權指數', twG, true);
+        .forEach(function (r) { html += gline(r.c, _rbName(r.c), r.g, false, lastC(r.c)); });
+      if (twG) html += gline('大盤', '加權指數', twG, true, idx[idx.length - 1].c);
       html += '</tbody></table></div>'
         + '<div class="rb-caveat">開高低都是未還原價，所以跟「昨收」相比時跨除息日會把配息算成跳空缺口。'
         + '除息日用還原係數（還原收盤 ÷ 收盤）是否變動判定並整根排除，'
