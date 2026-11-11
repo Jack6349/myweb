@@ -586,6 +586,24 @@ function esSortCol(key) {
 }
 
 // 填息率顯示：「(4/4) 100%」次數在前、比例固定寬度靠右，各列的 % 才會上下對齊
+// 評比排名前的配息頻率標記。關注清單拿掉名稱欄之後完全看不到頻率，
+// 而這一欄的寬度是被表頭「評比排名」四個字擐開的（72px），
+// 內容最寬只有 13px（「14」），裡面空著約 50px。
+// 實測加一個中文字後欄寬與表格最小寬完全沒變（1581 → 1581）。
+//
+// 頻率來源與「預估年配」用的是同一個（_esPerYear），兩欄不會各說各話。
+// s＝除息間隔月數。實測分佈：月 58、雙 2、季 121、半 26、年 41。
+var ES_FREQ_CH = { 1: '月', 2: '雙', 3: '季', 6: '半', 12: '年' };
+var ES_FREQ_TIP = { 1: '月配', 2: '雙月配', 3: '季配', 6: '半年配', 12: '年配' };
+
+function esFreqChip(code, step) {
+  var per = (typeof _esPerYear === 'function') ? _esPerYear(code, step) : null;
+  var m = per ? Math.round(12 / per) : null;
+  var ch = (m && ES_FREQ_CH[m]) || '無';
+  var tip = (m && ES_FREQ_TIP[m]) || '查不到配息頻率（未配息、個股或資料未揭露）';
+  return '<span class="es-fq' + (m ? '' : ' es-fq-0') + '" title="' + tip + '">' + ch + '</span>';
+}
+
 // ═════ 評比排名（關注清單要用）═════
 //
 // 評比頁的「#」是二輪分數在「同類前 30 名」裡的名次，與已有的「類別排名」
@@ -1021,7 +1039,9 @@ function esWatchHeads() {
     var c = ES_COLS.filter(function (x) { return x[0] === k; })[0];
     var label = k === 'score' ? '類別排名' : (k === 'rank' ? '評比排名' : c[1]);
     var tip = k === 'score' ? '在同類 ETF 中的名次（一年含息、近12月殖利率、一年價格、規模加權；上市未滿一年不排名）'
-      : (k === 'rank' ? 'ETF 評比表上的名次，與那一頁的「#」同一個數字。&#10;只有同類前 30 名有，其餘為「—」。&#10;與左邊「類別排名」的差別：那一欄是在同類全部 ETF 裡的名次，每一檔都有' : c[3]);
+      : (k === 'rank' ? '前面那個字是配息頻率：月、雙（雙月）、季、半（半年）、年、無（查不到）。&#10;'
+          + '數字是 ETF 評比表上的名次，與那一頁的「#」同一個。&#10;只有同類前 30 名有，其餘為「—」。&#10;'
+          + '與左邊「類別排名」的差別：那一欄是在同類全部 ETF 裡的名次，每一檔都有' : c[3]);
     var on = typeof _wtSort !== 'undefined' && _wtSort.replace(/(Asc|Desc)$/, '') === k;
     var asc = on && /Asc$/.test(_wtSort);
     return '<th class="num sort-th' + (on ? ' sorted' : '') + '" onclick="wtSortCol(\'' + k + '\')"' + (tip ? ' title="' + tip + '"' : '') + '>' + label +
@@ -1058,9 +1078,10 @@ function esWatchCells(code) {
   var rk = rkAll[String(r.code)];
   var cell = {
     // 評比表只列前 20 名，第 21～30 名有名次但那一頁上看不到，標起來免得找不到
-    rank: rk ? ('<b>' + rk.rank + '</b>' + (rk.listed ? '' : dim('（未入表）')))
-      : (r.young ? esDash('上市未滿一年，不列入評比排名')
-                 : esDash('沒進同類前 30 名，評比表沒給名次')),
+    rank: esFreqChip(r.code, r.step)
+      + (rk ? ('<b>' + rk.rank + '</b>' + (rk.listed ? '' : dim('（未入表）')))
+            : (r.young ? esDash('上市未滿一年，不列入評比排名')
+                       : esDash('沒進同類前 30 名，評比表沒給名次'))),
     // 「高股息（未滿一年）」整整擐寬這一欄 115px，而它只是在說「沒排名」。
     // 改成 —，分類與原因滑過去就看得到。
     score: r.grpRank ? r.grpLabel + ' <b>' + r.grpRank + '</b>' + dim('/' + r.grpN)
