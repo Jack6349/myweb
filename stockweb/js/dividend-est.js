@@ -874,9 +874,9 @@ function _divEsStatHtml(code) {
       + (r.y1Ann ? ' title="已公告、還沒除息"' : '') + '>' + r.y1Amt.toFixed(4) + '</span>';
   // 只配過一期的推不出走向（實測 00404A、00999A）——那是算不出來（—），
   // 跟「頻率資料檔沒這檔」（X）是兩回事，esSeqNA 替兩者分流。
+  // 走向與波動的寫法與 ETF 評比、關注清單共用，不在這裡再寫一份
   var trend = r.trend == null ? seqNA(true)
-    : '<span class="es-tr es-tr-' + ({ '成長': 'up', '持平': 'flat', '波動': 'wav', '下調': 'dn' })[r.trend] + '">'
-      + r.trend + '</span><span class="es-trn">' + (r.seqN || 0) + ' 期</span>';
+    : ((typeof esTrendHtml === 'function') ? esTrendHtml(r) : r.trend);
   var fillBusy = (typeof _esFillBusy !== 'undefined' && _esFillBusy[code]) || _divEsBusy;
   var fill = r.fill == null
     ? (fillBusy ? wait : ((typeof esFillNA === 'function') ? esFillNA(r) : dim('—')))
@@ -887,7 +887,7 @@ function _divEsStatHtml(code) {
   return '<div class="dvs-row">'
     + cell('單次配', amt, '最近一期每股配息金額（含已公告未除息）。黃色＝已公告、還沒除息')
     + cell('保守年配', r.yCons == null ? seqNA(false) : r.yCons.toFixed(2) + '%', '取樣區間內最低一期 × 一年期數 ÷ 現價：每一期都像最差那一期時的水準')
-    + cell('配息走向', trend, '下調＝最新一期就是最低、持平＝最高與最低差 5% 以內、成長＝只升不降、波動＝有升有降')
+    + cell('配息走向', trend, '連升＝連升 2 期以上、轉升＝剛升 1 期、固定＝每期同一個數字、連平＝尾端沒動但曾調整過、轉降＝剛降 1 期、連降＝連降 2 期以上。後面的符號是波動度：· 從未調整、～ 小、※ 大、— 期數不足')
     + '</div><div class="dvs-row">'
     + cell('填息率', fill, '近 12 個月：已填息次數 ÷ 除息次數（除息後收盤回到除息前收盤即算填息）')
     + cell('平均填息', fd, '已填息者平均花幾個交易日')
