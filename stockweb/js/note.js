@@ -11,7 +11,9 @@
 // 6 個，另外 6 個（tx-note、swap-hint、divest-hist-note、sd-onote、macro-alert-note、
 // ord-pend-note）其實一直沒被收合。合併後一律適用，其中屬於狀態訊息或操作指示的
 // 11 處已另外標上 nb-keep。.nb 是借用別的 class 排版、但內容是解釋的那些。
-var NOTE_SEL = ['.detail-note', '.nb'].join(',');
+// .rb-caveat 是進場訊號板自己的說明標記，一直沒被收进來，
+// 所以那一頁的解釋文字全部攞在表格底下。狀態訊息那幾段已另外標 nb-keep。
+var NOTE_SEL = ['.detail-note', '.nb', '.rb-caveat'].join(',');
 
 function _noteWrap(el) {
   if (!el || el.getAttribute('data-nbox') || el.closest('.nbox')) return;

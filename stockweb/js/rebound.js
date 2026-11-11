@@ -34,6 +34,13 @@ function _rbCfg() {
     // 費半門檻不寫死成百分比，寫成「費半自身日報酬的第 N 百分位」：
     // 百分位是資料算出來的，换成幾 % 會隨市況變，寫死成 3% 就是憑空訂數字。
     soxPct: (isNaN(sp) || sp < 50 || sp > 99.9) ? 90 : sp,
+    // 情境判定窗：台股近 N 日累計是負的算「連跌後」，否則算「上漲中」。
+    // 2／3／5 日的結論方向一致（連跌後掛平盤的成交率 17%／12%／3%，
+    // 上漲中 24%／33%／41%），跌得越久越不會回到昨收。預設 3 日。
+    regWin: (function () {
+      var w = parseInt(localStorage.getItem('rb_regwin'), 10);
+      return (isNaN(w) || w < 1 || w > 20) ? 3 : w;
+    })(),
     soxOn: localStorage.getItem('rb_soxon') !== '0'
   };
 }
@@ -260,6 +267,63 @@ function _rbSoxCalc(bars, pct) {
 // 開高低是未還原價，所以跟「昨收」比的時候跨除息日會把配息算成跳空缺口。
 // 除息日的判定不自己維護清單，用資料算：還原係數（adjclose ÷ close）在前後兩根之間
 // 變了，那一根就是除息日，整根排掉。
+// 掋這個價，成交率多少。這是挂限價單真正要的數字——
+// 中位數、最低、最高都是收盤對收盤的分布描述，沒有一個能變成委託單上的價格。
+//
+// 實測的發現（七檔方向一致）：連跌後反而更難成交。
+//   00981A 近 3 日判定：掛平盤的成交率，連跌後 9%（n=22）、上漲中 44%（n=18）。
+// 機制就是「開盤跳空」那一欄在講的：連跌＋費半大漲是最強的跳空組合，
+// 開高就不回頭，等拉回等不到。
+//
+// 除息日排掉：開高低是未還原價，跟前收相比會把配息算成跳空（與 _rbSoxGap 同一個判法）。
+var RB_FILL_OFFS = (function () {
+  var a = [];
+  for (var k = -100; k <= 200; k += 25) a.push(k / 100);   // −1% 到 +2%，0.25 一檔
+  return a;
+})();
+
+function _rbFill(bars, sox, reg) {
+  if (!bars || !sox || !reg) return null;
+  var mk = function () { return { n: 0, hit: RB_FILL_OFFS.map(function () { return 0; }) }; };
+  var dn = mk(), up = mk();
+  for (var i = 1; i < bars.length; i++) {
+    var b = bars[i], pv = bars[i - 1];
+    if (!(pv.c > 0) || !(b.l > 0)) continue;
+    var u = sox.prev(b.d);
+    if (u == null || u < pv.d || !(sox.rets[u] >= sox.thr)) continue;
+    var f0 = pv.a / pv.c, f1 = b.a / b.c;
+    if (Math.abs(f1 - f0) > 1e-6 * Math.max(f0, f1)) continue;      // 除息日
+    var v = reg[b.d];
+    if (v == null) continue;
+    var g = (v < 0) ? dn : up;
+    g.n++;
+    RB_FILL_OFFS.forEach(function (k, j) {
+      if (b.l <= pv.c * (1 + k / 100) + 1e-9) g.hit[j]++;
+    });
+  }
+  if (!dn.n && !up.n) return null;
+  var pc = function (g) {
+    return g.n ? g.hit.map(function (h) { return h / g.n * 100; }) : null;
+  };
+  return { dn: { n: dn.n, p: pc(dn) }, up: { n: up.n, p: pc(up) }, last: bars[bars.length - 1].c };
+}
+
+// 台股近 N 日累計（到前一日為止），當成「今天屬於哪種情境」的依據
+function _rbRegime(idx, win) {
+  var m = {};
+  for (var i = win + 1; i < idx.length; i++) {
+    if (idx[i - 1].c > 0 && idx[i - 1 - win].c > 0) {
+      m[idx[i].d] = (idx[i - 1].c / idx[i - 1 - win].c - 1) * 100;
+    }
+  }
+  return m;
+}
+function _rbRegimeNow(idx, win) {
+  var n = idx.length;
+  if (n < win + 1 || !(idx[n - 1].c > 0) || !(idx[n - 1 - win].c > 0)) return null;
+  return (idx[n - 1].c / idx[n - 1 - win].c - 1) * 100;
+}
+
 function _rbSoxGap(bars, sox) {
   if (!bars || !sox) return null;
   var gap = [], oc = [], hi = [], lo = [], cc = [], fade = 0, n = 0, exdiv = 0;
@@ -546,54 +610,59 @@ function _rbSoxHtml(view) {
   }
 
   var ana = (view === 'ana');
+  var reg = _rbRegime(idx, cfg.regWin);
+  var regNow = _rbRegimeNow(idx, cfg.regWin);
+  var nowDn = (regNow != null && regNow < 0);
+  var fills = {};
+  _rbData.codes.forEach(function (c) { fills[c] = _rbFill(_rbData.series[c] || [], sox, reg); });
+  var twF = _rbFill(idx, sox, reg);
+
+  html += '<div class="rb-sox-hd">現在是<b>' + (nowDn ? '連跌後' : '上漲中')
+    + '</b>（大盤近 ' + cfg.regWin + ' 日累計 <b style="color:' + _rbCol(regNow) + '">'
+    + _rbPct(regNow, 2) + '</b>）。每一格是<b>連跌後／上漲中</b>的成交率，'
+    + '粗體那一邊是今天；底下是對齊升降單位的價格，直接抄進委託單。</div>';
+
   html += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
-    + '<th>代號 / 名稱</th><th class="num">樣本</th><th class="num">上漲機率</th>'
-    + '<th class="num">中位數</th><th class="num">其中開盤跳空</th>'
-    + (ana ? '<th class="num">平均</th>' : '')
-    + '<th class="num">最低</th><th class="num">最高</th></tr></thead><tbody>';
-  var line = function (code, name, st, g, isIdx) {
-    var thin = st.n < 20;
-    var cls = [];
-    if (isIdx) cls.push('rb-sysrow');
-    if (thin) cls.push('rb-thin');
-    return '<tr' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>'
-      + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span>'
-      + (thin ? '<div class="rb-sub3 rs-dim">樣本不足 20 天，只能當量級看</div>' : '') + '</td>'
-      + '<td class="num rs-dim">' + st.n + ' 天</td>'
-      + '<td class="num" style="font-weight:700">' + st.up.toFixed(0) + '%</td>'
-      + '<td class="num" style="color:' + _rbCol(st.med) + ';font-weight:700">' + _rbPct(st.med, 2) + '</td>'
-      + '<td class="num" style="color:' + _rbCol(g ? g.gap : null) + '">' + (g ? _rbPct(g.gap, 2) : '—')
-        + (g ? '<div class="rb-sub3 rs-dim">開盤後 ' + _rbPct(g.oc, 2) + '</div>' : '') + '</td>'
-      + (ana ? '<td class="num" style="color:' + _rbCol(st.avg) + '">' + _rbPct(st.avg, 2) + '</td>' : '')
-      + '<td class="num" style="color:' + _rbCol(st.min) + '">' + _rbPct(st.min, 2) + '</td>'
-      + '<td class="num" style="color:' + _rbCol(st.max) + '">' + _rbPct(st.max, 2) + '</td></tr>';
+    + '<th>代號 / 名稱</th><th class="num">前收</th><th class="num">上漲機率</th>'
+    + '<th class="num" title="達標日的開盤跳空中位數；漲幅幾乎全在這裡給完">開盤跳空</th>';
+  RB_FILL_OFFS.forEach(function (k) {
+    html += '<th class="num">' + (k === 0 ? '平盤' : (k > 0 ? '＋' : '−') + Math.abs(k) + '%') + '</th>';
+  });
+  html += '<th class="num" title="左為連跌後的天數、右為上漲中">樣本 跌／漲</th></tr></thead><tbody>';
+
+  var rate = function (v, on) {
+    if (v == null) return '<span class="dm-dim">—</span>';
+    return '<span class="' + (on ? (v >= 60 ? 'bs-hi' : (v >= 30 ? 'bs-mid' : 'bs-lo')) : 'bs-off') + '">'
+      + v.toFixed(0) + '%</span>';
   };
-  rows.forEach(function (r) { html += line(r.c, _rbName(r.c), r.s, r.g, false); });
-  if (twS) html += line('大盤', '加權指數', twS, twG, true);
+  var fline = function (code, name, st, g, f, isIdx) {
+    var h = '<tr' + (isIdx ? ' class="rb-sysrow"' : '') + '>'
+      + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span></td>';
+    if (!f) {
+      return h + '<td class="num rs-dim" colspan="' + (RB_FILL_OFFS.length + 4)
+        + '">沒有可算的樣本</td></tr>';
+    }
+    var pc = f.last, tk = (typeof ovTick === 'function') ? null : null;
+    h += '<td class="num rs-dim">' + pc.toFixed(2) + '</td>'
+      + '<td class="num" style="font-weight:700">' + (st ? st.up.toFixed(0) + '%' : '—') + '</td>'
+      + '<td class="num" style="color:' + _rbCol(g ? g.gap : null) + '">' + (g ? _rbPct(g.gap, 2) : '—') + '</td>';
+    RB_FILL_OFFS.forEach(function (k, j) {
+      var px = pc * (1 + k / 100);
+      var t = px < 50 ? 0.01 : 0.05;
+      var ap = Math.round(px / t) * t;
+      h += '<td class="num">'
+        + rate(f.dn.p ? f.dn.p[j] : null, nowDn) + '<span class="bs-slash">／</span>'
+        + rate(f.up.p ? f.up.p[j] : null, !nowDn)
+        + '<span class="bs-sub">' + ap.toFixed(2) + '</span></td>';
+    });
+    h += '<td class="num rs-dim">' + f.dn.n + ' ／ ' + f.up.n + ' 天</td></tr>';
+    return h;
+  };
+  rows.forEach(function (r) { html += fline(r.c, _rbName(r.c), r.s, r.g, fills[r.c], false); });
+  if (twS) html += fline('大盤', '加權指數', twS, twG, twF, true);
   html += '</tbody></table></div>';
-  // 掛限價買進的人要看的是這一句，不是中位數
-  var withG = rows.filter(function (r) { return r.g; });
-  if (withG.length) {
-    var mostGap = withG.slice().sort(function (a, b) { return b.g.gap - a.g.gap; })[0];
-    var allFlat = withG.every(function (r) { return Math.abs(r.g.oc) < 0.5; });
-    html += '<div class="rb-caveat">中位數那一欄是收盤對收盤，但掛限價買進能不能成交看的是日內價。'
-      + '這些漲幅幾乎全部在開盤跳空：' + mostGap.c + ' 全日 '
-      + _rbPct(mostGap.g.cc, 2) + ' 裡有 ' + _rbPct(mostGap.g.gap, 2) + ' 是開盤就給完的，'
-      + '開盤後到收盤 ' + _rbPct(mostGap.g.oc, 2) + '。'
-      + (allFlat ? '各檔的「開盤後」中位數都在 0 附近 —— ' : '')
-      + '掛在跳空幅度之下不是「在那個位置買」，是「等它從開盤跌回來」；'
-      + '中位的日子不會跌回去。完整的開高低收分布在分析視圖。</div>';
-  }
 
   var thin = rows.filter(function (r) { return r.s.n < 20; });
-  html += '<div class="rb-caveat">樣本是「前一夜費半 ≥ ' + _rbPct(sox.thr, 2)
-    + ' 的那些台股交易日」，每一天算一次，彼此不重疊（跟下方主表不同，'
-    + '主表的觸發日會連續落在同一段修正裡）。'
-    + (thin.length ? '樣本不足 20 天的有 ' + thin.length + ' 檔（'
-        + thin.map(function (r) { return r.c + ' ' + r.s.n + ' 天'; }).join('、')
-        + '），它們的「最低～最高」隨時會被下一天改寫，只能當參考量級。' : '')
-    + '「費半大漲 ＋ 台股剛跌深」的雙條件本卡不算：近 ' + cfg.years
-    + ' 年同時滿足兩者的日子只有個位數，n 這麼小寫上去會被當成機率，比不寫更糟。</div>';
 
   if (ana) {
     var gr = rows.filter(function (r) { return r.g; });
@@ -627,7 +696,7 @@ function _rbSoxHtml(view) {
         + '「開盤→收盤」是同一天的兩個價相除，沒有這個問題。</div>';
     }
     if (twS) {
-      html += '<div class="rb-caveat rs-dim">符合條件的台股交易日（' + twS.n + ' 天）：'
+      html += '<div class="rb-caveat rs-dim nb-keep">符合條件的台股交易日（' + twS.n + ' 天）：'
         + twS.dates.join('、') + '</div>';
     }
   }
@@ -636,6 +705,23 @@ function _rbSoxHtml(view) {
 }
 
 // 日內形狀（開盤跳空）的六欄
+// 成交率表的六欄。決策視圖只留這一段，而且是收合的。
+function _rbFillSixHtml() {
+  if (!_rbData || !_rbData.cfg.soxOn || !_rbData.sox) return '';
+  var w = _rbData.cfg.regWin;
+  return '<dt>成交率表怎麼用</dt><dd>找到你想掛的價（格子底下那個數字，已對齊升降單位），'
+    + '上面的百分比就是「達標日裡有多少比例的日子，日內最低價碰得到它」。'
+    + '兩個數字是<b>連跌後／上漲中</b>，以大盤近 ' + w + ' 日累計是正是負區分（可在參數設定改）。</dd>'
+    + '<dt>連跌後反而更難成交</dt><dd>七檔方向一致。實測掛平盤的成交率：'
+    + '判定窗 2 日時連跌後 17%、上漲中 24%；3 日 12% vs 33%；5 日 3% vs 41%。'
+    + '跌得越久越不會回到昨收——因為連跌加費半大漲是最強的跳空組合，'
+    + '漲幅在開盤就給完了（見「開盤跳空」那一欄）。</dd>'
+    + '<dt>這張表不能告訴你什麼</dt><dd>成交率高不代表買得劃算：'
+    + '跌得多當然容易成交，那正是價格在走弱。'
+    + '樣本最少的只有十幾天（最右邊那一欄），一天就能改寫幾個百分點。'
+    + '它也不保證你那個數量排得進去。</dd>';
+}
+
 function _rbGapSixHtml() {
   if (!_rbData.cfg.soxOn || !_rbData.sox) return '';
   var gs = _rbData.codes.map(function (c) { return _rbSoxGap(_rbData.series[c] || [], _rbData.sox); })
@@ -900,7 +986,9 @@ function _rbDecHtml(dates, usableEps, sysEps) {
     + '各檔段數差這麼多是因為上市日差很多：' + _rbHistLine() + '。'
     + '歷史最短的那幾檔只涵蓋一段多頭，它們的勝率不是「長期統計」，是「這幾個月的樣子」。</div>';
 
-  html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbGapSixHtml() + _rbPosSixHtml() + _rbSixHtml() + '</dl></div>';
+  // 決策視圖不放方法論：這一頁的目的是參考不是預測，推估邏輯是寫給自己看的。
+  // 完整的六欄留在分析視圖。
+  html += '<div class="detail-note"><dl>' + _rbFillSixHtml() + '</dl></div>';
   return html;
 }
 
@@ -952,7 +1040,7 @@ function _rbAnaHtml(dates, usableEps, sysEps) {
       ' onchange="rbMarkToggle(\'' + e.start + '\', this.checked)"></td></tr>';
   });
   html += '</tbody></table>';
-  html += '<div class="rb-caveat">勾起來的事件從上方統計排除。目前 ' + usableEps + ' 段納入、' + sysEps + ' 段排除。'
+  html += '<div class="rb-caveat nb-keep">勾起來的事件從上方統計排除。目前 ' + usableEps + ' 段納入、' + sysEps + ' 段排除。'
     + '標記存在 ' + (_rbMStore === 'firestore' ? 'Firestore（已登入）' : '本機瀏覽器（未登入）') + '。</div>';
 
   html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbGapSixHtml() + _rbSixHtml() + _rbMethodHtml() + '</dl></div>';
@@ -1064,6 +1152,7 @@ function renderReboundParams() {
       '<label class="rb-chk"><input id="rb-soxon" type="checkbox"' + (c.soxOn ? ' checked' : '') +
       ' onchange="rbCfgChanged()"><span>在訊號板上顯示</span></label></span>' +
     '<span class="set-lb">費半門檻百分位</span>' + inp('rb-soxpct', c.soxPct, '1', '百分位' + _rbSoxThrTxt(), 50, 99.9) +
+    '<span class="set-lb">情境判定窗</span>' + inp('rb-regwin', c.regWin, '1', '交易日（台股累計負的算連跌後）', 1, 20) +
     '</div>' +
     '<div class="set-hint">目前：' + rbCfgStatus() + '。'
       + '改完到 進場訊號板 按「↻ 重新整理」重算（會重抓日線）。<br>'
@@ -1091,6 +1180,8 @@ function rbCfgChanged() {
   if (hs.length) localStorage.setItem('rb_holds', hs.join(','));
   var sp = parseFloat(g('rb-soxpct'));
   if (!isNaN(sp) && sp >= 50 && sp <= 99.9) localStorage.setItem('rb_soxpct', sp);
+  var rw = parseInt(g('rb-regwin'), 10);
+  if (!isNaN(rw) && rw >= 1 && rw <= 20) localStorage.setItem('rb_regwin', rw);
   var so = document.getElementById('rb-soxon');
   if (so) localStorage.setItem('rb_soxon', so.checked ? '1' : '0');
   // 參數變了，已算好的結果就過期了；下次進頁重抓，不在這裡順手重抓（使用者可能還在打字）
