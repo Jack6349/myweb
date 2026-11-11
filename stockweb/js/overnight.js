@@ -425,7 +425,7 @@ function ovHtml(view) {
 
   h += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>' +
     '<th>代號 / 名稱</th>' +
-    '<th class="num" title="持股的成本均價；只關注、沒持有的為「—」。字色是前收對成本的損益">成本均價</th>' +
+    '<th class="num" title="持股的成本均價；只關注、沒持有的為「—」。跟右邊的前收比就是目前的損益">成本均價</th>' +
     '<th class="num" title="字色是前收自己的漲跌（對再前一日）">前收</th>' +
     '<th class="num" title="當天開盤價的推估">預估開盤</th>' +
     '<th class="num" title="當天盤中最低價的推估。掛限價買進要跟這個比，不是跟收盤比">預估日內最低</th>' +
@@ -439,9 +439,10 @@ function ovHtml(view) {
     '<th class="num">樣本</th></tr></thead><tbody>';
   rows.forEach(function (r) {
     h += '<tr><td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span></td>' +
+      // 成本均價是固定的事實，它沒有漲跌。紅綠在這一頁的意思是「今天動了多少」，
+      // 拿來標一個不會動的數字是讀錯顏色。改用標頭的橘黃。
       '<td class="num">' + (r.cost > 0
-          ? '<span style="color:' + _rbCol(r.base > 0 ? (r.base / r.cost - 1) * 100 : null) + '">'
-            + _ovPx(r.cost) + '</span>'
+          ? '<span class="ov-cost">' + _ovPx(r.cost) + '</span>'
           : '<span class="dm-dim" title="只在關注清單，沒有持股">—</span>') + '</td>' +
       '<td class="num" style="color:' + _rbCol(r.baseChg) + '">' + _ovPx(r.base) + '</td>' +
       '<td class="num">' + _ovPx(r.oPx)

@@ -2094,3 +2094,5 @@ td.cost-even::after  { background: var(--text3); }
 .rb-frate { display: block; font-size: 11px; margin-top: 1px; }
 /* 日內形狀：百分比底下補換算後的價格 */
 .rb-gsub { display: block; font-size: 11px; color: var(--text2); font-weight: 400; }
+/* 成本均價：固定的事實，不是漲跌，用標頭的橘黃而不是紅綠 */
+.ov-cost { color: var(--accent2); }
