@@ -495,6 +495,9 @@ async function startDividendEst(force) {
   _divEstResult = { stocks: stocks, year: tw.y };
   info.textContent = tw.y + ' 年・' + stocks.length + ' 檔配息 ETF';
   renderDividendEst();
+  // 展開明細要用的整檔統計（與 ETF 評比同源），背景補，不擋畫面
+  if (force) { _divEsDone = false; }
+  _divEsPrep(stocks.map(function (x) { return x.code; }));
 }
 
 // ── 本月起 12 個月：把今年（res）與明年（resNext）的月份依「發放年月」接起來 ──
@@ -779,7 +782,7 @@ function renderDividendEst() {
         '<span class="num divest-est">' + money(s.res.estTotal) + '</span>' +
         '<span class="divest-chev">' + (open ? '▼' : '▶') + '</span>' +
       '</div>' +
-      (open ? '<div class="divest-detail">' + det +
+      (open ? '<div class="divest-detail">' + _divEsStatHtml(s.code) + det +
         '<div class="divest-hist" data-code="' + s.code + '"></div>' +
         '</div>' : '') +
     '</div>';
@@ -808,6 +811,80 @@ function renderDividendEst() {
     '</dl></div>';
   wrap.innerHTML = html;
   _divHistDrawAll();   // 圖要量容器實際寬度，必須在插入 DOM 之後畫
+}
+
+// ── 展開明細頂端的整檔統計列（與 ETF 評比同源）──
+//
+// 月份清單的每一列是一次除息，這五個是整檔的統計值，
+// 混進去會變成每列重複同一個數字，所以單獨一區放在清單之前：
+// 展開一檔的動線是「先看這檔整體值不值得，再看逍月細節」。
+//
+// 兩行分組：第一行問「配多少、穩不穩」，第二行問「配完還不還得回來」。
+// 填息跟配多少無關：配 10% 但填不回來等於左手換右手，
+// 所以不能混在同一行讓人誤讀成同一組數字。
+//
+// 單次配只印金額：標頭列已經有「預估年殖利率」，月配且每期固定的檔
+// （如 00984D）兩者數字會一模一樣卻定義不同，印兩次只會讓人找差異。
+var _divEsBusy = false, _divEsDone = false;
+
+async function _divEsPrep(codes) {
+  if (_divEsBusy || _divEsDone) return;
+  if (typeof _esGetBase !== 'function' || typeof esMetricsFor !== 'function') return;
+  _divEsBusy = true;
+  try {
+    // 保守年配與配息走向要配息頻率與歷次金額那幾份資料檔，
+    // 它們本來只在 ETF 評比頁載。沒載的話這兩欄永遠是「—」（實測 00984D）。
+    if (typeof _esLoadFreq === 'function') { try { await _esLoadFreq(); } catch (e) { hush('dividend-est', e); } }
+    await _esGetBase(false);
+    renderDividendEst();                       // 基礎指標先上，填息慢慢算
+    var rs = (codes || []).map(esMetricsFor).filter(Boolean);
+    // 填息率原本只算同類前 30 名，持股不在前 30 名就是空的。
+    // 這裡按持股清單逐檔補算（Yahoo 日線，當日快取，與評比頁共用同一份）。
+    if (rs.length && typeof _esEnsureFill === 'function') await _esEnsureFill(rs);
+    _divEsDone = true;
+  } catch (e) { hush('dividend-est', e); }
+  _divEsBusy = false;
+  renderDividendEst();
+}
+
+function _divEsStatHtml(code) {
+  if (typeof esMetricsFor !== 'function') return '';
+  var r = esMetricsFor(code);
+  var dim = function (t) { return '<span class="dm-dim">' + t + '</span>'; };
+  var wait = '<span class="const-spin"></span>';
+  var cell = function (lb, v, tip) {
+    return '<span class="dvs-i"' + (tip ? ' title="' + tip + '"' : '') + '>'
+      + '<span class="dvs-lb">' + lb + '</span><span class="dvs-v">' + v + '</span></span>';
+  };
+  if (!r) {
+    return '<div class="dvs-row">' + cell('單次配', _divEsBusy ? wait : dim('—'))
+      + cell('保守年配', _divEsBusy ? wait : dim('—'))
+      + cell('配息走向', _divEsBusy ? wait : dim('—')) + '</div>';
+  }
+  var pct = function (v) { return v == null ? dim('—') : v.toFixed(2) + '%'; };
+  var amt = r.y1Amt == null ? dim('—')
+    : '<span class="dvs-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '"'
+      + (r.y1Ann ? ' title="已公告、還沒除息"' : '') + '>' + r.y1Amt.toFixed(4) + '</span>';
+  // 只配過一期的推不出走向（實測 00404A、00999A）。
+  // 光一個「—」會被讀成「資料抽不到」，標出原因才分得出來。
+  var trend = r.trend == null
+    ? '<span class="dm-dim" title="'
+        + (r.seqN === 1 ? '只有 1 期紀錄，比不出走向'
+                        : '配息紀錄不足，比不出走向') + '">—</span>'
+    : '<span class="es-tr es-tr-' + ({ '成長': 'up', '持平': 'flat', '波動': 'wav', '下調': 'dn' })[r.trend] + '">'
+      + r.trend + '</span><span class="es-trn">' + (r.seqN || 0) + ' 期</span>';
+  var fillBusy = (typeof _esFillBusy !== 'undefined' && _esFillBusy[code]) || _divEsBusy;
+  var fill = r.fill == null ? (fillBusy ? wait : dim('—'))
+    : '<span class="dm-dim">(' + r.fillN + ')</span><span class="es-fpct">' + r.fill.toFixed(0) + '%</span>';
+  var fd = r.fillDays == null ? (fillBusy ? wait : dim('—')) : r.fillDays.toFixed(1) + ' 天';
+  return '<div class="dvs-row">'
+    + cell('單次配', amt, '最近一期每股配息金額（含已公告未除息）。黃色＝已公告、還沒除息')
+    + cell('保守年配', pct(r.yCons), '取樣區間內最低一期 × 一年期數 ÷ 現價：每一期都像最差那一期時的水準')
+    + cell('配息走向', trend, '下調＝最新一期就是最低、持平＝最高與最低差 5% 以內、成長＝只升不降、波動＝有升有降')
+    + '</div><div class="dvs-row">'
+    + cell('填息率', fill, '近 12 個月：已填息次數 ÷ 除息次數（除息後收盤回到除息前收盤即算填息）')
+    + cell('平均填息', fd, '已填息者平均花幾個交易日')
+    + '</div>';
 }
 
 // ── 歷年配息圖（個股明細展開後顯示）──

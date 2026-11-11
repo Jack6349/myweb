@@ -2047,3 +2047,10 @@ td.cost-even::after  { background: var(--text3); }
 /* 單次配：金額固定寬右對齊後接殖利率。每一列都有金額，所以同一行不會毀掉整欄對齊 */
 .es-amt { display: inline-block; min-width: 3.4em; margin-right: 5px; text-align: right; color: var(--text2); }
 .es-amt-ann { color: var(--accent2); }
+/* 股利估算 展開明細頂端的整檔統計：兩行一組，與月份清單之間留一條分隔 */
+.dvs-row { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 2px 4px; font-size: 13px; }
+.dvs-row + .dvs-row { padding-bottom: 7px; border-bottom: 1px solid var(--border); margin-bottom: 7px; }
+.dvs-i { display: inline-flex; align-items: baseline; gap: 6px; }
+.dvs-lb { color: var(--text3); font-size: 11.5px; }
+.dvs-v { color: var(--text); font-weight: 600; }
+.dvs-amt { color: var(--text); }
