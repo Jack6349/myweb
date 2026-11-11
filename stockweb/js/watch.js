@@ -509,7 +509,7 @@ async function wtScanBond() {
 // ── 主動式 ETF 報酬（Yahoo 日K；每日快取）──
 // 快取版本。v2 之後每一列存的是錨點收盤（c0／c1／c3）與配息，報酬和殖利率由現價當場算；
 // v1 存的是算好的報酬、沒有錨點，直接拿來重算會整排變成「—」。版本不符就當作沒有快取。
-var WT_ACT_V = 2;
+var WT_ACT_V = 3;
 function _wtActLoadCache() {
   if (_wtAct) return _wtAct;
   try {
@@ -533,7 +533,10 @@ async function _wtActFetch(code) {
       if (!res) continue;
       var cl = ((res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close) || [])
         .filter(function (x) { return x != null; });
-      if (cl.length >= 5) return { cl: cl, live: (res.meta && res.meta.regularMarketPrice) || null };
+      // 舊門檿是 5 根。剛上市幾天的檔因此整列消失，
+      // 使用者從表上看不出它存在。一根就收：成立以來算得出來，
+      // 近 1 月與近 3 月天數不足時本來就是空值，畫面會顯示「—」。
+      if (cl.length >= 1) return { cl: cl, live: (res.meta && res.meta.regularMarketPrice) || null };
     } catch (e) { hush('watch', e); }
   }
   return null;
@@ -600,8 +603,20 @@ async function wtLoadAct(force) {
     var got = await Promise.all(batch.map(function (x) { return _wtActFetch(x.c); }));
     var dv = await Promise.all(batch.map(function (x) { return _wtDivOf(x.c, ym, dcache); }));
     got.forEach(function (o, k) {
-      if (!o) return;
-      var cl = o.cl, n = cl.length, d = dv[k] || {};
+      var d = dv[k] || {};
+      if (!o) {
+        // 上市上櫃的主動式 ETF 一律列入，卿使日K 整個抽不到。
+        // 原本這裡直接 return，等於把那幾檔從名單上抹掉，
+        // 使用者沒辦法從表上分辨「沒這檔」與「這檔沒資料」。
+        // 現價還有機會從券商快照補上（見下方 _wtActPx），
+        // 所以這裡不寫死為空，只是沒有歷史錨點可算報酬。
+        rows.push({ code: batch[k].c, name: batch[k].n, days: 0,
+          px: null, pxFb: null, c0: null, c1: null, c3: null,
+          amount: d.none ? null : (d.amount != null ? d.amount : null),
+          freq: d.none ? null : (d.freq || null), exDate: d.none ? null : (d.exDate || null) });
+        return;
+      }
+      var cl = o.cl, n = cl.length;
       fb[batch[k].c] = o.live || cl[n - 1];
       // 錨點：20／60 個交易日前與第一筆。現價另外取，報酬在 _wtActDerive 算
       rows.push({ code: batch[k].c, name: batch[k].n, days: n,
@@ -758,7 +773,12 @@ function renderWatchAct() {
   var have = {}; _wtLoad().forEach(function (c) { have[c] = true; });
   var h = '<div class="wt-bar"><button class="btn-query" onclick="wtLoadAct(true)">↻ 重新計算</button>' +
     '<span id="wt-act-info" class="wt-dim">' +
-      (d ? d.rows.length + ' / ' + d.pool + ' 檔有資料｜更新 ' + _wtAtTw(d.at) + '（每日快取）'
+      (d ? d.rows.length + ' 檔（上市上櫃全數）'
+             + (function () {
+                 var nd = d.rows.filter(function (r) { return !r.days; }).length;
+                 return nd ? '，其中 ' + nd + ' 檔無日K' : '';
+               })()
+             + '｜更新 ' + _wtAtTw(d.at) + '（每日快取）'
          : '尚未載入，按「重新計算」開始（' + _wtActPool().length + ' 檔，約 10 秒）') + '</span>' +
     '<span id="wt-pick-info" class="wt-dim"></span>' +
     '<button class="btn-query" onclick="wtAddPicked()">＋ 加入關注</button></div>';
@@ -792,7 +812,8 @@ function renderWatchAct() {
       '<td class="num">' + pct(r.r1) + '</td>' +
       '<td class="num">' + pct(r.r3) + '</td>' +
       '<td class="num"><b>' + pct(r.rAll) + '</b></td>' +
-      '<td class="num' + (r.days < 60 ? ' swap-warn' : '') + '">' + r.days + '</td>' +
+      '<td class="num' + (r.days && r.days < 60 ? ' swap-warn' : '') + '">'
+        + (r.days ? r.days : '<span class="flat">—</span>') + '</td>' +
     '</tr>';
     if (open) h += '<tr class="es-drow"><td colspan="10" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
@@ -803,6 +824,9 @@ function renderWatchAct() {
     '<dt>單次配／預估年配</dt><dd>最近一次配息 ÷ 現價，以及再乘上年配息次數。欄位定義與 ETF 評比、新上市 ETF 相同。' +
     '滑過數字可看除息日與每股金額。顯示「—」代表查無配息紀錄（未配息或資料未揭露）。</dd>' +
     '<dt>報酬</dt><dd>起點用 Yahoo 日收盤價，終點用現價。主動式 ETF 多未配息或配息少，<code>價格報酬 ≈ 總報酬</code>。</dd>' +
+    '<dt>列入範圍</dt><dd>上市與上櫃的主動式股票型 ETF（代號結尾 A）<b>全數列入</b>，' +
+      '抽不到資料的也列，欄位放「—」。這樣才分辨得出「沒這檔」與「這檔沒資料」。' +
+      '主動式債券 ETF（結尾 D）在「債券 ETF」頁籤，不重複列在這裡。</dd>' +
     '<dt>務必同時看「資料天數」</dt><dd>多為新上市，49 天的報酬與 194 天的報酬不可直接比較。' +
     '天數不足者近1月／近3月顯示「—」。</dd>' +
     '<dt>排序與快取</dt><dd>預設依成立以來由高至低，點欄位可改、再點反向，排序會記住。' +
