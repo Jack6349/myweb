@@ -244,11 +244,19 @@ async function _ovLoadSoxLive() {
     if (cl[i] != null && ts[i] != null) { lastC = cl[i]; lastT = ts[i]; break; }
   }
   if (!(ref > 0) || !(lastC > 0)) throw new Error('sox intra empty');
+  // 開盤與否不能用 m.marketState：代理服務的回應根本沒有這個欄位，
+  // undefined === 'REGULAR' 永遠是 false，所以卡上一直寫「已收盤」，盤中也一樣。
+  // 2026-11-12 紐約 13:05（台北 02:05）實測：meta 裡只有 regularMarketTime、
+  // timezone、exchangeTimezoneName、currentTradingPeriod、tradingPeriods。
+  //
+  // 改用回應裡真的有的東西：最後報價時刻跟該標的自己的收盤時間比。
+  var rg = m.currentTradingPeriod && m.currentTradingPeriod.regular;
+  var live = (rg && rg.end && m.regularMarketTime) ? (m.regularMarketTime < rg.end) : null;
   // 標台灣時間，與卡上夜盤的時刻同一個時區才比得起來
   _ovSoxLive = {
     r: (lastC / ref - 1) * 100,
     at: new Date((lastT + 8 * 3600) * 1000).toISOString().slice(11, 16),
-    open: (m.marketState === 'REGULAR')
+    open: live
   };
   return _ovSoxLive;
 }
@@ -390,7 +398,9 @@ function ovHtml(view) {
     '隔夜費半 <b style="color:' + _rbCol(sox) + '">' + pct(sox) + '</b>'
     + (_ovSoxLive
         ? '（' + _ovSoxLive.at
-            + (_ovSoxLive.open ? '，美股還在盤中，收盤前還會變' : '，已收盤，這是最終值') + '）'
+            + (_ovSoxLive.open === true ? '，美股還在盤中，收盤前還會變'
+              : (_ovSoxLive.open === false ? '，已收盤，這是最終值'
+                : '，判不出是否已收盤')) + '）'
         : '（日線收盤值，即時價抓不到）')
     + (_ovAt ? '<span class="ov-at">兩者皆為 ' + _ovAt + ' 抓取，按「重新整理」重抓</span>' : '')
     + (_ovRef && _ovRef.pct != null
