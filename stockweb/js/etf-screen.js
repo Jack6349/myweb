@@ -1078,18 +1078,22 @@ function esWatchCells(code) {
   var rk = rkAll[String(r.code)];
   var cell = {
     // 評比表只列前 20 名，第 21～30 名有名次但那一頁上看不到，標起來免得找不到
+    // 名次也要固定寬，否則 9 與 20 不同寬，前面的頻率標記會跟著左右跑。
     rank: esFreqChip(r.code, r.step)
+      + '<span class="es-rkn">'
       + (rk ? ('<b>' + rk.rank + '</b>' + (rk.listed ? '' : dim('（未入表）')))
             : (r.young ? esDash('上市未滿一年，不列入評比排名')
-                       : esDash('沒進同類前 30 名，評比表沒給名次'))),
-    // 沒排名的列只標分類，不標「—」。
-    // 舊寫法的「高股息（未滿一年）」擐寬這一欄到 115px所以改過 —，
-    // 但那把分類也一起藏掉了：主動式（代號結尾 A）大多上市未滿一年，
-    // 整欄看過去一排「—」，連它們是哪一類都不知道。
-    // 只印分類三個字（約 36px）遠窄於有排名時的「高股息 7/32」，不影響欄寬。
-    score: r.grpRank ? r.grpLabel + ' <b>' + r.grpRank + '</b>' + dim('/' + r.grpN)
-      : '<span class="dm-dim" title="上市未滿一年，缺一年期報酬與填息紀錄，不列入排名">'
-        + (r.grpLabel || '—') + '</span>',
+                       : esDash('沒進同類前 30 名，評比表沒給名次')))
+      + '</span>',
+    // 分類與名次各自固定寬、各自右對齊，有排名與沒排名的列才排得齊。
+    // 分類兩種情況用同一個字色：它是輔助資訊，有沒排名不該改變它的亮度，
+    // 否則同一個「高股息」在上下兩列會是兩種顏色。強調給名次。
+    score: '<span class="es-grp"' + (r.grpRank ? ''
+        : ' title="上市未滿一年，缺一年期報酬與填息紀錄，不列入排名"')
+      + '>' + (r.grpLabel || '—') + '</span>'
+      + '<span class="es-grpn">'
+      + (r.grpRank ? '<b>' + r.grpRank + '</b>' + dim('/' + r.grpN) : '')
+      + '</span>',
     y1: (r.y1 == null ? dim('—')
       : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '">'
         + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + r.y1.toFixed(2) + '%'),
