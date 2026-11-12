@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=357">
+<link rel="stylesheet" href="css/app.css?v=359">
 </head>
 <body>
 
@@ -51,7 +51,9 @@
   <button data-view="watch" onclick="openWatch()">關注股票</button>
   <button data-view="rebound" onclick="openRebound()">進場訊號板</button>
   <button data-view="params" onclick="openParams()">參數設定</button>
+  <button id="rm-btn" class="rm-btn" onclick="rmToggle()">提醒<span id="rm-badge" class="rm-badge" style="display:none"></span></button>
 </nav>
+<div class="rm-anchor"><div id="rm-pop" class="rm-pop" hidden></div></div>
 
 <!-- 頂欄抽屜：零高度的定位容器，抽屜浮在內容上方，展開時下方表格不位移 -->
 <div class="dw-anchor"><div id="dw" class="dw" hidden></div></div>
@@ -507,6 +509,7 @@
 <script src="js/rebound.js?v=20"></script>
 <script src="js/bondsig.js?v=3"></script>
 <script src="js/news.js?v=82"></script>
+<script src="js/remind.js?v=4"></script>
 <script src="js/trend.js?v=35"></script>
 <script src="js/signals.js?v=32"></script>
 <script src="js/alerts.js?v=43"></script>
