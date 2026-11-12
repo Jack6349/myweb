@@ -2215,3 +2215,38 @@ td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
 }
 #nv-mkt > div:empty, #nv-pos > div:empty { display: none; }
 #nv-mkt .sub-title, #nv-pos .sub-title { margin-top: 0; }
+
+/* ── 提醒：功能列最右側的按鈕與浮出面板 ── */
+/* 按鈕上的數字是「現在成立的條件數」，不是未讀數。常駐成立的條件（交割、流量）
+   也算在裡面，所以它可能整天掛著一個數字——那是現況，不是待辦。 */
+/* nav-usage.js 會依使用頻率把所有 button[data-view] 重新 appendChild 到最後，
+   沒有 data-view 的提醒鈕會因此被擠到最前面，所以用 flex order 固定在最右。
+   功能列本身是 overflow-x:auto，按鈕多的時候最右邊會被捲出畫面——
+   提醒鈕捲掉就失去意義，所以同時 sticky 在右緣，底色蓋住捲過去的按鈕。 */
+.rm-btn { order: 999; margin-left: auto; position: sticky; right: 0; z-index: 1;
+          background: var(--bg2); box-shadow: -10px 0 10px 2px var(--bg2); }
+.rm-btn.rm-on { border-color: var(--warn); color: var(--warn); }
+.rm-badge { display: inline-block; min-width: 16px; height: 16px; line-height: 16px;
+            margin-left: 6px; padding: 0 4px; border-radius: 8px;
+            background: var(--warn); color: var(--on-light);
+            font-size: 11px; font-weight: 700; text-align: center; }
+.rm-anchor { position: relative; height: 0; }
+.rm-pop { position: absolute; right: 12px; top: 4px; z-index: 60; width: min(640px, calc(100vw - 24px));
+          max-height: 70vh; overflow: auto; background: var(--bg2);
+          border: 1px solid var(--border-strong); border-radius: 10px;
+          padding: 12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.rm-head { font-size: 15px; font-weight: 700; color: var(--accent2); margin-bottom: 8px;
+           display: flex; align-items: baseline; gap: 10px; }
+.rm-sub { font-size: 11px; font-weight: 400; color: var(--text3); }
+.rm-x { margin-left: auto; background: none; border: none; color: var(--text2);
+        font-size: 15px; cursor: pointer; }
+.rm-sec { font-size: 11.5px; font-weight: 600; color: var(--th); background: var(--thbg);
+          padding: 3px 6px; border-radius: 3px; margin: 10px 0 4px; }
+.rm-row { display: grid; grid-template-columns: 44px 1fr; gap: 8px;
+          padding: 5px 2px; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
+.rm-k { font-size: 11px; font-weight: 700; color: var(--text3); padding-top: 2px; }
+.rm-s { color: var(--text); }
+.rm-row.rm-lv2 .rm-s { color: var(--warn); font-weight: 700; }
+.rm-when { font-style: normal; color: var(--text3); font-size: 11px; font-weight: 400; margin-left: 8px; }
+.rm-w { grid-column: 2; color: var(--text2); font-size: 11.5px; }
+.rm-none { color: var(--text3); font-size: 12px; padding: 6px 2px; }
