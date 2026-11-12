@@ -2100,12 +2100,14 @@ td.cost-even::after  { background: var(--text3); }
    寬窄不一。改成固定配置，六個資料欄等寬，剩餘全給名稱。 */
 /* 不強制撐滿：撐滿時剩餘空間全被名稱吸走（實測 630px），比原本更不均。
    讓表格只佔它需要的寬度，六個資料欄就真的等寬。 */
-.wt-bond-t { table-layout: fixed; width: auto; min-width: 0; }
-.wt-bond-t .bc-chk { width: 70px; }
-.wt-bond-t .bc-code { width: 104px; }
-.wt-bond-t .bc-name { width: 224px; }
-.wt-bond-t .bc-d { width: 124px; }
-.wt-bond-t .inv-name { overflow: hidden; text-overflow: ellipsis; }
+/* 債券與主動式兩張表都是 23 欄。固定欄寬放不下，改回讓瀏覽器依內容分配，
+   並把左右內距從 4px 收到 3px —— 23 欄省下 46px，那是這兩張表能不能不出現
+   橫向捲軸的差別（實測最壞內容：4px 時 1581 與 1587，容器只有 1579）。 */
+.wt-bond-t td, .wt-bond-t th,
+.wt-act-t td, .wt-act-t th { padding-left: 3px; padding-right: 3px; }
+.wt-bond-t .inv-name { overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+/* 成份股按鈕併進代號格：它不值得自己佔一欄 */
+.wt-act-t .wt-cst { margin-left: 4px; padding: 1px 4px; }
 /* 代號格左緣的成本方向條：與「成本均價」欄左緣那條同一個語彙，但不帶落差大小
    （量級在成本均價與報酬率兩欄已經有了）。3px 塞在原本的 8px 左 padding 裡，欄寬不變。 */
 td.inv-code.code-cost { position: relative; }
