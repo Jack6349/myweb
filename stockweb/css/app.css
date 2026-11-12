@@ -2110,7 +2110,7 @@ td.cost-even::after  { background: var(--text3); }
    （量級在成本均價與報酬率兩欄已經有了）。3px 塞在原本的 8px 左 padding 裡，欄寬不變。 */
 td.inv-code.code-cost { position: relative; }
 td.inv-code.code-cost::before {
-  content: ''; position: absolute; left: 3px; top: 4px; bottom: 4px; width: 3px; border-radius: 2px;
+  content: ''; position: absolute; left: 2px; top: 2px; bottom: 2px; width: 5px; border-radius: 2px;
 }
 td.inv-code.code-cost.cost-under::before { background: var(--down); }
 td.inv-code.code-cost.cost-over::before  { background: var(--up); }
