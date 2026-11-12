@@ -304,7 +304,17 @@ function invValRow(p) {
           : (constWait ? '<span class="btn-detail btn-ghost" style="margin-left:4px" title="成份股資料載入中"><i class="spin"></i></span>' : '')) + '</td>' +
     '<td class="live-dot-cell"><button class="live-dot' + (dotOn ? ' on' : '') + '" style="--dot:' + dotColor +
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + code + '\',this)"></button></td>' +
-    '<td class="inv-code' + (typeof limitState === 'function' && limitState(code, price) ? ' lim-' + limitState(code, price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
+    // 代號格左緣的直條：現價對成本均價的方向（紅＝高於成本、綠＝低於）。
+    // 與「成本均價」欄左緣那條同一個語彙，只是這裡不帶落差大小：
+    // 這一格的任務是讓整欄一眼掃完，量級在右邊兩欄已經有了。
+    // 3px 寬，塞在原本的 8px 左 padding 裡，欄寬不變。
+    '<td class="inv-code'
+      + (typeof limitState === 'function' && limitState(code, price) ? ' lim-' + limitState(code, price) : '')
+      + (function () {
+          var cc = (typeof costLineClass === 'function') ? costLineClass(avgPx, price) : '';
+          return cc ? ' code-cost' + cc : '';
+        })()
+      + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     '<td class="inv-name">' + ((c && c.name) || '') + _invFreqTag(code) + '</td>' +
     '<td class="num inv-trd">' + invTradeCell(code) + '</td>' +
     // 餘額是「股」，借出註記用「張」：與股利估算的持有張數同一種寫法。
