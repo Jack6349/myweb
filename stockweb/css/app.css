@@ -2139,3 +2139,15 @@ td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
 /* 新聞情勢第一頁的區塊說明：分頁之後有空間，把原本只藏在滑過提示裡的寫成看得見的 */
 .nv-note { font-size: 12.5px; line-height: 1.7; color: var(--text2); margin: 2px 0 8px; }
 .nv-note b { color: var(--text); }
+/* 新聞情勢：頁籤靠左排在「重新抓取」下方（原本跟工具列同一行右側，離重新抓取很遠） */
+/* .pv-tabs 本體是 float:right（為別的版面設的），直接用會被浮到畫面外（實測左 −94）。
+   這裡要的是靠左、接在「重新抓取」下方，所以把 float 與右邊距解掉。 */
+.nv-tabs { float: none; display: flex; justify-content: flex-start;
+  margin: 0 0 14px; margin-right: 0; clear: both; }
+/* 每一區加外框分開：原本四區上下相連，捲動時分不出哪段是哪段 */
+#nv-mkt > div, #nv-pos > div {
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 12px; background: var(--bg2);
+}
+#nv-mkt > div:empty, #nv-pos > div:empty { display: none; }
+#nv-mkt .sub-title, #nv-pos .sub-title { margin-top: 0; }
