@@ -2118,3 +2118,24 @@ td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
 /* 代號與左緣那條成本方向條之間拉開：條寬 5px 之後只剩 1px 間距，看起來黏在一起。
    整欄一起加（含沒有條的列），欄內文字才對得齊。 */
 #inv-view td.inv-code { padding-left: 15px; }
+/* 新聞情勢三頁籤：整頁 107,789px，新聞一區就佔 103,823px，分開才看得了 */
+.nv-tabs { margin: 10px 0 12px; }
+/* 持股籌碼橫條：中線＝法人沒有淨連買賣，右紅左綠。與管制圖同一個讀法 */
+.chip-hint { color: var(--text2); font-size: 13px; padding: 8px 2px; display: flex; align-items: center; gap: 12px; }
+.chip-sub { font-size: 12px; color: var(--text3); font-weight: 400; margin-left: 10px; }
+.chip-reload { margin-left: 12px; }
+.chip-wrap { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.chip-row { display: grid; grid-template-columns: 76px 1fr 56px 68px; align-items: center; gap: 10px;
+  padding: 3px 2px; font-size: 13px; }
+.chip-code { color: var(--accent2); font-weight: 700; }
+.chip-track { position: relative; height: 16px; background: rgba(255,255,255,.05); border-radius: 3px; }
+.chip-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.25); }
+.chip-seg { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; }
+.chip-seg.up { background: var(--up); }
+.chip-seg.down { background: var(--down); }
+.chip-val { text-align: right; font-weight: 700; }
+.chip-prem { text-align: right; font-size: 12px; }
+.chip-na { color: var(--text3); font-size: 12px; }
+/* 新聞情勢第一頁的區塊說明：分頁之後有空間，把原本只藏在滑過提示裡的寫成看得見的 */
+.nv-note { font-size: 12.5px; line-height: 1.7; color: var(--text2); margin: 2px 0 8px; }
+.nv-note b { color: var(--text); }

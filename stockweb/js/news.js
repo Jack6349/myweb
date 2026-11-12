@@ -273,7 +273,12 @@ function renderFredBar() {
       '<span class="fred-val ' + cls + '">' + arrow + val + '</span>' +
       '<span class="fred-prev">前值 ' + pv + '</span></div>';
   });
+  // 分頁之後這一頁有空間，把原本只藏在滑過提示裡的定義寫成看得見的文字。
   el.innerHTML = '<div class="sub-title">美國總經（FRED，各項資料月份不同）</div>' +
+    '<div class="nv-note">月頻資料，FRED 轉載 BLS，通常官方發布當天或隔天更新——'
+    + '<b>不適合拿來搶即時數字</b>。'
+    + '非農就業與前值比（月增減，萬人），失業率是水位，'
+    + 'CPI 與核心 CPI 是年增率。每一格的小字是資料所屬月份，四項未必同月。</div>' +
     '<div class="fred-row">' + rows.join('') + '</div>';
 }
 
@@ -431,6 +436,151 @@ function renderTwPos() {
     + '<div class="fred-row">' + cells.join('') + '</div>';
 }
 
+// ═════ 頁籤：盤勢／位置與籌碼／新聞 ═════
+//
+// 實測整頁 107,789px，其中新聞清單（220 則）就佔 103,823px。
+// 看盤勢資料要先捏過它，看新聞又被前面四區擋著。
+var NV_TAB_LS = 'news_tab_v1';
+var _nvTab = (function () {
+  try { var v = localStorage.getItem(NV_TAB_LS); if (/^(mkt|pos|news)$/.test(v || '')) return v; } catch (e) {}
+  return 'mkt';
+})();
+function nvTab(k) {
+  _nvTab = /^(mkt|pos|news)$/.test(k) ? k : 'mkt';
+  try { localStorage.setItem(NV_TAB_LS, _nvTab); } catch (e) {}
+  nvApplyTab();
+}
+function nvApplyTab() {
+  ['mkt', 'pos', 'news'].forEach(function (t) {
+    var pane = document.getElementById('nv-' + t);
+    if (pane) pane.style.display = (t === _nvTab) ? '' : 'none';
+    var b = document.getElementById('nv-tab-' + t);
+    if (b) b.classList.toggle('on', t === _nvTab);
+  });
+}
+
+// ═════ 持股籌碼橫條 ═════
+//
+// 籌碼評估頁是全站最重的一頁（多日三大法人＋每一檔的成份股＋集保週報＋官方淨值），
+// 不能讓進這一頁就付那個成本。所以：籌碼評估頁今天載過就直接用它的結果，
+// 沒載過則放一顆按鈕，按了才抓——而且只抓畫條圖需要的（法人籌碼分數與折溢價），
+// 集保（週頻）與逐檔融資不抓：週頻資料放在日更的頁面會變成誤導，
+// 融資已經有大盤層級那一格。
+//
+// 分數範圍：外資連買賣天數（截在 ±5）＋投信連買賣天數（截在 ±5），
+// 所以是 −10 到 +10，以成份股權重加權。中線 0 就是「法人沒有淨連買賣」。
+var _chipRows = null, _chipBusy = false, _chipProg = '';
+
+async function loadChipBars() {
+  if (_chipBusy) return;
+  _chipBusy = true;
+  _chipProg = '';
+  renderChipBars();
+  try {
+    // 進新聞情勢頁時 _positions 是空的（那是持股庫存載的），
+    // 跟籌碼評估頁一樣自己去抓，否則永遠顯示「無持股」。
+    var ps = (typeof _positions !== 'undefined' && _positions && _positions.length) ? _positions : [];
+    if (!ps.length && typeof fetchBrokerPositions === 'function') {
+      try { ps = (await fetchBrokerPositions()) || []; } catch (e) { hush('news', e); }
+    }
+    var held = ps.map(function (p) { return String(p.code).toUpperCase(); });
+    if (!held.length) { _chipRows = []; return; }
+    // 官方淨值不等它：sigEnsureNavMap 抓不到會重試四次，實測超過 20 秒還沒回來，
+    // 整個條圖都被它卡住。折溢價在這張圖裡是配角，主角是法人籌碼分數，
+    // 所以讓它在背景跑，回來了再重畫一次把折溢價填上。
+    if (typeof sigEnsureNavMap === 'function') {
+      sigEnsureNavMap().then(function () {
+        if (!_chipRows) return;
+        _chipRows.forEach(function (r) {
+          var nv = (typeof sigGetNav === 'function') ? sigGetNav(r.code) : null;
+          if (nv && nv.premium != null) r.prem = nv.premium;
+        });
+        renderChipBars();
+      }).catch(function (e) { hush('news', e); });
+    }
+    var t86 = [];
+    try { t86 = await sigRecentT86(typeof SIG_T86_DAYS !== 'undefined' ? SIG_T86_DAYS : 5); } catch (e) { hush('news', e); }
+    // 成份股一檔約 1.4 秒，15 檔逐檔跑就是 21 秒。四條並行，降到約 5 秒。
+    var out = [], q = held.slice(), done = 0, total = held.length;
+    var one = async function (c) {
+      var chip = null;
+      try {
+        var parts = /^00/.test(c) ? (await fetchEtfConstituents(c)).holdings
+          : (typeof sigSelfHolding === 'function' ? sigSelfHolding(c, '') : []);
+        chip = sigComputeChipScore(parts, t86);
+      } catch (e) { hush('news', e); }
+      var nav = (typeof sigGetNav === 'function') ? sigGetNav(c) : null;
+      out.push({ code: c, name: (typeof _rbName === 'function' ? _rbName(c) : ''),
+                 score: chip ? chip.score : null, cov: chip ? chip.coveredPct : null,
+                 days: chip ? chip.days : (t86.length || null),
+                 prem: (nav && nav.premium != null) ? nav.premium : null });
+      done++;
+      _chipProg = done + '/' + total;
+      renderChipBars();
+    };
+    var worker = async function () { while (q.length) await one(q.shift()); };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    out.sort(function (a, b) {
+      if (a.score == null && b.score == null) return a.code.localeCompare(b.code);
+      if (a.score == null) return 1;
+      if (b.score == null) return -1;
+      return b.score - a.score;
+    });
+    _chipRows = out;
+  } finally {
+    _chipBusy = false;
+    renderChipBars();
+  }
+}
+
+function renderChipBars() {
+  var el = document.getElementById('chip-bar');
+  if (!el) return;
+  if (_chipBusy) {
+    el.innerHTML = '<div class="sub-title">持股籌碼</div>'
+      + '<div class="modal-loading">抓多日三大法人與每一檔的成份股… '
+      + (_chipProg || '') + '</div>';
+    return;
+  }
+  if (!_chipRows) {
+    el.innerHTML = '<div class="sub-title">持股籌碼</div>'
+      + '<div class="chip-hint">這一區要抓多日三大法人與每一檔的成份股，是全站最慢的一組資料，'
+      + '所以不自動載。'
+      + '<button class="btn-query" onclick="loadChipBars()">載入持股籌碼</button></div>';
+    return;
+  }
+  if (!_chipRows.length) {
+    el.innerHTML = '<div class="sub-title">持股籌碼</div><div class="modal-loading">無持股</div>';
+    return;
+  }
+  var MAX = 10;   // 分數的理論上限，橫條以它為滿格
+  var rows = _chipRows.map(function (r) {
+    var half = 50;   // 中線在 50%
+    var w = (r.score == null) ? 0 : Math.min(Math.abs(r.score) / MAX, 1) * half;
+    var bar = (r.score == null)
+      ? '<span class="chip-na">算不出（成份股覆蓋不足或非台股）</span>'
+      : '<span class="chip-seg ' + (r.score >= 0 ? 'up' : 'down') + '" style="'
+        + (r.score >= 0 ? 'left:50%;' : ('left:' + (half - w) + '%;'))
+        + 'width:' + w + '%"></span>';
+    return '<div class="chip-row" title="'
+      + (r.score == null ? '成份股覆蓋率不足 30%，不推算'
+         : '分數 ' + r.score.toFixed(2) + '（外資連買賣天數 ＋ 投信連買賣天數，各截在 ±5，依成份股權重加權）'
+           + '　覆蓋率 ' + r.cov + '%　近 ' + r.days + ' 個交易日') + '">'
+      + '<span class="chip-code">' + r.code + '</span>'
+      + '<span class="chip-track"><span class="chip-mid"></span>' + bar + '</span>'
+      + '<span class="chip-val ' + (r.score == null ? '' : (r.score > 0 ? 'up' : (r.score < 0 ? 'down' : ''))) + '">'
+      + (r.score == null ? '—' : (r.score > 0 ? '+' : '') + r.score.toFixed(1)) + '</span>'
+      + '<span class="chip-prem' + (r.prem == null ? ' chip-na' : (r.prem > 0 ? ' up' : (r.prem < 0 ? ' down' : ''))) + '">'
+      + (r.prem == null ? '—' : (r.prem > 0 ? '+' : '−') + Math.abs(r.prem).toFixed(2) + '%') + '</span></div>';
+  }).join('');
+  var n = _chipRows.filter(function (r) { return r.score != null; }).length;
+  el.innerHTML = '<div class="sub-title">持股籌碼'
+    + '<span class="chip-sub">中線＝法人沒有淨連買賣；右紅為連買、左綠為連賣。'
+    + '最右邊是官方折溢價。' + n + ' 檔算得出分數</span>'
+    + '<button class="btn-query chip-reload" onclick="loadChipBars()">↓ 重新載入</button></div>'
+    + '<div class="chip-wrap">' + rows + '</div>';
+}
+
 // ── 訊號一致性檢查 ──
 // 只做「方向比對」：陳述哪兩項資料彼此同向或相反，不推論股債會漲會跌。
 // 為何不給趨勢結論：同一組資料在軟著陸與衰退情境下市場解讀相反，程式無從分辨，
@@ -522,7 +672,12 @@ function renderConsistency() {
   if (!_consist.length) { el.innerHTML = ''; return; }
   var n = _consist.filter(function (r) { return r.level === 'diverge'; }).length;
   var h = '<div class="sub-title">訊號一致性　' +
-    (n ? '<b class="cs-n">' + n + ' 項方向不一致</b>' : '各項方向一致') + '</div>';
+    (n ? '<b class="cs-n">' + n + ' 項方向不一致</b>' : '各項方向一致') + '</div>'
+    + '<div class="nv-note">只做<b>方向比對</b>：陳述哪兩項資料彼此同向或相反，'
+    + '不推論股債會漲會跌。不給紅黃綠燈是因為同一組資料在軟著陸與衰退情境下'
+    + '市場解讀相反，程式無從分辨；壓成單一燈號會把不確定性藏起來，'
+    + '而<b>背離本身才是最有資訊量的部分</b>。'
+    + '資料全部取自現有來源（FRED 月頻、Yahoo 多日、非投等債 OAS）。</div>';
   _consist.forEach(function (r) {
     h += '<div class="cs-row"><span class="cs-dot">' + (r.level === 'diverge' ? '🔶' : '🟢') + '</span>' +
       '<span class="cs-title">' + r.title + '</span>' +
@@ -1268,8 +1423,12 @@ function renderMacroBar() {
   // 每格都標了自己的資料時間，這一行不再重述報價時間範圍，只標抓取時刻與重抓入口。
   var head = '';
   if (_macroAt) {
-    head = '<div class="macro-asof">' + macroFetchHtml() +
-      '　<span class="macro-dim">各格第二行為該項資料時間（台北）；美股收盤後為收盤價</span></div>';
+    head = '<div class="macro-asof">' + macroFetchHtml() + '</div>'
+      + '<div class="nv-note">各格第二行是該項<b>資料本身的時間</b>（台北），'
+      + '與最上方的「抓取」不同：那個是我這邊打 API 的時刻。美股收盤後顯示收盤價。'
+      + '小圖是<b>近一個月的日收盤走勢</b>，基準線是區間起點，'
+      + '跟格子右邊的當日漲跌<b>不是同一個基準</b>。'
+      + '滑過小圖可看每一天的數字；亮⚙的那格是累計變動達門檻，說明在下方。</div>';
   }
   // 警示說明：亮燈了才寫，平常不佔版面
   var hits = _macroSnap.filter(function (m) { return m.alert; });
@@ -1292,6 +1451,7 @@ function renderMacroBar() {
       '無條件基準 -0.01%。</dd>' +
       '</dl></div></div>';
   }
+  // 圖表區的說明：原本分散在每一格的滑過提示裡，分頁後寫出來。
   el.innerHTML = head + '<div class="macro-row">' + cells.join('') + '</div>' + foot;
 }
 
@@ -1570,6 +1730,8 @@ async function copyNewsPrompt() {
 }
 
 async function startNews() {
+  nvApplyTab();
+  renderChipBars();
   loadNews();
   loadTwPos(false).catch(function (e) { hush('news', e); });
 }
