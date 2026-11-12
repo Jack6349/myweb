@@ -2096,3 +2096,13 @@ td.cost-even::after  { background: var(--text3); }
 .rb-gsub { display: block; font-size: 11px; color: var(--text2); font-weight: 400; }
 /* 成本均價：固定的事實，不是漲跌，用標頭的橘黃而不是紅綠 */
 .ov-cost { color: var(--accent2); }
+/* 債券 ETF：9 欄撐滿 1644px 時瀏覽器按內容比例分配，名稱 307、現價 130、除息日 205，
+   寬窄不一。改成固定配置，六個資料欄等寬，剩餘全給名稱。 */
+/* 不強制撐滿：撐滿時剩餘空間全被名稱吸走（實測 630px），比原本更不均。
+   讓表格只佔它需要的寬度，六個資料欄就真的等寬。 */
+.wt-bond-t { table-layout: fixed; width: auto; min-width: 0; }
+.wt-bond-t .bc-chk { width: 70px; }
+.wt-bond-t .bc-code { width: 104px; }
+.wt-bond-t .bc-name { width: 224px; }
+.wt-bond-t .bc-d { width: 124px; }
+.wt-bond-t .inv-name { overflow: hidden; text-overflow: ellipsis; }
