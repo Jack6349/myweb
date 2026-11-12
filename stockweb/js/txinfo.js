@@ -198,7 +198,7 @@ async function loadOrderBox() {
     }
     var buyAmt = 0, sellAmt = 0, buyOpen = 0, sellOpen = 0;
     var html = '<div class="tx-otable-wrap"><table class="tx-otable"><thead><tr>' +
-      '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num" title="現價 － 基準價。已成交部分的基準價是成交均價；&#10;未成交（含已取消、失敗）用委託價，標「對委託價」；&#10;部分成交兩個都列，小字那個是剩餘量。&#10;紅＝現價高於基準價（買單即尚未輪到），綠＝低於">差額</th><th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：(成交均價－現價)×股數×(1−手續費－交易稅)，正＝賣在現價之上。兩邊都扣賣出成本，同價為 0">損益<span class="sort-ind">↕</span></th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量、成交均價；與現價的差額在委託後面那一欄">成交</th>' +
+      '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num" title="現價 － 基準價。已成交部分的基準價是成交均價；&#10;未成交（含已取消、失敗）用委託價，標「對委託價」；&#10;部分成交兩個都列，小字那個是剩餘量。&#10;紅＝現價高於基準價（買單即尚未輪到），綠＝低於">差額</th><th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：(成交均價－現價)×股數×(1−手續費－交易稅)，正＝賣在現價之上。兩邊都扣賣出成本，同價為 0">損益<span class="sort-ind">↕</span></th><th class="num sort-th" data-key="stl" onclick="txSortCol(\'stl\')" title="這一筆實際會扣款或入帳多少。&#10;買進＝−成交均價×股數×(1＋買進手續費)，賣出＝＋成交均價×股數×(1−賣出手續費與交易稅)。&#10;費率與左邊「損益」同一組。這是估值，券商的正式數字在上方「台幣交割」">交割金額<span class="sort-ind">↕</span></th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="成交數量、成交均價；與現價的差額在委託後面那一欄">成交</th>' +
       '<th class="sort-th" data-key="status" onclick="txSortCol(\'status\')">狀態<span class="sort-ind">↕</span></th>' + '<th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
       '<th>書號</th>' + '<th class="sort-th num" data-key="time" onclick="txSortCol(\'time\')">委託時間<span class="sort-ind">↕</span></th>' + '</tr></thead><tbody>';
     var aheads = await Promise.all(trades.map(function (t) { return _txAhead(t, trades).catch(function () { return null; }); }));
@@ -239,6 +239,8 @@ async function loadOrderBox() {
         '<td class="num tx-ddcell">' + _txDdCell(t, code, avg, dq) + '</td>' +
         '<td class="num tx-pnl"' + (dq ? ' data-code="' + code + '" data-avg="' + avg + '" data-sh="' + (dq * mult) + '" data-side="' + (buy ? 'B' : 'S') + '"' : '') + '>' +
           (dq ? _txPnlHtml(code, avg, dq * mult, buy) : '<span class="swap-dim">—</span>') + '</td>' +
+        '<td class="num tx-stl"' + (dq ? ' data-stl="' + _txSettleVal(avg, dq * mult, buy) + '"' : '') + '>' +
+          (dq ? _txSettleHtml(avg, dq * mult, buy) : '<span class="swap-dim">—</span>') + '</td>' +
         '<td class="num tx-px" data-code="' + code + '">' + _txPxHtml(code) + '</td>' +
         '<td class="num"' + (dealTitle ? ' title="' + dealTitle + '"' : '') + '>' +
           (dq ? '<span class="tx-deal">' + dq + unit + '<span class="tx-gap"></span>' + avg.toFixed(2) + '</span>' +
@@ -342,6 +344,24 @@ function _txPnlVal(code, avg, sh, buy) {
   return Math.round(buy ? px * sh * (1 - TX_SELL_COST) - avg * sh * (1 + TX_BUY_FEE)
                         : (avg - px) * sh * (1 - TX_SELL_COST));
 }
+// 交割金額（元）：這一筆實際會從帳戶扣多少、或入多少。
+//   買進：− 成交均價 × 股數 × (1 ＋ 買進手續費)      ← 應付
+//   賣出：＋ 成交均價 × 股數 × (1 − 賣出手續費與交易稅) ← 應收
+// 費率跟旁邊「損益」那一欄用同一組，兩欄才比得起來。
+//
+// 這是估值，不是券商的帳：實際扣款的手續費會取整、也可能有折扣。
+// 券商的正式數字在上方「台幣交割」那一框。
+function _txSettleVal(avg, sh, buy) {
+  if (!(avg > 0) || !(sh > 0)) return null;
+  return Math.round(buy ? -avg * sh * (1 + TX_BUY_FEE) : avg * sh * (1 - TX_SELL_COST));
+}
+function _txSettleHtml(avg, sh, buy) {
+  var v = _txSettleVal(avg, sh, buy);
+  if (v == null) return '<span class="swap-dim">—</span>';
+  var cls = v > 0 ? 'up' : (v < 0 ? 'down' : 'tx-flat');
+  return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toLocaleString('zh-TW') + '</span>';
+}
+
 function _txPnlHtml(code, avg, sh, buy) {
   var v = _txPnlVal(code, avg, sh, buy);
   if (v == null) return '<span class="swap-dim">—</span>';
@@ -415,7 +435,7 @@ function _txPxStart() {
 // 排序狀態存 localStorage（本機、每個瀏覽器各自記住），重新整理後維持；讀不到或值不合法時回預設
 var TX_SORT_LS = 'tx_sort_v1';
 var _txSort = (function () {
-  try { var v = localStorage.getItem(TX_SORT_LS); if (/^(code|side|pnl|status|time)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  try { var v = localStorage.getItem(TX_SORT_LS); if (/^(code|side|pnl|stl|status|time)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
   return 'timeDesc';
 })();
 // 數字越大越前面（第一次點＝降冪）：委託中 → 部分成交 → 全部成交 → 已取消 → 失敗，還在排隊的最先看到
@@ -447,6 +467,10 @@ function _txApplySort() {
     if (key === 'side') return +tr.getAttribute('data-side');
     if (key === 'status') return +tr.getAttribute('data-st');
     if (key === 'pnl') return _txRowPnl(tr);
+    if (key === 'stl') {
+      var st = tr.querySelector('.tx-stl[data-stl]');
+      return st ? +st.getAttribute('data-stl') : null;
+    }
     return +tr.getAttribute('data-ts');
   };
   rows.sort(function (a, b) {
