@@ -633,6 +633,161 @@ async function loadChipBars() {
   }
 }
 
+// ═════ 持股籌碼：趨勢摘要 ═════
+//
+// 數字表回答「現在的數值是多少」，這張表回答「這幾天發生了什麼」。
+// 規則全部用資料自己的門檻：自身分位（跟這檔自己的歷史比）與這批持股的四分位
+// （跟同時間的其他持股比），沒有自訂數字。
+//
+// 不給傾向：這是工具頁，列出發生了什麼與依據就停，不寫該買該賣。
+
+// 外資分點：單子從這裡進出的是真正的方向性部位
+function _chipFx(n) {
+  return /摩根|高盛|瑞銀|美林|野村|麥格理|花旗|滙豐|匯豐|德意志|里昂|星展|瑞士|美商|港商|英商|法商|新加坡商/.test(n);
+}
+// 本土券商的總公司層級：造市與自營的單子落在這裡，不是散在地區分點
+function _chipHq(n) {
+  return /總公司/.test(n)
+    || /^(元大|凱基|富邦|台新|永豐|統一|群益|群益金鼎|中國信託證|國泰|日盛|兆豐|玉山|第一金|新光|康和|口袋|華南永昌|大昌|亞東|宏遠)$/.test(n);
+}
+function _chipQ(arr, q) {
+  var a = arr.filter(function (v) { return v != null; }).sort(function (x, y) { return x - y; });
+  if (!a.length) return null;
+  return a[Math.min(a.length - 1, Math.floor(a.length * q))];
+}
+function _chipN(v, dp) {
+  return v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '')
+    + Math.abs(v).toLocaleString('zh-TW', { minimumFractionDigits: dp || 0, maximumFractionDigits: dp || 0 });
+}
+
+function _chipJudge(r, ctx) {
+  var t = [];
+  // 法人這 5 天的流向，跟這檔自己的歷史比
+  if (r.rank != null && r.pct != null) {
+    if (r.rank >= 80) {
+      t.push({ lv: 1, s: '法人買超在自身高檔',
+        w: '近 5 日淨 ' + _chipN(r.pct, 2) + '% 流通量，自身分位 ' + r.rank });
+    } else if (r.rank <= 20) {
+      t.push({ lv: 2, s: '法人賣壓在自身高檔',
+        w: '近 5 日淨 ' + _chipN(r.pct, 2) + '% 流通量，自身分位 ' + r.rank });
+    }
+  }
+  // 自營商是主要賣方、而且賣得夠大（大於這批持股的中位）時，才用分點判它是造市還是減碼。
+  // 量小的時候分點前五名本來就湊不出型態，硬判只會製造雜訊。
+  var dpAbs = (r.dp != null && r.dp < 0) ? Math.abs(r.dp) : 0;
+  if (dpAbs && dpAbs >= Math.abs(r.fp || 0) && ctx.dpMid != null && dpAbs >= ctx.dpMid && r.bk) {
+    var hq = (r.bk.bot || []).filter(function (x) { return _chipHq(x[0]); }).length;
+    var fx = (r.bk.top || []).filter(function (x) { return _chipFx(x[0]); }).length;
+    if (hq >= 2 && fx >= 1) {
+      t.push({ lv: 0, s: '自營商的賣來自造市對沖，不是減碼',
+        w: '賣超前五有 ' + hq + ' 家主辦券商總公司，買超前五有 ' + fx + ' 家外資分點' });
+    } else if (hq < 2 && fx === 0) {
+      t.push({ lv: 1, s: '賣壓分散在一般分點，不像造市對沖',
+        w: '賣超前五只有 ' + hq + ' 家總公司級分點，買超前五沒有外資分點' });
+    }
+    // 其餘情況（有外資買但總公司不足、或總公司夠但沒有外資買）型態不完整，不下判斷
+  }
+  // 槓桿籌碼的水位。融資規模要先夠大：00934 融資只有 1,531 張、佔流通 0.29%，
+  // 分位 100 也不會變成實際賣壓，那是雜訊的分位。
+  // 「融資水位低」不列：那不是發生了什麼，數字表的分位欄本來就看得到。
+  var mgPct = (r.mg && r.units) ? r.mg.bal / r.units * 100 : null;
+  if (r.mgRank != null && r.mgRank >= 80 && r.mg && mgPct != null
+      && ctx.mgFloor != null && mgPct >= ctx.mgFloor) {
+    t.push({ lv: 2, s: '融資水位在自身高檔',
+      w: '餘額 ' + Math.round(r.mg.bal).toLocaleString('zh-TW') + ' 張（佔流通 '
+        + mgPct.toFixed(2) + '%）、使用率 ' + r.mg.use + '%，60 日水位分位 ' + r.mgRank });
+  }
+  // 溢價加高融資＝追價的組合
+  if (r.prem != null && r.prem >= 1 && r.mgRank != null && r.mgRank >= 80) {
+    t.push({ lv: 2, s: '溢價與融資同時在高檔',
+      w: '溢價 ' + _chipN(r.prem, 2) + '%、融資水位分位 ' + r.mgRank + '，買進成本高於淨值' });
+  }
+  // 現金部位只對主動式有意義，而且只跟其他主動式比：
+  // 被動式貼著指數跑，現金本來就壓在 1% 以下，混在一起算四分位會把它們一律標成「打完了」。
+  if (r.act && r.as && r.as.cash != null && ctx.cSpread) {
+    if (r.code === ctx.cTop) {
+      t.push({ lv: 1, s: '這批主動式裡現金最高',
+        w: '現金 ' + r.as.cash + '%，主動式中位 ' + ctx.cMid + '%，最低的 '
+          + ctx.cBotCode + ' 只有 ' + ctx.cBot + '%' });
+    } else if (r.code === ctx.cBotCode) {
+      t.push({ lv: 1, s: '這批主動式裡現金最低',
+        w: '現金 ' + r.as.cash + '%，主動式中位 ' + ctx.cMid + '%，最高的 '
+          + ctx.cTop + ' 有 ' + ctx.cTopV + '%' });
+    }
+  }
+  return t;
+}
+
+function _chipTrendHtml() {
+  if (!_chipRows || !_chipRows.length) return '';
+  _chipRows.forEach(function (r) { r.act = /A$/.test(r.code); });
+  var acts = _chipRows.filter(function (r) { return r.act && r.as && r.as.cash != null; })
+    .sort(function (a, b) { return b.as.cash - a.as.cash; });
+  var cash = acts.map(function (r) { return r.as.cash; });
+  var dps = _chipRows.map(function (r) { return (r.dp != null && r.dp < 0) ? Math.abs(r.dp) : null; });
+  var mgs = _chipRows.map(function (r) {
+    return (r.mg && r.units) ? r.mg.bal / r.units * 100 : null;
+  });
+  var cTop = acts[0], cBot = acts[acts.length - 1];
+  // 最高要有最低的兩倍以上才算拉開；全部擠在一起時這一項不說話
+  var spread = (acts.length >= 3 && cBot.as.cash > 0 && cTop.as.cash / cBot.as.cash >= 2);
+  var ctx = { cSpread: spread, cTop: spread ? cTop.code : '', cTopV: spread ? cTop.as.cash : null,
+              cBotCode: spread ? cBot.code : '', cBot: spread ? cBot.as.cash : null,
+              cMid: _chipQ(cash, 0.5),
+              dpMid: _chipQ(dps, 0.5), mgFloor: _chipQ(mgs, 0.5) };
+  var hot = [], quiet = [], noData = [];
+  _chipRows.forEach(function (r) {
+    if (r.rank == null && !r.mg && !r.bk) { noData.push(r.code); return; }
+    var t = _chipJudge(r, ctx);
+    if (!t.length) { quiet.push(r.code); return; }
+    var lv = 0;
+    t.forEach(function (x) { if (x.lv > lv) lv = x.lv; });
+    hot.push({ code: r.code, lv: lv, t: t, pct: r.pct });
+  });
+  hot.sort(function (a, b) {
+    if (b.lv !== a.lv) return b.lv - a.lv;
+    return (a.pct == null ? 0 : a.pct) - (b.pct == null ? 0 : b.pct);
+  });
+  var LV = [['lv0', '一般'], ['lv1', '留意'], ['lv2', '要看']];
+  var rows = hot.map(function (h) {
+    return '<div class="ct-row">'
+      + '<span class="chip-code">' + h.code + '</span>'
+      + '<span class="ct-lv ' + LV[h.lv][0] + '">● ' + LV[h.lv][1] + '</span>'
+      + '<span class="ct-s">' + h.t.map(function (x) { return x.s; }).join('；') + '</span>'
+      + '<span class="ct-w">' + h.t.map(function (x) { return x.w; }).join('｜') + '</span>'
+      + '</div>';
+  }).join('');
+  var tail = '';
+  if (quiet.length) {
+    tail += '<div class="ct-quiet">其餘 ' + quiet.length + ' 檔沒有觸發任何條件：'
+      + quiet.join('、') + '</div>';
+  }
+  if (noData.length) {
+    tail += '<div class="ct-quiet">' + noData.join('、') + ' 三個來源都沒有資料，判不了</div>';
+  }
+  return '<div class="ct-wrap"><div class="ct-title">這幾天發生了什麼</div>'
+    + (rows ? '<div class="ct-head ct-row"><span>代號</span><span>狀態</span><span>發生什麼</span><span>依據</span></div>' + rows
+            : '<div class="ct-quiet">沒有任何一檔觸發條件</div>')
+    + tail
+    + '<div class="nb">判斷規則與它判不出來的事。'
+    + '四條規則，門檻全部取自資料：'
+    + '一、法人流向用這檔自己 ' + ((_chipMeta || {}).n || 0) + ' 個交易日的 5 日窗分布，分位 80 以上或 20 以下才列。'
+    + '二、自營商是主要賣方、而且賣超大於這批持股的中位時，才看分點：'
+    + '賣超前五有兩家以上本土券商總公司、買超前五有一家以上外資分點，判定為造市對沖申購，'
+    + '這是解釋不是警訊；兩邊都沒有才判賣壓分散。型態不完整的不下判斷。'
+    + '三、融資水位用這檔自己 60 個交易日的餘額分布，分位 80 以上才列，'
+    + '而且融資佔流通量要先大於這批持股的中位——否則是雜訊的分位：'
+    + '00934 融資只有 1,531 張、佔流通 0.29%，水位分位 100 也變不出實際賣壓。水位低不列，數字表看得到。'
+    + '四、現金只算主動式，而且只標最高與最低那一檔，最高要有最低的兩倍以上才標。'
+    + '用四分位會退化成排名，不管當天有沒有異常都固定標出同樣張數。'
+    + '被動式不列：它貼著指數跑，現金本來就壓在 1% 以下，不是經理人的決定。'
+    + '<b>判不出來的事</b>：分點不等於實際客戶，元大總公司底下不只造市一種流量，'
+    + '所以「造市對沖」是依分點型態的推論，不是帳務事實。'
+    + '規則也看不出價格已經反應多少，以及申贖背後是誰在贖。'
+    + '「要看」只表示這一檔有需要去查的東西，不代表方向。</div>'
+    + '</div>';
+}
+
 function _chipMd(y) { return y ? (y.slice(4, 6) + '/' + y.slice(6)) : '—'; }
 function _chipSign(v, dp, unit, miss) {
   if (v == null) return '<span class="chip-na">' + (miss || '—') + '</span>';
@@ -747,8 +902,9 @@ function renderChipBars() {
     + '<span class="chip-lgx">右側買超、左側賣超（賣超同色偏淡）。滿格＝'
     + SC.toFixed(2) + '% 流通量（持股的上四分位），超出的畫到底並標 ▸；條長只能在這張圖裡互相比。</span>'
     + '</div>'
+    + _chipTrendHtml()
     + '<div class="chip-wrap">' + head + rows + '</div>'
-    + '<div class="nv-note">'
+    + '<div class="nb">各欄的定義、比較基準與限制。'
     + '<div class="chip-ex"><b>三段堆疊條與佔流通</b>　'
     + '<b>定義</b>：證交所 T86 的「外資／投信／自營商買賣超股數」除 1,000 換成張，近 ' + CHIP_WIN
     + ' 個交易日加總，再除以該檔流通張數（流通單位數 ÷ 1,000，與 ETF 評比同一份資料）。'
@@ -812,7 +968,7 @@ function renderChipBars() {
     + '<b>不能告訴你</b>：這一格更新不規律，看到的通常是幾天前的數字（表頭有標資料日），'
     + '不能當成今天的部位；也分不出高現金是看空還是剛拿到一筆申購還沒配置。</div>'
     + '</div>'
-    + '<div class="nb"><b>說明</b>：為什麼沒有綜合分數，以及背離解讀的實測紀錄。'
+    + '<div class="nb">為什麼沒有綜合分數，以及背離解讀的實測紀錄。'
     + '舊版畫的是「穿透成份股的法人連買賣加權分數」，已經拿掉：它看起來像綜合評分，'
     + '實際上只是連買賣天數的加權平均。實測 7 檔持股 × 41 個交易日 ＝ 196 個觀察，'
     + '用 10 日累計籌碼與同期價格變化分成四種狀態，量測之後 5 日：'
