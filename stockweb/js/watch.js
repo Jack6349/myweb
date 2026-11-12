@@ -753,7 +753,13 @@ function renderWatchBond() {
     h += '<div class="modal-loading">' + (d ? '沒有年殖利率 ≥ ' + d.th + '% 的標的，可調低門檻後重新篩選。' : '尚未篩選。') + '</div>';
     wrap.innerHTML = h; return;
   }
-  h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
+  // 欄寬改成固定：這張表只有 9 欄卻要擐滿 1644px，瀁覽器按內容按比例分配
+  // 剩餘空間，結果名稱 307px、現價 130px、除息日 205px，寬窄不一。
+  // 六個資料欄給同一個寬度，剩下的全部留給名稱（它是唯一長短差很多的文字欄）。
+  h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table wt-bond-t">'
+    + '<colgroup><col class="bc-chk"><col class="bc-code"><col class="bc-name">'
+    + '<col class="bc-d"><col class="bc-d"><col class="bc-d"><col class="bc-d"><col class="bc-d"><col class="bc-d"></colgroup>'
+    + '<thead><tr>' +
     '<th></th>' + _wtSortTh(_wtBondSort, 'wtBondSort', 'code', '代號') + '<th>名稱</th>' +
     _wtSortTh(_wtBondSort, 'wtBondSort', 'px', '現價', 'num') + _wtSortTh(_wtBondSort, 'wtBondSort', 'amount', '每股金額', 'num') +
     _wtSortTh(_wtBondSort, 'wtBondSort', 'mY', '月配', 'num', '月殖利率：每股金額 ÷ 現價') + _wtSortTh(_wtBondSort, 'wtBondSort', 'yY', '預估年配', 'num', '預估年殖利率：最近一次配息 × 配息期數 ÷ 現價') +
