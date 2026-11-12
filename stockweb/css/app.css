@@ -2126,10 +2126,16 @@ td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
 .chip-reload { margin-left: 12px; }
 .chip-wrap { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
 /* 七欄：代號｜堆疊條｜淨張｜佔流通｜分位｜融資5日｜折溢價 */
-.chip-row { display: grid; grid-template-columns: 72px 1fr 74px 66px 48px 66px 66px;
-            align-items: center; gap: 10px; font-size: 13px; }
+/* 12 欄：代號｜堆疊條｜淨張｜佔流通｜分位｜主力淨張｜佔量｜融資餘額｜使用率｜水位分位｜現金｜折溢價 */
+.chip-row { display: grid;
+            grid-template-columns: 66px minmax(150px, 1fr) 70px 58px 42px 76px 50px 72px 54px 50px 52px 58px;
+            align-items: center; gap: 8px; font-size: 13px; }
 .chip-head { font-size: 11.5px; font-weight: 600; color: var(--th); background: var(--thbg);
-             padding: 3px 4px; border-radius: 3px; margin-bottom: 2px; }
+             padding: 3px 4px; border-radius: 3px; margin-bottom: 2px; align-items: end; }
+/* 第二行是該欄的資料日：三個來源不同天，不標會被當成都是今天 */
+.chip-head i { display: block; font-style: normal; font-weight: 400; font-size: 10px;
+               color: var(--text3); min-height: 12px; }
+.chip-old { opacity: .55; }
 .chip-head > span { text-align: right; }
 .chip-head > span:first-child { text-align: left; }
 .chip-hl { text-align: center !important; color: var(--text3); font-weight: 400; }

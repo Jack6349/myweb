@@ -471,7 +471,7 @@ function nvApplyTab() {
 // 三家分開畫，因為主動式 ETF 的自營商部位是造市與避險，跟外資投信的方向性部位不同性質。
 var CHIP_WIN = 5;          // 一個觀察窗 = 5 個交易日
 var CHIP_SCAN_DAYS = 63;   // 往回掃幾個日曆天（約 43 個交易日）取自身分布
-var _chipRows = null, _chipBusy = false, _chipProg = '', _chipMeta = null;
+var _chipRows = null, _chipBusy = false, _chipProg = '', _chipMeta = null, _chipYc = null;
 
 // T86 整日 JSON 約 1MB。sigFetchT86Day 會把整份存進 localStorage，
 // 那適合只抓近 5 日；這裡要回溯 40 幾天，存整份會把額度吃光，
@@ -586,20 +586,31 @@ async function loadChipBars() {
         pct: (nd && units) ? cur / units * 100 : null,
         rank: nd ? _chipPctile(hist, cur) : null, hn: hist.length,
         prem: (L && L.prem != null) ? L.prem : null,
-        mgn: null
+        bk: null, mg: null, as: null, mgRank: null
       });
     });
 
-    // 逐檔融資餘額：MI_MARGN 的每日快取與大盤那一格同一份，不新增來源
-    var mgTo = '';
+    // 分點主力、融資水位、資產分佈：排程每天抓 Yahoo 個股頁寫成的靜態檔。
+    // 證交所的 BSR 分點查詢要過驗證碼，抓不到；Yahoo 那一頁是算好的結果。
+    // 融資不用 MI_MARGN 的 5 日差分：差分會蓋掉水位的變化，
+    // 00406A 融資三週從 144,219 張漲到 281,885 張，當下的 5 日差分只有 −5.0%。
     try {
-      var mg = await sigRecentMargin(CHIP_WIN + 1);
-      if (mg && mg.length) mgTo = String(mg[0].ymd);
-      out.forEach(function (r) {
-        var mm = (typeof sigMargin === 'function') ? sigMargin(r.code, mg) : null;
-        if (mm && mm.chgPct != null) r.mgn = mm.chgPct;
-      });
-    } catch (e) { hush('news', e); }
+      var yr = await fetch('data/yahoo-chip.json?t=' + Date.now());
+      _chipYc = await yr.json();
+    } catch (e) { _chipYc = null; hush('news', e); }
+    var ym = (_chipYc && _chipYc.map) || {};
+    out.forEach(function (r) {
+      var y = ym[r.code];
+      if (!y) return;
+      r.bk = y.broker || null;
+      r.mg = y.margin || null;
+      r.as = y.asset || null;
+      if (r.mg && r.mg.hist && r.mg.hist.length >= 11) {
+        var h = r.mg.hist.slice(1).map(function (x) { return x[1]; })
+          .filter(function (v) { return v != null; });
+        r.mgRank = _chipPctile(h, r.mg.bal);
+      }
+    });
 
     out.sort(function (a, b) {
       if (a.pct == null && b.pct == null) return a.code.localeCompare(b.code);
@@ -608,7 +619,13 @@ async function loadChipBars() {
       return b.pct - a.pct;
     });
     _chipRows = out;
-    _chipMeta = { n: days.length, mgTo: mgTo,
+    var newest = function (k) {
+      var v = '';
+      out.forEach(function (r) { var o2 = r[k]; if (o2 && o2.d && o2.d > v) v = o2.d; });
+      return v;
+    };
+    _chipMeta = { n: days.length, yUpd: (_chipYc && _chipYc.updated) || '',
+      dBk: newest('bk'), dMg: newest('mg'), dAs: newest('as'),
       from: days.length ? String(days[days.length - 1]) : '', to: days.length ? String(days[0]) : '' };
   } finally {
     _chipBusy = false;
@@ -674,10 +691,27 @@ function renderChipBars() {
     if (neg > 50) h += '<span class="chip-clip l">◂</span>';
     return h;
   };
-  var head = '<div class="chip-row chip-head"><span>代號</span>'
-    + '<span class="chip-hl">← 賣超　｜　買超 →</span>'
-    + '<span>淨張</span><span>佔流通</span><span>分位</span><span>融資5日</span><span>折溢價</span></div>';
+  var m = _chipMeta || { n: 0 };
+  var hc = function (name, d) {
+    return '<span>' + name + '<i>' + (d ? _chipMd(d) : '') + '</i></span>';
+  };
+  var dT = _chipMd(m.to), dBk = m.dBk || '', dMg = m.dMg || '', dAs = m.dAs || '';
+  var head = '<div class="chip-row chip-head"><span>代號<i></i></span>'
+    + '<span class="chip-hl">← 賣超　｜　買超 →<i>' + dT + '</i></span>'
+    + hc('淨張', '') + '<span>佔流通<i>' + dT + '</i></span><span>分位<i>' + dT + '</i></span>'
+    + hc('主力淨張', dBk) + hc('佔量', dBk)
+    + hc('融資餘額', dMg) + hc('使用率', dMg) + hc('水位分位', dMg)
+    + hc('現金', dAs) + hc('折溢價', '') + '</div>';
+  // 某一列的資料日比表頭舊時整格壓暗：那一格不是今天的數字，不能讓它混在同一行裡
+  var old = function (o2, d) { return (o2 && o2.d && d && o2.d !== d) ? ' chip-old' : ''; };
+  var plain = function (v, dp, unit, cls) {
+    if (v == null) return '<span class="chip-na">✕</span>';
+    return '<span class="' + (cls || '') + '">'
+      + v.toLocaleString('zh-TW', { minimumFractionDigits: dp, maximumFractionDigits: dp })
+      + (unit || '') + '</span>';
+  };
   var rows = _chipRows.map(function (r) {
+    var bk = r.bk, mg = r.mg, as = r.as;
     return '<div class="chip-row">'
       + '<span class="chip-code">' + r.code + '</span>'
       + '<span class="chip-track">' + bar(r) + '</span>'
@@ -686,13 +720,25 @@ function renderChipBars() {
       + '<span class="chip-num">' + _chipSign(r.net == null ? null : Math.round(r.net), 0, '', '✕') + '</span>'
       + '<span class="chip-num">' + _chipSign(r.pct, 2, '%', r.nd ? '—' : '✕') + '</span>'
       + '<span class="chip-num chip-rk">' + (r.rank == null ? '<span class="chip-na">✕</span>' : r.rank) + '</span>'
-      + '<span class="chip-num">' + _chipSign(r.mgn, 1, '%') + '</span>'
+      + '<span class="chip-num' + old(bk, dBk) + '">'
+      + _chipSign(bk ? bk.net : null, 0, '') + '</span>'
+      + '<span class="chip-num' + old(bk, dBk) + '">'
+      + plain(bk ? bk.pv : null, 1, '%') + '</span>'
+      + '<span class="chip-num' + old(mg, dMg) + '">'
+      + plain(mg ? mg.bal : null, 0, '') + '</span>'
+      + '<span class="chip-num' + old(mg, dMg) + '">'
+      + plain(mg ? mg.use : null, 2, '%') + '</span>'
+      + '<span class="chip-num chip-rk' + old(mg, dMg) + '">'
+      + (r.mgRank == null ? '<span class="chip-na">✕</span>' : r.mgRank) + '</span>'
+      + '<span class="chip-num' + old(as, dAs) + '">'
+      + (as ? plain(as.cash, 2, '%') : '<span class="chip-na">—</span>') + '</span>'
       + '<span class="chip-num">' + _chipSign(r.prem, 2, '%') + '</span>'
       + '</div>';
   }).join('');
-  var m = _chipMeta || { n: 0 };
   el.innerHTML = '<div class="sub-title">持股籌碼'
-    + '<span class="chip-sub">近 ' + CHIP_WIN + ' 個交易日，資料日 ' + _chipMd(m.to) + '</span>'
+    + '<span class="chip-sub">法人近 ' + CHIP_WIN + ' 個交易日。三個來源的資料日不同，標在各欄名稱下面'
+    + ((m.yUpd && m.yUpd !== (typeof _divTwDate === 'function' ? _divTwDate().iso : '')) 
+       ? '｜<b class="cs-n">主力與融資的排程停在 ' + m.yUpd + '</b>' : '') + '</span>'
     + '<button class="btn-query chip-reload" onclick="loadChipBars()">↓ 重新載入</button></div>'
     + '<div class="chip-lg">'
     + '<span class="chip-k s-f"></span>外資'
@@ -725,17 +771,46 @@ function renderChipBars() {
     + '<b>行動含義</b>：80 以上或 20 以下才算訊號，中間就是日常噪音，不必看。'
     + '<b>不能告訴你</b>：分位分不出「正在往下探底」和「已經止跌打底」，兩者都是低分位。'
     + '要配淨張的實際方向一起讀。</div>'
-    + '<div class="chip-ex"><b>融資5日</b>　'
-    + '<b>定義</b>：證交所 MI_MARGN 這檔的「融資今日餘額」（張），最新一日與 ' + CHIP_WIN
-    + ' 個交易日前相比的增減 %。餘額低於 50 張不算（分母太小，一筆就 ±50%），顯示「—」。'
-    + '資料日 ' + _chipMd(m.mgTo) + '，通常比上面的法人資料晚一天（融資餘額收盤後才出）。'
-    + '<b>比較基準</b>：跟自己 5 天前比。'
-    + '<b>白話</b>：用借來的錢買這檔的人，這 5 天是增加還是減少。'
-    + '<b>機制</b>：融資是散戶的槓桿部位，不耐跌——有維持率壓力，跌到追繳就被迫賣出，'
-    + '所以融資增加會在下跌時變成加速器；融資減少代表這段槓桿籌碼已經退場。'
-    + '<b>行動含義</b>：融資快增又同時溢價擴大，是「散戶追價」的組合，追進去的成本比淨值貴。'
-    + '<b>不能告訴你</b>：ETF 的融資餘額通常很小，百分比容易被少數幾筆放大；'
-    + '也分不出餘額變動是融資買進還是融券回補造成的。</div>'
+    + '<div class="chip-ex"><b>主力淨張與佔量</b>　'
+    + '<b>定義</b>：Yahoo 個股頁的分點券商買賣超，當日買超前 15 家減賣超前 15 家的合計張數；'
+    + '「佔量」是主力買賣超佔當日成交量的比率。證交所的分點查詢要過驗證碼，抓不到，'
+    + 'Yahoo 這一頁是算好的結果。'
+    + '<b>比較基準</b>：跟這檔自己當天的成交量比。沒有歷史序列可以回溯，做不出分位。'
+    + '<b>白話</b>：今天買賣最集中的那幾家券商，合起來是站在買方還是賣方，佔了多少量。'
+    + '<b>機制</b>：這一欄是上面那段「自營商的賣可能只是造市」唯一能驗證的地方。'
+    + '造市商的單子會落在元大總公司、台新、凱基這些主辦券商的分點上，'
+    + '外資的單子落在摩根大通、高盛、瑞銀。賣方集中在主辦券商，表示那是申購買回的對沖；'
+    + '賣方散在一堆分點，才是真的有人在倒貨。同一個自營商賣超，兩種意思。'
+    + '<b>行動含義</b>：佔量超過兩成而且買賣兩方分別集中在外資分點與主辦券商，'
+    + '通常就是申贖造成的，不必當成看空。'
+    + '<b>不能告訴你</b>：分點不等於實際客戶，元大總公司底下不只造市一種流量；'
+    + '也只有前 15 名，中間那些分散的單子看不到。</div>'
+    + '<div class="chip-ex"><b>融資餘額、使用率與水位分位</b>　'
+    + '<b>定義</b>：融資餘額（張）與融資使用率（餘額 ÷ 該檔的融資限額）取自 Yahoo 資券變化頁，'
+    + '原始資料是證交所。水位分位是把今天的餘額放回這檔自己過去 60 個交易日的餘額分布，'
+    + '看落在第幾百分位，不含今天。'
+    + '<b>比較基準</b>：使用率跟這檔自己的融資限額比，水位分位跟它自己 60 日的歷史比。'
+    + '<b>白話</b>：用借來的錢買這檔的人有多少，比它自己平常多還是少。'
+    + '<b>機制</b>：融資是散戶的槓桿部位，不耐跌。有維持率壓力，跌到追繳就被迫賣出，'
+    + '所以融資水位高的時候，下跌會多一段被動賣壓；水位退下來代表這段加速器已經拆掉。'
+    + '<b>行動含義</b>：水位分位 80 以上而且溢價同時擴大，是散戶追價的組合，'
+    + '追進去的成本比淨值貴。'
+    + '<b>不能告訴你</b>：看不出融資的人是誰、成本在哪；'
+    + '也分不出餘額下降是自願減碼還是被斷頭。借券賣出餘額在 Yahoo 是另外載入的圖表，抓不到，'
+    + '所以法人的放空部位這一頁沒有。</div>'
+    + '<div class="chip-ex"><b>現金</b>　'
+    + '<b>定義</b>：Yahoo 持股分析頁的資產分佈，股票以外的現金部位佔基金資產的比率。'
+    + '個股沒有這一項，顯示「—」。'
+    + '<b>比較基準</b>：跟同一批持股的其他主動式 ETF 比。'
+    + '一般被動式 ETF 貼著指數跑，現金通常壓在 5% 以下。'
+    + '<b>白話</b>：經理人有多少錢沒有投下去。'
+    + '<b>機制</b>：主動式 ETF 的現金部位是經理人自己的決定，不是被動跟著指數走。'
+    + '現金拉高代表他在等，或者正在應付贖回；現金壓低代表他把子彈打完了，'
+    + '之後市場再跌，他沒有加碼的餘裕，只能賣股票換現金。這是在價格上完全看不到的資訊。'
+    + '<b>行動含義</b>：同一天同一類的兩檔，一檔現金 6%、一檔 21%，'
+    + '後面那檔對下跌的緩衝比較厚，對上漲的參與比較少。'
+    + '<b>不能告訴你</b>：這一格更新不規律，看到的通常是幾天前的數字（表頭有標資料日），'
+    + '不能當成今天的部位；也分不出高現金是看空還是剛拿到一筆申購還沒配置。</div>'
     + '</div>'
     + '<div class="nb"><b>說明</b>：為什麼沒有綜合分數，以及背離解讀的實測紀錄。'
     + '舊版畫的是「穿透成份股的法人連買賣加權分數」，已經拿掉：它看起來像綜合評分，'
