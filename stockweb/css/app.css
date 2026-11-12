@@ -2125,16 +2125,40 @@ td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
 .chip-sub { font-size: 12px; color: var(--text3); font-weight: 400; margin-left: 10px; }
 .chip-reload { margin-left: 12px; }
 .chip-wrap { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
-.chip-row { display: grid; grid-template-columns: 76px 1fr 56px 68px; align-items: center; gap: 10px;
-  padding: 3px 2px; font-size: 13px; }
+/* 七欄：代號｜堆疊條｜淨張｜佔流通｜分位｜融資5日｜折溢價 */
+.chip-row { display: grid; grid-template-columns: 72px 1fr 74px 66px 48px 66px 66px;
+            align-items: center; gap: 10px; font-size: 13px; }
+.chip-head { font-size: 11.5px; font-weight: 600; color: var(--th); background: var(--thbg);
+             padding: 3px 4px; border-radius: 3px; margin-bottom: 2px; }
+.chip-head > span { text-align: right; }
+.chip-head > span:first-child { text-align: left; }
+.chip-hl { text-align: center !important; color: var(--text3); font-weight: 400; }
 .chip-code { color: var(--accent2); font-weight: 700; }
-.chip-track { position: relative; height: 16px; background: rgba(255,255,255,.05); border-radius: 3px; }
+.chip-num { text-align: right; font-variant-numeric: tabular-nums; }
+.chip-rk { color: var(--text); font-weight: 700; }
+.chip-track { position: relative; height: 16px; background: rgba(255,255,255,.05); border-radius: 3px; overflow: hidden; }
+.chip-clip { position: absolute; top: 0; line-height: 16px; font-size: 11px; color: var(--warn);
+             background: rgba(0,0,0,.6); padding: 0 2px; border-radius: 2px; }
+.chip-clip.r { right: 1px; }
+.chip-clip.l { left: 1px; }
 .chip-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.25); }
+/* 方向由中線左右決定，顏色留給三家法人——紅綠在本站是漲跌的固定語意，不混用 */
 .chip-seg { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; }
-.chip-seg.up { background: var(--up); }
-.chip-seg.down { background: var(--down); }
-.chip-val { text-align: right; font-weight: 700; }
-.chip-prem { text-align: right; font-size: 12px; }
+.chip-seg.s-f { background: var(--accent3); }
+.chip-seg.s-t { background: var(--sub); }
+.chip-seg.s-d { background: var(--caution); }
+/* 三家法人取藍、粉、琥珀：色相互相拉開最遠。青色與藍太近，條圖上分不出來 */
+.chip-seg.sell { opacity: .5; }
+.chip-lg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); margin-top: 8px; }
+.chip-lg .chip-k { width: 11px; height: 11px; border-radius: 2px; display: inline-block; margin-left: 10px; }
+.chip-lg .chip-k:first-child { margin-left: 0; }
+.chip-k.s-f { background: var(--accent3); }
+.chip-k.s-t { background: var(--sub); }
+.chip-k.s-d { background: var(--caution); }
+.chip-lgx { color: var(--text3); margin-left: 14px; }
+.chip-ex { margin-top: 8px; }
+.chip-ex b { color: var(--sum); font-weight: 700; }
+.chip-ex b:first-child { color: var(--accent2); }
 .chip-na { color: var(--text3); font-size: 12px; }
 /* 新聞情勢第一頁的區塊說明：分頁之後有空間，把原本只藏在滑過提示裡的寫成看得見的 */
 .nv-note { font-size: 12.5px; line-height: 1.7; color: var(--text2); margin: 2px 0 8px; }
