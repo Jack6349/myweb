@@ -2166,6 +2166,22 @@ td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
 .chip-ex b { color: var(--sum); font-weight: 700; }
 .chip-ex b:first-child { color: var(--accent2); }
 .chip-na { color: var(--text3); font-size: 12px; }
+/* 持股籌碼的結論表：預設讀的是這張，數字表在下面，六欄說明收進 details */
+.ct-wrap { margin: 2px 0 14px; }
+.ct-title { font-size: 14px; font-weight: 700; color: var(--sub); margin-bottom: 6px; }
+.ct-row { display: grid; grid-template-columns: 66px 62px minmax(180px, 20fr) minmax(220px, 29fr);
+          gap: 8px; align-items: baseline; padding: 4px 4px; font-size: 13px;
+          border-bottom: 1px solid rgba(255,255,255,.06); }
+.ct-head { font-size: 11.5px; font-weight: 600; color: var(--th); background: var(--thbg);
+           border-radius: 3px; border-bottom: none; }
+/* 燈號不用紅綠：紅綠在本站固定是漲跌，拿來當狀態會被讀成數值方向 */
+.ct-lv { font-size: 12px; font-weight: 700; }
+.ct-lv.lv2 { color: var(--warn); }
+.ct-lv.lv1 { color: var(--caution); }
+.ct-lv.lv0 { color: var(--text3); }
+.ct-s { color: var(--text); }
+.ct-w { color: var(--text2); font-size: 12px; }
+.ct-quiet { color: var(--text3); font-size: 12px; padding: 6px 4px; }
 /* 新聞情勢第一頁的區塊說明：分頁之後有空間，把原本只藏在滑過提示裡的寫成看得見的 */
 .nv-note { font-size: 12.5px; line-height: 1.7; color: var(--text2); margin: 2px 0 8px; }
 .nv-note b { color: var(--text); }
