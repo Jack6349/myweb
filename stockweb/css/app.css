@@ -2106,3 +2106,12 @@ td.cost-even::after  { background: var(--text3); }
 .wt-bond-t .bc-name { width: 224px; }
 .wt-bond-t .bc-d { width: 124px; }
 .wt-bond-t .inv-name { overflow: hidden; text-overflow: ellipsis; }
+/* 代號格左緣的成本方向條：與「成本均價」欄左緣那條同一個語彙，但不帶落差大小
+   （量級在成本均價與報酬率兩欄已經有了）。3px 塞在原本的 8px 左 padding 裡，欄寬不變。 */
+td.inv-code.code-cost { position: relative; }
+td.inv-code.code-cost::before {
+  content: ''; position: absolute; left: 3px; top: 4px; bottom: 4px; width: 3px; border-radius: 2px;
+}
+td.inv-code.code-cost.cost-under::before { background: var(--down); }
+td.inv-code.code-cost.cost-over::before  { background: var(--up); }
+td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
