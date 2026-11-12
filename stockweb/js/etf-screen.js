@@ -516,14 +516,20 @@ function _esRank() {
   return { top: top, short: short, fresh: fresh, total: all.length, young: fresh.length };
 }
 
-var _esLive = {}, _esShown = [], _esLiveTimer = null, _esLiveAt = null;
+var _esLive = {}, _esChg = {}, _esShown = [], _esLiveTimer = null, _esLiveAt = null;
 async function _esLiveTick(always) {
   var wrap = document.getElementById('wt-screen-wrap');
   if (!wrap || wrap.style.display === 'none' || document.hidden || !_esShown.length || typeof fetchSnapshots !== 'function') return;
   if (!always && typeof _twOpen === 'function' && !_twOpen()) return;       // 盤後只在進頁時抓一次最後價
   try {
     var sn = await fetchSnapshots(_esShown.map(function (x) { return { exchange: x.mkt === 'OTC' ? 'OTC' : 'TSE', code: x.code }; }));
-    (sn || []).forEach(function (x) { if (x && x.code && x.close > 0) _esLive[x.code] = +x.close; });
+    // change_rate 一併存：評比頁沒有合約參考價，現價要上漲跌色就靠這個
+    (sn || []).forEach(function (x) {
+      if (x && x.code && x.close > 0) {
+        _esLive[x.code] = +x.close;
+        if (x.change_rate != null) _esChg[x.code] = +x.change_rate;
+      }
+    });
     _esLiveAt = new Date(Date.now() + 8 * 3600000).toISOString().slice(11, 19);
     renderEtfScreen();
   } catch (e) { /* 券商連線中斷 → 維持開頁價格 */ }
@@ -870,7 +876,14 @@ function renderEtfScreen() {
         + (r.young ? '<span class="es-tag es-new-tag" title="上市未滿一年，無一年期報酬與填息紀錄，不列入排名">新</span>' : '');
       case 'txt': return v || '';
       case 'f1': return v == null ? dim('—') : '<b>' + v.toFixed(1) + '</b>';
-      case 'f2': return v == null ? dim('—') : v.toFixed(2);
+      // 現價依當日漲跌上色，與關注清單、債券、主動式、新上市四個頁籤同一個寫法
+      case 'f2': {
+        if (v == null) return dim('—');
+        var cv = (_esChg[r.code] != null) ? _esChg[r.code]
+          : ((typeof wtChgPct === 'function') ? wtChgPct(r.code, v) : null);
+        return cv == null ? v.toFixed(2)
+          : '<span class="' + colorClass(cv) + '">' + v.toFixed(2) + '</span>';
+      }
       case 'pct': return v == null ? dim('—') : v.toFixed(2) + '%';
       case 'cons': return v == null ? esSeqNA(r, false) : v.toFixed(2) + '%';
       // 金額固定寬度右對齊，整欄才排得齊；每一列都有，所以不拆行
