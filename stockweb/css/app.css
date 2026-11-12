@@ -2141,12 +2141,30 @@ td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
 .chip-hl { text-align: center !important; color: var(--text3); font-weight: 400; }
 .chip-code { color: var(--accent2); font-weight: 700; }
 .chip-num { text-align: right; font-variant-numeric: tabular-nums; }
+/* 金額另起一行：接在張數後面會毀掉整欄的右對齊 */
+.chip-amt { display: block; font-style: normal; font-size: 10px; color: var(--text3); }
 .chip-rk { color: var(--text); font-weight: 700; }
 .chip-track { position: relative; height: 16px; background: rgba(255,255,255,.05); border-radius: 3px; overflow: hidden; }
-.chip-clip { position: absolute; top: 0; line-height: 16px; font-size: 11px; color: var(--warn);
-             background: rgba(0,0,0,.6); padding: 0 2px; border-radius: 2px; }
-.chip-clip.r { right: 1px; }
-.chip-clip.l { left: 1px; }
+/* 橫軸刻度列：平方根軸的條長不與數值成正比，沒有刻度就不能讀 */
+.chip-axis { padding: 0 0 2px; }
+.cx-cap { font-size: 10px; color: var(--text3); text-align: right; }
+.cx { position: relative; height: 15px; }
+.cx-mid { position: absolute; left: 50%; top: 0; bottom: 6px; width: 1px; background: rgba(255,255,255,.25); }
+.cx-k { position: absolute; top: 0; bottom: 0; width: 0; }
+.cx-k::before { content: ''; position: absolute; left: 0; top: 0; height: 4px; width: 1px;
+                background: rgba(255,255,255,.22); }
+.cx-k b { position: absolute; top: 3px; left: 0; transform: translateX(-50%);
+          font-size: 9.5px; font-weight: 400; color: var(--text3); white-space: nowrap; }
+.cx-end { position: absolute; top: 3px; font-size: 10px; color: var(--text3); }
+.cx-end.l { left: 0; }
+.cx-end.r { right: 0; }
+/* 結論表點名的那幾檔，在數字表的代號前面標同一顆燈 */
+.ct-dot { display: inline-block; width: 11px; font-style: normal; font-size: 9px; vertical-align: 1px; }
+.ct-dot.lv2 { color: var(--warn); }
+.ct-dot.lv1 { color: var(--caution); }
+.ct-lgd { font-size: 12px; color: var(--text2); margin-bottom: 8px; line-height: 1.7; }
+.ct-lgd .ct-lv { margin-left: 10px; margin-right: 3px; }
+.ct-lgd .ct-lv:first-child { margin-left: 0; }
 .chip-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.25); }
 /* 方向由中線左右決定，顏色留給三家法人——紅綠在本站是漲跌的固定語意，不混用 */
 .chip-seg { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; }

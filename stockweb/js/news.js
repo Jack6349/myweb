@@ -585,6 +585,7 @@ async function loadChipBars() {
         net: nd ? cur : null, nd: nd, units: units,
         pct: (nd && units) ? cur / units * 100 : null,
         rank: nd ? _chipPctile(hist, cur) : null, hn: hist.length,
+        px: (L && L.px > 0) ? L.px : null,
         prem: (L && L.prem != null) ? L.prem : null,
         bk: null, mg: null, as: null, mgRank: null
       });
@@ -718,8 +719,10 @@ function _chipJudge(r, ctx) {
   return t;
 }
 
-function _chipTrendHtml() {
-  if (!_chipRows || !_chipRows.length) return '';
+var LVNAME = [['lv0', '一般'], ['lv1', '留意'], ['lv2', '要看']];
+
+function _chipTrendCalc() {
+  if (!_chipRows || !_chipRows.length) return null;
   _chipRows.forEach(function (r) { r.act = /A$/.test(r.code); });
   var acts = _chipRows.filter(function (r) { return r.act && r.as && r.as.cash != null; })
     .sort(function (a, b) { return b.as.cash - a.as.cash; });
@@ -748,7 +751,15 @@ function _chipTrendHtml() {
     if (b.lv !== a.lv) return b.lv - a.lv;
     return (a.pct == null ? 0 : a.pct) - (b.pct == null ? 0 : b.pct);
   });
-  var LV = [['lv0', '一般'], ['lv1', '留意'], ['lv2', '要看']];
+  var lvMap = {};
+  hot.forEach(function (h) { lvMap[h.code] = h.lv; });
+  return { hot: hot, quiet: quiet, noData: noData, lvMap: lvMap };
+}
+
+function _chipTrendHtml(res) {
+  if (!res) return '';
+  var hot = res.hot, quiet = res.quiet, noData = res.noData;
+  var LV = LVNAME;
   var rows = hot.map(function (h) {
     return '<div class="ct-row">'
       + '<span class="chip-code">' + h.code + '</span>'
@@ -766,6 +777,10 @@ function _chipTrendHtml() {
     tail += '<div class="ct-quiet">' + noData.join('、') + ' 三個來源都沒有資料，判不了</div>';
   }
   return '<div class="ct-wrap"><div class="ct-title">這幾天發生了什麼</div>'
+    + '<div class="ct-lgd"><span class="ct-lv lv2">● 要看</span>有需要去查清楚的事，'
+    + '例如融資水位到了自身高檔。<span class="ct-lv lv1">● 留意</span>有變化但不急，'
+    + '例如經理人現金在這批裡偏高。<span class="ct-lv lv0">● 一般</span>是解釋不是警訊，'
+    + '例如那筆賣超查出來是造市對沖。三個都不代表方向，不是買賣訊號。</div>'
     + (rows ? '<div class="ct-head ct-row"><span>代號</span><span>狀態</span><span>發生什麼</span><span>依據</span></div>' + rows
             : '<div class="ct-quiet">沒有任何一檔觸發條件</div>')
     + tail
@@ -786,6 +801,17 @@ function _chipTrendHtml() {
     + '規則也看不出價格已經反應多少，以及申贖背後是誰在贖。'
     + '「要看」只表示這一檔有需要去查的東西，不代表方向。</div>'
     + '</div>';
+}
+
+// 金額＝淨張 × 1,000 股 × 現價。T86 是逐日的張數，這裡用當天收盤價一次換算，
+// 所以是量感不是精算值，標「約」。橫軸不用金額：跨檔比要除以規模，金額比不了。
+function _chipAmt(r) {
+  if (r.net == null || !r.px) return '';
+  var yi = r.net * 1000 * r.px / 1e8;
+  var a = Math.abs(yi), txt;
+  if (a >= 1) txt = a.toFixed(a >= 10 ? 0 : 1) + ' 億';
+  else txt = Math.round(a * 10000).toLocaleString('zh-TW') + ' 萬';
+  return '<i class="chip-amt">約 ' + txt + '</i>';
 }
 
 function _chipMd(y) { return y ? (y.slice(4, 6) + '/' + y.slice(6)) : '—'; }
@@ -814,45 +840,63 @@ function renderChipBars() {
     el.innerHTML = T + '<div class="modal-loading">無持股</div>';
     return;
   }
-  // 滿格取不到最大值：00406A 近 5 日自營商賣超相當於流通量的 7%，
-  // 用它當滿格，其他 14 檔全部縮成看不見的細線。改用上四分位當滿格，
-  // 超出的畫到底、在邊緣標一個箭頭（管制圖的超限點就是這樣標）。
-  var tot = _chipRows.filter(function (r) { return r.pct != null; })
-    .map(function (r) { return Math.abs(r.fp) + Math.abs(r.tp) + Math.abs(r.dp); })
-    .sort(function (a, b) { return a - b; });
-  var SC = tot.length ? tot[Math.min(tot.length - 1, Math.floor(tot.length * 0.75))] : 1;
-  if (!(SC > 0)) SC = 1;
+  // 軸：這批持股的買賣超從 0.09% 到 6.97% 流通量，差 77 倍。
+  // 線性軸放不下——用最大值當滿格，其他人全是細線；用上四分位當滿格，
+  // 最大的那幾檔要截斷。截斷等於把資料切掉，軸裝不下就該換軸。
+  // 改用平方根軸：零點與正負號都保留，長尾壓掉約 2.6 倍，兩端同時看得見，
+  // 代價是條長不再與數值成正比，所以一定要畫刻度，不能只給一條裸條。
+  var MAXA = 0;
+  _chipRows.forEach(function (r) {
+    if (r.pct == null) return;
+    var pos = 0, neg = 0;
+    [r.fp, r.tp, r.dp].forEach(function (v) { if (v > 0) pos += v; else if (v < 0) neg -= v; });
+    if (pos > MAXA) MAXA = pos;
+    if (neg > MAXA) MAXA = neg;
+  });
+  if (!(MAXA > 0)) MAXA = 1;
+  var AX = function (v) { return Math.sqrt(Math.max(0, v)) / Math.sqrt(MAXA) * 50; };
   var bar = function (r) {
     if (r.pct == null) return '<span class="chip-mid"></span>';
     var defs = [[r.fp, 'f'], [r.tp, 't'], [r.dp, 'd']];
-    var h = '<span class="chip-mid"></span>', off = 0, i, v, w;
+    var h = '<span class="chip-mid"></span>', i, v, cum, p0, p1;
+    cum = 0; p0 = 50;
     for (i = 0; i < 3; i++) {
       v = defs[i][0];
       if (!(v > 0)) continue;
-      w = v / SC * 50;
-      h += '<span class="chip-seg s-' + defs[i][1] + '" style="left:' + (50 + off) + '%;width:' + w + '%"></span>';
-      off += w;
+      cum += v; p1 = 50 + AX(cum);
+      h += '<span class="chip-seg s-' + defs[i][1] + '" style="left:' + p0 + '%;width:' + (p1 - p0) + '%"></span>';
+      p0 = p1;
     }
-    if (off > 50) h += '<span class="chip-clip r">▸</span>';
-    var neg = 0;
+    cum = 0; p0 = 50;
     for (i = 0; i < 3; i++) {
       v = defs[i][0];
       if (!(v < 0)) continue;
-      w = -v / SC * 50;
-      neg += w;
-      // left 可以是負值：track 有 overflow:hidden，超出的自然被裁掉
-      h += '<span class="chip-seg s-' + defs[i][1] + ' sell" style="left:' + (50 - neg) + '%;width:' + w + '%"></span>';
+      cum -= v; p1 = 50 - AX(cum);
+      h += '<span class="chip-seg s-' + defs[i][1] + ' sell" style="left:' + p1 + '%;width:' + (p0 - p1) + '%"></span>';
+      p0 = p1;
     }
-    if (neg > 50) h += '<span class="chip-clip l">◂</span>';
     return h;
   };
+  // 刻度取整齊值，不是把最大值切幾等份：讀的人要能直接認出 1%、2%
   var m = _chipMeta || { n: 0 };
+  var tr = _chipTrendCalc();
+  var lvMap = (tr && tr.lvMap) || {};
   var hc = function (name, d) {
     return '<span>' + name + '<i>' + (d ? _chipMd(d) : '') + '</i></span>';
   };
+  var ticks = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20].filter(function (v) { return v < MAXA; }).slice(-4);
+  var axis = '<div class="chip-row chip-axis"><span class="cx-cap">佔流通 %</span>'
+    + '<span class="cx"><span class="cx-mid"></span>'
+    + '<span class="cx-k" style="left:50%"><b>0</b></span>'
+    + ticks.map(function (v) {
+        return '<span class="cx-k" style="left:' + (50 + AX(v)) + '%"><b>' + v + '</b></span>'
+          + '<span class="cx-k" style="left:' + (50 - AX(v)) + '%"><b>' + v + '</b></span>';
+      }).join('')
+    + '<span class="cx-end l">← 賣超</span><span class="cx-end r">買超 →</span></span></div>';
+
   var dT = _chipMd(m.to), dBk = m.dBk || '', dMg = m.dMg || '', dAs = m.dAs || '';
   var head = '<div class="chip-row chip-head"><span>代號<i></i></span>'
-    + '<span class="chip-hl">← 賣超　｜　買超 →<i>' + dT + '</i></span>'
+    + '<span class="chip-hl">法人買賣超<i>' + dT + '</i></span>'
     + hc('淨張', '') + '<span>佔流通<i>' + dT + '</i></span><span>分位<i>' + dT + '</i></span>'
     + hc('主力淨張', dBk) + hc('佔量', dBk)
     + hc('融資餘額', dMg) + hc('使用率', dMg) + hc('水位分位', dMg)
@@ -867,12 +911,17 @@ function renderChipBars() {
   };
   var rows = _chipRows.map(function (r) {
     var bk = r.bk, mg = r.mg, as = r.as;
+    // 上面結論表點名的那幾檔，在這裡用同一顆燈標起來，兩張表才對得上
+    var lv = lvMap[r.code];
+    var dot = (lv == null || lv === 0) ? '<i class="ct-dot"></i>'
+      : '<i class="ct-dot ' + LVNAME[lv][0] + '">●</i>';
     return '<div class="chip-row">'
-      + '<span class="chip-code">' + r.code + '</span>'
+      + '<span class="chip-code">' + dot + r.code + '</span>'
       + '<span class="chip-track">' + bar(r) + '</span>'
       // nd === 0：T86 抓到了但這一檔不在裡面（債券 ETF 不在 ALLBUT0999），算抓不到 → ✕
       // units 缺：個股沒有流通單位數可除，這一欄不適用 → —
-      + '<span class="chip-num">' + _chipSign(r.net == null ? null : Math.round(r.net), 0, '', '✕') + '</span>'
+      + '<span class="chip-num">' + _chipSign(r.net == null ? null : Math.round(r.net), 0, '', '✕')
+      + _chipAmt(r) + '</span>'
       + '<span class="chip-num">' + _chipSign(r.pct, 2, '%', r.nd ? '—' : '✕') + '</span>'
       + '<span class="chip-num chip-rk">' + (r.rank == null ? '<span class="chip-na">✕</span>' : r.rank) + '</span>'
       + '<span class="chip-num' + old(bk, dBk) + '">'
@@ -899,11 +948,12 @@ function renderChipBars() {
     + '<span class="chip-k s-f"></span>外資'
     + '<span class="chip-k s-t"></span>投信'
     + '<span class="chip-k s-d"></span>自營商'
-    + '<span class="chip-lgx">右側買超、左側賣超（賣超同色偏淡）。滿格＝'
-    + SC.toFixed(2) + '% 流通量（持股的上四分位），超出的畫到底並標 ▸；條長只能在這張圖裡互相比。</span>'
+    + '<span class="chip-lgx">右側買超、左側賣超（賣超同色偏淡）。橫軸是近 ' + CHIP_WIN
+    + ' 日買賣超佔流通量的 %，<b>平方根刻度</b>——這批持股差到 77 倍，線性軸會讓小的看不見。'
+    + '條長不與數值成正比，要讀數看刻度或右邊的數字欄。</span>'
     + '</div>'
-    + _chipTrendHtml()
-    + '<div class="chip-wrap">' + head + rows + '</div>'
+    + _chipTrendHtml(tr)
+    + '<div class="chip-wrap">' + head + axis + rows + '</div>'
     + '<div class="nb">各欄的定義、比較基準與限制。'
     + '<div class="chip-ex"><b>三段堆疊條與佔流通</b>　'
     + '<b>定義</b>：證交所 T86 的「外資／投信／自營商買賣超股數」除 1,000 換成張，近 ' + CHIP_WIN
