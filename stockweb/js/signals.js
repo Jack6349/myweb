@@ -46,8 +46,12 @@ function sigGetNav(code) { return (_sigNavMap && _sigNavMap[String(code).toUpper
 function _sigNum(s) { return parseInt(String(s).replace(/,/g, ''), 10) || 0; }
 function _sigTodayYmd() { var tw = new Date(Date.now() + 8 * 3600000); return tw.getUTCFullYear() * 10000 + (tw.getUTCMonth() + 1) * 100 + tw.getUTCDate(); }
 
+// 快取鍵 v1 → v2：v1 只存了外資與投信，漏掉自營商。
+// 實測 2026-11-06 00405A：外資＋投信 +2,133 張（看起來是買超日），
+// 加上自營商是 −37,932 張——正負相反。同一天 00981A 從 −46,530 變成 −145,747，差 3 倍。
+// 主動式 ETF 的自營商部位（造市與避險）常常比外資大，不能不算。
 async function sigFetchT86Day(ymd) {
-  var key = 't86_v1_' + ymd;
+  var key = 't86_v2_' + ymd;
   try { var c = localStorage.getItem(key); if (c === 'HOLIDAY') return null; if (c) return JSON.parse(c); } catch (e) {}
   var j = null;
   try { var r = await fetch('https://www.twse.com.tw/rwd/zh/fund/T86?date=' + ymd + '&selectType=ALLBUT0999&response=json'); j = await r.json(); } catch (e) { return null; }
@@ -56,7 +60,8 @@ async function sigFetchT86Day(ymd) {
     return null;
   }
   var map = {};
-  j.data.forEach(function (row) { map[String(row[0]).trim()] = [_sigNum(row[4]), _sigNum(row[10])]; });
+  // [外資, 投信, 自營商合計]
+  j.data.forEach(function (row) { map[String(row[0]).trim()] = [_sigNum(row[4]), _sigNum(row[10]), _sigNum(row[11])]; });
   try { localStorage.setItem(key, JSON.stringify(map)); } catch (e) {}
   return map;
 }
@@ -90,9 +95,10 @@ function sigComputeChipScore(holdings, t86days) {
     if (series.every(function (s) { return !s; })) return;
     var fS = _sigStreak(series.map(function (s) { return s ? s[0] : 0; }));
     var tS = _sigStreak(series.map(function (s) { return s ? s[1] : 0; }));
-    var sc = _sigClamp5(fS) + _sigClamp5(tS);
+    var dS = _sigStreak(series.map(function (s) { return (s && s[2] != null) ? s[2] : 0; }));
+    var sc = _sigClamp5(fS) + _sigClamp5(tS) + _sigClamp5(dS);   // 三家各截 ±5 → −15～+15
     wsum += h.weight * sc; covered += h.weight;
-    rows.push({ code: code, name: h.name || '', weight: h.weight, f: fS, t: tS, impact: Math.abs(h.weight * sc) });
+    rows.push({ code: code, name: h.name || '', weight: h.weight, f: fS, t: tS, d: dS, impact: Math.abs(h.weight * sc) });
   });
   if (covered <= 0 || totalW <= 0 || covered / totalW < 0.3) return null;
   rows.sort(function (a, b) { return b.impact - a.impact; });
@@ -299,7 +305,7 @@ async function startSignals() {
     '<dt>隔夜美股</dt><dd><code>成分股隔夜漲跌 × 匯率</code>，推估純美股 ETF 今日開盤方向。</dd>' +
     '<dt>ADR 隔夜</dt><dd>台股成分股在美股掛牌的 ADR 隔夜漲跌，與台股高連動。</dd>' +
     '<dt>L2 折溢價</dt><dd>大幅折價（市價 &lt; 淨值）＝可能被錯殺；大幅溢價＝追價過熱。</dd>' +
-    '<dt>L3 籌碼分數</dt><dd><code>Σ 成分股權重 ×（外資連買賣天數 ＋ 投信連買賣天數）</code>，各 ±5、合計範圍 ±10，' +
+    '<dt>L3 籌碼分數</dt><dd><code>Σ 成分股權重 ×（外資 ＋ 投信 ＋ 自營商的連買賣天數）</code>，各 ±5、合計範圍 ±15，' +
       '個股視為「成分只有自己、權重 100%」，算出來就是該股自己的連買賣天數。' +
       '上限 ±5 不是人工門檻，等於查詢區間 5 個交易日（連買最多就 5 天）。' +
     '正（紅）偏多。融資 5 日增 ≥ 10% 且溢價 → ⚠️過熱。</dd>' +
@@ -352,12 +358,13 @@ function sigCardHtml(h, nav, chip, mgn, tdcc, overnight, adr) {
   // L3 chip
   var chipHtml;
   if (chip) {
-    var sc = chip.score, ccls = _sigCls(sc, 0.5);
-    var ctag = sc > 2 ? '偏多' : (sc < -2 ? '偏空' : '中性');
+    var sc = chip.score, ccls = _sigCls(sc, 0.75);
+    var ctag = sc > 3 ? '偏多' : (sc < -3 ? '偏空' : '中性');   // 三家合計 ±15，門檻等比例從 2 調到 3
     var contrib = chip.contributors.map(function (c) {
       return '<div class="sig-contrib"><span>' + c.code + ' ' + c.name + '（' + c.weight.toFixed(1) + '%）</span>' +
         '<span><span class="' + _sigCls(c.f, 0) + '">' + _sigStreakLabel(c.f, '外') + '</span> ' +
-        '<span class="' + _sigCls(c.t, 0) + '">' + _sigStreakLabel(c.t, '投') + '</span></span></div>';
+        '<span class="' + _sigCls(c.t, 0) + '">' + _sigStreakLabel(c.t, '投') + '</span> ' +
+        '<span class="' + _sigCls(c.d, 0) + '">' + _sigStreakLabel(c.d, '自') + '</span></span></div>';
     }).join('');
     var lowCov = chip.coveredPct < 60;
     chipHtml = '<div class="sig-sec"><span class="sig-label">L3 法人籌碼</span>' +
@@ -432,7 +439,7 @@ function signalsSummaryForPrompt() {
     if (r.chip) {
       var conf = r.chip.coveredPct >= 60 ? '' : (r.chip.coveredPct >= 30 ? '，低覆蓋僅供參考' : '');
       parts.push('法人籌碼' + (r.chip.score > 0 ? '+' : '') + r.chip.score.toFixed(1) +
-        (r.chip.score > 2 ? '(偏多)' : r.chip.score < -2 ? '(偏空)' : '') +
+        (r.chip.score > 3 ? '(偏多)' : r.chip.score < -3 ? '(偏空)' : '') +
         '〔覆蓋' + r.chip.coveredPct + '%' + conf + '〕');
     } else parts.push('籌碼不適用(外資/債券成分)');
     return '- ' + r.code + ' ' + (r.name || '') + '：' + parts.join('，');

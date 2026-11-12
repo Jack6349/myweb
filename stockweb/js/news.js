@@ -459,126 +459,294 @@ function nvApplyTab() {
   });
 }
 
-// ═════ 持股籌碼橫條 ═════
+// ═════ 持股籌碼 ═════
 //
-// 籌碼評估頁是全站最重的一頁（多日三大法人＋每一檔的成份股＋集保週報＋官方淨值），
-// 不能讓進這一頁就付那個成本。所以：籌碼評估頁今天載過就直接用它的結果，
-// 沒載過則放一顆按鈕，按了才抓——而且只抓畫條圖需要的（法人籌碼分數與折溢價），
-// 集保（週頻）與逐檔融資不抓：週頻資料放在日更的頁面會變成誤導，
-// 融資已經有大盤層級那一格。
+// 改版前這一區畫的是「穿透成份股的法人連買賣加權分數」，已經拿掉。
+// 那個數字看起來像綜合評分，實際上只是連買賣天數的加權平均，沒有可驗證的意義：
+// 實測 7 檔持股 × 41 個交易日 = 196 個觀察，用它去分「籌碼與價格背離」的四種狀態，
+// 四格的後 5 日中位報酬全是負的（區間本身是 20% 的下跌段），而唯一有意思的那一格
+// 只有 2 個樣本。撐不住的解讀就不要畫。
 //
-// 分數範圍：外資連買賣天數（截在 ±5）＋投信連買賣天數（截在 ±5），
-// 所以是 −10 到 +10，以成份股權重加權。中線 0 就是「法人沒有淨連買賣」。
-var _chipRows = null, _chipBusy = false, _chipProg = '';
+// 現在改用這一檔 ETF 自己在 T86 裡的買賣超，跟券商 App 的「三大法人」同一份資料。
+// 三家分開畫，因為主動式 ETF 的自營商部位是造市與避險，跟外資投信的方向性部位不同性質。
+var CHIP_WIN = 5;          // 一個觀察窗 = 5 個交易日
+var CHIP_SCAN_DAYS = 63;   // 往回掃幾個日曆天（約 43 個交易日）取自身分布
+var _chipRows = null, _chipBusy = false, _chipProg = '', _chipMeta = null;
+
+// T86 整日 JSON 約 1MB。sigFetchT86Day 會把整份存進 localStorage，
+// 那適合只抓近 5 日；這裡要回溯 40 幾天，存整份會把額度吃光，
+// 所以自己抓、只留持股這幾檔（一天約 20 bytes）。
+async function _chipDay(ymd, codes) {
+  var key = 'chipD_v1_' + ymd, cached = null;
+  try {
+    var c = localStorage.getItem(key);
+    if (c === 'HOLIDAY') return null;
+    if (c) cached = JSON.parse(c);
+  } catch (e) {}
+  if (cached && !codes.some(function (k) { return !(k in cached); })) return cached;
+  var j = null;
+  try {
+    var r = await fetch('https://www.twse.com.tw/rwd/zh/fund/T86?date=' + ymd + '&selectType=ALLBUT0999&response=json');
+    j = await r.json();
+  } catch (e) { return null; }
+  if (!j || !j.data || !j.data.length) {
+    if (ymd < _sigTodayYmd()) { try { localStorage.setItem(key, 'HOLIDAY'); } catch (e) {} }
+    return null;
+  }
+  var out = cached || {}, want = {};
+  codes.forEach(function (k) { want[k] = 1; });
+  j.data.forEach(function (row) {
+    var cd = String(row[0]).trim();
+    if (want[cd]) out[cd] = [_sigNum(row[4]), _sigNum(row[10]), _sigNum(row[11])];   // 外資、投信、自營商
+  });
+  // 當天沒出現在 T86（沒成交）：寫 null 佔位，否則每次載入都會為它重抓整天
+  codes.forEach(function (k) { if (!(k in out)) out[k] = null; });
+  try { localStorage.setItem(key, JSON.stringify(out)); } catch (e) {}
+  return out;
+}
+
+function _chipYmds(days) {
+  var out = [], now = new Date(Date.now() + 8 * 3600000);
+  for (var back = 0; back < days; back++) {
+    var d = new Date(now.getTime() - back * 86400000), dow = d.getUTCDay();
+    if (dow === 0 || dow === 6) continue;
+    out.push(d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate());
+  }
+  return out;
+}
+
+// 目前這一窗落在自己歷史分布的第幾百分位（不含自己）
+function _chipPctile(hist, cur) {
+  if (hist.length < 10) return null;
+  var lt = 0;
+  for (var i = 0; i < hist.length; i++) if (hist[i] < cur) lt++;
+  return Math.round(lt / hist.length * 100);
+}
 
 async function loadChipBars() {
   if (_chipBusy) return;
   _chipBusy = true;
   _chipProg = '';
+  _chipMeta = null;
   renderChipBars();
   try {
-    // 進新聞情勢頁時 _positions 是空的（那是持股庫存載的），
-    // 跟籌碼評估頁一樣自己去抓，否則永遠顯示「無持股」。
+    // 進新聞情勢頁時 _positions 是空的（那是持股庫存載的），自己去抓
     var ps = (typeof _positions !== 'undefined' && _positions && _positions.length) ? _positions : [];
     if (!ps.length && typeof fetchBrokerPositions === 'function') {
       try { ps = (await fetchBrokerPositions()) || []; } catch (e) { hush('news', e); }
     }
-    var held = ps.map(function (p) { return String(p.code).toUpperCase(); });
+    var held = ps.map(function (x) { return String(x.code).toUpperCase(); });
+    held = held.filter(function (c, k) { return held.indexOf(c) === k; });
     if (!held.length) { _chipRows = []; return; }
-    // 官方淨值不等它：sigEnsureNavMap 抓不到會重試四次，實測超過 20 秒還沒回來，
-    // 整個條圖都被它卡住。折溢價在這張圖裡是配角，主角是法人籌碼分數，
-    // 所以讓它在背景跑，回來了再重畫一次把折溢價填上。
-    if (typeof sigEnsureNavMap === 'function') {
-      sigEnsureNavMap().then(function () {
-        if (!_chipRows) return;
-        _chipRows.forEach(function (r) {
-          var nv = (typeof sigGetNav === 'function') ? sigGetNav(r.code) : null;
-          if (nv && nv.premium != null) r.prem = nv.premium;
-        });
-        renderChipBars();
-      }).catch(function (e) { hush('news', e); });
+
+    // 流通單位數與官方折溢價跟 ETF 評比同源（當日 localStorage 快取，通常不用重抓）
+    var list = {};
+    if (typeof _esGetBase === 'function') {
+      try { var b = await _esGetBase(false); if (b && b.list) list = b.list; } catch (e) { hush('news', e); }
     }
-    var t86 = [];
-    try { t86 = await sigRecentT86(typeof SIG_T86_DAYS !== 'undefined' ? SIG_T86_DAYS : 5); } catch (e) { hush('news', e); }
-    // 成份股一檔約 1.4 秒，15 檔逐檔跑就是 21 秒。四條並行，降到約 5 秒。
-    var out = [], q = held.slice(), done = 0, total = held.length;
-    var one = async function (c) {
-      var chip = null;
-      try {
-        var parts = /^00/.test(c) ? (await fetchEtfConstituents(c)).holdings
-          : (typeof sigSelfHolding === 'function' ? sigSelfHolding(c, '') : []);
-        chip = sigComputeChipScore(parts, t86);
-      } catch (e) { hush('news', e); }
-      var nav = (typeof sigGetNav === 'function') ? sigGetNav(c) : null;
-      out.push({ code: c, name: (typeof _rbName === 'function' ? _rbName(c) : ''),
-                 score: chip ? chip.score : null, cov: chip ? chip.coveredPct : null,
-                 days: chip ? chip.days : (t86.length || null),
-                 prem: (nav && nav.premium != null) ? nav.premium : null });
-      done++;
-      _chipProg = done + '/' + total;
-      renderChipBars();
+
+    var ymds = _chipYmds(CHIP_SCAN_DAYS), got = {}, q = ymds.slice(), done = 0, total = ymds.length;
+    var worker = async function () {
+      while (q.length) {
+        var y = q.shift();
+        var m = await _chipDay(y, held);
+        if (m) got[y] = m;
+        done++;
+        _chipProg = done + '/' + total;
+        renderChipBars();
+      }
     };
-    var worker = async function () { while (q.length) await one(q.shift()); };
     await Promise.all([worker(), worker(), worker(), worker()]);
+    var days = Object.keys(got).map(Number).sort(function (a, b) { return b - a; });   // 新 → 舊
+
+    var K = 1000;   // T86 是股數，換成張
+    var out = [];
+    held.forEach(function (c) {
+      var ser = days.map(function (y) { return got[y][c] || null; });
+      var f = 0, t = 0, d = 0, nd = 0, i, k;
+      for (i = 0; i < CHIP_WIN && i < ser.length; i++) {
+        if (!ser[i]) continue;
+        f += ser[i][0]; t += ser[i][1]; d += ser[i][2]; nd++;
+      }
+      var cur = (f + t + d) / K;
+      var hist = [];
+      for (i = 1; i + CHIP_WIN <= ser.length; i++) {
+        var v = 0, ok = false;
+        for (k = i; k < i + CHIP_WIN; k++) if (ser[k]) { v += ser[k][0] + ser[k][1] + ser[k][2]; ok = true; }
+        if (ok) hist.push(v / K);
+      }
+      var L = list[c];
+      var units = (L && L.units > 0) ? L.units / K : null;    // 流通張數
+      var pc = function (x) { return units ? (x / K) / units * 100 : null; };
+      out.push({
+        code: c, name: (typeof _rbName === 'function' ? _rbName(c) : ''),
+        f: f / K, t: t / K, d: d / K,
+        fp: pc(f), tp: pc(t), dp: pc(d),
+        net: nd ? cur : null, nd: nd, units: units,
+        pct: (nd && units) ? cur / units * 100 : null,
+        rank: nd ? _chipPctile(hist, cur) : null, hn: hist.length,
+        prem: (L && L.prem != null) ? L.prem : null,
+        mgn: null
+      });
+    });
+
+    // 逐檔融資餘額：MI_MARGN 的每日快取與大盤那一格同一份，不新增來源
+    var mgTo = '';
+    try {
+      var mg = await sigRecentMargin(CHIP_WIN + 1);
+      if (mg && mg.length) mgTo = String(mg[0].ymd);
+      out.forEach(function (r) {
+        var mm = (typeof sigMargin === 'function') ? sigMargin(r.code, mg) : null;
+        if (mm && mm.chgPct != null) r.mgn = mm.chgPct;
+      });
+    } catch (e) { hush('news', e); }
+
     out.sort(function (a, b) {
-      if (a.score == null && b.score == null) return a.code.localeCompare(b.code);
-      if (a.score == null) return 1;
-      if (b.score == null) return -1;
-      return b.score - a.score;
+      if (a.pct == null && b.pct == null) return a.code.localeCompare(b.code);
+      if (a.pct == null) return 1;
+      if (b.pct == null) return -1;
+      return b.pct - a.pct;
     });
     _chipRows = out;
+    _chipMeta = { n: days.length, mgTo: mgTo,
+      from: days.length ? String(days[days.length - 1]) : '', to: days.length ? String(days[0]) : '' };
   } finally {
     _chipBusy = false;
     renderChipBars();
   }
 }
 
+function _chipMd(y) { return y ? (y.slice(4, 6) + '/' + y.slice(6)) : '—'; }
+function _chipSign(v, dp, unit, miss) {
+  if (v == null) return '<span class="chip-na">' + (miss || '—') + '</span>';
+  var cls = v > 0 ? 'up' : (v < 0 ? 'down' : '');
+  var txt = (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toLocaleString('zh-TW', { minimumFractionDigits: dp, maximumFractionDigits: dp }) + (unit || '');
+  return '<span class="' + cls + '">' + txt + '</span>';
+}
+
 function renderChipBars() {
   var el = document.getElementById('chip-bar');
   if (!el) return;
+  var T = '<div class="sub-title">持股籌碼</div>';
   if (_chipBusy) {
-    el.innerHTML = '<div class="sub-title">持股籌碼</div>'
-      + '<div class="modal-loading">抓多日三大法人與每一檔的成份股… '
-      + (_chipProg || '') + '</div>';
+    el.innerHTML = T + '<div class="modal-loading">抓證交所 T86 多日三大法人… ' + (_chipProg || '') + '</div>';
     return;
   }
   if (!_chipRows) {
-    el.innerHTML = '<div class="sub-title">持股籌碼</div>'
-      + '<div class="chip-hint">這一區要抓多日三大法人與每一檔的成份股，是全站最慢的一組資料，'
-      + '所以不自動載。'
+    el.innerHTML = T + '<div class="chip-hint">要回溯約 ' + CHIP_SCAN_DAYS
+      + ' 個日曆天的三大法人日報才算得出自身分位，第一次載入要幾十秒，之後每天只多抓一天，所以不自動載。'
       + '<button class="btn-query" onclick="loadChipBars()">載入持股籌碼</button></div>';
     return;
   }
   if (!_chipRows.length) {
-    el.innerHTML = '<div class="sub-title">持股籌碼</div><div class="modal-loading">無持股</div>';
+    el.innerHTML = T + '<div class="modal-loading">無持股</div>';
     return;
   }
-  var MAX = 10;   // 分數的理論上限，橫條以它為滿格
+  // 滿格取不到最大值：00406A 近 5 日自營商賣超相當於流通量的 7%，
+  // 用它當滿格，其他 14 檔全部縮成看不見的細線。改用上四分位當滿格，
+  // 超出的畫到底、在邊緣標一個箭頭（管制圖的超限點就是這樣標）。
+  var tot = _chipRows.filter(function (r) { return r.pct != null; })
+    .map(function (r) { return Math.abs(r.fp) + Math.abs(r.tp) + Math.abs(r.dp); })
+    .sort(function (a, b) { return a - b; });
+  var SC = tot.length ? tot[Math.min(tot.length - 1, Math.floor(tot.length * 0.75))] : 1;
+  if (!(SC > 0)) SC = 1;
+  var bar = function (r) {
+    if (r.pct == null) return '<span class="chip-mid"></span>';
+    var defs = [[r.fp, 'f'], [r.tp, 't'], [r.dp, 'd']];
+    var h = '<span class="chip-mid"></span>', off = 0, i, v, w;
+    for (i = 0; i < 3; i++) {
+      v = defs[i][0];
+      if (!(v > 0)) continue;
+      w = v / SC * 50;
+      h += '<span class="chip-seg s-' + defs[i][1] + '" style="left:' + (50 + off) + '%;width:' + w + '%"></span>';
+      off += w;
+    }
+    if (off > 50) h += '<span class="chip-clip r">▸</span>';
+    var neg = 0;
+    for (i = 0; i < 3; i++) {
+      v = defs[i][0];
+      if (!(v < 0)) continue;
+      w = -v / SC * 50;
+      neg += w;
+      // left 可以是負值：track 有 overflow:hidden，超出的自然被裁掉
+      h += '<span class="chip-seg s-' + defs[i][1] + ' sell" style="left:' + (50 - neg) + '%;width:' + w + '%"></span>';
+    }
+    if (neg > 50) h += '<span class="chip-clip l">◂</span>';
+    return h;
+  };
+  var head = '<div class="chip-row chip-head"><span>代號</span>'
+    + '<span class="chip-hl">← 賣超　｜　買超 →</span>'
+    + '<span>淨張</span><span>佔流通</span><span>分位</span><span>融資5日</span><span>折溢價</span></div>';
   var rows = _chipRows.map(function (r) {
-    var half = 50;   // 中線在 50%
-    var w = (r.score == null) ? 0 : Math.min(Math.abs(r.score) / MAX, 1) * half;
-    var bar = (r.score == null)
-      ? '<span class="chip-na">算不出（成份股覆蓋不足或非台股）</span>'
-      : '<span class="chip-seg ' + (r.score >= 0 ? 'up' : 'down') + '" style="'
-        + (r.score >= 0 ? 'left:50%;' : ('left:' + (half - w) + '%;'))
-        + 'width:' + w + '%"></span>';
-    return '<div class="chip-row" title="'
-      + (r.score == null ? '成份股覆蓋率不足 30%，不推算'
-         : '分數 ' + r.score.toFixed(2) + '（外資連買賣天數 ＋ 投信連買賣天數，各截在 ±5，依成份股權重加權）'
-           + '　覆蓋率 ' + r.cov + '%　近 ' + r.days + ' 個交易日') + '">'
+    return '<div class="chip-row">'
       + '<span class="chip-code">' + r.code + '</span>'
-      + '<span class="chip-track"><span class="chip-mid"></span>' + bar + '</span>'
-      + '<span class="chip-val ' + (r.score == null ? '' : (r.score > 0 ? 'up' : (r.score < 0 ? 'down' : ''))) + '">'
-      + (r.score == null ? '—' : (r.score > 0 ? '+' : '') + r.score.toFixed(1)) + '</span>'
-      + '<span class="chip-prem' + (r.prem == null ? ' chip-na' : (r.prem > 0 ? ' up' : (r.prem < 0 ? ' down' : ''))) + '">'
-      + (r.prem == null ? '—' : (r.prem > 0 ? '+' : '−') + Math.abs(r.prem).toFixed(2) + '%') + '</span></div>';
+      + '<span class="chip-track">' + bar(r) + '</span>'
+      // nd === 0：T86 抓到了但這一檔不在裡面（債券 ETF 不在 ALLBUT0999），算抓不到 → ✕
+      // units 缺：個股沒有流通單位數可除，這一欄不適用 → —
+      + '<span class="chip-num">' + _chipSign(r.net == null ? null : Math.round(r.net), 0, '', '✕') + '</span>'
+      + '<span class="chip-num">' + _chipSign(r.pct, 2, '%', r.nd ? '—' : '✕') + '</span>'
+      + '<span class="chip-num chip-rk">' + (r.rank == null ? '<span class="chip-na">✕</span>' : r.rank) + '</span>'
+      + '<span class="chip-num">' + _chipSign(r.mgn, 1, '%') + '</span>'
+      + '<span class="chip-num">' + _chipSign(r.prem, 2, '%') + '</span>'
+      + '</div>';
   }).join('');
-  var n = _chipRows.filter(function (r) { return r.score != null; }).length;
+  var m = _chipMeta || { n: 0 };
   el.innerHTML = '<div class="sub-title">持股籌碼'
-    + '<span class="chip-sub">中線＝法人沒有淨連買賣；右紅為連買、左綠為連賣。'
-    + '最右邊是官方折溢價。' + n + ' 檔算得出分數</span>'
+    + '<span class="chip-sub">近 ' + CHIP_WIN + ' 個交易日，資料日 ' + _chipMd(m.to) + '</span>'
     + '<button class="btn-query chip-reload" onclick="loadChipBars()">↓ 重新載入</button></div>'
-    + '<div class="chip-wrap">' + rows + '</div>';
+    + '<div class="chip-lg">'
+    + '<span class="chip-k s-f"></span>外資'
+    + '<span class="chip-k s-t"></span>投信'
+    + '<span class="chip-k s-d"></span>自營商'
+    + '<span class="chip-lgx">右側買超、左側賣超（賣超同色偏淡）。滿格＝'
+    + SC.toFixed(2) + '% 流通量（持股的上四分位），超出的畫到底並標 ▸；條長只能在這張圖裡互相比。</span>'
+    + '</div>'
+    + '<div class="chip-wrap">' + head + rows + '</div>'
+    + '<div class="nv-note">'
+    + '<div class="chip-ex"><b>三段堆疊條與佔流通</b>　'
+    + '<b>定義</b>：證交所 T86 的「外資／投信／自營商買賣超股數」除 1,000 換成張，近 ' + CHIP_WIN
+    + ' 個交易日加總，再除以該檔流通張數（流通單位數 ÷ 1,000，與 ETF 評比同一份資料）。'
+    + '<b>比較基準</b>：條長跟同一張圖裡的其他持股比（滿格取這批持股的上四分位，不是最大值，'
+    + '否則單一檔的大額申贖會把其他人壓成細線）；要跟自己的歷史比看「分位」欄。'
+    + '<b>白話</b>：這 5 天哪幾家法人在買這檔、哪幾家在賣，量相當於這檔的百分之幾。'
+    + '<b>機制</b>：主動式 ETF 的自營商部位主要是造市與避險申贖，不是看多看空；外資與投信才是方向性部位。'
+    + '所以同一個淨額要分家看：「外資買、自營賣」通常是造市商在對沖申購，'
+    + '「三家一起賣」才是真的在減碼，兩者對後續價格的意思不同。'
+    + '<b>行動含義</b>：三段同向、且分位落在 80 以上或 20 以下，才值得去查是不是有申贖或指數調整這類一次性原因。'
+    + '單獨這一欄不足以支撐買賣決定。'
+    + '<b>不能告訴你</b>：看不出對手方是誰（法人買超必然有人賣超），也看不出價格有沒有先反應完。'
+    + '要配「分位」與「折溢價」一起看。</div>'
+    + '<div class="chip-ex"><b>分位</b>　'
+    + '<b>定義</b>：把這檔過去 ' + m.n + ' 個交易日裡每一個 ' + CHIP_WIN
+    + ' 日窗的法人淨買賣張數排成分布，看目前這一窗落在第幾百分位（0＝歷史最賣，100＝歷史最買），不含目前這一窗本身。'
+    + '<b>比較基準</b>：只跟自己比，不跟別檔比。'
+    + '<b>白話</b>：現在這波買賣，對這檔來說算大還是算平常。'
+    + '<b>機制</b>：絕對張數不能跨檔比（規模不同），佔流通量能跨檔比卻不知道「對這檔算不算多」，分位補的是後者。'
+    + '<b>行動含義</b>：80 以上或 20 以下才算訊號，中間就是日常噪音，不必看。'
+    + '<b>不能告訴你</b>：分位分不出「正在往下探底」和「已經止跌打底」，兩者都是低分位。'
+    + '要配淨張的實際方向一起讀。</div>'
+    + '<div class="chip-ex"><b>融資5日</b>　'
+    + '<b>定義</b>：證交所 MI_MARGN 這檔的「融資今日餘額」（張），最新一日與 ' + CHIP_WIN
+    + ' 個交易日前相比的增減 %。餘額低於 50 張不算（分母太小，一筆就 ±50%），顯示「—」。'
+    + '資料日 ' + _chipMd(m.mgTo) + '，通常比上面的法人資料晚一天（融資餘額收盤後才出）。'
+    + '<b>比較基準</b>：跟自己 5 天前比。'
+    + '<b>白話</b>：用借來的錢買這檔的人，這 5 天是增加還是減少。'
+    + '<b>機制</b>：融資是散戶的槓桿部位，不耐跌——有維持率壓力，跌到追繳就被迫賣出，'
+    + '所以融資增加會在下跌時變成加速器；融資減少代表這段槓桿籌碼已經退場。'
+    + '<b>行動含義</b>：融資快增又同時溢價擴大，是「散戶追價」的組合，追進去的成本比淨值貴。'
+    + '<b>不能告訴你</b>：ETF 的融資餘額通常很小，百分比容易被少數幾筆放大；'
+    + '也分不出餘額變動是融資買進還是融券回補造成的。</div>'
+    + '</div>'
+    + '<div class="nb"><b>說明</b>：為什麼沒有綜合分數，以及背離解讀的實測紀錄。'
+    + '舊版畫的是「穿透成份股的法人連買賣加權分數」，已經拿掉：它看起來像綜合評分，'
+    + '實際上只是連買賣天數的加權平均。實測 7 檔持股 × 41 個交易日 ＝ 196 個觀察，'
+    + '用 10 日累計籌碼與同期價格變化分成四種狀態，量測之後 5 日：'
+    + '同向上 92 次（中位 −1.90%、上漲率 47%）、背離·籌碼買價跌 28 次（−2.79%、25%）、'
+    + '同向下 74 次（−5.03%、20%）、背離·籌碼賣價漲 2 次（+2.68%、100%）。'
+    + '四格全負是因為這段區間本身是 20% 的下跌段，而唯一有意思的那一格只有 2 個樣本，'
+    + '所以「背離」這個解讀撐不住，不畫。另外舊版的 T86 快取只存了外資與投信，漏掉自營商：'
+    + '2026-11-06 的 00405A，外資＋投信是 +2,133 張（看起來是買超日），加上自營商是 −37,932 張，'
+    + '正負相反；同一天 00981A 從 −46,530 變成 −145,747，差 3 倍。這次一起修掉。</div>';
 }
 
 // ── 訊號一致性檢查 ──
