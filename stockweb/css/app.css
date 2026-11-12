@@ -2115,3 +2115,6 @@ td.inv-code.code-cost::before {
 td.inv-code.code-cost.cost-under::before { background: var(--down); }
 td.inv-code.code-cost.cost-over::before  { background: var(--up); }
 td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
+/* 代號與左緣那條成本方向條之間拉開：條寬 5px 之後只剩 1px 間距，看起來黏在一起。
+   整欄一起加（含沒有條的列），欄內文字才對得齊。 */
+#inv-view td.inv-code { padding-left: 15px; }
