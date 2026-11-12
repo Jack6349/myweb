@@ -277,6 +277,160 @@ function renderFredBar() {
     '<div class="fred-row">' + rows.join('') + '</div>';
 }
 
+// ═════ 大盤位置、月份季節性、融資餘額 ═════
+//
+// 起因是一篇投信稿：「自 5 萬點回檔 2 成」「短線急漲逾 6000 點」
+// 「融資瘦身有成」「過去 20 年 11 月到隔年 Q1 上漲機率高」。
+// 這幾句全都可以用手邊的資料檢驗，而頁面上卻沒有。
+// 這一區的目的是讓使用者能反駁新聞，不是整理新聞。
+//
+// 實測結果（寫在這裡以免之後重算）：25 年月線 11 月上漲 20/25（80%）是全年最強，
+// 但 12 月 56%、3 月 52% 是全年墊底那一群——「11 月到 Q1」是灌水的說法。
+var TWPOS_LS = 'news_twpos_v1';
+var _twPos = null;    // { at, hi, lo, last, season:[{m,up,n,med}], mgn:{cur,prev,days,chg} }
+
+function _twPosNum(v) { return v == null ? '\u2014' : Math.round(v).toLocaleString('zh-TW'); }
+function _twPosPct(v, dp) {
+  if (v == null) return '\u2014';
+  return (v > 0 ? '+' : (v < 0 ? '\u2212' : '')) + Math.abs(v).toFixed(dp == null ? 2 : dp) + '%';
+}
+
+// 大盤位置：距一年高點、自高點後最低反彈、收復了多少
+async function _twPosRange() {
+  var url = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=1d&range=1y';
+  var j = await (await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url))).json();
+  var res = j.chart && j.chart.result && j.chart.result[0];
+  if (!res) throw new Error('TWII 1y');
+  var ts = res.timestamp || [], cl = (res.indicators.quote[0].close || []), b = [];
+  for (var i = 0; i < ts.length; i++) {
+    if (cl[i] != null) b.push({ d: new Date((ts[i] + 28800) * 1000).toISOString().slice(0, 10), c: cl[i] });
+  }
+  if (b.length < 30) throw new Error('TWII bars');
+  var last = b[b.length - 1];
+  var hi = b.reduce(function (a, x) { return x.c > a.c ? x : a; });
+  var lo = b.filter(function (x) { return x.d >= hi.d; }).reduce(function (a, x) { return x.c < a.c ? x : a; });
+  return { last: last, hi: hi, lo: lo };
+}
+
+// 月份季節性：25 年月線，每一個月的上漲機率與中位報酬
+async function _twPosSeason() {
+  var url = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=1mo&range=25y';
+  var j = await (await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url))).json();
+  var res = j.chart && j.chart.result && j.chart.result[0];
+  if (!res) throw new Error('TWII 25y');
+  var ts = res.timestamp || [], cl = (res.indicators.quote[0].close || []), b = [];
+  for (var i = 0; i < ts.length; i++) if (cl[i] != null) b.push({ t: new Date(ts[i] * 1000), c: cl[i] });
+  var by = {};
+  for (var k = 1; k < b.length; k++) {
+    var m = b[k].t.getUTCMonth() + 1;
+    (by[m] = by[m] || []).push((b[k].c / b[k - 1].c - 1) * 100);
+  }
+  var med = function (a) {
+    a = a.slice().sort(function (x, y) { return x - y; });
+    var n = a.length;
+    return n ? (n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2) : null;
+  };
+  var out = [];
+  for (var mm = 1; mm <= 12; mm++) {
+    var a = by[mm] || [];
+    if (!a.length) continue;
+    out.push({ m: mm, n: a.length, up: a.filter(function (v) { return v > 0; }).length, med: med(a) });
+  }
+  return out;
+}
+
+// 大盤融資餘額：把籌碼頁已經在用的 MI_MARGN 按日加總（單位張）。
+// 不新增來源，那一頁的每日快取直接拿來用。
+async function _twPosMargin() {
+  if (typeof sigRecentMargin !== 'function') return null;
+  var ds = await sigRecentMargin(6);
+  if (!ds || ds.length < 2) return null;
+  var sum = function (d) {
+    var t = 0;
+    Object.keys(d.map).forEach(function (k) { if (d.map[k] != null) t += d.map[k]; });
+    return t;
+  };
+  var cur = sum(ds[0]), prev = sum(ds[ds.length - 1]);
+  return {
+    cur: cur, prev: prev, days: ds.length,
+    from: String(ds[ds.length - 1].ymd), to: String(ds[0].ymd),
+    chg: prev > 0 ? (cur - prev) / prev * 100 : null
+  };
+}
+
+async function loadTwPos(force) {
+  var el = document.getElementById('twpos-bar');
+  if (!el) return;
+  var day = _divTwDate ? _divTwDate().iso : new Date().toISOString().slice(0, 10);
+  if (!force) {
+    try {
+      var c = JSON.parse(localStorage.getItem(TWPOS_LS) || 'null');
+      if (c && c.day === day && c.v) { _twPos = c.v; renderTwPos(); return; }
+    } catch (e) {}
+  }
+  var r = await Promise.allSettled([_twPosRange(), _twPosSeason(), _twPosMargin()]);
+  _twPos = {
+    rng: r[0].status === 'fulfilled' ? r[0].value : null,
+    season: r[1].status === 'fulfilled' ? r[1].value : null,
+    mgn: r[2].status === 'fulfilled' ? r[2].value : null
+  };
+  try { localStorage.setItem(TWPOS_LS, JSON.stringify({ day: day, v: _twPos })); } catch (e) {}
+  renderTwPos();
+}
+
+function renderTwPos() {
+  var el = document.getElementById('twpos-bar');
+  if (!el || !_twPos) return;
+  var cells = [];
+  var cell = function (nm, sub, val, cls, tip) {
+    return '<div class="fred-cell"' + (tip ? ' title="' + tip + '"' : '') + '>'
+      + '<span class="fred-name">' + nm + '<span class="fred-month">' + (sub || '') + '</span></span>'
+      + '<span class="fred-val ' + (cls || '') + '">' + val + '</span></div>';
+  };
+  var g = _twPos.rng;
+  if (g) {
+    var dHi = (g.last.c / g.hi.c - 1) * 100;
+    var dLo = (g.last.c / g.lo.c - 1) * 100;
+    var back = (g.hi.c > g.lo.c) ? (g.last.c - g.lo.c) / (g.hi.c - g.lo.c) * 100 : null;
+    var dd = (g.lo.c / g.hi.c - 1) * 100;
+    cells.push(cell('\u8ddd\u4e00\u5e74\u9ad8\u9ede', g.hi.d.slice(5) + ' ' + _twPosNum(g.hi.c),
+      _twPosPct(dHi), dHi < 0 ? 'down' : 'up',
+      '\u6700\u65b0 ' + _twPosNum(g.last.c) + '\uff0c\u4e00\u5e74\u9ad8 ' + _twPosNum(g.hi.c)));
+    cells.push(cell('\u81ea\u4f4e\u9ede\u53cd\u5f48', g.lo.d.slice(5) + ' ' + _twPosNum(g.lo.c),
+      _twPosPct(dLo), dLo > 0 ? 'up' : 'down',
+      '\u9ad8\u9ede\u4e4b\u5f8c\u7684\u6700\u4f4e\u6536\u76e4\u3002\u6700\u5927\u56de\u6a94 ' + _twPosPct(dd)));
+    cells.push(cell('\u6536\u5fa9\u6bd4\u4f8b', '\u8dcc\u5e45\u88e1\u88dc\u56de\u4e86\u591a\u5c11',
+      back == null ? '\u2014' : back.toFixed(0) + '%', '',
+      '\uff08\u73fe\u50f9 \u2212 \u6700\u4f4e\uff09\u00f7\uff08\u6700\u9ad8 \u2212 \u6700\u4f4e\uff09\u3002100% \u4ee3\u8868\u56de\u5230\u9ad8\u9ede'));
+  }
+  var ss = _twPos.season;
+  if (ss && ss.length) {
+    var nowM = new Date(Date.now() + 8 * 3600000).getUTCMonth() + 1;
+    var cur = ss.filter(function (x) { return x.m === nowM; })[0];
+    if (cur) {
+      var rate = cur.up / cur.n * 100;
+      // 排名：這個月在十二個月裡的位置
+      var rank = ss.slice().sort(function (a, b) { return (b.up / b.n) - (a.up / a.n); })
+        .findIndex(function (x) { return x.m === nowM; }) + 1;
+      cells.push(cell(nowM + ' \u6708\u4e0a\u6f32\u6a5f\u7387', cur.n + ' \u5e74\u4e2d ' + cur.up + ' \u6b21',
+        rate.toFixed(0) + '%', rate >= 60 ? 'up' : (rate <= 45 ? 'down' : ''),
+        '\u5168\u5e74\u7b2c ' + rank + ' \u5f37\u3002\u4e2d\u4f4d\u5831\u916c ' + _twPosPct(cur.med)
+        + '\u3002\u8cc7\u6599\uff1a\u52a0\u6b0a\u6307\u6578 25 \u5e74\u6708\u7dda\uff0c\u81ea\u5df1\u7b97\u7684'));
+    }
+  }
+  var mg = _twPos.mgn;
+  if (mg) {
+    cells.push(cell('\u5927\u76e4\u878d\u8cc7\u9918\u984d', _twPosNum(mg.cur / 10000) + ' \u842c\u5f35',
+      _twPosPct(mg.chg), mg.chg > 0 ? 'up' : (mg.chg < 0 ? 'down' : ''),
+      mg.from.slice(4, 6) + '/' + mg.from.slice(6) + ' \u7684 ' + _twPosNum(mg.prev) + ' \u5f35 \u2192 '
+      + mg.to.slice(4, 6) + '/' + mg.to.slice(6) + ' \u7684 ' + _twPosNum(mg.cur) + ' \u5f35\u3002'
+      + '\u4f86\u6e90\uff1a\u8b49\u4ea4\u6240 MI_MARGN \u6309\u65e5\u52a0\u7e3d\uff08\u8207\u7c4c\u78bc\u8a55\u4f30\u9801\u540c\u4e00\u4efd\u5feb\u53d6\uff09'));
+  }
+  if (!cells.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="sub-title">\u5927\u76e4\u4f4d\u7f6e\u8207\u7c4c\u78bc</div>'
+    + '<div class="fred-row">' + cells.join('') + '</div>';
+}
+
 // ── 訊號一致性檢查 ──
 // 只做「方向比對」：陳述哪兩項資料彼此同向或相反，不推論股債會漲會跌。
 // 為何不給趨勢結論：同一組資料在軟著陸與衰退情境下市場解讀相反，程式無從分辨，
@@ -1417,4 +1571,5 @@ async function copyNewsPrompt() {
 
 async function startNews() {
   loadNews();
+  loadTwPos(false).catch(function (e) { hush('news', e); });
 }
