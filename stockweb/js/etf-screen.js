@@ -1039,41 +1039,55 @@ function esMetricsFor(code) {
   r.fee = (mg != null && cu != null) ? mg + cu : null;
   return r;
 }
-var _esWatchBusy = false;
-async function esWatchPrep(codes) {
-  if (_esWatchBusy) return;
-  _esWatchBusy = true;
+var _esWatchBusy = {};
+// 補齊指標欄要的四份資料，每一份到位就重畫一次（先出現的欄不必等最慢的那一份）。
+// key 讓三張表各自有自己的闥：債券頁籤在補的時候，主動式頁籤不該被擋掉。
+async function esMetricsPrep(key, codes, render) {
+  if (_esWatchBusy[key]) return;
+  _esWatchBusy[key] = true;
+  render = render || function () {};
   try {
     await _esGetBase(false);
-    if (typeof renderWatch === 'function') renderWatch();
+    render();
     try { await _esLoadFreq(); } catch (e) { hush('etf-screen', e); }
     var etfs = (codes || []).map(esMetricsFor).filter(Boolean);
     if (!etfs.length) return;
-    if (typeof divMetaLoad === 'function') divMetaLoad(etfs.map(function (r) { return r.code; })).then(function () { if (typeof renderWatch === 'function') renderWatch(); }).catch(function (e) { hush('etf-screen', e); });
+    if (typeof divMetaLoad === 'function') divMetaLoad(etfs.map(function (r) { return r.code; })).then(render).catch(function (e) { hush('etf-screen', e); });
     // 保守年配與配息走向要配息頻率與歷次金額那幾份資料檔，
     // 沒載的話兩欄全是 ✕（跟股利估算那邊踩過同一個坑）
-    _esLoadFreq().then(function () { if (typeof renderWatch === 'function') renderWatch(); }).catch(function (e) { hush('etf-screen', e); });
+    _esLoadFreq().then(render).catch(function (e) { hush('etf-screen', e); });
     await _esEnsureFill(etfs);
-    if (typeof renderWatch === 'function') renderWatch();
+    render();
     // 排名要跟評比頁一致，就得把所屬分類的前 30 名補齊
     await esRankPrep(etfs.map(function (r) { return r.code; }));
-    if (typeof renderWatch === 'function') renderWatch();
-  } catch (e) { console.warn('[關注清單 ETF 指標]', e); }
-  finally { _esWatchBusy = false; }
+    render();
+  } catch (e) { console.warn('[ETF 指標欄]', e); }
+  finally { _esWatchBusy[key] = false; }
+}
+function esWatchPrep(codes) {
+  return esMetricsPrep('list', codes, function () { if (typeof renderWatch === 'function') renderWatch(); });
 }
 var ES_WCOLS = ['rank', 'score', 'y1', 'yEst', 'yCons', 'trend', 'y12', 'fill', 'fillDays',
                 'g6', 'g12', 'tr6', 'tr12', 'size', 'fee', 'prem'];
-function esWatchHeads() {
-  return ES_WCOLS.map(function (k) {
+// 債券 ETF 與主動式 ETF 兩張表用的子集：少了「單次配、預估年配」。
+// 那兩個頁籤本來就各自算過這兩個數字（債券還有「僅 1 筆紀錄推定為月配」那條規則），
+// 再放一份會在同一列給出兩個不同的百分比——剛公告配息那幾天最明顯。
+var ES_WCOLS2 = ['rank', 'score', 'yCons', 'trend', 'y12', 'fill', 'fillDays',
+                 'g6', 'g12', 'tr6', 'tr12', 'size', 'fee', 'prem'];
+function esWatchHeads(cols, sortState, sortFn) {
+  cols = cols || ES_WCOLS;
+  if (sortState == null) sortState = (typeof _wtSort !== 'undefined') ? _wtSort : '';
+  sortFn = sortFn || 'wtSortCol';
+  return cols.map(function (k) {
     var c = ES_COLS.filter(function (x) { return x[0] === k; })[0];
     var label = k === 'score' ? '類別排名' : (k === 'rank' ? '評比排名' : c[1]);
     var tip = k === 'score' ? '在同類 ETF 中的名次（一年含息、近12月殖利率、一年價格、規模加權；上市未滿一年不排名）'
       : (k === 'rank' ? '前面那個字是配息頻率：月、雙（雙月）、季、半（半年）、年、無（查不到）。&#10;'
           + '數字是 ETF 評比表上的名次，與那一頁的「#」同一個。&#10;只有同類前 30 名有，其餘為「—」。&#10;'
           + '與左邊「類別排名」的差別：那一欄是在同類全部 ETF 裡的名次，每一檔都有' : c[3]);
-    var on = typeof _wtSort !== 'undefined' && _wtSort.replace(/(Asc|Desc)$/, '') === k;
-    var asc = on && /Asc$/.test(_wtSort);
-    return '<th class="num sort-th' + (on ? ' sorted' : '') + '" onclick="wtSortCol(\'' + k + '\')"' + (tip ? ' title="' + tip + '"' : '') + '>' + label +
+    var on = sortState.replace(/(Asc|Desc)$/, '') === k;
+    var asc = on && /Asc$/.test(sortState);
+    return '<th class="num sort-th' + (on ? ' sorted' : '') + '" onclick="' + sortFn + '(\'' + k + '\')"' + (tip ? ' title="' + tip + '"' : '') + '>' + label +
       '<span class="sort-ind">' + (on ? (asc ? '▲' : '▼') : '↕') + '</span></th>';
   }).join('');
 }
@@ -1095,12 +1109,13 @@ function esWatchSortVal(code, key) {
   }
   return r[key] == null ? null : r[key];
 }
-function esWatchCells(code) {
+function esWatchCells(code, cols) {
+  cols = cols || ES_WCOLS;
   var r = esMetricsFor(code);
   var dim = function (t) { return '<span class="dm-dim">' + t + '</span>'; };
   if (!r) {
     var loading = !_esBase && (typeof isEtfCode === 'function') && isEtfCode(code);
-    return ES_WCOLS.map(function () { return '<td class="num">' + (loading ? '<span class="const-spin"></span>' : dim('—')) + '</td>'; }).join('');
+    return cols.map(function () { return '<td class="num">' + (loading ? '<span class="const-spin"></span>' : dim('—')) + '</td>'; }).join('');
   }
   var sg = function (v) { if (v == null) return dim('—'); var cls = v > 0 ? 'up' : (v < 0 ? 'down' : ''); return '<span class="' + cls + '">' + (v > 0 ? '+' : '') + v.toFixed(2) + '%</span>'; };
   var pct = function (v) { return v == null ? dim('—') : v.toFixed(2) + '%'; };
@@ -1139,7 +1154,7 @@ function esWatchCells(code) {
     fee: r.fee == null ? dim('—') : r.fee.toFixed(2) + '%',
     prem: sg(r.prem)
   };
-  return ES_WCOLS.map(function (k) { return '<td class="num es-wm">' + cell[k] + '</td>'; }).join('');
+  return cols.map(function (k) { return '<td class="num es-wm">' + cell[k] + '</td>'; }).join('');
 }
 
 // ══════════ 展開明細（ETF 評比與關注股票共用）══════════

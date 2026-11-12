@@ -23,7 +23,6 @@ var _wtTab = 'list';     // list | bond | act | screen | new
 var _wtBond = null;      // 債券篩選結果
 var _wtAct = null;       // 主動式報酬結果
 var _wtBusy = false;
-var _wtPick = {};        // 待加入勾選：code -> true
 // 關注清單排序（存本機，重新整理後維持）；'' ＝加入順序
 var WT_SORT_LS = 'watch_sort_v1';
 var _wtSort = (function () { try { return localStorage.getItem(WT_SORT_LS) || ''; } catch (e) { return ''; } })();
@@ -416,9 +415,22 @@ function wtShowTab(tab) {
   document.getElementById('wt-new-wrap').style.display = (tab === 'new') ? '' : 'none';
   if (tab === 'new') { if (typeof startEtfNew === 'function') startEtfNew(false); }
   else if (tab === 'screen') { if (typeof startEtfScreen === 'function') { renderEtfScreen(); startEtfScreen(false); } }
-  else if (tab === 'bond') { _wtBondLoad(); renderWatchBond(); wtBondRefreshPx(); }
-  else if (tab === 'act') { _wtActLoadCache(); renderWatchAct(); wtActRefreshPx(); }
+  else if (tab === 'bond') { _wtBondLoad(); renderWatchBond(); wtBondRefreshPx(); _wtMetricsPrep('bond'); }
+  else if (tab === 'act') { _wtActLoadCache(); renderWatchAct(); wtActRefreshPx(); _wtMetricsPrep('act'); }
   else renderWatch();
+}
+
+// 指標欄的背景補資料（排名、填息、內扣、配息頻率）。
+// 填息要逐檔抓日線，主動式 36 檔第一次進頁約一分鐘，之後當日快取。
+function _wtMetricsPrep(tab) {
+  if (typeof esMetricsPrep !== 'function') return;
+  var codes = [];
+  if (tab === 'bond') { var d = _wtBondLoad(); codes = d && d.rows ? d.rows.map(function (r) { return r.code; }) : []; }
+  else { codes = (_wtAct && _wtAct.rows) ? _wtAct.rows.map(function (r) { return r.code; }) : []; }
+  if (!codes.length) return;
+  esMetricsPrep(tab, codes, function () {
+    if (tab === 'bond') renderWatchBond(); else renderWatchAct();
+  });
 }
 
 // ── 候選池（依代號末碼分類；債券再以名稱鎖定高息類，避免掃描投等債/公債浪費配額）──
@@ -530,6 +542,7 @@ async function wtScanBond() {
   try { localStorage.setItem(WT_BOND_LS, JSON.stringify(_wtBond)); } catch (e) {}
   _wtBusy = false;
   renderWatchBond();
+  _wtMetricsPrep('bond');
 }
 
 // ── 主動式 ETF 報酬（Yahoo 日K；每日快取）──
@@ -675,27 +688,10 @@ async function wtLoadAct(force) {
   try { localStorage.setItem(WT_ACT_LS, JSON.stringify(_wtAct)); } catch (e) {}
   _wtBusy = false;
   renderWatchAct();
+  _wtMetricsPrep('act');
 }
 
-// ── 勾選與批次加入 ──
-function wtPick(code, el) { if (el.checked) _wtPick[code] = true; else delete _wtPick[code]; _wtPickInfo(); }
-function _wtPickInfo() {
-  var n = Object.keys(_wtPick).length, el = document.getElementById('wt-pick-info');
-  if (el) el.textContent = n ? '已勾選 ' + n + ' 檔' : '';
-}
-async function wtAddPicked() {
-  var picks = Object.keys(_wtPick), list = _wtLoad(), added = 0, full = false;
-  picks.forEach(function (c) {
-    if (list.indexOf(c) >= 0) return;
-    if (list.length >= WT_MAX) { full = true; return; }
-    list.push(c); added++;
-  });
-  _wtSave(); _wtPick = {};
-  _wtNote = '已加入 ' + added + ' 檔' + (full ? '（達上限 ' + WT_MAX + ' 檔，其餘未加入）' : '');
-  wtShowTab('list');
-  await startWatch();
-}
-
+// 勾選與批次加入已移除：兩個頁籤改用 ±關注，一檔一檔點。
 // 時間戳顯示：快取存的是 toISOString()，那是 UTC，直接切字串會比台灣時間少 8 小時
 // （實測 2026-10-31 01:42 存檔，畫面寫成 2026-10-30 17:42）。顯示前加回時差。
 function _wtAtTw(iso) {
@@ -710,12 +706,18 @@ function _wtLoadSort(ls, def, re) {
   try { var v = localStorage.getItem(ls); if (re.test(v || '')) return v; } catch (e) {}
   return def;
 }
-var _wtBondSort = _wtLoadSort(WT_BSORT_LS, 'yYDesc', /^(code|px|amount|mY|yY|exDate|payDate)(Asc|Desc)$/);
+// 指標欄的值不在列物件裡（它來自評比那份當日資料），排序時要另外去問
+var WT_MKEY = /^(rank|score|yCons|trend|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)$/;
+var _wtBondSort = _wtLoadSort(WT_BSORT_LS, 'yYDesc',
+  /^(code|px|amount|mY|yY|exDate|payDate|rank|score|yCons|trend|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/);
 function _wtNextSort(cur, k) { return cur === k + 'Desc' ? k + 'Asc' : k + 'Desc'; }
 function _wtSortRows(rows, state) {
   var k = state.replace(/(Asc|Desc)$/, ''), asc = /Asc$/.test(state);
+  var get = WT_MKEY.test(k) && typeof esWatchSortVal === 'function'
+    ? function (r) { return esWatchSortVal(r.code, k); }
+    : function (r) { return r[k]; };
   return rows.slice().sort(function (a, b) {
-    var x = a[k], y = b[k];
+    var x = get(a), y = get(b);
     if (x == null && y == null) return 0;
     if (x == null) return 1;                                  // 缺值一律墊底
     if (y == null) return -1;
@@ -728,6 +730,38 @@ function _wtSortTh(state, fn, k, label, cls, tip) {
   return '<th class="' + (cls ? cls + ' ' : '') + 'sort-th' + (on ? ' sorted' : '') + '" onclick="' + fn + '(\'' + k + '\')"' +
     (tip ? ' title="' + tip + '"' : '') + '>' + label + '<span class="sort-ind">' + (on ? (asc ? '▲' : '▼') : '↕') + '</span></th>';
 }
+// ±關注：與 ETF 評比同一顆按鈕、同一句話。
+// 按鈕上的字是「按下去會發生什麼」，不是「現在是什麼狀態」。
+var _wtWmsg = '';
+function wtWatchBtn(code) {
+  var on = _wtLoad().indexOf(code) >= 0;
+  return '<button class="swap-mini es-wbtn ' + (on ? 'on' : 'off') + '" title="'
+    + (on ? '取消關注' : '加入關注清單') + '" onclick="wtWatchToggle(\'' + code + '\')">'
+    + (on ? '－ 關注' : '＋ 關注') + '</button>';
+}
+function wtWatchToggle(code) {
+  code = String(code);
+  var list = _wtLoad(), i = list.indexOf(code);
+  if (i >= 0) {
+    list.splice(i, 1); _wtSave(); _wtUnsub(code);
+    _wtWmsg = code + ' 已移出關注清單';
+  } else if (list.length >= WT_MAX) {
+    _wtWmsg = '關注清單已達上限 ' + WT_MAX + ' 檔，請先到「關注股票」移除';
+  } else {
+    list.push(code); _wtSave();
+    _wtWmsg = code + ' 已加入關注清單';
+    if (typeof startWatch === 'function') startWatch().catch(function (e) { hush('watch', e); });
+  }
+  _wtReRender();
+  setTimeout(function () { if (_wtWmsg) { _wtWmsg = ''; _wtReRender(); } }, 4000);
+}
+function _wtReRender() {
+  if (_wtTab === 'bond') renderWatchBond();
+  else if (_wtTab === 'act') renderWatchAct();
+  else renderWatch();
+}
+function _wtWmsgHtml() { return _wtWmsg ? '<span class="wt-dim">' + _wtWmsg + '</span>' : ''; }
+
 function wtBondSort(k) {
   _wtBondSort = _wtNextSort(_wtBondSort, k);
   try { localStorage.setItem(WT_BSORT_LS, _wtBondSort); } catch (e) {}
@@ -735,41 +769,39 @@ function wtBondSort(k) {
 }
 
 // ── 渲染：債券 ETF ──
+// 欄位：±關注｜代號｜名稱｜現價｜每股金額｜月配｜預估年配｜除息｜發放 ＋ 14 欄評比指標。
+// 除息、發放只留月日：年份在這張表上沒有作用，兩欄各省 30px，那是能不能不捲動的差別。
 function renderWatchBond() {
   var wrap = document.getElementById('wt-bond-wrap');
   if (!wrap) return;
   var th = _wtBondTh(), d = _wtBondLoad();
-  var have = {}; _wtLoad().forEach(function (c) { have[c] = true; });
   var h = '<div class="wt-bar">年殖利率 ≥ <input id="wt-bond-th" class="sbl-inp" type="number" min="0" step="0.5" value="' + th +
     '" onchange="wtBondThChanged(this)"> %' +
     '<button class="btn-query" onclick="wtScanBond()">↻ 重新篩選</button>' +
     '<span id="wt-bond-info" class="wt-dim">' +
       (d ? '上次篩選 ' + _wtAtTw(d.at) + '（門檻 ' + d.th + '%｜掃 ' + d.scanned + ' 檔、取得 ' + d.got + ' 檔、通過 ' + d.rows.length + ' 檔）'
          : '尚未篩選，按「重新篩選」開始（約 ' + _wtBondPool().length + ' 檔，數秒）') + '</span>' +
-    '<span id="wt-pick-info" class="wt-dim"></span>' +
-    '<button class="btn-query" onclick="wtAddPicked()">＋ 加入關注</button></div>';
+    _wtWmsgHtml() + '</div>';
 
   if (!d || !d.rows.length) {
     h += '<div class="modal-loading">' + (d ? '沒有年殖利率 ≥ ' + d.th + '% 的標的，可調低門檻後重新篩選。' : '尚未篩選。') + '</div>';
     wrap.innerHTML = h; return;
   }
-  // 欄寬改成固定：這張表只有 9 欄卻要擐滿 1644px，瀁覽器按內容按比例分配
-  // 剩餘空間，結果名稱 307px、現價 130px、除息日 205px，寬窄不一。
-  // 六個資料欄給同一個寬度，剩下的全部留給名稱（它是唯一長短差很多的文字欄）。
-  h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table wt-bond-t">'
-    + '<colgroup><col class="bc-chk"><col class="bc-code"><col class="bc-name">'
-    + '<col class="bc-d"><col class="bc-d"><col class="bc-d"><col class="bc-d"><col class="bc-d"><col class="bc-d"></colgroup>'
-    + '<thead><tr>' +
-    '<th></th>' + _wtSortTh(_wtBondSort, 'wtBondSort', 'code', '代號') + '<th>名稱</th>' +
-    _wtSortTh(_wtBondSort, 'wtBondSort', 'px', '現價', 'num') + _wtSortTh(_wtBondSort, 'wtBondSort', 'amount', '每股金額', 'num') +
-    _wtSortTh(_wtBondSort, 'wtBondSort', 'mY', '月配', 'num', '月殖利率：每股金額 ÷ 現價') + _wtSortTh(_wtBondSort, 'wtBondSort', 'yY', '預估年配', 'num', '預估年殖利率：最近一次配息 × 配息期數 ÷ 現價') +
-    _wtSortTh(_wtBondSort, 'wtBondSort', 'exDate', '除息日') + _wtSortTh(_wtBondSort, 'wtBondSort', 'payDate', '發放日') +
+  var mh = (typeof esWatchHeads === 'function') ? esWatchHeads(ES_WCOLS2, _wtBondSort, 'wtBondSort') : '';
+  var ncol = 9 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);
+  var sh = function (k, label, cls, tip) { return _wtSortTh(_wtBondSort, 'wtBondSort', k, label, cls, tip); };
+  h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table wt-bond-t"><thead><tr>' +
+    '<th>關注</th>' + sh('code', '代號') + '<th>名稱</th>' +
+    sh('px', '現價', 'num') + sh('amount', '每股金額', 'num') +
+    sh('mY', '月配', 'num', '月殖利率：每股金額 ÷ 現價') +
+    sh('yY', '預估年配', 'num', '預估年殖利率：最近一次配息 × 配息期數 ÷ 現價') +
+    sh('exDate', '除息') + sh('payDate', '發放') + mh +
     '</tr></thead><tbody>';
+  var md = function (iso) { return iso ? '<span title="' + iso + '">' + iso.slice(5).replace('-', '/') + '</span>' : '—'; };
   _wtSortRows(d.rows, _wtBondSort).forEach(function (r) {
     var open = _wtBondOpen === r.code;
     h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="wtBondRowClick(event,\'' + r.code + '\')">' +
-      '<td>' + (have[r.code] ? '<span class="wt-dim">已關注</span>'
-        : '<input type="checkbox"' + (_wtPick[r.code] ? ' checked' : '') + ' onchange="wtPick(\'' + r.code + '\',this)">') + '</td>' +
+      '<td class="es-wcell">' + wtWatchBtn(r.code) + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-name">' + r.name + '</td>' +
       (function () { var pc = wtPxCell(r.code, r.px);
@@ -779,15 +811,20 @@ function renderWatchBond() {
       '<td class="num swap-yield" title="' + (r.guessed ? '僅 1 筆配息紀錄，頻率推定為月配（新上市債券 ETF 慣例），待累積紀錄後自動修正'
         : '依 ' + r.n + ' 筆除息間隔推得年 ' + r.freq + ' 次') + '"><b>' + r.yY.toFixed(2) + '%</b>' +
         (r.guessed ? '<span class="wt-guess"> *推定</span>' : '') + '</td>' +
-      '<td>' + r.exDate + '</td>' +
-      '<td>' + (r.payDate || '—') + '</td>' +
+      '<td>' + md(r.exDate) + '</td>' +
+      '<td>' + md(r.payDate) + '</td>' +
+      ((typeof esWatchCells === 'function') ? esWatchCells(r.code, ES_WCOLS2) : '') +
     '</tr>';
-    if (open) h += '<tr class="es-drow"><td colspan="9" class="es-dslot" data-code="' + r.code + '"></td></tr>';
+    if (open) h += '<tr class="es-drow"><td colspan="' + ncol + '" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
     '<div class="detail-note"><dl>' +
     '<dt>預估年殖利率</dt><dd><code>最近一次配息 × 配息期數 ÷ 現價</code>，期數由歷次除息間隔推得。' +
     '預設依此由高至低排序，點欄位可改，排序會記住。</dd>' +
+    '<dt>後面 14 欄</dt><dd>與「ETF 評比」「關注股票」同一份當日資料、同一套算法，欄位定義見評比頁說明。' +
+    '這裡不重複放評比頁的「單次配、預估年配」：左邊的「月配、預估年配」是本頁自己掃出來的，' +
+    '含「僅 1 筆紀錄推定為月配」那條規則，兩套並列會在剛公告配息時各說各話。</dd>' +
+    '<dt>除息、發放</dt><dd>只顯示月日，滑過去看完整日期。</dd>' +
     '<dt>掃描範圍</dt><dd>末碼 D（主動式債券）全部，加上末碼 B 且名稱含「非投／高收／高息／優先／新興」者，共 ' +
     _wtBondPool().length + ' 檔。被動式投等債與公債檔數多、殖利率普遍偏低，不掃以節省配額。</dd>' +
     '<dt>標「*推定」</dt><dd>只有 1 筆配息紀錄（新上市），依債券 ETF 慣例推定為月配，累積第 2 筆後自動改用實際間隔。</dd>' +
@@ -798,7 +835,6 @@ function renderWatchBond() {
   wrap.innerHTML = h;
   if (typeof wtFitWrap === 'function') wtFitWrap();   // 先定表格要不要捲動，明細才量得到正確的可視寬
   if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
-  _wtPickInfo();
 }
 var _wtBondOpen = null;   // 債券 ETF 頁籤：目前展開明細的代號（一次一列）
 function wtBondRowClick(ev, code) {
@@ -808,17 +844,20 @@ function wtBondRowClick(ev, code) {
 }
 
 // ── 渲染：主動式 ETF ──
-var _wtActSort = _wtLoadSort(WT_ASORT_LS, 'rAllDesc', /^(code|px|y1|yEst|r1|r3|rAll|days)(Asc|Desc)$/);
+var _wtActSort = _wtLoadSort(WT_ASORT_LS, 'rAllDesc',
+  /^(code|px|y1|yEst|r1|r3|rAll|days|rank|score|yCons|trend|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/);
 function wtActSort(k) {
   _wtActSort = _wtNextSort(_wtActSort, k);
   try { localStorage.setItem(WT_ASORT_LS, _wtActSort); } catch (e) {}
   renderWatchAct();
 }
+// 欄位：±關注｜代號（含成份股）｜現價｜單次配｜預估年配｜近1月｜近3月｜成立以來｜天數 ＋ 14 欄評比指標。
+// 名稱欄拿掉：它是這張表唯一長短差很多的文字欄，佔 112px，留著就一定會出現橫向捲軸。
+// 名稱在滑過代號、展開明細時都看得到。成份股改成代號後面一顆小按鈕，不再自己佔一欄。
 function renderWatchAct() {
   var wrap = document.getElementById('wt-act-wrap');
   if (!wrap) return;
   var d = _wtAct;
-  var have = {}; _wtLoad().forEach(function (c) { have[c] = true; });
   var h = '<div class="wt-bar"><button class="btn-query" onclick="wtLoadAct(true)">↻ 重新計算</button>' +
     '<span id="wt-act-info" class="wt-dim">' +
       (d ? d.rows.length + ' 檔（上市上櫃全數）'
@@ -828,8 +867,7 @@ function renderWatchAct() {
                })()
              + '｜更新 ' + _wtAtTw(d.at) + '（每日快取）'
          : '尚未載入，按「重新計算」開始（' + _wtActPool().length + ' 檔，約 10 秒）') + '</span>' +
-    '<span id="wt-pick-info" class="wt-dim"></span>' +
-    '<button class="btn-query" onclick="wtAddPicked()">＋ 加入關注</button></div>';
+    _wtWmsgHtml() + '</div>';
   if (!d || !d.rows.length) { h += '<div class="modal-loading">尚未載入報酬資料。</div>'; wrap.innerHTML = h; return; }
 
   var sh = function (k, label, cls, tip) { return _wtSortTh(_wtActSort, 'wtActSort', k, label, cls == null ? 'num' : cls, tip); };
@@ -842,27 +880,29 @@ function renderWatchAct() {
   var pctR = function (v, r, tip) {
     return v == null ? na(r, tip) : '<span class="' + colorClass(v) + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%</span>';
   };
-  var pct = function (v) { return v == null ? '<span class="flat">—</span>' : '<span class="' + colorClass(v) + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%</span>'; };
   // 殖利率不套漲跌色：它不是漲跌，正負沒有意義，與 ETF 評比、新上市 ETF 的呈現一致
   var yld = function (v) { return v == null ? '<span class="flat">—</span>' : v.toFixed(2) + '%'; };
-  // 沒有配息紀錄的那幾檔要說明是「查不到」，不是「配 0」
+  // 沒有配息紀錄的那幾檔要說明是「查不到」，不是「配 0」。
+  // 每股金額本來獨立顯示在「單次配」裡，欄位擠不下之後移進這句提示。
   var dtip = function (r) {
     if (r.amount == null) return ' title="查無配息紀錄（未配息或資料未揭露）"';
     return ' title="最近一次 ' + r.exDate + ' 每股 ' + r.amount + ' 元，年 ' + r.freq + ' 次"';
   };
-  h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
-    '<th></th>' + sh('code', '代號', '') + '<th>名稱</th>' + sh('px', '現價') +
-    sh('y1', '單次配', 'num', '單次殖利率：最近一次配息 ÷ 現價') +
+  var mh = (typeof esWatchHeads === 'function') ? esWatchHeads(ES_WCOLS2, _wtActSort, 'wtActSort') : '';
+  var ncol = 9 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);
+  h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table wt-act-t"><thead><tr>' +
+    '<th>關注</th>' + sh('code', '代號', '') + sh('px', '現價') +
+    sh('y1', '單次配', 'num', '單次殖利率：最近一次配息 ÷ 現價。滑過數字看除息日與每股金額') +
     sh('yEst', '預估年配', 'num', '預估年殖利率：最近一次配息 × 年配息次數 ÷ 現價') +
     sh('r1', '近1月') + sh('r3', '近3月') + sh('rAll', '成立以來') +
-    sh('days', '資料天數', 'num', 'Yahoo 可取得的交易日數，越短代表上市越新') + '</tr></thead><tbody>';
+    sh('days', '天數', 'num', 'Yahoo 可取得的交易日數，越短代表上市越新') + mh + '</tr></thead><tbody>';
   _wtSortRows(d.rows, _wtActSort).forEach(function (r) {
     var open = _wtActOpen === r.code;
     h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="wtActRowClick(event,\'' + r.code + '\')">' +
-      '<td>' + (have[r.code] ? '<span class="wt-dim">已關注</span>'
-        : '<input type="checkbox"' + (_wtPick[r.code] ? ' checked' : '') + ' onchange="wtPick(\'' + r.code + '\',this)">') + '</td>' +
-      '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
-      '<td class="inv-name">' + r.name + '</td>' +
+      '<td class="es-wcell">' + wtWatchBtn(r.code) + '</td>' +
+      '<td class="inv-code"><span class="code-link" title="' + (r.name ? r.name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖')
+        + '" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span>'
+        + '<button class="swap-mini wt-cst" title="看成份股" onclick="openConstituents(\'' + r.code + '\')">份</button></td>' +
       (function () { var pc = wtPxCell(r.code, r.px);
         return '<td class="' + pc.cls + '">'
           + (pc.txt || gapX('券商快照與 Yahoo 都取不到價')) + '</td>'; })() +
@@ -873,16 +913,22 @@ function renderWatchAct() {
       '<td class="num"><b>' + pctR(r.rAll, r, '沒有可用的起點收盤') + '</b></td>' +
       '<td class="num' + (r.days && r.days < 60 ? ' swap-warn' : '') + '">'
         + (r.days ? r.days : gapX('Yahoo 日K 整檔抽不到')) + '</td>' +
+      ((typeof esWatchCells === 'function') ? esWatchCells(r.code, ES_WCOLS2) : '') +
     '</tr>';
-    if (open) h += '<tr class="es-drow"><td colspan="10" class="es-dslot" data-code="' + r.code + '"></td></tr>';
+    if (open) h += '<tr class="es-drow"><td colspan="' + ncol + '" class="es-dslot" data-code="' + r.code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
     '<div class="detail-note"><dl>' +
     '<dt>現價</dt><dd>券商即時快照，與關注清單、債券 ETF、ETF 評比同一個來源，盤中回到本頁籤會自動刷新。' +
     'Yahoo 當天那根日 K 的收盤常常是空值，只靠它會慢一個交易日。</dd>' +
+    '<dt>名稱與成份股</dt><dd>名稱欄拿掉了，它是這張表唯一長短差很多的文字欄，留著就會出現橫向捲軸。' +
+    '滑過代號看得到名稱，展開明細也有。代號後面的〔份〕是成份股。</dd>' +
     '<dt>單次配／預估年配</dt><dd>最近一次配息 ÷ 現價，以及再乘上年配息次數。欄位定義與 ETF 評比、新上市 ETF 相同。' +
     '滑過數字可看除息日與每股金額。顯示「—」代表查無配息紀錄（未配息或資料未揭露）。</dd>' +
     '<dt>報酬</dt><dd>起點用 Yahoo 日收盤價，終點用現價。主動式 ETF 多未配息或配息少，<code>價格報酬 ≈ 總報酬</code>。</dd>' +
+    '<dt>後面 14 欄</dt><dd>與「ETF 評比」「關注股票」同一份當日資料、同一套算法。' +
+    '這批 ETF 多為今年上市，一年期的欄位（評比排名、類別排名、一年價格、一年含息）大半會是空的——' +
+    '那是數字不存在，不是沒抓到。填息率與平均填息要有除息紀錄才算得出來。</dd>' +
     '<dt>空格的兩種意思</dt><dd><span class="na-gap">✕</span> 是<b>資料源沒給</b>' +
       '（日K 整檔抽不到），按「重新計算」有機會會有；' +
       '<span class="flat">—</span> 是<b>資料拿到了但算不出來</b>（天數不足、查無配息紀錄），' +
@@ -890,7 +936,7 @@ function renderWatchAct() {
     '<dt>列入範圍</dt><dd>上市與上櫃的主動式股票型 ETF（代號結尾 A）<b>全數列入</b>，' +
       '抽不到資料的也列，欄位放「—」。這樣才分辨得出「沒這檔」與「這檔沒資料」。' +
       '主動式債券 ETF（結尾 D）在「債券 ETF」頁籤，不重複列在這裡。</dd>' +
-    '<dt>務必同時看「資料天數」</dt><dd>多為新上市，49 天的報酬與 194 天的報酬不可直接比較。' +
+    '<dt>務必同時看「天數」</dt><dd>多為新上市，49 天的報酬與 194 天的報酬不可直接比較。' +
     '天數不足者近1月／近3月顯示「—」。</dd>' +
     '<dt>排序與快取</dt><dd>預設依成立以來由高至低，點欄位可改、再點反向，排序會記住。' +
     '每日快取，按「重新計算」強制更新。點列展開配息走勢與近 2 年紀錄。</dd>' +
@@ -900,7 +946,6 @@ function renderWatchAct() {
   wrap.innerHTML = h;
   if (typeof wtFitWrap === 'function') wtFitWrap();   // 先定表格要不要捲動，明細才量得到正確的可視寬
   if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
-  _wtPickInfo();
 }
 var _wtActOpen = null;   // 主動式 ETF 頁籤：目前展開明細的代號（一次一列）
 function wtActRowClick(ev, code) {
