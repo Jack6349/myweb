@@ -283,6 +283,25 @@ function wtRowClick(ev, code) {
   wtToggleDetail(code);
 }
 
+// 關注股票各頁籤共用的「現價」儲存格：依當日漲跌上紅綠。
+//
+// 漲跌用券商合約的參考價（reference，即前一日收盤）算，與關注清單那一頁
+// 本來就在用的是同一個來源，四個頁籤不會各說各話。
+// 拿不到參考價就不上色（保持原色），不猜。
+function wtChgPct(code, px) {
+  var c = (typeof _contracts !== 'undefined' && _contracts[String(code)]) || null;
+  if (px > 0 && c && c.reference > 0) return (px - c.reference) / c.reference * 100;
+  // 沒有合約參考價時，用快照當時帶回來的漲跌幅
+  var r = (typeof _rows !== 'undefined' && _rows[String(code)]) || null;
+  return (r && r.chgPct != null) ? r.chgPct : null;
+}
+function wtPxCell(code, px, extraCls) {
+  var cls = 'num' + (extraCls ? ' ' + extraCls : '');
+  if (!(px > 0)) return { cls: cls, txt: null, chg: null };
+  var v = wtChgPct(code, px);
+  return { cls: cls + (v == null ? '' : ' ' + colorClass(v)), txt: px.toFixed(2), chg: v };
+}
+
 function _wtRowHtml(code) {
   var c = _contracts[code], r = _rows[code];
   var price = (r && r.close != null) ? r.close : null;
@@ -397,7 +416,7 @@ function wtShowTab(tab) {
   document.getElementById('wt-new-wrap').style.display = (tab === 'new') ? '' : 'none';
   if (tab === 'new') { if (typeof startEtfNew === 'function') startEtfNew(false); }
   else if (tab === 'screen') { if (typeof startEtfScreen === 'function') { renderEtfScreen(); startEtfScreen(false); } }
-  else if (tab === 'bond') { _wtBondLoad(); renderWatchBond(); }
+  else if (tab === 'bond') { _wtBondLoad(); renderWatchBond(); wtBondRefreshPx(); }
   else if (tab === 'act') { _wtActLoadCache(); renderWatchAct(); wtActRefreshPx(); }
   else renderWatch();
 }
@@ -486,7 +505,9 @@ async function wtScanBond() {
     var cons = pool.map(function (x) { return _contracts[x.c]; }).filter(Boolean);
     if (cons.length) {
       var snaps = await fetchSnapshots(cons);
-      snaps.forEach(function (s) { if (s.close != null) { px[String(s.code)] = s.close; _rows[s.code] = { close: s.close, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) }; } });
+      // change_rate 一併存：債券頁籤是每日快取，下一次進頁時 _contracts 裡未必有這幾檔，
+      // 沒有參考價就算不出漲跌、現價也就上不了色。
+      snaps.forEach(function (s) { if (s.close != null) { px[String(s.code)] = s.close; _rows[s.code] = { close: s.close, chgPct: s.change_rate, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) }; } });
     }
   } catch (e) { console.warn('[watch bond px]', e); }
 
@@ -573,7 +594,7 @@ async function _wtActPx(codes, fallback) {
       snaps.forEach(function (s) {
         if (s.close != null && s.close > 0) {
           px[String(s.code)] = s.close;
-          _rows[s.code] = { close: s.close, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) };
+          _rows[s.code] = { close: s.close, chgPct: s.change_rate, total_volume: s.total_volume, time: (s.datetime || '').slice(11, 19) };
         }
       });
     }
@@ -583,6 +604,21 @@ async function _wtActPx(codes, fallback) {
 }
 
 // 回到頁籤時只刷現價（本機快照，不碰 Yahoo）：歷史收盤仍用當天的快取
+// 債券頁籤的現價刷新：比照主動式那一支。
+// 歷史掃描（配息、殖利率）仍用當日快取，只重抓報價與漲跌。
+async function wtBondRefreshPx() {
+  var d = _wtBondLoad();
+  // 不擋 _wtBusy：那是給重量掃描用的闥，快照刷新跟它無關。
+  // 擋了的話進頁當下主掃描還在跑，這一次就被吞掉，現價與顏色停在上次掃描。
+  if (!d || !d.rows || !d.rows.length) return;
+  var codes = d.rows.map(function (r) { return r.code; });
+  var fb = {}; d.rows.forEach(function (r) { fb[r.code] = r.px; });
+  try {
+    var px = await _wtActPx(codes, fb);
+    d.rows.forEach(function (r) { if (px[r.code] > 0) r.px = px[r.code]; });
+  } catch (e) { hush('watch', e); }
+  renderWatchBond();
+}
 async function wtActRefreshPx() {
   if (!_wtAct || _wtAct.v !== WT_ACT_V || !_wtAct.rows.length || _wtBusy) return;
   var fb = {}, codes = _wtAct.rows.map(function (r) { fb[r.code] = r.pxFb || r.px; return r.code; });
@@ -730,7 +766,8 @@ function renderWatchBond() {
         : '<input type="checkbox"' + (_wtPick[r.code] ? ' checked' : '') + ' onchange="wtPick(\'' + r.code + '\',this)">') + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-name">' + r.name + '</td>' +
-      '<td class="num">' + r.px.toFixed(2) + '</td>' +
+      (function () { var pc = wtPxCell(r.code, r.px);
+        return '<td class="' + pc.cls + '">' + (pc.txt || '—') + '</td>'; })() +
       '<td class="num">' + r.amount.toFixed(4) + '</td>' +
       '<td class="num swap-yield">' + r.mY.toFixed(2) + '%</td>' +
       '<td class="num swap-yield" title="' + (r.guessed ? '僅 1 筆配息紀錄，頻率推定為月配（新上市債券 ETF 慣例），待累積紀錄後自動修正'
@@ -820,8 +857,9 @@ function renderWatchAct() {
         : '<input type="checkbox"' + (_wtPick[r.code] ? ' checked' : '') + ' onchange="wtPick(\'' + r.code + '\',this)">') + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-name">' + r.name + '</td>' +
-      '<td class="num">' + (r.px != null ? r.px.toFixed(2)
-        : gapX('券商快照與 Yahoo 都取不到價')) + '</td>' +
+      (function () { var pc = wtPxCell(r.code, r.px);
+        return '<td class="' + pc.cls + '">'
+          + (pc.txt || gapX('券商快照與 Yahoo 都取不到價')) + '</td>'; })() +
       '<td class="num"' + dtip(r) + '>' + yld(r.y1) + '</td>' +
       '<td class="num"' + dtip(r) + '>' + yld(r.yEst) + '</td>' +
       '<td class="num">' + pctR(r.r1, r, '上市不足 20 個交易日，沒有一個月前的錨點') + '</td>' +

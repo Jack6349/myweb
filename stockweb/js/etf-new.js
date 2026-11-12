@@ -68,7 +68,10 @@ async function enWatch(code, el) {
 function _enPxCell(r) {
   if (r.upcoming) return '<span class="swap-dim">未上市</span>';
   var p = _enPx[r.code];
-  return (p && p.close != null) ? p.close.toFixed(2) : '—';
+  if (!(p && p.close != null)) return '—';
+  // 這一頁的快照本來就帶漲跌幅，直接用，不用再算一次
+  var cls = (p.chgPct == null) ? '' : colorClass(p.chgPct);
+  return cls ? '<span class="' + cls + '">' + p.close.toFixed(2) + '</span>' : p.close.toFixed(2);
 }
 function _enChgCell(r) {
   if (r.upcoming) return '<span class="swap-dim">—</span>';
