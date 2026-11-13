@@ -71,16 +71,22 @@ async function ovTodayNight() {
     var pending = nIdx >= 0;          // 這一夜還沒開過盤
     if (!pending) {
       // 今天日盤已收、今晚還沒開：退回「驅動這一個日盤的那一夜」，卡頭會標成已開過盤
+      // 往回找上一夜。遇到日盤就停——但盤中時 lastDayIdx 本身就在今天的日盤裡，
+      // 往回走的頭幾十根還是今天的日盤，一遇到就停等於永遠找不到夜盤。
+      // 2026-11-13 11:13 實測：整個 08:45～15:00 都抽不到，退回資料檔，
+      // 畫面因此推估「昨天」那一盤，而且沒有任何地方說它是昨天的。
+      // 只有走到「更早那一天的日盤」才算越界。
       var pIdx = -1;
       for (var q = lastDayIdx - 1; q >= 0; q--) {
         var h3 = dt[q].slice(11, 16);
-        if (h3 >= '08:45' && h3 <= '13:45') break;
+        if (h3 >= '08:45' && h3 <= '13:45') { if (dt[q].slice(0, 10) !== lastDayDate) break; continue; }
         if (h3 >= '15:00' || h3 <= '05:00') { if (pIdx < 0) pIdx = q; }
       }
+      // 基準價要取「更早那一天」的日盤收盤，不是今天盤中的價
       var prevDayIdx = -1;
       for (var q2 = lastDayIdx - 1; q2 >= 0; q2--) {
         var h4 = dt[q2].slice(11, 16);
-        if (h4 >= '08:45' && h4 <= '13:45') { prevDayIdx = q2; break; }
+        if (h4 >= '08:45' && h4 <= '13:45' && dt[q2].slice(0, 10) !== lastDayDate) { prevDayIdx = q2; break; }
       }
       if (pIdx < 0 || prevDayIdx < 0) throw new Error('夜盤資料不足');
       nIdx = pIdx; baseClose = cl[prevDayIdx]; lastDayDate = dt[prevDayIdx].slice(0, 10);
@@ -204,6 +210,7 @@ function ovDSort(k) {
 }
 function _ovSortVal(r, k) {
   if (k === 'code') return r.code;
+  if (k === 'live') { var lv = _ovLiveOf(r.code); return lv ? lv.px : null; }
   if (k === 'range') return r.loPx;          // 範圍照價格排（下界）
   if (k === 'actC') return r.act ? r.act.c : null;
   if (k === 'actL') return r.act ? r.act.l : null;
@@ -217,6 +224,81 @@ function _ovDSortVal(r, k) {
   if (k === 'medUp') return y(r.medUp);
   if (k === 'medDn') return y(r.medDn);
   return null;
+}
+
+// ══════════ 現價（盤中即時，收盤後停住）══════════
+// 這一頁本來只有日線，沒有任何即時來源。推估的那一盤正在進行時，
+// 旁邊沒有現價就只能自己切到別頁對照——推估與實際是這張表的全部重點。
+//
+// 收盤後不動：盤中每 30 秒抓一次券商快照，13:35 之後那一輪直接跳過，
+// 畫面停在最後一次抓到的價。不是「凍結一個舊值」，是收盤價本來就不會再變。
+var OV_LIVE_MS = 30000;
+var _ovLive = {};          // code -> { px, d, at }
+var _ovLiveAt = '', _ovLiveOpen = null, _ovLiveTimer = null;
+
+function _ovEx(code) {
+  var ct = (typeof _contracts !== 'undefined' && _contracts[code]) || null;
+  if (ct && ct.exchange) return ct.exchange;
+  var f = ((typeof _wtIdx !== 'undefined' && _wtIdx) || []).filter(function (x) { return x.c === code; })[0];
+  return f ? f.e : 'TSE';
+}
+async function _ovLiveTick(always) {
+  var view = document.getElementById('rebound-view');
+  if (!view || view.style.display === 'none' || document.hidden) return;
+  if (!_rbData || !_rbData.codes || !_rbData.codes.length) return;
+  if (typeof fetchSnapshots !== 'function') return;
+  var open = (typeof _twOpen === 'function') ? _twOpen() : false;
+  // 收盤後只在進頁那一次抓（always），之後每一輪都在這裡掉頭
+  if (!always && !open) return;
+  try {
+    var sn = await fetchSnapshots(_rbData.codes.map(function (c) { return { exchange: _ovEx(c), code: c }; }));
+    (sn || []).forEach(function (x) {
+      if (x && x.code && x.close > 0) {
+        _ovLive[String(x.code)] = { px: +x.close, d: (x.datetime || '').slice(0, 10), at: (x.datetime || '').slice(11, 19) };
+      }
+    });
+    _ovLiveAt = new Date(Date.now() + 8 * 3600000).toISOString().slice(11, 19);
+    _ovLiveOpen = open;
+    if (typeof rbRender === 'function') rbRender();
+  } catch (e) { hush('overnight-live', e); }   // 券商連線中斷 → 維持上一次的價
+}
+function ovLiveStart() {
+  _ovLiveTick(true);
+  if (!_ovLiveTimer) _ovLiveTimer = setInterval(function () { _ovLiveTick(false); }, OV_LIVE_MS);
+}
+// 這一檔現在的價，以及它屬於哪一天。
+// 日期要帶著走：晚上推估明天時，快照回來的是今天的收盤，那不是「推估那一盤的現價」，
+// 不能拿去跟前收算漲跌（算出來一定是 0%，整欄都是假的 0）。
+function _ovLiveOf(code) {
+  var v = _ovLive[String(code)];
+  if (v && v.px > 0) return v;
+  var r = (typeof _rows !== 'undefined' && _rows[String(code)]) || null;   // 持股的 SSE tick
+  return (r && r.close > 0) ? { px: r.close, d: '', at: r.time || '' } : null;
+}
+
+// 現價那一格。t＝_ovToday（推估的是哪一盤）。
+// 三種狀況分開講，不混成一個數字：
+//   1. 快照的日期就是推估那一盤 → 現價，附對前收的漲跌，上色
+//   2. 快照是更早的日期（晚上看明天）→ 那一盤還沒開始，標灰、不給漲跌
+//   3. 完全沒有快照（券商連線沒開）→ 破折號
+function _ovLiveCell(r, t) {
+  var lv = _ovLiveOf(r.code);
+  if (!lv) return '<td class="num"><span class="dm-dim" title="券商快照取不到（本機連線未開）">—</span></td>';
+  var sameDay = !lv.d || !t || !t.d || lv.d === t.d;
+  if (!sameDay) {
+    // 兩個方向都會發生，講錯方向比不講更糟：
+    // 快照比推估早＝那一盤還沒開始（晚上看明天）；比推估晚＝那一盤已經過去了。
+    var tip = lv.d < t.d
+      ? '這是 ' + lv.d + ' 的收盤，推估的 ' + t.d + ' 那一盤還沒開始'
+      : '這是 ' + lv.d + ' 的價，推估的是 ' + t.d + ' 那一盤，已經過去了';
+    return '<td class="num"><span class="dm-dim" title="' + tip + '">' + _ovPx(lv.px)
+      + '<span class="ov-sub dm-dim">' + lv.d.slice(5).replace('-', '/') + '</span></span></td>';
+  }
+  var ch = (r.base > 0) ? (lv.px / r.base - 1) * 100 : null;
+  return '<td class="num ov-key">' + _ovPx(lv.px)
+    + '<span class="ov-sub" style="color:' + _rbCol(ch) + '">'
+    + (ch == null ? '—' : (ch > 0 ? '+' : (ch < 0 ? '\u2212' : '')) + Math.abs(ch).toFixed(2) + '%')
+    + '</span></td>';
 }
 
 function _ovCost(code) {
@@ -488,6 +570,8 @@ function ovHtml(view) {
                 : '，盤別不明')) + '）'
         : '（日線收盤值）')
     + (_ovAt ? '<span class="ov-at">' + _ovAt + ' 抓取</span>' : '')
+    + (_ovLiveAt ? '<span class="ov-at">現價 ' + _ovLiveAt
+        + (_ovLiveOpen ? '，盤中每 30 秒更新' : '，已收盤、不再更新') + '</span>' : '')
     + (hasAct
       ? '<br><b style="color:var(--accent2)">這一夜已經開過盤了</b>：'
         + _ovToday.d + ' 的 K 線已存在，右邊是實際值。'
@@ -497,6 +581,8 @@ function ovHtml(view) {
     rbSortTh(_ovSort, 'ovSort', 'code', '代號 / 名稱').replace('class="num ', 'class="') +
     rbSortTh(_ovSort, 'ovSort', 'cost', '成本均價', '持股的成本均價；只關注、沒持有的為「—」。跟右邊的前收比就是目前的損益') +
     rbSortTh(_ovSort, 'ovSort', 'base', '前收', '字色是前收自己的漲跌（對再前一日）') +
+    rbSortTh(_ovSort, 'ovSort', 'live', '現價', '券商即時快照，盤中每 30 秒更新；13:35 之後不再抓，停在收盤價。'
+      + '下面那一行是對前收的漲跌，與右邊幾欄的推估是同一個基準，可以直接比') +
     rbSortTh(_ovSort, 'ovSort', 'oPx', '預估開盤', '當天開盤價的推估') +
     rbSortTh(_ovSort, 'ovSort', 'lPx', '預估日內最低', '當天盤中最低價的推估。掛限價買進要跟這個比，不是跟收盤比') +
     rbSortTh(_ovSort, 'ovSort', 'cPx', '預估收盤', '範圍的中心。別把它當成一個會到的價') +
@@ -515,6 +601,7 @@ function ovHtml(view) {
           ? '<span class="ov-cost">' + _ovPx(r.cost) + '</span>'
           : '<span class="dm-dim" title="只在關注清單，沒有持股">—</span>') + '</td>' +
       '<td class="num" style="color:' + _rbCol(r.baseChg) + '">' + _ovPx(r.base) + '</td>' +
+      _ovLiveCell(r, t) +
       '<td class="num">' + _ovPx(r.oPx)
         + '<span class="ov-sub" style="color:' + _rbCol(r.oPct) + '">' + pct(r.oPct) + '</span></td>' +
       '<td class="num ov-key">' + _ovPx(r.lPx)
@@ -541,6 +628,11 @@ function ovHtml(view) {
     + '兩個訊號只說明得了一半上下的起伏（見「說明力」欄），'
     + '預估收盤只是範圍的中心。掛限價買進看「預估日內最低」。'
     + '所有價格以 ' + (rows[0] ? rows[0].basePrev : '') + ' 的收盤為基準，已對齊升降單位。</dd>'
+    + '<dt>現價</dt><dd>券商即時快照。盤中每 30 秒更新，13:35 之後那一輪就不再抓，停在收盤價——'
+    + '收盤之後它本來就不會再變，不是畫面卡住。下面那一行的漲跌對的是前收，'
+    + '跟右邊三欄推估同一個基準，直接比得出來今天走在推估的哪個位置。'
+    + '推估的那一盤還沒開始時（例如晚上看明天），快照回來的是今天的收盤，'
+    + '這一欄會標灰並說明是哪一天的價，不會假裝那是「明天的現價」。</dd>'
     + (_ovRef && _ovRef.pct != null
         ? '<dt>跟總覽的百分比不一樣</dt><dd>總覽與券商 App 顯示 '
             + pct(_ovRef.pct) + '，對的是期交所參考價 ' + nf(_ovRef.px)
