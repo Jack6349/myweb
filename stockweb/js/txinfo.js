@@ -20,7 +20,22 @@ async function loadSettleBox() {
     var rows = await fetchSettlements();
     if (!rows || !rows.length) { el.innerHTML = '<div class="modal-loading">無交割資料</div>'; return; }
     var sp = splitSettlements(rows);
-    var html = '<table class="tx-settle-table">';
+    // 餘額：以「帳戶餘額」為起點，依日期逐筆套上還沒扣款的交割。
+    // 已扣款那幾筆不扣第二次 —— 使用者輸入的是當下的銀行餘額，那些錢已經不在裡面了。
+    // 沒填帳戶餘額就整欄「—」，不用 0 充數：0 是一個金額，空白是沒有這個資訊。
+    var bal = (typeof abGet === 'function') ? abGet() : null;
+    var run = bal, abDay = (typeof abAtDay === 'function') ? abAtDay() : '';
+    // 依日期算，算完把結果掛回那一筆上（ord 與 rows 是同一批物件），
+    // 顯示順序維持券商給的順序，不另外重排
+    rows.slice().sort(function (a, b) { return (a.date || '') < (b.date || '') ? -1 : 1; })
+      .forEach(function (r) {
+        if (run == null || settleIsPaid(r, sp.today)) { r._bal = null; return; }
+        run += (r.amount || 0);
+        r._bal = run;
+      });
+    var html = '<table class="tx-settle-table"><thead><tr><th>交割日</th><th class="num">金額</th>'
+      + '<th class="num" title="帳戶餘額依日期逐筆套上還沒扣款的交割之後，那一天結束時帳上剩多少。'
+      + '已扣款的那幾筆不再扣一次。沒填帳戶餘額時整欄是「—」">餘額</th></tr></thead><tbody>';
     rows.forEach(function (r) {
       var amt = r.amount || 0;
       var paid = settleIsPaid(r, sp.today);
@@ -30,14 +45,27 @@ async function loadSettleBox() {
       var tl = r.T === 0 ? 'T' : 'T+' + r.T;
       var pill = paid ? '<span class="tx-paid">已扣款</span>'
         : (due ? '<span class="tx-due">今日 ' + SETTLE_PAID_HOUR + ':00 交割</span>' : '');
+      var bv = r._bal;
+      var btxt = bv == null
+        ? '<span class="dm-dim" title="' + (bal == null ? '未填帳戶餘額' : '已扣款，這筆已經反映在帳戶餘額裡') + '">—</span>'
+        : '<span class="' + (bv < 0 ? 'tx-bal-neg' : '') + '"'
+          + (bv < 0 ? ' title="這一天扣完之後帳上不夠，要先入金"' : '')
+          + '>' + Math.round(bv).toLocaleString('zh-TW') + '</span>';
       html += '<tr' + (paid ? ' class="tx-settle-paid"' : (due ? ' class="tx-settle-due"' : '')) + '>' +
         '<td class="tx-sd">' + d + '<span class="tx-st">' + tl + '</span>' + pill + '</td>' +
-        '<td class="num ' + cls + '">' + (amt === 0 ? '0' : amt.toLocaleString('zh-TW')) + '</td></tr>';
+        '<td class="num ' + cls + '">' + (amt === 0 ? '0' : amt.toLocaleString('zh-TW')) + '</td>' +
+        '<td class="num tx-bal">' + btxt + '</td></tr>';
     });
     var tot = sp.pending;
     var tcls = tot > 0 ? 'up' : (tot < 0 ? 'down' : '');
     html += '<tr class="tx-settle-total"><td>合計待交割</td><td class="num ' + tcls + '">' +
-      (tot === 0 ? '0' : tot.toLocaleString('zh-TW')) + '</td></tr></table>' +
+      (tot === 0 ? '0' : tot.toLocaleString('zh-TW')) + '</td>' +
+      '<td class="num tx-bal">' + (run == null
+        ? '<span class="dm-dim">—</span>'
+        : '<span class="' + (run < 0 ? 'tx-bal-neg' : '') + '"'
+          + (run < 0 ? ' title="全部扣完之後帳上不夠，要先入金"' : '')
+          + '>' + Math.round(run).toLocaleString('zh-TW') + '</span>')
+      + '</td></tr></tbody></table>' +
       '<div class="detail-note nb">負數＝應付（銀行扣款）、正數＝應收。' +
       '扣款門檻是交割日當天 ' + SETTLE_PAID_HOUR + ':00（銀行營業時間）：' +
       '過了 ' + SETTLE_PAID_HOUR + ':00 標「已扣款」並<b>不計入</b>合計，' +
@@ -47,7 +75,14 @@ async function loadSettleBox() {
       (sp.dueRows.length
         ? '<b>今日 ' + SETTLE_PAID_HOUR + ':00 待交割 ' + sp.dueToday.toLocaleString('zh-TW') +
           '</b>，已含在合計裡；過了 ' + SETTLE_PAID_HOUR + ':00 會自動移出。'
-        : '') + '</div>';
+        : '')
+      + '<br>餘額欄：起點是你在總覽「部位與配置」填的<b>帳戶餘額</b>'
+      + (bal == null
+          ? '，目前<b>未填</b>，所以整欄是「—」。券商 API 給得出交割應收付，給不出銀行帳戶裡有多少錢，那兩件事在不同機構。'
+          : '（' + bal.toLocaleString('zh-TW') + (abDay ? '，於 ' + abDay + ' 輸入' : '') + '）'
+            + '，依日期逐筆套上還沒扣款的交割。已扣款的不再扣一次——你填的是當下的餘額，那些錢已經不在裡面了。'
+            + '起點是你輸入那一刻的數字，之後有入金、出金或配息入帳要自己更新，這裡不會知道。')
+      + '</div>';
     el.innerHTML = html;
   } catch (e) { el.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>'; }
 }

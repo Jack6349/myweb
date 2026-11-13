@@ -804,6 +804,9 @@ function renderDrawer() {
       ? sumPair('合計待交割', (_settleTot > 0 ? '+' : '') + _settleTot.toLocaleString('zh-TW'),
                 cvar[colorClass(_settleTot)])
       : '') +
+    // 帳戶餘額：手動輸入。券商 API 給得出交割應收付，給不出銀行帳戶裡有多少錢，
+    // 那兩件事在不同機構。放在「合計待交割」旁邊，因為它們是同一筆錢的兩端。
+    (typeof abInputHtml === 'function' ? abInputHtml() : '') +
     '</div>';
   h += '<div class="dw-sec">配置</div><div id="dw-cats"></div>';
   d.innerHTML = h;
