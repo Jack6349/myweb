@@ -556,6 +556,38 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
    拿綠色標一個「錢不夠」會讀成好消息。用警示橘。 */
 .tx-bal-neg { color: var(--warn); font-weight: 700; }
 .tx-sd { color: var(--text2); }
+/* ── 台幣交割：現金流表 ── */
+.tx-settle-table .tx-cf-start td { color: var(--text2); border-bottom: 1px dashed var(--border); }
+.tx-settle-table .tx-cf-none { color: var(--text3); text-align: center; padding: 10px 2px; }
+.tx-kind { font-size: 10px; border-radius: 3px; padding: 1px 4px; margin-right: 6px; vertical-align: 1px; }
+.tx-kind.k-stl { background: rgba(255,255,255,.08); color: var(--text2); }
+.tx-kind.k-div { background: rgba(38,217,98,.16); color: var(--down); }
+.tx-kind.k-plan { background: rgba(240,204,122,.16); color: var(--accent2); }
+.tx-cf-act { width: 26px; text-align: right; }
+.tx-cf-plan td { background: rgba(240,204,122,.05); }
+/* 過期的預計進出：停止計入，等使用者說它到底扣了沒 */
+.tx-od { margin: 8px 0 0; border: 1px solid rgba(255,159,67,.45); border-radius: 6px; padding: 6px 8px; }
+.tx-od-t { font-size: 12px; color: var(--warn); margin-bottom: 4px; }
+.tx-od-r { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
+.tx-od-d { color: var(--text2); }
+.tx-od-m { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-od-a { font-variant-numeric: tabular-nums; }
+.tx-od .btn-query { padding: 1px 8px; font-size: 12px; }
+/* 新增一筆預計進出 */
+.tx-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 0; }
+.tx-add-t { font-size: 12px; color: var(--text2); }
+.ap-in { font-family: inherit; font-size: 13px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; }
+.ap-in:focus { border-color: var(--accent2); outline: none; }
+.ap-date { color-scheme: dark; }
+.ap-amt { width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+.ap-memo { width: 120px; }
+.tx-add .btn-query { padding: 3px 10px; font-size: 12px; }
+/* 下單視窗：交割那天帳上剩多少 */
+.ord-cash { margin-top: 6px; font-size: 13px; color: var(--text2); }
+.ord-cash b { color: var(--accent2); font-size: 15px; }
+.ord-cash.short b { color: var(--warn); }
+.ord-short { color: var(--warn); font-weight: 700; margin-left: 8px; }
 .tx-st { color: var(--text3); font-size: 11px; margin-left: 8px; }
 /* 說明收合（note.js 自動包）：預設收起，只留一列「說明」 */
 .nbox { margin: 8px 0 14px; }

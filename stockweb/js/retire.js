@@ -165,7 +165,29 @@ function rtCashHtml() {
     h += '<div class="set-hint">配息對照：請先開啟股利估算頁載入月份總覽。</div>';
     return h;
   }
-  var bal = 0, rows = '';
+  // 起點：原本固定 0，等於把「你現在有多少錢」排除在外，累計餘額只是淨流的累加。
+  // 改成從帳戶餘額起算，但要先修正三件在輸入那一刻之後才會動的錢：
+  //   －還沒扣的交割、＋還沒發生的預計進出、－本月已發放的配息。
+  // 最後一項是因為下面第一列會把本月整個月的配息加進去，其中已發放的那部分
+  // 已經在你填的餘額裡，不扣就重複算一次。
+  var start = (typeof abGet === 'function') ? abGet() : null, adj = null;
+  if (start != null) {
+    adj = { settle: 0, plan: 0, paidDiv: 0 };
+    var f = (typeof abFlow === 'function') ? abFlow(_abSettle || [], { divs: false }) : null;
+    if (f) f.rows.forEach(function (x) {
+      if (x.kind === 'settle') adj.settle += x.amt; else if (x.kind === 'plan') adj.plan += x.amt;
+    });
+    var ym0 = (typeof _divTwDate === 'function') ? _divTwDate().iso.slice(0, 7) : '';
+    var est = (typeof _divEstResult !== 'undefined' && _divEstResult && _divEstResult.stocks) || null;
+    if (est && ym0) est.forEach(function (st) {
+      (st.res.months || []).forEach(function (m) {
+        if (!m.payDate || m.payDate.slice(0, 7) !== ym0 || !(m.total > 0)) return;
+        if (typeof _abDivInBalance === 'function' && _abDivInBalance(m.payDate)) adj.paidDiv += m.total;
+      });
+    });
+    start = start + adj.settle + adj.plan - adj.paidDiv;
+  }
+  var bal = (start == null) ? 0 : start, rows = '';
   inc.forEach(function (o) {
     var e = rtExpense(o.m);
     var net = (e == null) ? null : o.amt - e;
@@ -181,7 +203,16 @@ function rtCashHtml() {
     '<th class="num">預計支出</th><th class="num">當月淨額</th><th class="num">累計餘額</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>' +
     '<div class="set-hint">配息入帳取自股利估算的月份總覽（依發放月，含借券補償）。' +
-    '累計餘額從 0 起算，只看這 12 個月的進出，不含你現有的現金。</div>';
+    (start == null
+      ? '累計餘額<b>從 0 起算</b>，只看這 12 個月的進出，不含你現有的現金——'
+        + '到總覽「部位與配置」填上帳戶餘額，這一欄就會變成「帳上實際會有多少」。'
+      : '累計餘額<b>從帳上實際有多少起算</b>：帳戶餘額 ' + abMoney(abGet())
+        + '（於 ' + abAtDay() + ' 輸入）'
+        + (adj.settle ? '，' + (adj.settle < 0 ? '減' : '加') + '還沒扣的交割 ' + abMoney(Math.abs(adj.settle)) : '')
+        + (adj.plan ? '，' + (adj.plan < 0 ? '減' : '加') + '預計進出 ' + abMoney(Math.abs(adj.plan)) : '')
+        + (adj.paidDiv ? '，減本月已發放的配息 ' + abMoney(adj.paidDiv) + '（已經在餘額裡，下面第一列會再算一次）' : '')
+        + ' ＝ <b>' + abMoney(start) + '</b>。')
+    + '</div>';
   return h;
 }
 
