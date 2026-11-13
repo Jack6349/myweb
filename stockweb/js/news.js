@@ -1462,7 +1462,7 @@ async function loadTwIdxIntra() {
   // 但快照盤後會停更，用同一份 K 線資料推比較不會兩邊對不起來。
   var prevClose = null, t = [], c = [];
   for (var i = 0; i < j.datetime.length; i++) {
-    if (j.datetime[i].slice(0, 10) === day) { t.push(j.datetime[i].slice(11, 16)); c.push(j.Close[i]); }
+    if (j.datetime[i].slice(0, 10) === day) { t.push(kbarMin(j.datetime[i])); c.push(j.Close[i]); }
     else prevClose = j.Close[i];
   }
   if (!c.length) throw new Error('當日無指數分K');
@@ -1609,7 +1609,7 @@ async function loadTxfIntra(ref) {
   while (st > 0 && isNight(j.datetime[st - 1]) === night && ms[st] - ms[st - 1] <= 3 * 3600000) st--;
   var t = [], c = [], avg = [], cv = 0, ca = 0;
   for (var k = st; k < j.datetime.length; k++) {
-    t.push(j.datetime[k].slice(11, 16));
+    t.push(kbarMin(j.datetime[k]));   // 分K標的是該分鐘的結尾，見 overnight.js 的 kbarMin
     c.push(j.Close[k]);
     cv += (j.Volume[k] || 0); ca += (j.Amount[k] || 0);
     avg.push(cv > 0 ? ca / cv : j.Close[k]);   // 開盤第一根若無量，先用收盤頂著
