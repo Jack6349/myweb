@@ -243,8 +243,15 @@ function abRefreshViews() {
   if (typeof renderTopbarTotals === 'function' && typeof _dwOpen !== 'undefined' && _dwOpen) renderTopbarTotals();
   if (typeof loadSettleBox === 'function' && document.getElementById('tx-settle-body')) loadSettleBox();
   if (typeof _ordRender === 'function' && typeof _ord !== 'undefined' && _ord) _ordRender();
+  // 退休現金流那張表要先載支出設定才畫得出來。
+  // 直接呼叫會在設定還沒載的時候炸掉（實測 14:01:59：讀不到 base），
+  // 而且是被吞掉的錯——畫面只會停在舊內容，不會有人知道。
   var cash = document.getElementById('dv-cash');
-  if (cash && typeof rtCashHtml === 'function') cash.innerHTML = rtCashHtml();
+  if (cash && cash.style.display !== 'none' && typeof rtCashHtml === 'function') {
+    if (typeof rtLoad === 'function') {
+      rtLoad().then(function () { cash.innerHTML = rtCashHtml(); }).catch(function (e) { hush('acct', e); });
+    } else { cash.innerHTML = rtCashHtml(); }
+  }
 }
 
 function abMoney(v) { return (v == null) ? '—' : Math.round(v).toLocaleString('zh-TW'); }
