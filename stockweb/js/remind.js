@@ -127,27 +127,28 @@ async function _rmCondSettle() {
   var out = [];
   _rmSettle.forEach(function (r) {
     if (!(r.amount < 0)) return;
-    var bal = (typeof abBalAt === 'function') ? abBalAt(_rmSettle, r.date) : null;
+    var bal = (typeof abBalAt === 'function') ? abBalAt(_rmSettle, r.date, { divs: false }) : null;
     out.push({
       id: 'settle|' + r.date, k: 'settle', lv: r.T <= 1 ? 2 : 1,
       s: r.date + ' 要付 ' + Math.abs(r.amount).toLocaleString('zh-TW') + ' 元（T+' + r.T + '）',
       w: bal == null
         ? '券商交割款。總覽「部位與配置」填了帳戶餘額之後，這裡會直接說那天帳上剩多少'
-        : '券商交割款。那天扣完帳上預估剩 ' + Math.round(bal).toLocaleString('zh-TW') + ' 元'
+        : '券商交割款。那天扣完帳上預估剩 ' + Math.round(bal).toLocaleString('zh-TW') + ' 元（不含配息）'
     });
   });
   // 帳上不夠：任何一個未來的日期餘額轉負就說話。
   // 這跟上面那條不是同一件事——上面是「要付多少」，這條是「付不出來」。
   // 沒填帳戶餘額時整條不存在，不會變成噪音。
   if (typeof abFlow === 'function' && typeof abGet === 'function' && abGet() != null) {
-    var f = abFlow(_rmSettle);
+    // 不含配息：寧可早一點說「可能不夠」，也不要讓還沒入帳的錢把警告壓下去
+    var f = abFlow(_rmSettle, { divs: false });
     var hit = null;
     f.rows.forEach(function (x) { if (hit == null && x.bal != null && x.bal < 0) hit = x; });
     if (hit) {
       out.push({
         id: 'short|' + hit.d, k: 'short', lv: 2,
         s: hit.d + ' 帳上不夠，差 ' + Math.abs(Math.round(hit.bal)).toLocaleString('zh-TW') + ' 元',
-        w: '以帳戶餘額為起點，排完交割、預計進出與配息入帳之後第一個轉負的日子。'
+        w: '以帳戶餘額為起點，排完交割與預計進出之後第一個轉負的日子，不含配息入帳。'
           + '明細在交易資訊「台幣交割」'
       });
     }

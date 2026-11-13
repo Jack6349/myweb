@@ -43,53 +43,100 @@ async function loadSettleBox() {
     var bal = f.start, abDay = abAtDay();
     var today = _divTwDate().iso;
 
+    // 兩張表分開算，不合成一條餘額線。
+    //
+    // 交割是已經成立的應付：那筆錢一定會在那天離開帳戶。
+    // 配息是預估收入：金額與發放日都還可能變，而且它要到那天才真的入帳。
+    // 兩邊混成一條線的話，「付得出來嗎」會被還沒到手的錢蓋過去——
+    // 帳上只剩 5 萬、明天要付 20 萬，但下個月有 30 萬配息，合計線看起來很健康。
+    var today = _divTwDate().iso;
+    var stl = f.rows.filter(function (x) { return x.kind !== 'div'; });
+    var div = f.rows.filter(function (x) { return x.kind === 'div'; });
+
+    // 日期還沒到的餘額是推算，用暗色；錢真的動了才轉亮
+    var happened = function (x) {
+      return x.kind === 'settle' ? settleIsPaid(x.ref, sp.today) : (x.d < today);
+    };
+    var balCell = function (v, fut, tip) {
+      if (v == null) return '<td class="num tx-bal"><span class="dm-dim">—</span></td>';
+      var cls = (v < 0 ? 'tx-bal-neg' : (fut ? 'tx-fut' : ''));
+      return '<td class="num tx-bal"><span class="' + cls + '"'
+        + (v < 0 ? ' title="這一天之後帳上不夠，要先入金"' : (tip ? ' title="' + tip + '"' : ''))
+        + '>' + abMoney(v) + '</span></td>';
+    };
+    var amtCell = function (v) {
+      return '<td class="num ' + (v > 0 ? 'up' : (v < 0 ? 'down' : '')) + '">' + abSigned(v) + '</td>';
+    };
+
+    // ── 表一：帳戶餘額 → 交割與自訂進出 ──
     var html = '<table class="tx-settle-table"><thead><tr><th>日期</th><th>項目</th>'
       + '<th class="num">金額</th>'
-      + '<th class="num" title="帳戶餘額依日期套上這些進出之後，那一天結束時帳上剩多少。'
-      + '輸入餘額之前就已經扣掉或入帳的不再算一次。沒填帳戶餘額時整欄是「—」">餘額</th>'
+      + '<th class="num" title="只算交割與你自己排的進出，不含配息。'
+      + '這一欄回答的是「付得出來嗎」，所以不把還沒入帳的錢算進去">餘額</th>'
       + '<th></th></tr></thead><tbody>';
-
-    // 起點列：看得見起點，下面每一列的餘額才有依據
     html += '<tr class="tx-cf-start"><td>' + (abDay ? abDay.slice(5).replace('-', '/') : '—') + '</td>'
       + '<td>帳戶餘額<span class="tx-st">起點</span></td><td class="num"></td>'
       + '<td class="num tx-bal">' + (bal == null ? '<span class="dm-dim">未填</span>' : abMoney(bal)) + '</td>'
       + '<td></td></tr>';
 
-    if (!f.rows.length) {
-      html += '<tr><td colspan="5" class="tx-cf-none">沒有待交割、預計進出或未入帳的配息</td></tr>';
+    // 交割那一邊自己從起點重算一次，不沿用合併後的餘額
+    var runS = bal;
+    if (!stl.length) {
+      html += '<tr><td colspan="5" class="tx-cf-none">沒有待交割，也沒有排定的進出</td></tr>';
     }
-    f.rows.forEach(function (x) {
-      var d = (x.d || '').slice(5).replace('-', '/');
+    stl.forEach(function (x) {
+      if (runS != null) runS += x.amt;
       var due = x.kind === 'settle' && settleIsDueToday(x.ref, sp.today);
       var paid = x.kind === 'settle' && settleIsPaid(x.ref, sp.today);
       var tag = x.kind === 'plan' ? '<span class="tx-kind k-plan">自訂</span>'
-        : (x.kind === 'div' ? '<span class="tx-kind k-div">配息</span>'
-                            : '<span class="tx-kind k-stl">交割</span>');
-      // 已扣款但仍列出：它不在輸入當時的餘額裡（餘額是更早填的），所以照樣要扣。
-      // 標出來，否則看起來像重複計算。
+                                  : '<span class="tx-kind k-stl">交割</span>';
+      // 已扣款但仍列出：它不在輸入當時的餘額裡（餘額是更早填的），所以照樣要扣
       var pill = paid ? '<span class="tx-paid">已扣款</span>'
-        : (due ? '<span class="tx-due">今日 ' + SETTLE_PAID_HOUR + ':00 交割</span>' : '');
+        : (due ? '<span class="tx-due">今日 ' + SETTLE_PAID_HOUR + ':00</span>' : '');
       html += '<tr class="' + (x.kind === 'plan' ? 'tx-cf-plan' : (due ? 'tx-settle-due' : '')) + '">'
-        + '<td class="tx-sd">' + d + '</td>'
+        + '<td class="tx-sd">' + (x.d || '').slice(5).replace('-', '/') + '</td>'
         + '<td>' + tag + x.label + pill + '</td>'
-        + '<td class="num ' + (x.amt > 0 ? 'up' : (x.amt < 0 ? 'down' : '')) + '">' + abSigned(x.amt) + '</td>'
-        + '<td class="num tx-bal">' + (x.bal == null ? '<span class="dm-dim">—</span>'
-            : '<span class="' + (x.bal < 0 ? 'tx-bal-neg' : '') + '"'
-              + (x.bal < 0 ? ' title="這一天之後帳上不夠，要先入金"' : '') + '>' + abMoney(x.bal) + '</span>')
-        + '</td>'
+        + amtCell(x.amt)
+        + balCell(runS, !happened(x), !happened(x) ? '日期還沒到，這是推算' : '')
         + '<td class="tx-cf-act">' + (x.kind === 'plan'
             ? '<button class="swap-mini" title="刪除這筆" onclick="apDel(\'' + x.id + '\').then(abRefreshViews)">✕</button>'
             : '') + '</td></tr>';
     });
-
     var tot = sp.pending;
-    var tcls = tot > 0 ? 'up' : (tot < 0 ? 'down' : '');
-    html += '<tr class="tx-settle-total"><td></td><td>合計待交割</td><td class="num ' + tcls + '">' +
-      (tot === 0 ? '0' : tot.toLocaleString('zh-TW')) + '</td>' +
-      '<td class="num tx-bal">' + (f.end == null ? '<span class="dm-dim">—</span>'
-        : '<span class="' + (f.end < 0 ? 'tx-bal-neg' : '') + '"'
-          + (f.end < 0 ? ' title="全部走完之後帳上不夠，要先入金"' : '') + '>' + abMoney(f.end) + '</span>')
-      + '</td><td></td></tr></tbody></table>';
+    html += '<tr class="tx-settle-total"><td></td><td>交割走完</td>'
+      + '<td class="num ' + (tot > 0 ? 'up' : (tot < 0 ? 'down' : '')) + '">'
+      + (tot === 0 ? '0' : tot.toLocaleString('zh-TW')) + '</td>'
+      + balCell(runS, true, '全部交割與排定的進出走完之後') + '<td></td></tr></tbody></table>';
+
+    // ── 表二：配息入帳（預估，不併進上面那條線）──
+    var runD = 0;
+    html += '<div class="tx-sec">配息入帳<span class="tx-sec-n">預估，另外算</span></div>';
+    if (!f.hasDiv) {
+      html += '<div class="tx-cf-none tx-sec-b">'
+        + (_txDivBusy ? '計算中…' : '這次沒算出來') + '</div>';
+    } else if (!div.length) {
+      html += '<div class="tx-cf-none tx-sec-b">今年剩下的發放日都過了</div>';
+    } else {
+      html += '<table class="tx-settle-table"><tbody>';
+      div.forEach(function (x) {
+        runD += x.amt;
+        html += '<tr><td class="tx-sd">' + (x.d || '').slice(5).replace('-', '/') + '</td>'
+          + '<td><span class="tx-kind k-div">配息</span>' + x.label + '</td>'
+          + amtCell(x.amt)
+          + '<td class="num tx-bal"><span class="' + (x.d < today ? '' : 'tx-fut') + '">'
+          + abMoney(runD) + '</span></td><td class="tx-cf-act"></td></tr>';
+      });
+      html += '<tr class="tx-settle-total"><td></td><td>今年剩下合計</td>'
+        + amtCell(runD) + '<td class="num tx-bal"></td><td></td></tr></tbody></table>';
+    }
+
+    // ── 兩邊合起來：要看「年底會有多少」才用這個數字 ──
+    if (bal != null) {
+      var both = (runS == null ? null : runS + runD);
+      html += '<div class="tx-both">兩邊合起來 <b class="' + (both != null && both < 0 ? 'tx-bal-neg' : 'tx-fut') + '">'
+        + abMoney(both) + '</b><span class="tx-both-n">交割走完 ' + abMoney(runS)
+        + (runD ? ' ＋ 配息 ' + abMoney(runD) : '') + '</span></div>';
+    }
 
     // ── 過期的預計進出：不自動清掉，先問 ──
     var od = apOverdue();
@@ -119,6 +166,12 @@ async function loadSettleBox() {
       + '<span id="ap-msg" class="wt-dim"></span></div>';
 
     html += '<div class="detail-note nb">金額負數＝付出（銀行扣款、提領），正數＝收到（應收、入金、配息）。'
+      + '<br><b>為什麼分成兩張</b>：交割是已經成立的應付，那筆錢一定會在那天離開帳戶；'
+      + '配息是預估收入，金額與發放日都還可能變，而且要到那天才真的入帳。'
+      + '合成一條線會讓「付得出來嗎」被還沒到手的錢蓋過去——'
+      + '帳上剩 5 萬、明天要付 20 萬，但下個月有 30 萬配息，合計線看起來很健康。'
+      + '上面那張回答「付得出來嗎」，下面那張回答「還會進來多少」。'
+      + '<br><b>暗色的餘額</b>：日期還沒到，那是推算。錢真的動了之後才轉亮。'
       + '扣款門檻是交割日當天 ' + SETTLE_PAID_HOUR + ':00（銀行營業時間）。'
       + (sp.dueRows.length
           ? '<b>今日 ' + SETTLE_PAID_HOUR + ':00 待交割 ' + sp.dueToday.toLocaleString('zh-TW') + '</b>，'
@@ -130,7 +183,7 @@ async function loadSettleBox() {
           : '（' + bal.toLocaleString('zh-TW') + (abDay ? '，於 ' + abDay + ' 輸入' : '') + '）。'
             + '往後只加減<b>那一刻之後才會動的錢</b>：輸入前就扣掉的交割、輸入前就入帳的配息都不再算一次。'
             + '所以一筆標「已扣款」的交割仍然可能列在上面——它現在扣掉了，但它不在你當初填的那個數字裡。')
-      + '<br><b>配息入帳</b>：'
+      + '<br><b>配息入帳</b>：下單視窗與提醒的「帳上不夠」都<b>不含</b>這一邊，理由同上。'
       + (f.hasDiv ? '取自股利估算的月度結果（可領張數已依建倉明細判定），只列發放日還沒到的。'
                   : (_txDivBusy
                       ? '<b>計算中</b>——逐檔抓配息紀錄約十幾秒，好了會自動補進上面的表。'

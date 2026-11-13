@@ -164,13 +164,14 @@ function ordSubmit() {
 function _ordCashHtml(buy, amt) {
   if (typeof abGet !== 'function' || abGet() == null) return '';
   var d = abSettleDay(2);
-  var before = abBalAt(_abSettle || [], d);
+  // 不含配息：這一行回答「付得出來嗎」，不該靠還沒入帳的錢撐住
+  var before = abBalAt(_abSettle || [], d, { divs: false });
   if (before == null) return '';
   var after = before + (buy ? -Math.round(amt) : Math.round(amt));
   var md = d.slice(5).replace('-', '/');
   return '<div class="ord-cash' + (after < 0 ? ' short' : '') + '">'
     + md + '（T+2）交割後帳上預估 <b>' + abMoney(after) + '</b> 元'
-    + '<span class="ord-dim">　這筆之前 ' + abMoney(before) + '</span>'
+    + '<span class="ord-dim">　這筆之前 ' + abMoney(before) + '　不含配息</span>'
     + (after < 0 ? '<span class="ord-short">不夠付，要先入金</span>' : '')
     + '</div>';
 }
