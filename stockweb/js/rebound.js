@@ -114,13 +114,23 @@ var _rbBars = {};
 // 只補最近幾個交易日，更早的缺口影響不到前收與推估，不值得花配額。
 var RB_GAP_DAYS = 6;
 async function _rbDayFromBroker(code, d) {
-  var ex = (typeof _ovEx === 'function') ? _ovEx(code) : 'TSE';
-  var tries = (ex === 'OTC') ? ['OTC', 'TSE'] : ['TSE', 'OTC'];
-  for (var a = 0; a < tries.length; a++) {
+  // 大盤不是股票代號：指數走 IND／TSE／001，與總覽那張加權指數分時同一個來源。
+  // 成交量的單位也不同（指數給的不是張），所以指數這條不做張轉股。
+  var isIdx = (code === '^TWII');
+  var cands;
+  if (isIdx) {
+    cands = [{ security_type: 'IND', exchange: 'TSE', code: '001' }];
+  } else {
+    var ex = (typeof _ovEx === 'function') ? _ovEx(code) : 'TSE';
+    cands = ((ex === 'OTC') ? ['OTC', 'TSE'] : ['TSE', 'OTC']).map(function (e) {
+      return { security_type: 'STK', exchange: e, code: code };
+    });
+  }
+  for (var a = 0; a < cands.length; a++) {
     try {
       var r = await fetch('/api/v1/data/kbars', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contract: { security_type: 'STK', exchange: tries[a], code: code }, start: d, end: d })
+        body: JSON.stringify({ contract: cands[a], start: d, end: d })
       });
       if (!r.ok) continue;
       var j = await r.json(), dt = j.datetime || [];
@@ -140,7 +150,7 @@ async function _rbDayFromBroker(code, d) {
       // 成交量券商給「張」、Yahoo 給「股」，不乘回去的話這一天在 20 日均量裡
       // 只剩千分之一，量能那一欄會整排偏掉。
       return { d: d, c: c, a: c, o: o, h: (h === -Infinity ? null : h),
-               l: (l === Infinity ? null : l), v: v * 1000, src: 'broker' };
+               l: (l === Infinity ? null : l), v: isIdx ? v : v * 1000, src: 'broker' };
     } catch (e) { hush('rebound-gap', e); }
   }
   return null;
@@ -318,6 +328,13 @@ function _rbPrevFn(dates) {
   };
 }
 // 費半日報酬分布與門檻。指數沒有配息，用未還原收盤。
+//
+// 門檻是對稱的兩個：第 pct 百分位（大漲）與第 100−pct 百分位（大跌）。
+// 原本只有大漲那一個，費半大跌的日子整張卡直接收成一行「未達門檻」。
+// 2026-11-14 實測：費半 −3.80%（第 8 百分位），大跌門檻 −3.37%，明明是達標的，
+// 畫面什麼都不給。而費半大跌正是買進最需要資訊的時候。
+//
+// 兩邊的樣本相當（大漲 51 個台股交易日、大跌 46 個），不是資料只夠做一邊。
 function _rbSoxCalc(bars, pct) {
   if (!bars || bars.length < 60) return null;
   var rets = {}, dates = [];
@@ -328,14 +345,27 @@ function _rbSoxCalc(bars, pct) {
   }
   if (dates.length < 60) return null;
   var sorted = dates.map(function (d) { return rets[d]; }).sort(function (a, b) { return a - b; });
-  var thr = _rbQuant(sorted, pct);
+  var thr = _rbQuant(sorted, pct), thrDn = _rbQuant(sorted, 100 - pct);
   var lastD = dates[dates.length - 1];
   var hit = dates.filter(function (d) { return rets[d] >= thr; });
+  var hitDn = dates.filter(function (d) { return rets[d] <= thrDn; });
   return {
-    rets: rets, dates: dates, sorted: sorted, thr: thr, n: sorted.length,
-    hit: hit.length, prev: _rbPrevFn(dates),
+    rets: rets, dates: dates, sorted: sorted, thr: thr, thrDn: thrDn, n: sorted.length,
+    hit: hit.length, hitDn: hitDn.length, prev: _rbPrevFn(dates),
     last: { d: lastD, r: rets[lastD], rank: _rbRank(sorted, rets[lastD]) }
   };
+}
+// 今天站在哪一邊：'up' 大漲、'dn' 大跌、null 兩邊都沒達標
+function _rbSoxSide(sox) {
+  if (!sox || !sox.last || sox.last.r == null) return null;
+  if (sox.last.r >= sox.thr) return 'up';
+  if (sox.last.r <= sox.thrDn) return 'dn';
+  return null;
+}
+// 挑樣本的判準。三個統計函式都吃這個，不各自寫一份比大小。
+function _rbSoxHit(sox, side) {
+  if (side === 'dn') return function (v) { return v <= sox.thrDn; };
+  return function (v) { return v >= sox.thr; };
 }
 // 達標日的「日內形狀」：全日漲幅拆成開盤前（跳空）與開盤後（盤中）兩段。
 // 為什麼要拆：掛限價買進能不能成交，看的是日內最低價有沒有碰到掛價，
@@ -362,7 +392,7 @@ var RB_FILL_OFFS = (function () {
 // 成交率表與日內形狀表的排序。
 // 掋價格子排的是成交率（依價格排等於依前收排，重複），
 // 而且用的是「今天那一邊」的數字，與畫面標重的那一邊一致。
-var RB_FSORT_LS = 'rb_fsort_v1', RB_GSORT_LS = 'rb_gsort_v1';
+var RB_FSORT_LS = 'rb_fsort_v1', RB_GSORT_LS = 'rb_gsort_v1', RB_DSORT_LS = 'rb_dsort_v1';
 var _rbFSort = rbSortGet(RB_FSORT_LS, 'upDesc');
 var _rbGSort = rbSortGet(RB_GSORT_LS, 'gapDesc');
 function rbFSort(k) {
@@ -375,16 +405,26 @@ function rbGSort(k) {
   try { localStorage.setItem(RB_GSORT_LS, _rbGSort); } catch (e) {}
   rbRender();
 }
+var _rbDSort = rbSortGet(RB_DSORT_LS, 'ccAsc');
+function rbDSort(k) {
+  _rbDSort = rbSortNext(_rbDSort, k);
+  try { localStorage.setItem(RB_DSORT_LS, _rbDSort); } catch (e) {}
+  rbRender();
+}
+// 分析視圖可以手動切到另一邊看歷史；決策視圖一律跟著今天的方向，不給切。
+var _rbSoxView = null;
+function rbSoxSide(k) { _rbSoxView = k; rbRender(); }
 
-function _rbFill(bars, sox, reg) {
+function _rbFill(bars, sox, reg, hit) {
   if (!bars || !sox || !reg) return null;
+  hit = hit || _rbSoxHit(sox, 'up');
   var mk = function () { return { n: 0, hit: RB_FILL_OFFS.map(function () { return 0; }) }; };
   var dn = mk(), up = mk();
   for (var i = 1; i < bars.length; i++) {
     var b = bars[i], pv = bars[i - 1];
     if (!(pv.c > 0) || !(b.l > 0)) continue;
     var u = sox.prev(b.d);
-    if (u == null || u < pv.d || !(sox.rets[u] >= sox.thr)) continue;
+    if (u == null || u < pv.d || !hit(sox.rets[u])) continue;
     var f0 = pv.a / pv.c, f1 = b.a / b.c;
     if (Math.abs(f1 - f0) > 1e-6 * Math.max(f0, f1)) continue;      // 除息日
     var v = reg[b.d];
@@ -418,8 +458,9 @@ function _rbRegimeNow(idx, win) {
   return (idx[n - 1].c / idx[n - 1 - win].c - 1) * 100;
 }
 
-function _rbSoxGap(bars, sox) {
+function _rbSoxGap(bars, sox, hit) {
   if (!bars || !sox) return null;
+  hit = hit || _rbSoxHit(sox, 'up');
   var gap = [], oc = [], hi = [], lo = [], cc = [], fade = 0, n = 0, exdiv = 0;
   for (var i = 1; i < bars.length; i++) {
     var b = bars[i], p = bars[i - 1];
@@ -427,7 +468,7 @@ function _rbSoxGap(bars, sox) {
     if (!(p.c > 0) || !(b.o > 0)) continue;
     var u = sox.prev(b.d);
     if (u == null || u < p.d) continue;
-    if (!(sox.rets[u] >= sox.thr)) continue;
+    if (!hit(sox.rets[u])) continue;
     var f0 = p.a / p.c, f1 = b.a / b.c;
     if (Math.abs(f1 - f0) > 1e-6 * Math.max(f0, f1)) { exdiv++; continue; }
     n++;
@@ -445,16 +486,63 @@ function _rbSoxGap(bars, sox) {
   };
 }
 
+// ── 費半大跌那一邊：跌到哪裡、買了之後多久翻正 ──
+//
+// 為什麼不照抄大漲那一邊的成交率表：那張表問的是「掛限價買得到嗎」。
+// 費半大跌隔天台股開低，掛在前收之下幾乎一定成交，整排會逼近 100%，
+// 看起來像發現、其實是定義使然。跌邊要問的是另外三件事：
+//   跌到哪裡（日內最低與收盤）、跌幅有多少在開盤就給完（跳空）、買了之後多久翻正。
+//
+// 翻正的定義是「買在達標日收盤」：那是這個情境下真正做得到的進場點。
+// 用「對前收」當基準會算成另一個問題（這一天跌完了沒），不是買方要的。
+var RB_DIP_HOLDS = [1, 3, 5];
+function _rbSoxDip(bars, sox, hit, useAdj) {
+  if (!bars || !sox) return null;
+  hit = hit || _rbSoxHit(sox, 'dn');
+  var gap = [], lo = [], cc = [], idxs = [], exdiv = 0;
+  for (var i = 1; i < bars.length; i++) {
+    var b = bars[i], p = bars[i - 1];
+    if (!(p.c > 0) || !(b.c > 0)) continue;
+    var u = sox.prev(b.d);
+    if (u == null || u < p.d || !hit(sox.rets[u])) continue;
+    var f0 = p.a / p.c, f1 = b.a / b.c;
+    if (Math.abs(f1 - f0) > 1e-6 * Math.max(f0, f1)) { exdiv++; continue; }   // 除息日
+    idxs.push(i);
+    cc.push((b.c / p.c - 1) * 100);
+    if (b.o > 0) gap.push((b.o / p.c - 1) * 100);
+    if (b.l > 0) lo.push((b.l / p.c - 1) * 100);
+  }
+  if (!idxs.length) return null;
+  // 翻正：買在達標日收盤，持有 N 個交易日之後的報酬。
+  // 最後幾個達標日還沒走滿 N 天，分母因此比上面那幾欄小，每一欄各自標自己的天數。
+  var fwd = RB_DIP_HOLDS.map(function (h) {
+    var rs = [];
+    idxs.forEach(function (i) {
+      var j = i + h;
+      if (j >= bars.length) return;
+      var p0 = useAdj ? bars[i].a : bars[i].c, p1 = useAdj ? bars[j].a : bars[j].c;
+      if (!(p0 > 0) || !(p1 > 0)) return;
+      rs.push((p1 / p0 - 1) * 100);
+    });
+    if (!rs.length) return { h: h, n: 0, up: null, med: null };
+    return { h: h, n: rs.length, med: _rbMed(rs),
+             up: rs.filter(function (r) { return r > 0; }).length / rs.length * 100 };
+  });
+  return { n: idxs.length, exdiv: exdiv, gap: _rbMed(gap), lo: _rbMed(lo), cc: _rbMed(cc),
+           fwd: fwd, last: bars[bars.length - 1].c };
+}
+
 // 一檔在「前一夜費半 ≥ 門檻」的那些台股交易日，當日漲跌的分布。
 // 個股用還原收盤（除息日不該被當成下跌），大盤用未還原。
-function _rbSoxFwd(bars, sox, useAdj) {
+function _rbSoxFwd(bars, sox, useAdj, hit) {
   if (!bars || !sox) return null;
+  hit = hit || _rbSoxHit(sox, 'up');
   var rs = [], ds = [];
   for (var i = 1; i < bars.length; i++) {
     var u = sox.prev(bars[i].d);
     // 這一根美股盤必須落在前一個台股收盤之後，否則是前天已經反應過的那一根
     if (u == null || u < bars[i - 1].d) continue;
-    if (!(sox.rets[u] >= sox.thr)) continue;
+    if (!hit(sox.rets[u])) continue;
     var p0 = useAdj ? bars[i - 1].a : bars[i - 1].c, p1 = useAdj ? bars[i].a : bars[i].c;
     if (!(p0 > 0) || !(p1 > 0)) continue;
     rs.push((p1 / p0 - 1) * 100); ds.push(bars[i].d);
@@ -542,6 +630,9 @@ async function startRebound(force) {
   var series = {};
   // 交易日曆取自大盤，用來偵測個股日線整天缺值（見 _rbPatchGaps）
   var cal = idx.map(function (b) { return b.d; });
+  // 大盤自己也要補。收盤後 Yahoo 的當日收盤要從別的欄位補，那一根沒有日內高低，
+  // 表尾大盤那一列的「開盤跳空」「日內最低」就會少掉最新一天。
+  try { await _rbPatchGaps('^TWII', idx, cal); } catch (e) { hush('rebound', e); }
   for (var i = 0; i < codes.length; i++) {
     if (info) info.textContent = '抓取 ' + codes[i] + ' 日線…（' + (i + 1) + '/' + codes.length + '）';
     series[codes[i]] = await _rbSeries(codes[i], cfg.years);
@@ -663,6 +754,97 @@ function rbRender() {
   wrap.innerHTML = html;
 }
 
+// ── 費半大跌那一邊的表 ──
+// 欄位跟大漲那一邊刻意不同，理由寫在 _rbSoxDip 的檔頭。
+// 價格一律換算出來：百分比抄不進委託單。
+function _rbSoxDnHtml(sox, hit, head, sideBtn, on, pending) {
+  var idx = _rbData.idx;
+  var rows = _rbData.codes.map(function (c) {
+    return { c: c, d: _rbSoxDip(_rbData.series[c] || [], sox, hit, true) };
+  }).filter(function (r) { return r.d; });
+  var twD = _rbSoxDip(idx, sox, hit, false);
+
+  var html = '<div class="rb-sox">' + sideBtn;
+  html += '<div class="sec-title">隔夜費半大跌之後</div>';
+  html += '<div class="rb-sox-hd' + (on ? ' on' : '') + '">'
+    + (on ? '已達大跌門檻。' : '今天不在這一邊（下表是歷史分布）。') + head;
+  if (on && pending) {
+    var u2 = sox.prev(idx[idx.length - 1].d);
+    html += '這一夜還沒進市場。'
+      + ((u2 != null && hit(sox.rets[u2])) ? '<b>連續第二根以上</b>（已經跌過一輪）。'
+                                           : '<b>訊號的第一根</b>。');
+  } else if (on) {
+    html += '台股已反應過，下表是歷史分布。';
+  }
+  html += '</div>';
+
+  if (!rows.length) {
+    return html + '<div class="rb-caveat nb-keep">這組門檻下沒有任何一檔有樣本：'
+      + '要麼門檻太嚴（第 ' + _rbData.cfg.soxPct + ' 百分位的對稱邊），要麼這幾檔上市後還沒碰過。</div></div>';
+  }
+
+  html += '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
+    + rbSortTh(_rbDSort, 'rbDSort', 'code', '代號 / 名稱').replace('class="num ', 'class="')
+    + rbSortTh(_rbDSort, 'rbDSort', 'px', '前收')
+    + rbSortTh(_rbDSort, 'rbDSort', 'n', '樣本')
+    + rbSortTh(_rbDSort, 'rbDSort', 'gap', '開盤跳空', '達標日開盤對前收的中位數。跌幅有多少在開盤就給完')
+    + rbSortTh(_rbDSort, 'rbDSort', 'lo', '日內最低', '達標日最低價對前收的中位數。掛單掛在這裡附近才接得到')
+    + rbSortTh(_rbDSort, 'rbDSort', 'cc', '當日收盤', '達標日收盤對前收的中位數');
+  RB_DIP_HOLDS.forEach(function (h, j) {
+    html += rbSortTh(_rbDSort, 'rbDSort', 'w' + j, (h === 1 ? '隔日' : '第 ' + h + ' 日') + '翻正',
+      '買在達標日收盤，' + h + ' 個交易日之後收盤是正報酬的比例；小字是報酬中位數與天數');
+  });
+  html += '</tr></thead><tbody>';
+
+  var px = function (pc, v) {
+    if (!(pc > 0) || v == null) return '';
+    var q = pc * (1 + v / 100), t = q < 50 ? 0.01 : 0.05;
+    return '<span class="rb-gsub">' + (Math.round(q / t) * t).toFixed(2) + '</span>';
+  };
+  var wcell = function (f) {
+    if (!f || !f.n) return '<td class="num rs-dim">—</td>';
+    // 翻正機率不上紅綠。綠色在這一頁是「跌」，而翻正講的是漲，
+    // 機率越高標越綠會讓人第一眼讀成相反的意思。
+    // 機率本身用粗細表達強弱，紅綠留給旁邊的報酬中位數（那個真的是漲跌）。
+    return '<td class="num"><span style="font-weight:700;color:'
+      + (f.up >= 50 ? 'var(--text)' : 'var(--text3)') + '">' + f.up.toFixed(0) + '%</span>'
+      + '<span class="rb-gsub" style="color:' + _rbCol(f.med) + '">' + _rbPct(f.med, 2) + '</span>'
+      + '<span class="rb-gsub">' + f.n + ' 天</span></td>';
+  };
+  var line = function (code, name, d, isIdx) {
+    var pc = d.last;
+    var h = '<tr' + (isIdx ? ' class="rb-sysrow"' : '') + '>'
+      + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span></td>'
+      + '<td class="num rs-dim">' + (pc > 0 ? pc.toFixed(2) : '—') + '</td>'
+      + '<td class="num rs-dim">' + d.n + ' 天</td>'
+      + '<td class="num" style="color:' + _rbCol(d.gap) + ';font-weight:700">' + _rbPct(d.gap, 2) + px(pc, d.gap) + '</td>'
+      + '<td class="num" style="color:' + _rbCol(d.lo) + ';font-weight:700">' + _rbPct(d.lo, 2) + px(pc, d.lo) + '</td>'
+      + '<td class="num" style="color:' + _rbCol(d.cc) + '">' + _rbPct(d.cc, 2) + px(pc, d.cc) + '</td>';
+    d.fwd.forEach(function (f) { h += wcell(f); });
+    return h + '</tr>';
+  };
+  var dval = function (r, k) {
+    if (k === 'code') return r.c;
+    if (k === 'px') return r.d.last;
+    if (k === 'n') return r.d.n;
+    var m = /^w(\d+)$/.exec(k);
+    if (m) { var f = r.d.fwd[+m[1]]; return f ? f.up : null; }
+    return r.d[k] == null ? null : r.d[k];
+  };
+  rbSortRows(rows, _rbDSort, dval)
+    .forEach(function (r) { html += line(r.c, _rbName(r.c), r.d, false); });
+  if (twD) html += line('大盤', '加權指數', twD, true);
+  html += '</tbody></table></div>';
+
+  var ex = rows.reduce(function (a, r) { return a + r.d.exdiv; }, 0);
+  html += '<div class="rb-caveat">「翻正」是買在<b>達標日收盤</b>之後 N 個交易日的報酬，'
+    + '不是「對前收回來了沒」。最後幾個達標日還沒走滿天數，所以越右邊的欄位分母越小，各欄自己標。'
+    + '除息日整根排除（還原係數有沒有變動），本次共排掉 ' + ex + ' 日。'
+    + '開高低是未還原價，「前收」那幾欄跨除息日會把配息算成跳空，判法與大漲那一邊相同。</div>';
+  html += '</div>';
+  return html;
+}
+
 // ── 隔夜費半條件卡 ──
 // 決策視圖：未達門檻收成一行，達門檻才展表。分析視圖：一律展表。
 // 本卡不受「系統性」標記影響：那些標記是標在跌深事件上的，跟隔夜費半是兩組条件。
@@ -674,29 +856,47 @@ function _rbSoxHtml(view) {
     return '<div class="rb-caveat nb-keep">費半（^SOX）日線取不到（代理服務無回應或樣本不足），'
       + '隔夜條件卡略過；下方主表不受影響。</div>';
   }
-  var L = sox.last, on = L.r >= sox.thr;
+  var L = sox.last;
+  var side = _rbSoxSide(sox);
+  var ana0 = (view === 'ana');
+  var shown = (ana0 && _rbSoxView) ? _rbSoxView : (side || 'up');
+  var on = (side === shown);
+  var hit = _rbSoxHit(sox, shown);
   var idx = _rbData.idx, lastTw = idx[idx.length - 1];
-  var twChg = idx.length > 1 ? (lastTw.c / idx[idx.length - 2].c - 1) * 100 : null;
   // 費半最後一根落在台股最後一根的後面 → 台股還沒反應（同一日期的美股盤在台股收盤之後）
   var pending = L.d >= lastTw.d;
 
+  // 美股這一盤收了沒。沒收的話這個數字還會動，而門檻判定會跟著翻面：
+  // 2026-11-14 實測同一根 00:34 是 −4.89%、03:06 是 −3.80%，一個多小時回了 1.1 個百分點，
+  // 而大跌門檻 −3.37% 離 −3.80% 只剩 0.43。不標的話會把半場的分數當成終場。
+  var liveS = (typeof _ovSoxLive !== 'undefined') ? _ovSoxLive : null;
+  var sess = (liveS && liveS.open === true) ? '<b style="color:var(--caution)">盤中，還會變</b>'
+    : ((liveS && liveS.open === false) ? '已收盤' : '');
   var head = '費半 <b style="color:' + _rbCol(L.r) + '">' + _rbPct(L.r, 2)
-    + '</b>（' + L.d + '），門檻 <b>' + _rbPct(sox.thr, 2) + '</b>。';
+    + '</b>（' + L.d + (sess ? '，' + sess : '') + '，自身第 '
+    + (L.rank == null ? '—' : L.rank.toFixed(0)) + ' 百分位）。'
+    + '門檻 大漲 <b>' + _rbPct(sox.thr, 2) + '</b>／大跌 <b>' + _rbPct(sox.thrDn, 2) + '</b>。';
 
-  if (!on && view !== 'ana') {
-    return '<div class="rb-sox rb-sox-off nb-keep">隔夜費半未達門檻。' + head + '</div>';
+  if (!side && !ana0) {
+    return '<div class="rb-sox rb-sox-off nb-keep">隔夜費半兩邊都沒達標。' + head + '</div>';
   }
+  var sideBtn = !ana0 ? '' : '<div class="rb-sideb">'
+    + '<button class="pv-tab' + (shown === 'up' ? ' on' : '') + '" onclick="rbSoxSide(\'up\')">大漲那一邊</button>'
+    + '<button class="pv-tab' + (shown === 'dn' ? ' on' : '') + '" onclick="rbSoxSide(\'dn\')">大跌那一邊</button></div>';
+
+  if (shown === 'dn') return _rbSoxDnHtml(sox, hit, head, sideBtn, on, pending);
 
   var rows = _rbData.codes.map(function (c) {
-    return { c: c, s: _rbSoxFwd(_rbData.series[c] || [], sox, true), g: _rbSoxGap(_rbData.series[c] || [], sox) };
+    return { c: c, s: _rbSoxFwd(_rbData.series[c] || [], sox, true, hit),
+             g: _rbSoxGap(_rbData.series[c] || [], sox, hit) };
   }).filter(function (r) { return r.s; });
   rows.sort(function (a, b) { return b.s.med - a.s.med; });
-  var twS = _rbSoxFwd(idx, sox, false), twG = _rbSoxGap(idx, sox);
+  var twS = _rbSoxFwd(idx, sox, false, hit), twG = _rbSoxGap(idx, sox, hit);
 
-  var html = '<div class="rb-sox">';
+  var html = '<div class="rb-sox">' + sideBtn;
   html += '<div class="sec-title">隔夜費半大漲之後，台股當天</div>';
   html += '<div class="rb-sox-hd' + (on ? ' on' : '') + '">'
-    + (on ? '已達門檻。' : '未達門檻。') + head;
+    + (on ? '已達大漲門檻。' : '今天不在這一邊（下表是歷史分布）。') + head;
   if (on && pending) {
     // 台股上一個交易日對到的費半是否也達標 → 今天就是連續第二根
     var u2 = sox.prev(lastTw.d), prevHit = (u2 != null && sox.rets[u2] >= sox.thr);
@@ -720,8 +920,8 @@ function _rbSoxHtml(view) {
   var regNow = _rbRegimeNow(idx, cfg.regWin);
   var nowDn = (regNow != null && regNow < 0);
   var fills = {};
-  _rbData.codes.forEach(function (c) { fills[c] = _rbFill(_rbData.series[c] || [], sox, reg); });
-  var twF = _rbFill(idx, sox, reg);
+  _rbData.codes.forEach(function (c) { fills[c] = _rbFill(_rbData.series[c] || [], sox, reg, hit); });
+  var twF = _rbFill(idx, sox, reg, hit);
 
   html += '<div class="rb-sox-hd">現在是<b>' + (nowDn ? '連跌後' : '上漲中')
     + '</b>（大盤近 ' + cfg.regWin + ' 日 <b style="color:' + _rbCol(regNow) + '">'
@@ -851,6 +1051,40 @@ function _rbSoxHtml(view) {
   }
   html += '</div>';
   return html;
+}
+
+// 費半大跌那一邊的六欄
+function _rbSoxDipSixHtml() {
+  if (!_rbData || !_rbData.cfg.soxOn || !_rbData.sox) return '';
+  var sox = _rbData.sox, cfg = _rbData.cfg;
+  return '<dt>費半大跌後的翻正機率 · 定義</dt><dd>挑出「前一夜費半 ≤ 大跌門檻」的台股交易日'
+    + '（門檻是費半自身日報酬的第 ' + (100 - cfg.soxPct) + ' 百分位，近 ' + cfg.years + ' 年算出來是 '
+    + _rbPct(sox.thrDn, 2) + '，共 ' + sox.hitDn + ' 個費半交易日）。'
+    + '假設在那一天的台股收盤買進，看 1、3、5 個交易日之後的收盤是不是正報酬，'
+    + '列出正報酬的比例與報酬中位數。個股用還原收盤，除息日整根排除。</dd>'
+    + '<dt>費半大跌後的翻正機率 · 比較基準</dt><dd>跟「隨便哪一天買進」比才有意義，而這張表<b>沒有給那個對照</b>。'
+    + '表尾的大盤那一列是唯一的橫向對照：個股的翻正機率高於大盤，差額才是這幾檔自己的東西。'
+    + '所以這張表不能用來證明「費半大跌隔天買進比較好」，只能用來比較這幾檔之間誰反彈得快。</dd>'
+    + '<dt>費半大跌後的翻正機率 · 白話意義</dt><dd>費半昨晚重挫，如果你今天收盤接下來，'
+    + '歷史上過幾天會回到成本之上的比例大概是多少、通常賺賠多少。</dd>'
+    + '<dt>費半大跌後的翻正機率 · 機制</dt><dd>這幾檔重押台股半導體供應鏈，費半是同一條供應鏈的海外定價。'
+    + '傳導路徑：<code>費半收盤 → 台積電 ADR 與夜盤期貨先反應 → 隔日台股開盤缺口</code>。'
+    + '跌的那一邊多了一件漲的那一邊沒有的事：開盤跳空會把跌幅先給完一部分，'
+    + '所以「日內最低」通常比「開盤跳空」更深，掛在跳空價接不到的單，掛在日內最低附近才接得到。'
+    + '至於為什麼過幾天會翻正，機制不在費半，在於這類急殺多半是情緒定價、'
+    + '基本面沒有同步變化，所以價格會往回走。這也是它最容易失效的地方：'
+    + '當跌勢真的來自基本面（例如終端需求轉弱），價格不會往回走，而這張表分不出這兩種。</dd>'
+    + '<dt>費半大跌後的翻正機率 · 行動含義</dt><dd>它給的是掛價與等待天數的參考，不是進出訊號。'
+    + '「日內最低」那一欄換算出來的價格是掛限價買進真正接得到的位置；'
+    + '翻正機率那幾欄告訴你接到之後大概要等幾天才看得到正報酬。'
+    + '機率低於五成的那幾檔，意思是這個情境在它身上沒有優勢，單憑這張表不足以支撐買進。</dd>'
+    + '<dt>費半大跌後的翻正機率 · 不能告訴你什麼</dt><dd>四件事。'
+    + '一、分不出情緒急殺與基本面轉弱，而這兩者的後續完全相反（見機制）。'
+    + '二、樣本 ' + sox.hitDn + ' 個費半交易日看起來不少，但同一段修正會連續好幾天都達門檻，'
+    + '真正獨立的事件遠少於天數，1、3、5 日三欄之間又高度重疊，區間比數字看起來寬得多。'
+    + '三、沒有「隨便哪一天買進」的對照，所以證明不了這個情境本身有優勢。'
+    + '四、費半那一根若還在盤中（卡頭會標），門檻判定可能在收盤前翻面，'
+    + '現在看到的這一邊未必是最後成立的那一邊。</dd>';
 }
 
 // 日內形狀（開盤跳空）的六欄
@@ -1137,7 +1371,8 @@ function _rbDecHtml(dates, usableEps, sysEps) {
 
   // 決策視圖不放方法論：這一頁的目的是參考不是預測，推估邏輯是寫給自己看的。
   // 完整的六欄留在分析視圖。
-  html += '<div class="detail-note"><dl>' + _rbFillSixHtml() + '</dl></div>';
+  html += '<div class="detail-note"><dl>'
+    + (_rbSoxSide(_rbData.sox) === 'dn' ? _rbSoxDipSixHtml() : _rbFillSixHtml()) + '</dl></div>';
   return html;
 }
 
@@ -1192,7 +1427,8 @@ function _rbAnaHtml(dates, usableEps, sysEps) {
   html += '<div class="rb-caveat nb-keep">勾起來的事件從上方統計排除。目前 ' + usableEps + ' 段納入、' + sysEps + ' 段排除。'
     + '標記存在 ' + (_rbMStore === 'firestore' ? 'Firestore（已登入）' : '本機瀏覽器（未登入）') + '。</div>';
 
-  html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbGapSixHtml() + _rbSixHtml() + _rbMethodHtml() + '</dl></div>';
+  html += '<div class="detail-note"><dl>' + _rbSoxSixHtml() + _rbSoxDipSixHtml()
+    + _rbGapSixHtml() + _rbSixHtml() + _rbMethodHtml() + '</dl></div>';
   return html;
 }
 
