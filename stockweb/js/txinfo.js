@@ -12,79 +12,143 @@ async function startTxinfo() {
 }
 function refreshTxinfo() { loadSettleBox(); loadOrderBox(); }
 
-// ── 上左：台幣交割 ──
+// ── 上左：台幣交割（券商交割 ＋ 預計進出 ＋ 配息入帳，依日期排出帳上餘額）──
+// 原本只有券商那三筆。只看交割回答得了「要付多少」，回答不了「付得出來嗎」——
+// 後者要有起點（帳戶餘額）、要有其他會動的錢（提領、入金、配息），而且要照日期排。
+// 日期怎麼判斷「已經在餘額裡」統一寫在 acct.js 的檔頭，這裡不重複一套。
 async function loadSettleBox() {
   var el = document.getElementById('tx-settle-body');
   el.innerHTML = '<div class="modal-loading">查詢中…</div>';
   try {
     var rows = await fetchSettlements();
-    if (!rows || !rows.length) { el.innerHTML = '<div class="modal-loading">無交割資料</div>'; return; }
-    var sp = splitSettlements(rows);
-    // 餘額：以「帳戶餘額」為起點，依日期逐筆套上還沒扣款的交割。
-    // 已扣款那幾筆不扣第二次 —— 使用者輸入的是當下的銀行餘額，那些錢已經不在裡面了。
-    // 沒填帳戶餘額就整欄「—」，不用 0 充數：0 是一個金額，空白是沒有這個資訊。
-    var bal = (typeof abGet === 'function') ? abGet() : null;
-    var run = bal, abDay = (typeof abAtDay === 'function') ? abAtDay() : '';
-    // 依日期算，算完把結果掛回那一筆上（ord 與 rows 是同一批物件），
-    // 顯示順序維持券商給的順序，不另外重排
-    rows.slice().sort(function (a, b) { return (a.date || '') < (b.date || '') ? -1 : 1; })
-      .forEach(function (r) {
-        if (run == null || settleIsPaid(r, sp.today)) { r._bal = null; return; }
-        run += (r.amount || 0);
-        r._bal = run;
-      });
-    var html = '<table class="tx-settle-table"><thead><tr><th>交割日</th><th class="num">金額</th>'
-      + '<th class="num" title="帳戶餘額依日期逐筆套上還沒扣款的交割之後，那一天結束時帳上剩多少。'
-      + '已扣款的那幾筆不再扣一次。沒填帳戶餘額時整欄是「—」">餘額</th></tr></thead><tbody>';
-    rows.forEach(function (r) {
-      var amt = r.amount || 0;
-      var paid = settleIsPaid(r, sp.today);
-      var due = settleIsDueToday(r, sp.today);
-      var cls = amt > 0 ? 'up' : (amt < 0 ? 'down' : '');
-      var d = (r.date || '').slice(5).replace('-', '/');
-      var tl = r.T === 0 ? 'T' : 'T+' + r.T;
+    _abSettle = rows || [];
+    var sp = splitSettlements(rows || []);
+    var f = abFlow(rows || []);
+    var bal = f.start, abDay = abAtDay();
+    var today = _divTwDate().iso;
+
+    var html = '<table class="tx-settle-table"><thead><tr><th>日期</th><th>項目</th>'
+      + '<th class="num">金額</th>'
+      + '<th class="num" title="帳戶餘額依日期套上這些進出之後，那一天結束時帳上剩多少。'
+      + '輸入餘額之前就已經扣掉或入帳的不再算一次。沒填帳戶餘額時整欄是「—」">餘額</th>'
+      + '<th></th></tr></thead><tbody>';
+
+    // 起點列：看得見起點，下面每一列的餘額才有依據
+    html += '<tr class="tx-cf-start"><td>' + (abDay ? abDay.slice(5).replace('-', '/') : '—') + '</td>'
+      + '<td>帳戶餘額<span class="tx-st">起點</span></td><td class="num"></td>'
+      + '<td class="num tx-bal">' + (bal == null ? '<span class="dm-dim">未填</span>' : abMoney(bal)) + '</td>'
+      + '<td></td></tr>';
+
+    if (!f.rows.length) {
+      html += '<tr><td colspan="5" class="tx-cf-none">沒有待交割、預計進出或未入帳的配息</td></tr>';
+    }
+    f.rows.forEach(function (x) {
+      var d = (x.d || '').slice(5).replace('-', '/');
+      var due = x.kind === 'settle' && settleIsDueToday(x.ref, sp.today);
+      var paid = x.kind === 'settle' && settleIsPaid(x.ref, sp.today);
+      var tag = x.kind === 'plan' ? '<span class="tx-kind k-plan">自訂</span>'
+        : (x.kind === 'div' ? '<span class="tx-kind k-div">配息</span>'
+                            : '<span class="tx-kind k-stl">交割</span>');
+      // 已扣款但仍列出：它不在輸入當時的餘額裡（餘額是更早填的），所以照樣要扣。
+      // 標出來，否則看起來像重複計算。
       var pill = paid ? '<span class="tx-paid">已扣款</span>'
         : (due ? '<span class="tx-due">今日 ' + SETTLE_PAID_HOUR + ':00 交割</span>' : '');
-      var bv = r._bal;
-      var btxt = bv == null
-        ? '<span class="dm-dim" title="' + (bal == null ? '未填帳戶餘額' : '已扣款，這筆已經反映在帳戶餘額裡') + '">—</span>'
-        : '<span class="' + (bv < 0 ? 'tx-bal-neg' : '') + '"'
-          + (bv < 0 ? ' title="這一天扣完之後帳上不夠，要先入金"' : '')
-          + '>' + Math.round(bv).toLocaleString('zh-TW') + '</span>';
-      html += '<tr' + (paid ? ' class="tx-settle-paid"' : (due ? ' class="tx-settle-due"' : '')) + '>' +
-        '<td class="tx-sd">' + d + '<span class="tx-st">' + tl + '</span>' + pill + '</td>' +
-        '<td class="num ' + cls + '">' + (amt === 0 ? '0' : amt.toLocaleString('zh-TW')) + '</td>' +
-        '<td class="num tx-bal">' + btxt + '</td></tr>';
+      html += '<tr class="' + (x.kind === 'plan' ? 'tx-cf-plan' : (due ? 'tx-settle-due' : '')) + '">'
+        + '<td class="tx-sd">' + d + '</td>'
+        + '<td>' + tag + x.label + pill + '</td>'
+        + '<td class="num ' + (x.amt > 0 ? 'up' : (x.amt < 0 ? 'down' : '')) + '">' + abSigned(x.amt) + '</td>'
+        + '<td class="num tx-bal">' + (x.bal == null ? '<span class="dm-dim">—</span>'
+            : '<span class="' + (x.bal < 0 ? 'tx-bal-neg' : '') + '"'
+              + (x.bal < 0 ? ' title="這一天之後帳上不夠，要先入金"' : '') + '>' + abMoney(x.bal) + '</span>')
+        + '</td>'
+        + '<td class="tx-cf-act">' + (x.kind === 'plan'
+            ? '<button class="swap-mini" title="刪除這筆" onclick="apDel(\'' + x.id + '\').then(abRefreshViews)">✕</button>'
+            : '') + '</td></tr>';
     });
+
     var tot = sp.pending;
     var tcls = tot > 0 ? 'up' : (tot < 0 ? 'down' : '');
-    html += '<tr class="tx-settle-total"><td>合計待交割</td><td class="num ' + tcls + '">' +
+    html += '<tr class="tx-settle-total"><td></td><td>合計待交割</td><td class="num ' + tcls + '">' +
       (tot === 0 ? '0' : tot.toLocaleString('zh-TW')) + '</td>' +
-      '<td class="num tx-bal">' + (run == null
-        ? '<span class="dm-dim">—</span>'
-        : '<span class="' + (run < 0 ? 'tx-bal-neg' : '') + '"'
-          + (run < 0 ? ' title="全部扣完之後帳上不夠，要先入金"' : '')
-          + '>' + Math.round(run).toLocaleString('zh-TW') + '</span>')
-      + '</td></tr></tbody></table>' +
-      '<div class="detail-note nb">負數＝應付（銀行扣款）、正數＝應收。' +
-      '扣款門檻是交割日當天 ' + SETTLE_PAID_HOUR + ':00（銀行營業時間）：' +
-      '過了 ' + SETTLE_PAID_HOUR + ':00 標「已扣款」並<b>不計入</b>合計，' +
-      '未到標「今日 ' + SETTLE_PAID_HOUR + ':00 交割」並<b>仍計入</b>合計 —— ' +
-      '凌晨看的時候那筆錢還在帳上。' +
-      (sp.paidRows.length ? '本次已扣 ' + sp.paid.toLocaleString('zh-TW') + '。' : '') +
-      (sp.dueRows.length
-        ? '<b>今日 ' + SETTLE_PAID_HOUR + ':00 待交割 ' + sp.dueToday.toLocaleString('zh-TW') +
-          '</b>，已含在合計裡；過了 ' + SETTLE_PAID_HOUR + ':00 會自動移出。'
-        : '')
-      + '<br>餘額欄：起點是你在總覽「部位與配置」填的<b>帳戶餘額</b>'
+      '<td class="num tx-bal">' + (f.end == null ? '<span class="dm-dim">—</span>'
+        : '<span class="' + (f.end < 0 ? 'tx-bal-neg' : '') + '"'
+          + (f.end < 0 ? ' title="全部走完之後帳上不夠，要先入金"' : '') + '>' + abMoney(f.end) + '</span>')
+      + '</td><td></td></tr></tbody></table>';
+
+    // ── 過期的預計進出：不自動清掉，先問 ──
+    var od = apOverdue();
+    if (od.length) {
+      html += '<div class="tx-od"><div class="tx-od-t">這幾筆過了日期，已經停止計入餘額</div>';
+      od.forEach(function (p) {
+        html += '<div class="tx-od-r"><span class="tx-od-d">' + p.date.slice(5).replace('-', '/') + '</span>'
+          + '<span class="tx-od-m">' + (p.memo || ((p.amt || 0) < 0 ? '提領' : '入金')) + '</span>'
+          + '<span class="num tx-od-a ' + ((p.amt || 0) > 0 ? 'up' : 'down') + '">' + abSigned(p.amt) + '</span>'
+          + '<button class="btn-query" title="這筆錢真的動了：併進帳戶餘額並刪掉這一列"'
+          + ' onclick="apApply(\'' + p.id + '\').then(abRefreshViews)">已扣</button>'
+          + '<button class="btn-query" title="還沒發生：改成明天，之後再調"'
+          + ' onclick="apPostpone(\'' + p.id + '\')">沒扣</button>'
+          + '<button class="swap-mini" onclick="apDel(\'' + p.id + '\').then(abRefreshViews)">刪除</button></div>';
+      });
+      html += '</div>';
+    }
+
+    // ── 新增一筆預計進出 ──
+    html += '<div class="tx-add"><span class="tx-add-t">預計進出</span>'
+      + '<input id="ap-d" class="ap-in ap-date" type="date" value="' + today + '" title="發生日期">'
+      + '<input id="ap-a" class="ap-in ap-amt" type="text" inputmode="numeric" placeholder="金額" '
+      + 'title="負數＝提領、轉出；正數＝入金、轉入" onkeydown="if(event.key===\'Enter\')apAddFromForm()">'
+      + '<input id="ap-m" class="ap-in ap-memo" type="text" placeholder="說明（選填）" '
+      + 'onkeydown="if(event.key===\'Enter\')apAddFromForm()">'
+      + '<button class="btn-query" onclick="apAddFromForm()">＋ 加入</button>'
+      + '<span id="ap-msg" class="wt-dim"></span></div>';
+
+    html += '<div class="detail-note nb">金額負數＝付出（銀行扣款、提領），正數＝收到（應收、入金、配息）。'
+      + '扣款門檻是交割日當天 ' + SETTLE_PAID_HOUR + ':00（銀行營業時間）。'
+      + (sp.dueRows.length
+          ? '<b>今日 ' + SETTLE_PAID_HOUR + ':00 待交割 ' + sp.dueToday.toLocaleString('zh-TW') + '</b>，'
+            + '過了就會從「合計待交割」移出。'
+          : '')
+      + '<br><b>餘額欄怎麼算</b>：起點是你在總覽「部位與配置」填的帳戶餘額'
       + (bal == null
           ? '，目前<b>未填</b>，所以整欄是「—」。券商 API 給得出交割應收付，給不出銀行帳戶裡有多少錢，那兩件事在不同機構。'
-          : '（' + bal.toLocaleString('zh-TW') + (abDay ? '，於 ' + abDay + ' 輸入' : '') + '）'
-            + '，依日期逐筆套上還沒扣款的交割。已扣款的不再扣一次——你填的是當下的餘額，那些錢已經不在裡面了。'
-            + '起點是你輸入那一刻的數字，之後有入金、出金或配息入帳要自己更新，這裡不會知道。')
-      + '</div>';
+          : '（' + bal.toLocaleString('zh-TW') + (abDay ? '，於 ' + abDay + ' 輸入' : '') + '）。'
+            + '往後只加減<b>那一刻之後才會動的錢</b>：輸入前就扣掉的交割、輸入前就入帳的配息都不再算一次。'
+            + '所以一筆標「已扣款」的交割仍然可能列在上面——它現在扣掉了，但它不在你當初填的那個數字裡。')
+      + '<br><b>配息入帳</b>：'
+      + (f.hasDiv ? '取自股利估算的月度結果（可領張數已依建倉明細判定），只列發放日還沒到的。'
+                  : '<b>未計入</b>——股利估算頁這次還沒載入過，拿不到發放日與金額。'
+                    + '<button class="btn-query" onclick="txLoadDiv()">載入配息</button>'
+                    + '沒有它，下面的餘額只扣不加，會比實際低。')
+      + '<br><b>預計進出</b>：提領、入金這類券商看不到的動帳，自己排進來。'
+      + '過了日期不會自動消失——直接刪掉的話，萬一你還沒更新帳戶餘額，往後的餘額會悄悄多出那一筆。'
+      + '過期的會停止計入並列在表格下方，按「已扣」才併進帳戶餘額。</div>';
     el.innerHTML = html;
   } catch (e) { el.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>'; }
+}
+// 配息入帳要股利估算的結果。它是重活（逐檔抓配息紀錄），不自動跑，按了才跑。
+async function txLoadDiv() {
+  var m = document.getElementById('ap-msg');
+  if (m) m.textContent = '載入配息資料…';
+  try { if (typeof startDividendEst === 'function') await startDividendEst(false); }
+  catch (e) { hush('txinfo', e); }
+  loadSettleBox();
+}
+async function apAddFromForm() {
+  var d = document.getElementById('ap-d'), a = document.getElementById('ap-a'), m = document.getElementById('ap-m');
+  var msg = document.getElementById('ap-msg');
+  var raw = String(a.value || '').replace(/[,\s元]/g, '');
+  var v = raw === '' ? null : Number(raw);
+  if (!d.value) { if (msg) msg.textContent = '要先選日期'; return; }
+  if (v == null || !isFinite(v) || v === 0) { if (msg) msg.textContent = '金額要是數字，負數＝提領、正數＝入金'; return; }
+  await apAdd(d.value, v, String(m.value || '').trim());
+  loadSettleBox();
+}
+// 「沒扣」＝還沒發生，往後挪一天。挪到哪一天使用者自己最清楚，
+// 這裡只負責讓它離開過期狀態，不替他猜日期。
+async function apPostpone(id) {
+  var t = new Date(Date.now() + 8 * 3600000 + 86400000).toISOString().slice(0, 10);
+  await apSet(id, { date: t });
+  loadSettleBox();
 }
 
 // ── 上右：今日委託與成交彙整 ──

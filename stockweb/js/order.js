@@ -155,6 +155,26 @@ function ordSubmit() {
   }
 }
 
+// 交割那天帳上還剩多少。
+//
+// 為什麼放在這裡：下單是唯一一個「現在決定、兩天後扣錢」的動作，
+// 而那兩天之間還有別的交割、提領與配息會動。只看價金看不出付不付得出來。
+//
+// 這一行是估算：價金未計手續費與交易稅（上面那行已標明），所以餘額偏樂觀。
+function _ordCashHtml(buy, amt) {
+  if (typeof abGet !== 'function' || abGet() == null) return '';
+  var d = abSettleDay(2);
+  var before = abBalAt(_abSettle || [], d);
+  if (before == null) return '';
+  var after = before + (buy ? -Math.round(amt) : Math.round(amt));
+  var md = d.slice(5).replace('-', '/');
+  return '<div class="ord-cash' + (after < 0 ? ' short' : '') + '">'
+    + md + '（T+2）交割後帳上預估 <b>' + abMoney(after) + '</b> 元'
+    + '<span class="ord-dim">　這筆之前 ' + abMoney(before) + '</span>'
+    + (after < 0 ? '<span class="ord-short">不夠付，要先入金</span>' : '')
+    + '</div>';
+}
+
 function _ordRender() {
   var el = document.getElementById('ord-body');
   if (!el || !_ord) return;
@@ -194,6 +214,7 @@ function _ordRender() {
       '<span class="ord-dim">（未計手續費' + (buy ? '' : '與交易稅') + '）</span>' +
       (c.limit_up != null ? '<span class="ord-dim">　漲停 ' + _ordFmt(c.limit_up) +
         '／跌停 ' + _ordFmt(c.limit_down) + '</span>' : '') + '</div>' +
+    _ordCashHtml(buy, amt) +
     '<div class="ord-ticks"><div class="ord-ticks-t">整股　最近 ' + ORD_TICKS + ' 筆</div>' +
       _ordTicksHtml() + '</div>' +
     '<div id="ord-dry" class="ord-dry" style="display:none"></div>';
