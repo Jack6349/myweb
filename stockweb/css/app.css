@@ -218,6 +218,15 @@ html, body { overflow-x: clip; }
 .fx-hit { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
   background: var(--up); margin-right: 5px; vertical-align: middle; }
 .sum-plabel { font-size: 14px; color: var(--text2); font-weight: 600; }
+/* 帳戶餘額的輸入格：外觀跟旁邊幾個數字一致（同字級、等寬、右對齊），
+   只有游標移上去才看得出它可以打字——它是這一排唯一能改的東西，不該一直喊著自己是表單。 */
+.ab-inp { width: 104px; font: 700 14px inherit; font-variant-numeric: tabular-nums; letter-spacing: -.5px;
+  text-align: right; color: var(--text); background: transparent;
+  border: 1px solid transparent; border-radius: 4px; padding: 1px 4px; }
+.ab-inp:hover { border-color: var(--border); }
+.ab-inp:focus { border-color: var(--accent2); outline: none; background: var(--bg2); }
+.ab-inp::placeholder { color: var(--text3); font-weight: 400; }
+.ab-at { font-size: 11px; color: var(--text3); }
 .sum-pval { font-size: 14px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
 .btn-toggle { background: rgba(138,180,212,.14); border: 1px solid rgba(138,180,212,.45); color: var(--accent3); font-size: 12px; font-weight: 600; padding: 4px 0; border-radius: 6px; cursor: pointer; font-family: var(--font); white-space: nowrap; width: 84px; text-align: center; box-sizing: border-box; flex-shrink: 0; }
 .btn-toggle:hover { background: rgba(138,180,212,.26); }
@@ -532,6 +541,14 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-settle-table { font-size: 14px; }
 .tx-settle-table td { padding: 6px 2px; border-bottom: 1px solid var(--border); }
 .tx-settle-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tx-settle-table th { text-align: left; color: var(--th); font-weight: 600; font-size: 11.5px;
+  letter-spacing: .8px; border-bottom: 2px solid var(--border); padding: 4px 2px; }
+.tx-settle-table th.num { text-align: right; }
+/* 餘額欄：它是推算值，不是券商給的數字，字色退一階與左邊兩欄分開 */
+.tx-settle-table td.tx-bal { color: var(--text2); }
+/* 餘額是負的＝那一天扣完帳上不夠。這不是「跌」，紅綠在這個 App 裡專給漲跌用，
+   拿綠色標一個「錢不夠」會讀成好消息。用警示橘。 */
+.tx-bal-neg { color: var(--warn); font-weight: 700; }
 .tx-sd { color: var(--text2); }
 .tx-st { color: var(--text3); font-size: 11px; margin-left: 8px; }
 /* 說明收合（note.js 自動包）：預設收起，只留一列「說明」 */
