@@ -549,8 +549,9 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-settle-table th { text-align: left; color: var(--th); font-weight: 600; font-size: 11.5px;
   letter-spacing: .8px; border-bottom: 2px solid var(--border); padding: 4px 2px; }
 .tx-settle-table th.num { text-align: right; }
-/* 餘額欄：它是推算值，不是券商給的數字，字色退一階與左邊兩欄分開 */
-.tx-settle-table td.tx-bal { color: var(--text2); }
+/* 餘額欄：與頂欄損益表的「現值」同色（--accent2）。
+   兩者都是「現在帳上有多少」，用同一個顏色讀起來才是同一類數字。 */
+.tx-settle-table td.tx-bal { color: var(--accent2); }
 /* 餘額是負的＝那一天扣完帳上不夠。這不是「跌」，紅綠在這個 App 裡專給漲跌用，
    拿綠色標一個「錢不夠」會讀成好消息。用警示橘。 */
 .tx-bal-neg { color: var(--warn); font-weight: 700; }
