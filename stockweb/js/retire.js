@@ -154,6 +154,9 @@ function rtRenderSummary() {
 // 支出對照配息：月份總覽已經算出逐月入帳，這裡只做相減與累計餘額
 // 現金流對照表：顯示在 股利估算 → 月份總覽 底下（divnav.js 呼叫），不在設定頁
 function rtCashHtml() {
+  // 設定還沒載好就先回一句話。呼叫端本來就該先 rtLoad()，但少一道防線的代價是
+  // 整張表炸掉而且錯誤被吞掉，畫面停在舊內容沒有任何跡象。
+  if (!_rtCfg) return '<div class="set-hint">載入支出設定中…</div>';
   var y = rtYearTotal();
   if (_rtCfg.base == null && !Object.keys(_rtCfg.months).length) {
     return '<div class="set-hint">填入月基準後，這裡會顯示年支出合計；配息對照需要股利估算頁先載入月份總覽。</div>';

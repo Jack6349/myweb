@@ -14,15 +14,19 @@ async function startTxinfo() {
 function refreshTxinfo() { loadSettleBox(); loadOrderBox(); txEnsureDiv(); }
 
 // 配息入帳要股利估算的結果（逐檔抓配息紀錄，約十幾秒）。
-// 沒有它，台幣交割的餘額只扣不加，會比實際低——那比慢十幾秒嚴重。
-// 一個瀏覽器工作階段只算一次：算完存在 _divEstResult，股利估算頁也直接拿去用。
+// 沒有它，台幣交割的餘額只扣不加，會比實際低。
+//
+// 盤中不自動算：那十幾秒會跟行情訂閱、快照搶同一條券商連線與同一份流量額度，
+// 而盤中要看的是價格，不是年底還剩多少。改成按一下才算，非交易時段才自動。
+// 一個工作階段只算一次：算完存在 _divEstResult，股利估算頁也直接拿去用。
 var _txDivBusy = false;
-async function txEnsureDiv() {
+async function txEnsureDiv(force) {
   if (_txDivBusy) return;
-  if (typeof _divEstResult !== 'undefined' && _divEstResult) return;
+  if (!force && typeof _divEstResult !== 'undefined' && _divEstResult) return;
+  if (!force && typeof _twOpen === 'function' && _twOpen()) return;   // 盤中只在按了才算
   if (typeof startDividendEst !== 'function') return;
   _txDivBusy = true;
-  loadSettleBox();                      // 先把「載入中」標出來
+  loadSettleBox();                      // 先把「計算中」標出來
   try { await startDividendEst(false); } catch (e) { hush('txinfo', e); }
   _txDivBusy = false;
   loadSettleBox();
@@ -113,7 +117,10 @@ async function loadSettleBox() {
     html += '<div class="tx-sec">配息入帳<span class="tx-sec-n">預估，另外算</span></div>';
     if (!f.hasDiv) {
       html += '<div class="tx-cf-none tx-sec-b">'
-        + (_txDivBusy ? '計算中…' : '這次沒算出來') + '</div>';
+        + (_txDivBusy ? '計算中…'
+            : ((typeof _twOpen === 'function' && _twOpen())
+                ? '盤中不自動算，見下方說明'
+                : '這次沒算出來')) + '</div>';
     } else if (!div.length) {
       html += '<div class="tx-cf-none tx-sec-b">今年剩下的發放日都過了</div>';
     } else {
@@ -187,20 +194,22 @@ async function loadSettleBox() {
       + (f.hasDiv ? '取自股利估算的月度結果（可領張數已依建倉明細判定），只列發放日還沒到的。'
                   : (_txDivBusy
                       ? '<b>計算中</b>——逐檔抓配息紀錄約十幾秒，好了會自動補進上面的表。'
-                        + '在那之前餘額只扣不加，會比實際低。'
-                      : '<b>未計入</b>——這次自動載入沒成功（通常是資料來源沒回應）。'
-                        + '<button class="btn-query" onclick="txLoadDiv()">重試</button>'
-                        + '沒有它，下面的餘額只扣不加，會比實際低。'))
+                      : ((typeof _twOpen === 'function' && _twOpen())
+                          ? '<b>盤中不自動算</b>——那十幾秒會跟行情搶同一條券商連線與流量額度，'
+                            + '而盤中要看的是價格。要看配息按一下，收盤後進這一頁會自動算。'
+                            + '<button class="btn-query" onclick="txLoadDiv()">現在算</button>'
+                          : '<b>未計入</b>——這次自動載入沒成功（通常是資料來源沒回應）。'
+                            + '<button class="btn-query" onclick="txLoadDiv()">重試</button>')))
       + '<br><b>預計進出</b>：提領、入金這類券商看不到的動帳，自己排進來。'
       + '過了日期不會自動消失——直接刪掉的話，萬一你還沒更新帳戶餘額，往後的餘額會悄悄多出那一筆。'
       + '過期的會停止計入並列在表格下方，按「已扣」才併進帳戶餘額。</div>';
     el.innerHTML = html;
   } catch (e) { el.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>'; }
 }
-// 自動載入失敗後的重試
+// 手動算一次：盤中的唯一入口，也是非交易時段自動載入失敗後的重試
 async function txLoadDiv() {
   if (typeof _divEstResult !== 'undefined') _divEstResult = null;
-  await txEnsureDiv();
+  await txEnsureDiv(true);
 }
 async function apAddFromForm() {
   var d = document.getElementById('ap-d'), a = document.getElementById('ap-a'), m = document.getElementById('ap-m');
