@@ -558,12 +558,24 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-sd { color: var(--text2); }
 /* ── 台幣交割：現金流表 ── */
 .tx-settle-table .tx-cf-start td { color: var(--text2); border-bottom: 1px dashed var(--border); }
+/* 起點是整張表唯一的事實（你親手填的），其餘每一列都是推算。
+   它要亮，不然亮暗之分就沒有基準可比。 */
+.tx-settle-table .tx-cf-start td.tx-bal { color: var(--accent2); font-weight: 700; }
 .tx-settle-table .tx-cf-none { color: var(--text3); text-align: center; padding: 10px 2px; }
 .tx-kind { font-size: 10px; border-radius: 3px; padding: 1px 4px; margin-right: 6px; vertical-align: 1px; }
 .tx-kind.k-stl { background: rgba(255,255,255,.08); color: var(--text2); }
 .tx-kind.k-div { background: rgba(38,217,98,.16); color: var(--down); }
 .tx-kind.k-plan { background: rgba(240,204,122,.16); color: var(--accent2); }
 .tx-cf-act { width: 26px; text-align: right; }
+/* 日期還沒到的餘額是推算，不是事實。退一階，錢真的動了才是正色。 */
+.tx-fut { color: var(--text2); }
+.tx-sec { font-size: 12px; color: var(--accent2); font-weight: 600; margin: 10px 0 2px;
+  border-top: 1px solid var(--border); padding-top: 8px; }
+.tx-sec-n { color: var(--text3); font-weight: 400; margin-left: 6px; }
+.tx-sec-b { padding: 6px 2px; }
+.tx-both { margin-top: 8px; font-size: 13px; color: var(--text2); }
+.tx-both b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.tx-both-n { display: block; font-size: 11px; color: var(--text3); }
 .tx-cf-plan td { background: rgba(240,204,122,.05); }
 /* 過期的預計進出：停止計入，等使用者說它到底扣了沒 */
 .tx-od { margin: 8px 0 0; border: 1px solid rgba(255,159,67,.45); border-radius: 6px; padding: 6px 8px; }
