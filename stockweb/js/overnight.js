@@ -14,6 +14,19 @@
 // 說明力最高 0.54、最低 0.26：**一半以上的隔日漲跌這兩個訊號解釋不了**。
 // 所以卡片給的是區間不是點，而且區間寬度各檔不同（偏移度那張表）。
 
+// 分 K 的時刻標在「那一分鐘的結尾」，不是開頭。
+// 實測兩次：牆上時鐘 00:36:51 時最後一根標 00:37:00，00:38:27 時標 00:39:00。
+// 也就是標 00:34 的那根涵蓋的是 00:33:00～00:33:59。
+// 直接把標籤當成成交時刻顯示，畫面會比系統時間早一分鐘，看起來像抓到了未來的資料。
+// loadTxfIntra 的檔頭寫「日盤 08:46 → 13:45」也是同一件事：開盤是 08:45，
+// 第一根被標成 08:46。
+function kbarMin(iso) {
+  if (!iso || iso.length < 16) return '';
+  var h = +iso.slice(11, 13), m = +iso.slice(14, 16) - 1;
+  if (m < 0) { m = 59; h = (h + 23) % 24; }
+  return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+}
+
 var OV_URL = 'data/night-txf.json';
 var OV_REC_LS = 'overnight_rec_v1';      // 命中率紀錄（預測 vs 實際）
 var _ovNight = null, _ovToday = null, _ovBusy = false, _ovRec = null, _ovAt = null;
@@ -98,7 +111,7 @@ async function ovTodayNight() {
     var drive = (nd > lastDayDate) ? nd
       : new Date(Date.parse(lastDayDate) + 86400000).toISOString().slice(0, 10);
     _ovToday = { d: drive, pct: (cl[nIdx] / baseClose - 1) * 100, src: 'live',
-                 base: lastDayDate, at: dt[nIdx].slice(11, 16), pending: pending,
+                 base: lastDayDate, at: kbarMin(dt[nIdx]), pending: pending,
                  bp: baseClose, np: cl[nIdx] };
   } catch (e) { hush('overnight', e); _ovToday = fallback(); }
   return _ovToday;
@@ -560,8 +573,20 @@ function ovHtml(view) {
   var nf = function (v) { return v == null ? '—' : Math.round(v).toLocaleString('zh-TW'); };
   // 標額區只留「現在是什麼狀況」的事實，解釋全改放到下方的說明裡。
   // 舊版這一塊 418 字，而且用的是標額標記，全站的說明收合機制根本收不到它。
+  // 基準要標出來。這個百分比比的是「日盤最後一根 K 的收盤」，
+  // 總覽盤勢那一格比的是「期交所參考價」（當日結算價＝最後一分鐘的成交量加權均價），
+  // 兩者差幾點，所以同一時刻兩邊會差 0.02～0.03 個百分點。
+  // 這裡不能改用期交所參考價：night-txf.json 的 446 天歷史全是用日盤 K 收盤算的，
+  // 換基準等於餵給迴歸的輸入跟當初配適的定義不一致。
+  var nbTip = t.bp != null
+    ? '基準＝' + nf(t.bp) + '（' + (t.base || '') + ' 日盤最後一根 K 的收盤）。'
+      + '總覽盤勢那一格用的是期交所參考價，兩者差幾點，所以百分比會差 0.02～0.03。'
+      + '這裡用日盤收盤是為了跟 446 天的夜盤歷史同一個定義，換成參考價會讓迴歸的輸入前後不一致。'
+    : '';
   h += '<div class="rb-sox-hd on">台指期夜盤 <b style="color:' + _rbCol(t.pct) + '">' + pct(t.pct) + '</b>'
-    + '（' + nf(t.np) + (t.at ? '，' + t.at : '') + '）　'
+    + '（' + nf(t.np) + (t.at ? '，' + t.at : '')
+    + (t.bp != null ? '，<span class="ov-base" title="' + nbTip.replace(/"/g, '&quot;')
+        + '">基準 ' + nf(t.bp) + '</span>' : '') + '）　'
     + '隔夜費半 <b style="color:' + _rbCol(sox) + '">' + pct(sox) + '</b>'
     + (_ovSoxLive
         ? '（' + _ovSoxLive.at
