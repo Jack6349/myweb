@@ -104,6 +104,61 @@ async function rbMarkToggle(date, on) {
 
 // ── 日線（Yahoo，經 GAS 代理；還原收盤優先）──
 var _rbBars = {};
+// ══════════ Yahoo 的台股日線整天缺值時，用本機券商的分K補回來 ══════════
+// 2026-11-12 實測：^TWII 有 43,091.87，但個股與 ETF 全部是 null——
+// 00934、0056、00878、八檔主動式，open/high/low/close/volume 無一例外。
+// 缺的那一天會被濾掉，「前收」於是退回再前一天：00934 顯示 27.66（11/11 收），
+// 實際 11/12 收 27.09，整列的漲跌、推估、實際全部錯一天，而畫面上看不出來。
+//
+// 交易日曆用大盤（^TWII）：它有值而個股沒有，缺口才看得出來。
+// 只補最近幾個交易日，更早的缺口影響不到前收與推估，不值得花配額。
+var RB_GAP_DAYS = 6;
+async function _rbDayFromBroker(code, d) {
+  var ex = (typeof _ovEx === 'function') ? _ovEx(code) : 'TSE';
+  var tries = (ex === 'OTC') ? ['OTC', 'TSE'] : ['TSE', 'OTC'];
+  for (var a = 0; a < tries.length; a++) {
+    try {
+      var r = await fetch('/api/v1/data/kbars', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contract: { security_type: 'STK', exchange: tries[a], code: code }, start: d, end: d })
+      });
+      if (!r.ok) continue;
+      var j = await r.json(), dt = j.datetime || [];
+      var o = null, h = -Infinity, l = Infinity, c = null, v = 0, n = 0;
+      for (var i = 0; i < dt.length; i++) {
+        if (dt[i].slice(0, 10) !== d) continue;
+        n++;
+        if (o == null && j.Open[i] > 0) o = j.Open[i];
+        if (j.High[i] > h) h = j.High[i];
+        if (j.Low[i] < l) l = j.Low[i];
+        if (j.Close[i] > 0) c = j.Close[i];
+        v += j.Volume[i] || 0;
+      }
+      if (!n || !(c > 0)) continue;
+      // 還原價跟著收盤：這一天有沒有除息無從得知，a === c 代表「不還原」。
+      // ovEstimate 用 a/c 的倍率偵測除息日，相等就不會被誤判成除息。
+      // 成交量券商給「張」、Yahoo 給「股」，不乘回去的話這一天在 20 日均量裡
+      // 只剩千分之一，量能那一欄會整排偏掉。
+      return { d: d, c: c, a: c, o: o, h: (h === -Infinity ? null : h),
+               l: (l === Infinity ? null : l), v: v * 1000, src: 'broker' };
+    } catch (e) { hush('rebound-gap', e); }
+  }
+  return null;
+}
+async function _rbPatchGaps(code, out, cal) {
+  if (!out || !cal || !cal.length) return out;
+  var have = {};
+  out.forEach(function (b) { have[b.d] = 1; });
+  var miss = cal.slice(-RB_GAP_DAYS).filter(function (d) { return !have[d]; });
+  if (!miss.length) return out;                 // 正常情況一次都不會往下走
+  for (var i = 0; i < miss.length; i++) {
+    var b = await _rbDayFromBroker(code, miss[i]);
+    if (b) out.push(b);
+  }
+  out.sort(function (a, b2) { return a.d < b2.d ? -1 : 1; });
+  return out;
+}
+
 async function _rbSeries(sym, years) {
   var key = sym + '|' + years;
   if (_rbBars[key]) return _rbBars[key];
@@ -463,9 +518,12 @@ async function startRebound(force) {
     return;
   }
   var series = {};
+  // 交易日曆取自大盤，用來偵測個股日線整天缺值（見 _rbPatchGaps）
+  var cal = idx.map(function (b) { return b.d; });
   for (var i = 0; i < codes.length; i++) {
     if (info) info.textContent = '抓取 ' + codes[i] + ' 日線…（' + (i + 1) + '/' + codes.length + '）';
     series[codes[i]] = await _rbSeries(codes[i], cfg.years);
+    try { await _rbPatchGaps(codes[i], series[codes[i]], cal); } catch (e) { hush('rebound', e); }
   }
   var sox = null;
   if (cfg.soxOn) {
