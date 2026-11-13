@@ -771,6 +771,12 @@ function dwTab(k) {
 function renderDrawer() {
   var d = document.getElementById('dw');
   if (!d) return;
+  // 盤中每一筆 tick 都會重畫這個抽屜。帳戶餘額是裡面唯一能打字的欄位，
+  // 整張 innerHTML 換掉就把它連同游標一起丟了——實測點進去焦點立刻跳開，
+  // 一個字都打不進去。正在輸入時整張不重畫：旁邊那幾個數字停個幾秒沒人看得出來，
+  // 打不了字是功能壞掉。離開欄位（blur）會存檔並重畫，不會停在舊值。
+  var ae = document.activeElement;
+  if (_dwOpen && ae && ae.id === 'ab-inp') return;
   d.hidden = !_dwOpen;
   if (!_dwOpen) { d.innerHTML = ''; return; }   // 收起時不留 DOM，盤中不跟著重繪
   var t = portfolioTotals();

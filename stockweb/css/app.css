@@ -220,12 +220,17 @@ html, body { overflow-x: clip; }
 .sum-plabel { font-size: 14px; color: var(--text2); font-weight: 600; }
 /* 帳戶餘額的輸入格：外觀跟旁邊幾個數字一致（同字級、等寬、右對齊），
    只有游標移上去才看得出它可以打字——它是這一排唯一能改的東西，不該一直喊著自己是表單。 */
-.ab-inp { width: 104px; font: 700 14px inherit; font-variant-numeric: tabular-nums; letter-spacing: -.5px;
-  text-align: right; color: var(--text); background: transparent;
-  border: 1px solid transparent; border-radius: 4px; padding: 1px 4px; }
-.ab-inp:hover { border-color: var(--border); }
-.ab-inp:focus { border-color: var(--accent2); outline: none; background: var(--bg2); }
-.ab-inp::placeholder { color: var(--text3); font-weight: 400; }
+/* 字級用三個長寫，不用 font 簡寫：`font: 700 14px inherit` 整條是無效宣告
+   （簡寫的字體家族不接受 inherit），瀏覽器會整條丟掉，輸入框因此掉回系統預設
+   的小字、不粗體，跟旁邊幾個數字完全不同一套。 */
+.ab-inp { width: 104px; font-family: inherit; font-size: 14px; font-weight: 700;
+  font-variant-numeric: tabular-nums; letter-spacing: -.5px;
+  text-align: right; color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; }
+.ab-inp:hover { border-color: var(--text3); }
+.ab-inp:focus { border-color: var(--accent2); outline: none;
+  box-shadow: 0 0 0 2px rgba(90,169,255,.25); background: var(--bg2); }
+.ab-inp::placeholder { color: var(--text3); font-weight: 400; letter-spacing: 0; }
 .ab-at { font-size: 11px; color: var(--text3); }
 .sum-pval { font-size: 14px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
 .btn-toggle { background: rgba(138,180,212,.14); border: 1px solid rgba(138,180,212,.45); color: var(--accent3); font-size: 12px; font-weight: 600; padding: 4px 0; border-radius: 6px; cursor: pointer; font-family: var(--font); white-space: nowrap; width: 84px; text-align: center; box-sizing: border-box; flex-shrink: 0; }
