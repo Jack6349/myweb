@@ -422,7 +422,11 @@ async function startRebound(force) {
   var wrap = document.getElementById('rebound-wrap');
   var info = document.getElementById('rebound-info');
   if (!wrap) return;
-  if (_rbData && !force) { rbRender(); return; }
+  if (_rbData && !force) {
+    rbRender();
+    if (typeof ovLiveStart === 'function') ovLiveStart();   // 回到這一頁要重新開始跟現價
+    return;
+  }
   wrap.innerHTML = '<div class="modal-loading">抓取大盤與各檔日線…</div>';
 
   if (typeof ensureFeed === 'function' && !Object.keys((typeof _sharesMap !== 'undefined' && _sharesMap) || {}).length) {
@@ -476,6 +480,7 @@ async function startRebound(force) {
   if (typeof bsPrepare === 'function') { try { await bsPrepare(force); } catch (e) { hush('rebound', e); } }
   if (info) info.textContent = '資料日 ' + idx[idx.length - 1].d + '（Yahoo 日線，' + cfg.years + ' 年）';
   rbRender();
+  if (typeof ovLiveStart === 'function') ovLiveStart();
 }
 
 function rbView(v) {
