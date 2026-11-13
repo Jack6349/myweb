@@ -6,11 +6,27 @@ async function startTxinfo() {
   errEl.style.display = 'none';
   if (!(await checkServer())) { errEl.style.display = 'block'; errEl.innerHTML = serverDownHtml(); return; }
   loadSettleBox();
+  txEnsureDiv();          // 背景算配息，算完重畫交割框；不擋下面三個查詢
   loadOrderBox();
   initTradeDates();
   loadTrades(); // 下半框沿用交易紀錄（元素 id 不變）
 }
-function refreshTxinfo() { loadSettleBox(); loadOrderBox(); }
+function refreshTxinfo() { loadSettleBox(); loadOrderBox(); txEnsureDiv(); }
+
+// 配息入帳要股利估算的結果（逐檔抓配息紀錄，約十幾秒）。
+// 沒有它，台幣交割的餘額只扣不加，會比實際低——那比慢十幾秒嚴重。
+// 一個瀏覽器工作階段只算一次：算完存在 _divEstResult，股利估算頁也直接拿去用。
+var _txDivBusy = false;
+async function txEnsureDiv() {
+  if (_txDivBusy) return;
+  if (typeof _divEstResult !== 'undefined' && _divEstResult) return;
+  if (typeof startDividendEst !== 'function') return;
+  _txDivBusy = true;
+  loadSettleBox();                      // 先把「載入中」標出來
+  try { await startDividendEst(false); } catch (e) { hush('txinfo', e); }
+  _txDivBusy = false;
+  loadSettleBox();
+}
 
 // ── 上左：台幣交割（券商交割 ＋ 預計進出 ＋ 配息入帳，依日期排出帳上餘額）──
 // 原本只有券商那三筆。只看交割回答得了「要付多少」，回答不了「付得出來嗎」——
@@ -116,22 +132,22 @@ async function loadSettleBox() {
             + '所以一筆標「已扣款」的交割仍然可能列在上面——它現在扣掉了，但它不在你當初填的那個數字裡。')
       + '<br><b>配息入帳</b>：'
       + (f.hasDiv ? '取自股利估算的月度結果（可領張數已依建倉明細判定），只列發放日還沒到的。'
-                  : '<b>未計入</b>——股利估算頁這次還沒載入過，拿不到發放日與金額。'
-                    + '<button class="btn-query" onclick="txLoadDiv()">載入配息</button>'
-                    + '沒有它，下面的餘額只扣不加，會比實際低。')
+                  : (_txDivBusy
+                      ? '<b>計算中</b>——逐檔抓配息紀錄約十幾秒，好了會自動補進上面的表。'
+                        + '在那之前餘額只扣不加，會比實際低。'
+                      : '<b>未計入</b>——這次自動載入沒成功（通常是資料來源沒回應）。'
+                        + '<button class="btn-query" onclick="txLoadDiv()">重試</button>'
+                        + '沒有它，下面的餘額只扣不加，會比實際低。'))
       + '<br><b>預計進出</b>：提領、入金這類券商看不到的動帳，自己排進來。'
       + '過了日期不會自動消失——直接刪掉的話，萬一你還沒更新帳戶餘額，往後的餘額會悄悄多出那一筆。'
       + '過期的會停止計入並列在表格下方，按「已扣」才併進帳戶餘額。</div>';
     el.innerHTML = html;
   } catch (e) { el.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>'; }
 }
-// 配息入帳要股利估算的結果。它是重活（逐檔抓配息紀錄），不自動跑，按了才跑。
+// 自動載入失敗後的重試
 async function txLoadDiv() {
-  var m = document.getElementById('ap-msg');
-  if (m) m.textContent = '載入配息資料…';
-  try { if (typeof startDividendEst === 'function') await startDividendEst(false); }
-  catch (e) { hush('txinfo', e); }
-  loadSettleBox();
+  if (typeof _divEstResult !== 'undefined') _divEstResult = null;
+  await txEnsureDiv();
 }
 async function apAddFromForm() {
   var d = document.getElementById('ap-d'), a = document.getElementById('ap-a'), m = document.getElementById('ap-m');

@@ -170,7 +170,7 @@ function abDivIn() {
     (s.res.months || []).forEach(function (m) {
       if (!m.payDate || !(m.total > 0)) return;
       if (_abDivInBalance(m.payDate)) return;        // 已經在餘額裡
-      out.push({ d: m.payDate, kind: 'div', label: s.code + ' 配息', amt: Math.round(m.total) });
+      out.push({ d: m.payDate, kind: 'div', label: s.code, amt: Math.round(m.total) });
     });
   });
   return out;
