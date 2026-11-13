@@ -435,13 +435,17 @@ function limitState(code, price) {
   return '';
 }
 function colorClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'flat'); }
-// 成本均價色：成本高於現價＝套牢（綠）、低於現價＝獲利（紅）、相等或無報價＝不上色
+// 成本均價色：成本高於現價＝套牢（綠）、低於現價＝獲利（紅）、打平＝黃、無報價＝不上色
 // 台股慣例紅漲綠跌；此處以「現價相對成本」的方向著色，與損益欄同向
+//
+// 「相等」的判準取畫面上看得到的兩位小數，不是浮點數相等。
+// 2026-11-13 實例：00402A 成本 9.0368、現價 9.04，兩欄都顯示 9.04，
+// 卻因為差了第三位小數的 0.0032 被判成「低於成本」而上紅條。
+// 那 0.0032 不是方向，是四捨五入——畫面寫一樣就該是一樣。
 function costLineClass(avg, price) {
   if (avg == null || price == null) return '';
-  if (avg > price) return ' cost-under';   // 成本 > 現價 → 綠
-  if (avg < price) return ' cost-over';    // 成本 < 現價 → 紅
-  return ' cost-even';
+  if (avg.toFixed(2) === price.toFixed(2)) return ' cost-even';   // 打平 → 黃
+  return avg > price ? ' cost-under' : ' cost-over';              // 綠 / 紅
 }
 
 // 成本均價儲存格：左緣垂直色條，高度依「現價相對成本的落差%」填色

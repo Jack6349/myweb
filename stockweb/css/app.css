@@ -980,7 +980,7 @@ td.cost-bar::before { top: 4px; bottom: 4px; background: rgba(255,255,255,.09); 
 td.cost-bar::after  { bottom: 4px; height: var(--fill, 0%); }                        /* 填充 */
 td.cost-under::after { background: var(--down); }
 td.cost-over::after  { background: var(--up); }
-td.cost-even::after  { background: var(--text3); }
+td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是灰——灰讀起來像沒資料 */
 
 /* 填息追蹤：本月發放 */
 .rf-pay { max-width: 1100px; }
@@ -2116,7 +2116,7 @@ td.inv-code.code-cost::before {
 }
 td.inv-code.code-cost.cost-under::before { background: var(--down); }
 td.inv-code.code-cost.cost-over::before  { background: var(--up); }
-td.inv-code.code-cost.cost-even::before  { background: var(--text3); }
+td.inv-code.code-cost.cost-even::before  { background: var(--caution); }
 /* 代號與左緣那條成本方向條之間拉開：條寬 5px 之後只剩 1px 間距，看起來黏在一起。
    整欄一起加（含沒有條的列），欄內文字才對得齊。 */
 #inv-view td.inv-code { padding-left: 15px; }
