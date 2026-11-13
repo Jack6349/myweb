@@ -41,8 +41,19 @@ async function bsPrepare(force) {
       }
     }
     var codes = bsCodes();
+    // 交易日曆用大盤，跟股票那邊同一套缺口偵測。原本債券這條路沒接，
+    // Yahoo 漏一天就只能退回前一天的收盤，而畫面上看不出來。
+    var cal = null;
+    try {
+      var idx = (_rbData && _rbData.idx && _rbData.idx.length)
+        ? _rbData.idx : await _rbSeries('^TWII', cfg.years);
+      cal = idx.map(function (b) { return b.d; });
+    } catch (e) { hush('bondsig', e); }
     for (var k = 0; k < codes.length; k++) {
-      if (!_bsBars[codes[k]]) _bsBars[codes[k]] = await _rbSeries(codes[k], cfg.years);
+      if (!_bsBars[codes[k]]) {
+        _bsBars[codes[k]] = await _rbSeries(codes[k], cfg.years);
+        if (cal) { try { await _rbPatchGaps(codes[k], _bsBars[codes[k]], cal); } catch (e2) { hush('bondsig', e2); } }
+      }
     }
   } catch (e) { hush('bondsig', e); }
   _bsBusy = false;
@@ -51,9 +62,17 @@ async function bsPrepare(force) {
 // 一檔的成交率：掛在「前收 ± n 個升降單位」時，日內最低／最高有沒有觸及。
 // sel 用來挑樣本（全部／隔夜 HYG 跌／漲）。
 function bsFill(code, sel) {
-  var bars = (_bsBars[code] || []).filter(function (b) { return b.l > 0 && b.h > 0 && b.c > 0; });
+  var all = _bsBars[code] || [];
+  // 成交率要日內最高最低才算得出來，所以統計只用高低齊全的日子。
+  // 但「前收」只需要收盤 —— 拿最新那一根有收盤的，不要跟著統計一起被濾掉。
+  // 收盤當下 Yahoo 偶爾只給得出收盤（高低要等補），那一天算不進成交率，
+  // 卻一定要當前收：掛單是掛在今天收盤的上下，不是前天收盤的上下。
+  var bars = all.filter(function (b) { return b.l > 0 && b.h > 0 && b.c > 0; });
   if (bars.length < 30 || !_bsHyg) return null;
-  var tick = _bsTick(bars[bars.length - 1].c);
+  var lastC = null;
+  for (var z = all.length - 1; z >= 0; z--) { if (all[z].c > 0) { lastC = all[z]; break; } }
+  if (!lastC) lastC = bars[bars.length - 1];
+  var tick = _bsTick(lastC.c);
   var buy = BS_OFFS.map(function () { return 0; }), sell = BS_OFFS.map(function () { return 0; }), n = 0;
   for (var i = 1; i < bars.length; i++) {
     var pc = bars[i - 1].c;
@@ -70,7 +89,7 @@ function bsFill(code, sel) {
   }
   if (n < 25) return null;
   return {
-    n: n, tick: tick, last: bars[bars.length - 1].c,
+    n: n, tick: tick, last: lastC.c, lastD: lastC.d,
     buy: buy.map(function (v) { return v / n * 100; }),
     sell: sell.map(function (v) { return v / n * 100; })
   };
@@ -134,7 +153,9 @@ function bsHtml() {
       }
       var base = dn || upS || b;
       h += '<tr><td><span class="tx-ocode">' + c + '</span><span class="tx-oname">' + _rbName(c) + '</span></td>'
-        + '<td class="num rs-dim">' + _bsPx(base.last) + '</td>';
+        + '<td class="num rs-dim">' + _bsPx(base.last)
+        + (base.lastD ? '<span class="bs-sub">' + base.lastD.slice(5).replace('-', '/') + '</span>' : '')
+        + '</td>';
       BS_OFFS.forEach(function (k, idx) {
         var px = base.last + (isBuy ? -1 : 1) * k * base.tick;
         var pick = function (z) { return z ? (isBuy ? z.buy : z.sell)[idx] : null; };

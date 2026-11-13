@@ -147,13 +147,19 @@ async function _rbDayFromBroker(code, d) {
 }
 async function _rbPatchGaps(code, out, cal) {
   if (!out || !cal || !cal.length) return out;
-  var have = {};
-  out.forEach(function (b) { have[b.d] = 1; });
+  // 「整天沒有」與「只有收盤、沒有高低」都算缺口：後者算不出成交率，
+  // 而券商的分 K 聚出來的是真實日內高低，換掉比留著殘根好。
+  var have = {}, stub = {};
+  out.forEach(function (b) { if (b.h > 0 && b.l > 0) have[b.d] = 1; else stub[b.d] = 1; });
   var miss = cal.slice(-RB_GAP_DAYS).filter(function (d) { return !have[d]; });
   if (!miss.length) return out;                 // 正常情況一次都不會往下走
   for (var i = 0; i < miss.length; i++) {
     var b = await _rbDayFromBroker(code, miss[i]);
-    if (b) out.push(b);
+    if (!b) continue;
+    if (stub[miss[i]]) {
+      for (var z = out.length - 1; z >= 0; z--) if (out[z].d === miss[i]) { out.splice(z, 1); break; }
+    }
+    out.push(b);
   }
   out.sort(function (a, b2) { return a.d < b2.d ? -1 : 1; });
   return out;
@@ -178,7 +184,16 @@ async function _rbSeries(sym, years) {
       var cl = qt.close || [], op = qt.open || [], hg = qt.high || [], lw = qt.low || [], vo = qt.volume || [];
       var acl = ((res && res.indicators && res.indicators.adjclose && res.indicators.adjclose[0]) || {}).adjclose || null;
       for (var k = 0; k < ts.length; k++) {
-        if (cl[k] == null) continue;
+        // close 是 null 但 high/low 在的那一天先留著，下面用 meta 的收盤補。
+        //
+        // 收盤後 Yahoo 的當日 close 會空一段時間（11/12、11/13 連兩天，全台股標的皆然），
+        // 但同一根的 open/high/low 是有值的。原本只要 close 是 null 就整根丟掉，
+        // 連帶把 high/low 一起丟了，再由下面的 meta 補一根「只有收盤、沒有高低」的殘根。
+        // 殘根對股票那邊無所謂（只用到收盤），債券那邊卻會被整個濾掉：
+        // 成交率要日內最高最低才算得出來，濾掉之後「前收」就退回前一天。
+        // 2026-11-14 00:40 實測 00981B：11/13 的 o/h/l 都在、只有 close 是 null，
+        // meta 的收盤 9.09 也在，畫面卻顯示 11/12 的 9.11。
+        if (cl[k] == null && !(hg[k] > 0 && lw[k] > 0)) continue;
         out.push({
           d: new Date(ts[k] * 1000 + tzo).toISOString().slice(0, 10),
           c: cl[k], a: (acl && acl[k] != null) ? acl[k] : cl[k],
@@ -193,10 +208,17 @@ async function _rbSeries(sym, years) {
   // 不補的話觸發判定會漏掉最新一個交易日，變成拿前天的位置在做今天的判斷。
   if (_rbMeta && _rbMeta.regularMarketPrice > 0 && _rbMeta.regularMarketTime) {
     var md = new Date(_rbMeta.regularMarketTime * 1000 + tzo).toISOString().slice(0, 10);
-    if (!out.length || md > out[out.length - 1].d) {
+    var lastB = out.length ? out[out.length - 1] : null;
+    if (lastB && lastB.d === md && !(lastB.c > 0)) {
+      // 高低已經在手上，只缺收盤 —— 補進同一根，不要另外長一根沒有高低的出來
+      lastB.c = _rbMeta.regularMarketPrice;
+      lastB.a = _rbMeta.regularMarketPrice;
+    } else if (!lastB || md > lastB.d) {
       out.push({ d: md, c: _rbMeta.regularMarketPrice, a: _rbMeta.regularMarketPrice, o: null, h: null, l: null });
     }
   }
+  // 補不到收盤的留著會讓下游算出 NaN（_rbTriggers 直接相除，沒有防呆）
+  out = out.filter(function (b) { return b.c > 0; });
   if (out.length) _rbBars[key] = out;
   return out;
 }
