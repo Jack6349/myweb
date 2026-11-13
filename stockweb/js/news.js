@@ -1344,8 +1344,26 @@ document.addEventListener('mousemove', function (ev) {
   var pts = sp.dataset.pts.split(';');
   var r = sp.getBoundingClientRect();
   if (!r.width) return;
-  var k = Math.round((ev.clientX - r.left) / r.width * (pts.length - 1));
-  if (k < 0) k = 0; if (k > pts.length - 1) k = pts.length - 1;
+  // 用「橫軸座標」找最近的點，不是用「第幾個點」。
+  //
+  // 原本寫 k = 滑鼠位置比例 × (點數-1)，那是把橫軸當成等距的索引軸。
+  // 自從橫軸改成時間刻度（整盤有多長當分母，線走到哪停到哪），兩者就對不起來了：
+  // 夜盤 15:00～05:00 共 840 分鐘，20:50 只走完 41.7%，點全擠在左邊 41.7% 的範圍內，
+  // 但滑鼠移到 41.7% 處算出來的索引是第 41.7% 個點，那個點畫在 x=17% 的位置。
+  // 滑鼠在右、十字線在左，差距隨著「還沒走完的比例」放大。
+  var px = (ev.clientX - r.left) / r.width * MSPK_W;
+  // 還沒走完的那一段沒有資料，指標範圍就跟著線收到哪停到哪。
+  // 不收的話，滑鼠在留白區會把十字線釘在最後一點，看起來還是對不上位置。
+  // 容忍半格（點與點之間的間距），免得最後一點附近抖動。
+  var lastX = parseFloat(pts[pts.length - 1].split('|')[2]);
+  var gap = pts.length > 1
+    ? (lastX - parseFloat(pts[0].split('|')[2])) / (pts.length - 1) : 0;
+  if (px > lastX + Math.max(gap, 1)) { _mspkClear(); return; }
+  var k = 0, best = Infinity;
+  for (var q = 0; q < pts.length; q++) {
+    var dx = Math.abs(parseFloat(pts[q].split('|')[2]) - px);
+    if (dx < best) { best = dx; k = q; }
+  }
   var f = pts[k].split('|');
   var cross = sp.querySelector('.mspk-cross'), dot = sp.querySelector('.mspk-dot');
   if (cross) { cross.setAttribute('x1', f[2]); cross.setAttribute('x2', f[2]); cross.style.display = ''; }
