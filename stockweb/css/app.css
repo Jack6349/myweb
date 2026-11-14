@@ -320,7 +320,11 @@ html, body { overflow-x: clip; }
 .tc-table th:nth-child(1), .tc-table td:nth-child(1) { width: 66px; }
 .tc-table th:nth-child(2), .tc-table td:nth-child(2) { width: 96px; }
 .tc-table th:nth-child(3), .tc-table td:nth-child(3) { width: 78px; }
-.tc-table th:nth-child(4), .tc-table td:nth-child(4) { width: 78px; }
+/* 現價欄要容得下「價格＋狀態徽章」。這張是 table-layout:fixed，
+   寬度不夠時內容不會撠寬欄位，而是直接溢出到下一欄（跟漲跌疊在一起），
+   而且溢出時右對齊會失效、每一列的金額右緣變成鍿狀。
+   2350.00 約 52px ➕ 間距 6 ➕ 徽章 34 ➕ 左右 padding 16 ≈ 108。 */
+.tc-table th:nth-child(4), .tc-table td:nth-child(4) { width: 112px; }
 .tc-table th:nth-child(5), .tc-table td:nth-child(5) { width: 74px; }
 .tc-table th:nth-child(6), .tc-table td:nth-child(6) { width: 78px; }
 .tc-table .tc-holders { white-space: normal; line-height: 2; }
@@ -2209,7 +2213,10 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   border-color: color-mix(in srgb, var(--down) 45%, transparent);
   background: color-mix(in srgb, var(--down) 12%, transparent); }
 .rb-bs-fl { color: var(--text3); border-color: var(--border); }
-/* 佔位：空框先占住 34px，資料回來再填，填完不會讓版面跳動 */
+/* 精簡版：不帶天數，給欄位已經挤到極限的表格用。
+   寬度從 34px 降到 22px，代價是看不出連續幾天（提示裡還有）。 */
+.rb-bsub.rb-bs-sm { min-width: 22px; padding: 0 3px; }
+/* 佔位：空框先占住寬度，資料回來再填，填完不會讓版面跳動 */
 .rb-bs-wait { border-color: color-mix(in srgb, var(--border) 60%, transparent); }
 /* 成本均價：固定的事實，不是漲跌，用標頭的橘黃而不是紅綠 */
 .ov-cost { color: var(--accent2); }
