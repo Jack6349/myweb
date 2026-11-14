@@ -17,6 +17,45 @@ var ALLIANZ_FUNDS = { '00402A': 'E0003' };
 // 00402A 已改走安聯官網 API（上方 ALLIANZ_FUNDS），此處清單降為官網抓失敗時的備援。
 // 更新方式：CMoney 該檔「持股明細」頁複製，貼進下方（權重去 %）。
 var HOLDINGS_OVERRIDES = {
+  // 00988A：MoneyDJ 的 API 只回台股那 9 檔（26.1% 權重），海外的 21 檔全缺；
+  // CMoney 已擋在登入後（回「解析 __NUXT__ 失敗」）。兩條自動路徑都拿不到完整清單，
+  // 所以改抄發行商官網的法定每日揭露。
+  // 來源：統一投信 ezmoney.com.tw/ETF/Fund/Info?fundCode=61YTW（00988A 的內部代碼）
+  // 注意網址參數是 fundCode 不是 fundNo，帶錯會默默顯示另一檔基金的資料。
+  // 同一頁另有「期貨(名目本金)」欄位，00988A 是 0%，確認它沒有期貨或選擇權部位。
+  // 組成：台股 26.10%、美股 64.98%、其他海外 3.09%（韓、德、日各一檔），合計 94.17%。
+  '00988A': { source: '統一投信官網(2026/11/14 取，淨值日 2026/11/12)', holdings: [
+    { code: 'AMD US', name: 'Advanced Micro Devices', weight: 7.65 },
+    { code: 'BE US', name: 'Bloom Energy Corp-A', weight: 7.42 },
+    { code: 'MSFT US', name: 'Microsoft Corp', weight: 6.84 },
+    { code: 'SPCX US', name: 'Space Exploration Tech-CL A', weight: 6.63 },
+    { code: 'AAPL US', name: 'Apple Inc', weight: 5.22 },
+    { code: '3037', name: '欣興', weight: 5.10 },
+    { code: 'PLTR US', name: 'Palantir Technologies Inc-A', weight: 4.91 },
+    { code: '3443', name: '創意', weight: 4.67 },
+    { code: 'CRWD US', name: 'CrowdStrike Holdings Inc-A', weight: 4.15 },
+    { code: '3017', name: '奇鋐', weight: 4.13 },
+    { code: 'PANW US', name: 'Palo Alto Networks Inc', weight: 3.95 },
+    { code: 'AMZN US', name: 'Amazon.com Inc', weight: 3.28 },
+    { code: '1303', name: '南亞', weight: 3.01 },
+    { code: 'OKTA US', name: 'Okta Inc', weight: 2.98 },
+    { code: '2330', name: '台積電', weight: 2.78 },
+    { code: 'NET US', name: 'Cloudflare Inc-Class A', weight: 2.60 },
+    { code: '2383', name: '台光電', weight: 2.54 },
+    { code: 'SNOW US', name: 'Snowflake Inc-Class A', weight: 2.44 },
+    { code: '009150 KS', name: 'Samsung Electro-Mechanics', weight: 2.17 },
+    { code: '3711', name: '日月光投控', weight: 1.84 },
+    { code: 'ZS US', name: 'Zscaler Inc', weight: 1.58 },
+    { code: 'NTSK US', name: 'Netskope Inc-CL A', weight: 1.46 },
+    { code: '6223', name: '旺矽', weight: 1.27 },
+    { code: 'META US', name: 'Meta Platforms Inc', weight: 1.27 },
+    { code: 'TWLO US', name: 'Twilio Inc-A', weight: 1.04 },
+    { code: 'MU US', name: 'Micron Technology Inc', weight: 0.99 },
+    { code: '2454', name: '聯發科', weight: 0.76 },
+    { code: 'MRNA US', name: 'Moderna Inc', weight: 0.57 },
+    { code: 'IFX GY', name: 'Infineon Technologies AG', weight: 0.47 },
+    { code: '3697 JP', name: 'Shift Inc', weight: 0.45 }
+  ] },
   '00402A': { source: '手動(CMoney 2026/07/13)', holdings: [
     { code: 'NVDA US', name: 'NVIDIA Corp', weight: 8.70 },
     { code: 'AAPL US', name: 'Apple Inc', weight: 7.35 },
