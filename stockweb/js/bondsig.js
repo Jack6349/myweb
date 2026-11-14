@@ -23,6 +23,22 @@ function bsCodes() {
 }
 function _bsTick(p) { return p < 50 ? 0.01 : 0.05; }
 
+// 價格比大小一律換成「分」的整數再比，不留浮點數的容忍值。
+//
+// 原本寫的是 `日內最低 <= 掛價 + 1e-9`。資料來源回傳的是單精度浮點數，
+// 9.78 存進去是 9.779999732971191、9.76 是 9.760000228881836，誤差約 2e-7，
+// 比那個容忍值大兩百倍。於是「日內最低剛好等於掛價」時，算不算成交要看
+// 浮點數往哪邊捨入，大約一半的情況被判成沒成交。
+//
+// 而「剛好等於」正是這張表的大宗：這兩檔一天只動 1 到 3 檔，掛價又是整數檔位。
+// 2026-11-14 實測 00984D 掛 −0.02，修正前 38%、修正後 52%，差 14 個百分點，
+// 而且四個數列（兩檔 × 買賣）全部往低估的方向偏，中段偏最多。
+//
+// 換成整數之後沒有誤差可言，也不必再猜容忍值該設多大。
+function _bsCents(v) { return Math.round(v * 100); }
+// 掛價要先對齊升降單位：委託單只掛得出格線上的價格，統計就該用同一個價格。
+function _bsAlign(v) { var t = _bsTick(v); return Math.round(v / t) * t; }
+
 async function bsPrepare(force) {
   if (_bsBusy) return;
   _bsBusy = true;
@@ -61,33 +77,42 @@ async function bsPrepare(force) {
 
 // 一檔的成交率：掛在「前收 ± n 個升降單位」時，日內最低／最高有沒有觸及。
 // sel 用來挑樣本（全部／隔夜 HYG 跌／漲）。
-function bsFill(code, sel) {
+// days 有給就只看最近 N 個交易日，而且不拆 HYG 方向（30 天拆完每格剩十幾天，沒有意義）。
+// 這一列的用途是「現在跟平常比是鬆還是緊」，不是拿來取代全期統計。
+function bsFill(code, sel, days) {
   var all = _bsBars[code] || [];
   // 成交率要日內最高最低才算得出來，所以統計只用高低齊全的日子。
   // 但「前收」只需要收盤 —— 拿最新那一根有收盤的，不要跟著統計一起被濾掉。
   // 收盤當下 Yahoo 偶爾只給得出收盤（高低要等補），那一天算不進成交率，
   // 卻一定要當前收：掛單是掛在今天收盤的上下，不是前天收盤的上下。
-  var bars = all.filter(function (b) { return b.l > 0 && b.h > 0 && b.c > 0; });
+  // 高低相等的那幾根排掉：上市後的頭幾個交易日資料來源給不出日內價，
+  // 開高低收填同一個數字（而且不在升降單位的格線上，例如 10.0103）。
+  // 留著的話平盤那一欄會變成必定成交，等於灌水。兩檔各 8 根。
+  var bars = all.filter(function (b) { return b.l > 0 && b.h > 0 && b.c > 0 && b.h > b.l; });
   if (bars.length < 30 || !_bsHyg) return null;
+  var win = days ? Math.max(2, Math.min(days + 1, bars.length)) : 0;
   var lastC = null;
   for (var z = all.length - 1; z >= 0; z--) { if (all[z].c > 0) { lastC = all[z]; break; } }
   if (!lastC) lastC = bars[bars.length - 1];
   var tick = _bsTick(lastC.c);
   var buy = BS_OFFS.map(function () { return 0; }), sell = BS_OFFS.map(function () { return 0; }), n = 0;
-  for (var i = 1; i < bars.length; i++) {
+  for (var i = win ? bars.length - win + 1 : 1; i < bars.length; i++) {
     var pc = bars[i - 1].c;
     if (!(pc > 0)) continue;
-    var u = _bsHyg.prev(bars[i].d);
-    var hv = (u != null && _bsHyg.rets[u] != null) ? _bsHyg.rets[u] : null;
-    if (!sel(hv)) continue;
+    if (!win) {
+      var u = _bsHyg.prev(bars[i].d);
+      var hv = (u != null && _bsHyg.rets[u] != null) ? _bsHyg.rets[u] : null;
+      if (!sel(hv)) continue;
+    }
     n++;
+    var lc = _bsCents(bars[i].l), hc = _bsCents(bars[i].h);
     for (var k = 0; k < BS_OFFS.length; k++) {
       var off = BS_OFFS[k] * tick;
-      if (bars[i].l <= pc - off + 1e-9) buy[k]++;
-      if (bars[i].h >= pc + off - 1e-9) sell[k]++;
+      if (lc <= _bsCents(_bsAlign(pc - off))) buy[k]++;
+      if (hc >= _bsCents(_bsAlign(pc + off))) sell[k]++;
     }
   }
-  if (n < 25) return null;
+  if (n < (win ? 10 : 25)) return null;
   return {
     n: n, tick: tick, last: lastC.c, lastD: lastC.d,
     buy: buy.map(function (v) { return v / n * 100; }),
@@ -97,11 +122,13 @@ function bsFill(code, sel) {
 
 function _bsPx(v, d) { return v == null ? '—' : v.toFixed(d == null ? 2 : d); }
 // on＝這個方向就是今天的方向，標重；另一邊淡化但仍然讀得到
+// 強弱用亮度與粗細，不用紅綠。
+// 綠色在這一頁是「跌」，而成交率不是漲跌，借用它會讓整頁的色彩語彙鬆掉。
 function _bsRate(v, on) {
   if (v == null) return '<span class="dm-dim">—</span>';
   if (!on) return '<span class="bs-off">' + v.toFixed(0) + '%</span>';
-  var cls = v >= 60 ? 'bs-hi' : (v >= 30 ? 'bs-mid' : 'bs-lo');
-  return '<span class="' + cls + '">' + v.toFixed(0) + '%</span>';
+  return '<span class="' + (v >= 60 ? 'bs-s3' : (v >= 30 ? 'bs-s2' : 'bs-s1')) + '">'
+    + v.toFixed(0) + '%</span>';
 }
 
 function bsHtml() {
@@ -130,13 +157,21 @@ function bsHtml() {
                  : '粗體那個是今天的方向（' + (up ? 'HYG 上漲' : 'HYG 下跌') + '）。')
     + '兩邊都列是為了讓你看得到「萬一明天反過來，這個掛價變成多少」。'
     + '<br>'
-    + '價格已對齊升降單位，直接抄進委託單。<b>買進看日內最低有沒有跌到你的掛價，賣出看日內最高有沒有漲到。</b>'
-    + '這裡不預測漲跌，只回答「掛在這個價位，歷史上多少比例的日子碰得到」。</div>';
+    + '每一格上方的大字是<b>價格</b>，已對齊升降單位，直接抄進委託單；'
+    + '下方小字是那個價位的成交率。'
+    + '<b>買進看日內最低有沒有跌到你的掛價，賣出看日內最高有沒有漲到。</b>'
+    + '這裡不預測漲跌，只回答「掛在這個價位，歷史上多少比例的日子碰得到」。'
+    + '<br><b>「近 30 日」那一列</b>：同一個掛價在最近 30 個交易日的實際成交率，'
+    + '小字是它跟上面全期數字的差距。它回答的是「現在跟平常比是鬆是緊」，'
+    + '不拆 HYG 方向（30 天再拆成兩半，每格只剩十幾天）。'
+    + '<b>它不是更準的那個數字</b>：30 天的標準誤約 ±9 個百分點，'
+    + '全期（兩、四百天）是 ±2 到 ±4。實測拿近 30 日去預測接下來 20 天，'
+    + '四檔裡有三檔比用全期還差。兩個並列是讓你看差距，不是讓你換掉上面那一個。</div>';
 
   ['buy', 'sell'].forEach(function (side) {
     var isBuy = side === 'buy';
     h += '<div class="sec-title bs-side">' + (isBuy ? '買進：掛在前收之下' : '賣出：掛在前收之上') + '</div>'
-      + '<div class="rs-cat-wrap"><table class="inv-table rb-table"><thead><tr>'
+      + '<div class="rs-cat-wrap"><table class="inv-table rb-table bs-table"><thead><tr>'
       + '<th>代號 / 名稱</th><th class="num">前收</th>';
     BS_OFFS.forEach(function (k) {
       h += '<th class="num">' + (k === 0 ? '平盤' : (isBuy ? '−' : '＋') + (k * 0.01).toFixed(2)) + '</th>';
@@ -152,18 +187,36 @@ function bsHtml() {
         return;
       }
       var base = dn || upS || b;
+      var r30 = bsFill(c, selAll, 30);
+      // 價格放主體、成交率降為小字：掛單要抄的是價格，成交率是用來決定抄哪一欄。
+      // 與股票那張成交率表同一個主從關係。
       h += '<tr><td><span class="tx-ocode">' + c + '</span><span class="tx-oname">' + _rbName(c) + '</span></td>'
         + '<td class="num rs-dim">' + _bsPx(base.last)
         + (base.lastD ? '<span class="bs-sub">' + base.lastD.slice(5).replace('-', '/') + '</span>' : '')
         + '</td>';
       BS_OFFS.forEach(function (k, idx) {
-        var px = base.last + (isBuy ? -1 : 1) * k * base.tick;
+        var px = _bsAlign(base.last + (isBuy ? -1 : 1) * k * base.tick);
         var pick = function (z) { return z ? (isBuy ? z.buy : z.sell)[idx] : null; };
-        h += '<td class="num">'
+        h += '<td class="num"><span class="bs-px">' + _bsPx(px) + '</span>'
+          + '<span class="bs-sub">'
           + _bsRate(pick(dn), dir < 0) + '<span class="bs-slash">／</span>' + _bsRate(pick(upS), dir > 0)
-          + '<span class="bs-sub">' + _bsPx(px) + '</span></td>';
+          + '</span></td>';
       });
       h += '<td class="num rs-dim">' + (dn ? dn.n : 0) + ' ／ ' + (upS ? upS.n : 0) + ' 日</td></tr>';
+      // 近 30 日：回答「現在跟平常比是鬆還是緊」。不拆 HYG 方向，分母就是 30。
+      if (r30) {
+        h += '<tr class="bs-r30"><td class="bs-r30-l">近 30 日</td><td class="num"></td>';
+        BS_OFFS.forEach(function (k, idx) {
+          var v = (isBuy ? r30.buy : r30.sell)[idx];
+          var full = base ? (isBuy ? b.buy : b.sell)[idx] : null;
+          var d = (v == null || full == null) ? null : v - full;
+          h += '<td class="num">' + (v == null ? '<span class="dm-dim">—</span>'
+            : v.toFixed(0) + '%<span class="bs-sub">'
+              + (d == null ? '' : (d > 0 ? '＋' : (d < 0 ? '−' : '±')) + Math.abs(d).toFixed(0))
+              + '</span>') + '</td>';
+        });
+        h += '<td class="num rs-dim">' + r30.n + ' 日</td></tr>';
+      }
     });
     h += '</tbody></table></div>';
   });

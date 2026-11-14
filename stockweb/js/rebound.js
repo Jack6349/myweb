@@ -431,8 +431,16 @@ function _rbFill(bars, sox, reg, hit) {
     if (v == null) continue;
     var g = (v < 0) ? dn : up;
     g.n++;
+    // 掛價先對齊升降單位再比，而且在「分」的整數格線上比。
+    // 兩個理由：一是委託單只掛得出格線上的價格，畫面顯示的也是對齊後的那個數字，
+    // 統計卻用沒對齊的原始百分比價位，等於量的門檻比你實際掛得出去的嚴一點。
+    // 二是浮點數的容忍值問題（詳見 bondsig.js 的 _bsCents）。
+    // 這張表的掛價是百分比、落點不在格線上，所以影響比債券那張小：
+    // 2026-11-14 實測三檔差 0 到 3 個百分點，多數是 0 到 1，但方向一律是低估。
+    var lc = Math.round(b.l * 100);
     RB_FILL_OFFS.forEach(function (k, j) {
-      if (b.l <= pv.c * (1 + k / 100) + 1e-9) g.hit[j]++;
+      var raw = pv.c * (1 + k / 100), t = raw < 50 ? 0.01 : 0.05;
+      if (lc <= Math.round(Math.round(raw / t) * t * 100)) g.hit[j]++;
     });
   }
   if (!dn.n && !up.n) return null;
