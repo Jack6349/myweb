@@ -287,6 +287,7 @@ function bsHtml() {
       h += '<tr><td><span class="tx-ocode">' + c + '</span><span class="tx-oname">' + _rbName(c) + '</span></td>'
         + '<td class="num" style="color:' + _rbCol(_rbLastChg(_bsBars[c] || [])) + '">' + _bsPx(base.last)
         + (base.lastD ? '<span class="bs-sub">' + base.lastD.slice(5).replace('-', '/') + '</span>' : '')
+        + (typeof _rbStreakSub === 'function' ? _rbStreakSub(_bsBars[c] || []) : '')
         + '</td>';
       BS_OFFS.forEach(function (k, idx) {
         var px = _bsAlign(base.last + (isBuy ? -1 : 1) * k * base.tick);

@@ -339,13 +339,47 @@ function _rbLastChg(bars) {
   if (!(c0 > 0) || !(c1 > 0)) return null;
   return (c1 / c0 - 1) * 100;
 }
-// 前收儲存格：數字照舊，字色是它自己的漲跌
+// 前收目前走在什麼狀態：連續同向幾天，或剛剛轉向。
+//
+// 這是描述不是預測。實測過連漲連跌對隔日沒有預測力
+// （Wald-Wolfowitz 連串檢定 Z = −0.65／−0.65／−0.44，連續長度跟丟銅板沒有差別），
+// 所以標籤只陳述現在的序列長什麼樣，不帶任何「所以會怎樣」的暗示，字色也不加重。
+// 用還原收盤判方向，除息當天不算下跌。
+function _rbStreak(bars) {
+  if (!bars || bars.length < 2) return null;
+  var px = function (x) { return (x.a > 0) ? x.a : x.c; };
+  var dir = function (i) {
+    var a = px(bars[i]), b = px(bars[i - 1]);
+    if (!(a > 0) || !(b > 0)) return 0;
+    var d = a - b;
+    return d > 0 ? 1 : (d < 0 ? -1 : 0);
+  };
+  var last = bars.length - 1, d0 = dir(last);
+  if (d0 === 0) return { n: 0, dir: 0, txt: '平盤' };
+  var n2 = 1;
+  for (var i = last - 1; i >= 1; i--) { if (dir(i) !== d0) break; n2++; }
+  if (n2 >= 2) return { n: n2, dir: d0, txt: '連' + (d0 > 0 ? '漲' : '跌') + ' ' + n2 };
+  var prev = (bars.length >= 3) ? dir(last - 1) : 0;
+  if (prev === -d0) return { n: 1, dir: d0, txt: (d0 > 0 ? '跌轉漲' : '漲轉跌') };
+  return { n: 1, dir: d0, txt: (d0 > 0 ? '漲' : '跌') };
+}
+function _rbStreakSub(bars) {
+  var k = _rbStreak(bars);
+  if (!k) return '';
+  var tip;
+  if (k.dir === 0) tip = '前收跟再前一天收在同一個價';
+  else if (k.n >= 2) tip = '前收是連續第 ' + k.n + ' 天' + (k.dir > 0 ? '上漲' : '下跌');
+  else if (k.txt.length === 3) tip = '前收' + k.txt.charAt(0) + '了一段之後，這一天轉' + k.txt.charAt(2);
+  else tip = '前收' + k.txt + '，再前一天持平';
+  return '<span class="rb-bsub" title="' + tip + '（還原後，除息不算下跌）">' + k.txt + '</span>';
+}
+// 前收儲存格：數字照舊，字色是它自己的漲跌，底下一行是目前的狀態
 function _rbBaseTd(pc, bars) {
   if (!(pc > 0)) return '<td class="num rs-dim">—</td>';
   var ch = _rbLastChg(bars);
   return '<td class="num" style="color:' + _rbCol(ch) + '"'
     + (ch == null ? '' : ' title="前收對再前一個交易日 ' + _rbPct(ch, 2) + '（還原後，除息不算下跌）"')
-    + '>' + pc.toFixed(2) + '</td>';
+    + '>' + pc.toFixed(2) + _rbStreakSub(bars) + '</td>';
 }
 
 // 費半日報酬分布與門檻。指數沒有配息，用未還原收盤。
