@@ -2209,6 +2209,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   border-color: color-mix(in srgb, var(--down) 45%, transparent);
   background: color-mix(in srgb, var(--down) 12%, transparent); }
 .rb-bs-fl { color: var(--text3); border-color: var(--border); }
+/* 佔位：空框先占住 34px，資料回來再填，填完不會讓版面跳動 */
+.rb-bs-wait { border-color: color-mix(in srgb, var(--border) 60%, transparent); }
 /* 成本均價：固定的事實，不是漲跌，用標頭的橘黃而不是紅綠 */
 .ov-cost { color: var(--accent2); }
 /* 債券 ETF：9 欄撐滿 1644px 時瀏覽器按內容比例分配，名稱 307、現價 130、除息日 205，

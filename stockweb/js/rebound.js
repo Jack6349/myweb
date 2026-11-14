@@ -368,6 +368,102 @@ function _rbStreak(bars) {
 // 兩種狀態本質不同，不該共用一套符號：連續是數量（▲5 比 ▲×5 乾淨），
 // 轉向是事件（⤴ 一眼就是折返，不需要數字）。
 // 硬用同一套會變成 ▼▲ 或 ○● 那種要想一下才讀得懂的東西。
+// ── 徽章要用的日收盤：給沒有現成日線的頁面用 ──
+//
+// 來源順序刻意是「免費的先」：
+//   1. 排程 daily-k.py 產的靜態日 K（data/dayk/），持股各檔都有，零成本。
+//   2. 本機券商的分 K 聚成日線。實測 2330 抓 12 天是 452ms／169KB，走 localhost。
+// 不走 Yahoo：那條要經 GAS 代理，實測 2 到 23 秒而且有單日配額，
+// 為了一個徽章去燒配額不划算（chart.js 的檔頭有同一件事的實測紀錄）。
+//
+// 只需要數得出連續幾天，所以 12 個日曆天就夠（最多顯示 5＋）。
+var _rbDayBars = {};
+async function rbDayBars(code) {
+  code = String(code);
+  if (_rbDayBars[code] !== undefined) return _rbDayBars[code];
+  var p2 = (async function () {
+    // 1) 靜態日 K
+    try {
+      var r = await fetch('data/dayk/' + encodeURIComponent(code) + '.json', { cache: 'no-cache' });
+      if (r.ok && typeof _chartDkUnpack === 'function') {
+        var b = _chartDkUnpack(await r.json());
+        // 太舊就不用：連續幾天是「目前的狀態」，拿三週前的序列算出來的數字會錯得無聲無息。
+        // 這不是理論風險：進度寫在主目錄，而開發時從 worktree 上傳會把它蓋回舊版，
+        // 2026-11-14 實際發生過一次（静態檔停在 10/22）。過期就改走券商，它永遠是當下的。
+        if (b && b.length > 1) {
+          var fresh = new Date(Date.now() + 8 * 3600000 - 6 * 86400000).toISOString().slice(0, 10);
+          if (b[b.length - 1].d >= fresh) {
+            return b.slice(-12).map(function (x) { return { d: x.d, c: x.c, a: (x.ac > 0 ? x.ac : x.c) }; });
+          }
+        }
+      }
+    } catch (e) { /* 靜態檔沒有不是錯誤，往下走 */ }
+    // 2) 券商分 K 聚日線
+    try {
+      var now = new Date(Date.now() + 8 * 3600000);
+      var from = new Date(now.getTime() - 12 * 86400000).toISOString().slice(0, 10);
+      var to = now.toISOString().slice(0, 10);
+      var ex = (typeof _ovEx === 'function') ? _ovEx(code) : 'TSE';
+      var tries = (ex === 'OTC') ? ['OTC', 'TSE'] : ['TSE', 'OTC'];
+      for (var i = 0; i < tries.length; i++) {
+        var rr = await fetch('/api/v1/data/kbars', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contract: { security_type: 'STK', exchange: tries[i], code: code },
+            start: from, end: to })
+        });
+        if (!rr.ok) continue;
+        var j = await rr.json(), dt = j.datetime || [], cl = j.Close || [];
+        if (!dt.length) continue;
+        var byD = {}, order = [];
+        for (var k = 0; k < dt.length; k++) {
+          var dd = dt[k].slice(0, 10);
+          if (!(cl[k] > 0)) continue;
+          if (byD[dd] === undefined) order.push(dd);
+          byD[dd] = cl[k];                       // 當日最後一筆＝收盤
+        }
+        if (order.length < 2) continue;
+        order.sort();
+        // 分 K 沒有還原價，a 填收盤。除息當天會被當成下跌，
+        // 這些頁面的代號多是個股、除息日稀少，而且靜態日 K 那條（持股）本來就有還原價。
+        return order.map(function (d2) { return { d: d2, c: byD[d2], a: byD[d2] }; });
+      }
+    } catch (e2) { hush('rebound', e2); }
+    return null;
+  })();
+  _rbDayBars[code] = p2;
+  return p2;
+}
+// 把畫面上的佔位徽章補滿。佔位是固定寬度的空框，所以填完不會造成版面跳動。
+// 併發限制 6：都走 localhost，但一次全開會讓本機伺服器排隊，反而更慢。
+async function rbStreakFill(root) {
+  var els = [].slice.call((root || document).querySelectorAll('.rb-bsub[data-sc]'));
+  if (!els.length) return;
+  var i = 0;
+  async function worker() {
+    while (i < els.length) {
+      var el = els[i++], code = el.getAttribute('data-sc');
+      if (!el.isConnected) continue;
+      var bars = null;
+      try { bars = await rbDayBars(code); } catch (e) { hush('rebound', e); }
+      if (!el.isConnected) continue;
+      var k = bars ? _rbStreak(bars) : null;
+      if (!k) { el.remove(); continue; }
+      var h = _rbStreakSub(bars);
+      var tmp = document.createElement('div'); tmp.innerHTML = h;
+      var fresh = tmp.firstChild;
+      el.className = fresh.className;
+      el.textContent = fresh.textContent;
+      el.setAttribute('title', fresh.getAttribute('title'));
+      el.removeAttribute('data-sc');
+    }
+  }
+  await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+}
+// 佔位：先畫空框佔住寬度，資料回來再填
+function rbStreakSlot(code) {
+  return '<span class="rb-bsub rb-bs-wait" data-sc="' + code + '"></span>';
+}
+
 function _rbStreakSub(bars) {
   var k = _rbStreak(bars);
   if (!k) return '';
@@ -387,8 +483,10 @@ function _rbStreakSub(bars) {
     cls = k.dir > 0 ? 'rb-bs-up' : 'rb-bs-dn';
     tip = '前收' + k.txt + '，再前一天持平';
   }
-  return '<span class="rb-bsub ' + cls + '" title="' + tip + '（還原後，除息不算下跌）">'
-    + icon + '</span>';
+  // 補一句「數的是收盤序列」：停損停利與成份股曝險那兩張接的是現價，
+  // 盤中那個徽章會落後一天（不含今天還沒收的那一根）。
+  return '<span class="rb-bsub ' + cls + '" title="' + tip
+    + '（數的是收盤序列，盤中不含今天；還原後，除息不算下跌）">' + icon + '</span>';
 }
 // 前收儲存格：數字照舊，字色是它自己的漲跌，底下一行是目前的狀態
 function _rbBaseTd(pc, bars) {
