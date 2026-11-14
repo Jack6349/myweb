@@ -914,7 +914,7 @@ function renderWatchAct() {
       '<td class="es-wcell">' + wtWatchBtn(r.code) + '</td>' +
       '<td class="inv-code"><span class="code-link" title="' + (r.name ? r.name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖')
         + '" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span>'
-        + '<button class="swap-mini wt-cst" title="看成份股" onclick="openConstituents(\'' + r.code + '\')">份</button></td>' +
+        + '<button class="swap-mini wt-cst" title="看成份股" onclick="openConstituents(\'' + r.code + '\')">成</button></td>' +
       (function () { var pc = wtPxCell(r.code, r.px);
         return '<td class="' + pc.cls + '">'
           + (pc.txt ? '<span class="rb-bpx">' + pc.txt + '</span>'
