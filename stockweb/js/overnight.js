@@ -28,6 +28,48 @@ function kbarMin(iso) {
 }
 
 var OV_SD_HL = 10;       // 區間寬度的半衰期（交易日），見 _ovFit 檔頭
+
+// ── 海外指數要不要當第三個因子：兩道閘，兩道都過才納入 ──
+//
+// 第一道是結構：這一檔的成份股有多少比例在海外。純台股的基金沒有理由掛 Nasdaq，
+// 連測都不該測——八檔一起測四個因子等於 32 次檢定，在 p<0.05 下本來就會蹦出一兩個假陽性。
+// 先用持股把範圍縮到說得出理由的那幾檔，統計才是在驗證假設而不是撈資料。
+//
+// 第二道是統計：在夜盤與費半之上，Nasdaq 還能不能多解釋一截（增量 F 檢定）。
+//
+// 2026-11-14 實測，兩道閘各自擋掉不同的東西：
+//   00988A 外股 68.1%（美股 65.0%），F=9.59 → 納入。走查預測誤差 1.843 → 1.791。
+//   00402A 外股 98.4% 但 F=0.11 → 不納入。它是美股半導體，費半已經蓋掉了，
+//          而且台指期夜盤 15:00～05:00 跨完整個美股盤，本來就是更晚、更完整的一次定價。
+//   其餘六檔外股 0%，第一道就擋下，不進統計。
+//
+// 所以這不是「替 00988A 開特例」，是一條規則；哪一檔過關由它自己的持股與資料決定。
+var OV_FGN_W = 50;       // 外股權重門檻（%）
+var OV_ADD_F = 3.95;     // 增量 F 門檻，約 p<0.05
+var _ovIxic = null;      // Nasdaq 日報酬
+
+async function _ovIxicLoad() {
+  if (_ovIxic) return _ovIxic;
+  try {
+    var b = await _rbSeries('^IXIC', (_rbData && _rbData.cfg ? _rbData.cfg.years : 3));
+    if (!b || b.length < 60) return null;
+    var m = {}, ds = [];
+    for (var i = 1; i < b.length; i++) {
+      if (!(b[i - 1].c > 0)) continue;
+      m[b[i].d] = (b[i].c / b[i - 1].c - 1) * 100; ds.push(b[i].d);
+    }
+    _ovIxic = { rets: m, dates: ds, prev: _rbPrevFn(ds) };
+  } catch (e) { hush('overnight', e); }
+  return _ovIxic;
+}
+// 這一檔的外股權重（%）。拿不到成份股就回 null，等於第一道閘關著。
+function _ovFgnW(code) {
+  var m = (typeof _constMap !== 'undefined' && _constMap) ? _constMap[String(code)] : null;
+  if (!m || !m.rows || !m.rows.length) return null;
+  var w = 0;
+  m.rows.forEach(function (r) { if (r.kind !== 'TW') w += r.weight; });
+  return w;
+}
 var OV_URL = 'data/night-txf.json';
 var OV_REC_LS = 'overnight_rec_v1';      // 命中率紀錄（預測 vs 實際）
 var _ovNight = null, _ovToday = null, _ovBusy = false, _ovRec = null, _ovAt = null;
@@ -118,29 +160,35 @@ async function ovTodayNight() {
   return _ovToday;
 }
 
-// ── 兩個輸入的最小平方（常數＋夜盤＋費半），3×3 直接解 ──
-function _ovFit(X1, X2, Y) {
-  var n = Y.length;
-  if (n < 40) return null;
+// ── 最小平方（常數＋任意個因子），高斯消去直接解 ──
+// 原本寫死兩個因子。改成吃陣列是為了讓少數幾檔可以多掛一個海外指數，
+// 判準寫在 _ovFactors。
+function _ovFit(Xs, Y) {
+  var n = Y.length, K = Xs.length + 1;
+  if (n < 40 + (Xs.length - 2) * 10) return null;   // 多一個因子就多要 10 天
+  var X1 = Xs[0], X2 = Xs[1];
+  var col = function (a, i) { return a === 0 ? 1 : Xs[a - 1][i]; };
   var s = function (f) { var t = 0; for (var i = 0; i < n; i++) t += f(i); return t; };
-  var M = [
-    [n, s(function (i) { return X1[i]; }), s(function (i) { return X2[i]; }), s(function (i) { return Y[i]; })],
-    [0, s(function (i) { return X1[i] * X1[i]; }), s(function (i) { return X1[i] * X2[i]; }), s(function (i) { return X1[i] * Y[i]; })],
-    [0, 0, s(function (i) { return X2[i] * X2[i]; }), s(function (i) { return X2[i] * Y[i]; })]
-  ];
-  M[1][0] = M[0][1]; M[2][0] = M[0][2]; M[2][1] = M[1][2];
-  for (var c = 0; c < 3; c++) {
-    var p = c;
-    for (var r2 = c; r2 < 3; r2++) if (Math.abs(M[r2][c]) > Math.abs(M[p][c])) p = r2;
-    var t2 = M[c]; M[c] = M[p]; M[p] = t2;
-    if (Math.abs(M[c][c]) < 1e-10) return null;
-    for (var r3 = 0; r3 < 3; r3++) {
-      if (r3 === c) continue;
-      var f = M[r3][c] / M[c][c];
-      for (var k = c; k < 4; k++) M[r3][k] -= f * M[c][k];
+  var M = [];
+  for (var a = 0; a < K; a++) {
+    M.push([]);
+    for (var b2 = 0; b2 <= K; b2++) {
+      M[a].push(s(function (i) { return col(a, i) * (b2 < K ? col(b2, i) : Y[i]); }));
     }
   }
-  var b = [M[0][3] / M[0][0], M[1][3] / M[1][1], M[2][3] / M[2][2]];
+  for (var c = 0; c < K; c++) {
+    var p = c;
+    for (var r2 = c; r2 < K; r2++) if (Math.abs(M[r2][c]) > Math.abs(M[p][c])) p = r2;
+    var t2 = M[c]; M[c] = M[p]; M[p] = t2;
+    if (Math.abs(M[c][c]) < 1e-10) return null;
+    for (var r3 = 0; r3 < K; r3++) {
+      if (r3 === c) continue;
+      var f = M[r3][c] / M[c][c];
+      for (var k = c; k <= K; k++) M[r3][k] -= f * M[c][k];
+    }
+  }
+  var b = []; for (var a2 = 0; a2 < K; a2++) b.push(M[a2][K] / M[a2][a2]);
+  var pred = function (i) { var q = b[0]; for (var a3 = 1; a3 < K; a3++) q += b[a3] * Xs[a3 - 1][i]; return q; };
   var my = s(function (i) { return Y[i]; }) / n, ss = 0, tot = 0, resU = [], resD = [];
   // 區間寬度用「近期加權」的殘差，不是全部歷史的平均。
   //
@@ -157,7 +205,7 @@ function _ovFit(X1, X2, Y) {
   // 係數的時變性偵測不到（分段變異 ÷ 估計誤差應有的變異＝0.72 與 0.21，都小於 1）。
   var lam = Math.pow(0.5, 1 / OV_SD_HL), v = null, hit = 0, cvn = 0;
   for (var i2 = 0; i2 < n; i2++) {
-    var e = Y[i2] - (b[0] + b[1] * X1[i2] + b[2] * X2[i2]);
+    var e = Y[i2] - pred(i2);
     ss += e * e; tot += (Y[i2] - my) * (Y[i2] - my);
     if (X1[i2] > 0) resU.push(e); else if (X1[i2] < 0) resD.push(e);
     // 實測覆蓋率：當下那條區間有沒有罩住當天的實際值。前 40 天讓 EWMA 先收斂。
@@ -165,9 +213,10 @@ function _ovFit(X1, X2, Y) {
     v = (v == null) ? e * e : lam * v + (1 - lam) * e * e;
   }
   return {
-    n: n, a: b[0], bN: b[1], bS: b[2], r2: tot ? 1 - ss / tot : null,
-    sd: Math.sqrt(ss / (n - 3)),
-    sdEw: (v == null) ? Math.sqrt(ss / (n - 3)) : Math.sqrt(v),
+    n: n, k: K, co: b, a: b[0], bN: b[1], bS: b[2], bX: (K > 3 ? b[3] : null),
+    r2: tot ? 1 - ss / tot : null, ss: ss,
+    sd: Math.sqrt(ss / (n - K)),
+    sdEw: (v == null) ? Math.sqrt(ss / (n - K)) : Math.sqrt(v),
     cover: cvn ? hit / cvn * 100 : null, coverN: cvn,
     resU: resU, resD: resD
   };
@@ -367,7 +416,10 @@ function ovEstimate(code) {
   var raw = (d.series[code] || []).filter(function (b) { return b.c > 0; });
   var bars = raw.filter(function (b) { return b.o > 0 && b.l > 0; });
   if (bars.length < 45 || !raw.length) return null;
-  var X1 = [], X2 = [], Yo = [], Yl = [], Yc = [];
+  // 第一道閘：外股權重夠高才把 Nasdaq 列為候選
+  var fgn = _ovFgnW(code);
+  var useIx = (fgn != null && fgn >= OV_FGN_W && _ovIxic);
+  var X1 = [], X2 = [], X3 = [], Yo = [], Yl = [], Yc = [];
   for (var i = 1; i < bars.length; i++) {
     var dd = bars[i].d, pc = bars[i - 1].c;
     var nv = _ovNight[dd];
@@ -375,19 +427,48 @@ function ovEstimate(code) {
     var u = sox ? sox.prev(dd) : null;
     var sv = (u && sox.rets[u] != null) ? sox.rets[u] : null;
     if (sv == null) continue;
+    var xv = null;
+    if (useIx) {
+      var ui = _ovIxic.prev(dd);
+      xv = (ui && _ovIxic.rets[ui] != null) ? _ovIxic.rets[ui] : null;
+      if (xv == null) continue;
+    }
     // 除息日整根排除：開高低是未還原價，跨除息會把配息算成跳空
     var f0 = bars[i - 1].a / bars[i - 1].c, f1 = bars[i].a / bars[i].c;
     if (Math.abs(f1 - f0) > 1e-6 * Math.max(f0, f1)) continue;
-    X1.push(nv); X2.push(sv);
+    X1.push(nv); X2.push(sv); if (useIx) X3.push(xv);
     Yo.push((bars[i].o / pc - 1) * 100);
     Yl.push((bars[i].l / pc - 1) * 100);
     Yc.push((bars[i].c / pc - 1) * 100);
   }
-  var fo = _ovFit(X1, X2, Yo), fl = _ovFit(X1, X2, Yl), fc = _ovFit(X1, X2, Yc);
+  // 第二道閘：Nasdaq 在夜盤與費半之上還能不能多解釋一截（以收盤那條判定，三條共用同一個決定，
+  // 否則同一列三個價會各用各的模型，解釋不了）
+  var base = [X1, X2], f2 = _ovFit(base, Yc), ixOn = false, addF = null;
+  if (useIx && f2) {
+    var f3 = _ovFit([X1, X2, X3], Yc);
+    if (f3) {
+      addF = ((f2.ss - f3.ss) / 1) / (f3.ss / (f3.n - f3.k));
+      ixOn = addF > OV_ADD_F;
+    }
+  }
+  var Xs = ixOn ? [X1, X2, X3] : base;
+  var fo = _ovFit(Xs, Yo), fl = _ovFit(Xs, Yl), fc = _ovFit(Xs, Yc);
   if (!fc) return null;
   var t = _ovToday;
   if (!t) return null;
-  var ev = function (f) { return f ? f.a + f.bN * t.pct + f.bS * _ovSox() : null; };
+  // 今晚的 Nasdaq：與夜盤、費半同一個「台股還沒反應過」的判準
+  var ixNow = null;
+  if (ixOn) {
+    var un = _ovIxic.prev(t.d);
+    ixNow = (un && _ovIxic.rets[un] != null) ? _ovIxic.rets[un] : null;
+    if (ixNow == null) { ixOn = false; Xs = base; fo = _ovFit(Xs, Yo); fl = _ovFit(Xs, Yl); fc = _ovFit(Xs, Yc); if (!fc) return null; }
+  }
+  var ev = function (f) {
+    if (!f) return null;
+    var q = f.a + f.bN * t.pct + f.bS * _ovSox();
+    if (ixOn && f.bX != null && ixNow != null) q += f.bX * ixNow;
+    return q;
+  };
   // 基準價＝那一夜「之前」的最後一個收盤，不是最新收盤。
   // 盤中時最新一根就是今天，而今天反映的正是這一夜——用它當基準等於把答案當題目。
   var bi = -1;
@@ -416,6 +497,7 @@ function ovEstimate(code) {
     lHiPx: (function () { var q = ev(fl); return (q == null || !fl) ? null : mk(q + fl.sdEw); })(),
     lCover: fl ? fl.cover : null, lCoverN: fl ? fl.coverN : null,
     sd: fc.sdEw, sdFull: fc.sd, cover: fc.cover, coverN: fc.coverN, r2: fc.r2,
+    fgnW: fgn, ixOn: ixOn, ixF: addF, ixNow: ixNow,
     sdUp: _ovSd(fc.resU), sdDn: _ovSd(fc.resD),
     medUp: _ovMed(fc.resU), medDn: _ovMed(fc.resD),
     nUp: fc.resU.length, nDn: fc.resD.length
@@ -576,10 +658,17 @@ function ovHitHtml() {
 async function ovPrepare(force) {
   if (_ovBusy) return;
   _ovBusy = true;
-  if (force) { _ovToday = null; _ovNight = null; _ovSoxLive = null; _ovRef = null; }
+  if (force) { _ovToday = null; _ovNight = null; _ovSoxLive = null; _ovRef = null; _ovIxic = null; }
   try {
     await ovLoadNight();
     await ovTodayNight();
+    // 成份股：第一道闘要用（外股權重）。每日快取，重複呼叫不會再打請求。
+    if (typeof _constEnsure === 'function' && _rbData && _rbData.codes) {
+      for (var ci = 0; ci < _rbData.codes.length; ci++) {
+        try { await _constEnsure(_rbData.codes[ci]); } catch (e) { hush('overnight', e); }
+      }
+    }
+    await _ovIxicLoad();
     try { await _ovLoadSoxLive(); } catch (e) { hush('overnight-sox', e); }
     try { await _ovLoadRef(); } catch (e) { hush('overnight-ref', e); }
   } finally { _ovBusy = false; }
@@ -667,7 +756,13 @@ function ovHtml(view) {
     (ana ? rbSortTh(_ovSort, 'ovSort', 'r2', '說明力', '這兩個訊號說明得了多少起伏；1 是完全說中、0 是完全說不中')
          + rbSortTh(_ovSort, 'ovSort', 'n', '樣本') : '') + '</tr></thead><tbody>';
   rows.forEach(function (r) {
-    h += '<tr><td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span></td>' +
+    // 多掛了第三個因子的那幾檔要標出來，否則同一張表裡會有兩種模型而看不出來
+    h += '<tr><td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span>'
+      + (r.ixOn ? '<span class="ov-fx" title="這一檔的成份股有 '
+          + (r.fgnW == null ? '' : r.fgnW.toFixed(0)) + '% 在海外，而實測 Nasdaq 在夜盤與費半之上還能多解釋一截'
+          + '（增量 F=' + (r.ixF == null ? '' : r.ixF.toFixed(1)) + '，門檻 ' + OV_ADD_F + '），'
+          + '所以這一列的推估多掛了 Nasdaq。其他各檔只用夜盤與費半。">＋N</span>' : '')
+      + '</td>' +
       // 成本均價是固定的事實，它沒有漲跌。紅綠在這一頁的意思是「今天動了多少」，
       // 拿來標一個不會動的數字是讀錯顏色。改用標頭的橘黃。
       '<td class="num">' + (r.cost > 0

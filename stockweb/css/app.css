@@ -2126,6 +2126,9 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .rb-sideb { display: flex; gap: 6px; margin: 0 0 8px; }
 /* 典型範圍才是這張表的主數字：兩個訊號只說明得了一半的起伏，點估值是區間的中心而已 */
 /* 掛買參考與收盤區間：這張表唯一要讀的兩個東西，放大加粗 */
+/* 多掛了第三個因子的標記 */
+.ov-fx { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px;
+  background: rgba(240,204,122,.14); color: var(--accent2); font-size: 10px; cursor: help; }
 .rb-table td.ov-big { font-size: 16px; }
 /* 顏色接說明力。紅綠在這一頁是漲跌，只能用亮度 */
 .rb-table td.ov-t3 { color: var(--text); font-weight: 700; }
