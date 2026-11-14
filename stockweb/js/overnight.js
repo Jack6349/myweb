@@ -27,6 +27,7 @@ function kbarMin(iso) {
   return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
 }
 
+var OV_SD_HL = 10;       // 區間寬度的半衰期（交易日），見 _ovFit 檔頭
 var OV_URL = 'data/night-txf.json';
 var OV_REC_LS = 'overnight_rec_v1';      // 命中率紀錄（預測 vs 實際）
 var _ovNight = null, _ovToday = null, _ovBusy = false, _ovRec = null, _ovAt = null;
@@ -141,15 +142,45 @@ function _ovFit(X1, X2, Y) {
   }
   var b = [M[0][3] / M[0][0], M[1][3] / M[1][1], M[2][3] / M[2][2]];
   var my = s(function (i) { return Y[i]; }) / n, ss = 0, tot = 0, resU = [], resD = [];
+  // 區間寬度用「近期加權」的殘差，不是全部歷史的平均。
+  //
+  // 全部歷史那一版，實測覆蓋率只有 57 到 58%（00981A、00988A），而卡片寫「約三分之二」。
+  // 原因是殘差本身會變：00981A 分段估是 1.48、1.27、2.25、2.91、2.38，最大是最小的 2.3 倍，
+  // 平均進去等於用平靜期的尺去量現在。
+  //
+  // 半衰期 10 日是測出來的，不是挑的。八檔的覆蓋率偏離 68% 的平均絕對值：
+  // 全部歷史 7.6、半衰60 5.6、半衰30 4.7、半衰20 3.5、半衰15 2.2、半衰10 1.9、半衰5 1.8。
+  // 5 到 15 是一片平台，取 10 是因為更短會讓區間每天跳一到三個升降單位（半衰5 是 0.011～0.034 元，
+  // 半衰10 是 0.006～0.018 元），畫面會抖而校準沒有變好。
+  //
+  // 係數維持全部歷史：測過 45、60、75、90 日與各種加權，四檔裡三檔都比全部歷史差。
+  // 係數的時變性偵測不到（分段變異 ÷ 估計誤差應有的變異＝0.72 與 0.21，都小於 1）。
+  var lam = Math.pow(0.5, 1 / OV_SD_HL), v = null, hit = 0, cvn = 0;
   for (var i2 = 0; i2 < n; i2++) {
     var e = Y[i2] - (b[0] + b[1] * X1[i2] + b[2] * X2[i2]);
     ss += e * e; tot += (Y[i2] - my) * (Y[i2] - my);
     if (X1[i2] > 0) resU.push(e); else if (X1[i2] < 0) resD.push(e);
+    // 實測覆蓋率：當下那條區間有沒有罩住當天的實際值。前 40 天讓 EWMA 先收斂。
+    if (v != null && i2 >= 40) { if (Math.abs(e) <= Math.sqrt(v)) hit++; cvn++; }
+    v = (v == null) ? e * e : lam * v + (1 - lam) * e * e;
   }
   return {
     n: n, a: b[0], bN: b[1], bS: b[2], r2: tot ? 1 - ss / tot : null,
-    sd: Math.sqrt(ss / (n - 3)), resU: resU, resD: resD
+    sd: Math.sqrt(ss / (n - 3)),
+    sdEw: (v == null) ? Math.sqrt(ss / (n - 3)) : Math.sqrt(v),
+    cover: cvn ? hit / cvn * 100 : null, coverN: cvn,
+    resU: resU, resD: resD
   };
+}
+// 說明力分三段亮度。這一頁的紅綠是漲跌，不能拿來標可信度。
+//
+// 門檻 0.5 與 0.25 是「解釋掉一半」「解釋掉四分之一」，不是從目前這幾檔的分布倒推的
+// （那會隨持股變動而漂移）。實測兩個更自然的候選都分不出差別：
+// 區間校不校準（八檔全在 68% ± 2 標準誤內）、訊號顯不顯著（F 值 20 到 109，門檻 3.1）。
+// 會變的只有幅度，所以顏色接幅度。
+function _ovTier(r2) {
+  if (r2 == null) return 'ov-t0';
+  return (r2 > 0.5) ? 'ov-t3' : ((r2 >= 0.25) ? 'ov-t2' : 'ov-t1');
 }
 function _ovSd(a) {
   if (!a || a.length < 8) return null;
@@ -378,8 +409,13 @@ function ovEstimate(code) {
                  cPct: (act.c / base - 1) * 100, lPct: (act.l / base - 1) * 100 } : null,
     oPct: ev(fo), lPct: ev(fl), cPct: pc2,
     oPx: mk(ev(fo)), lPx: mk(ev(fl)), cPx: mk(pc2),
-    loPx: mk(pc2 == null ? null : pc2 - fc.sd), hiPx: mk(pc2 == null ? null : pc2 + fc.sd),
-    sd: fc.sd, r2: fc.r2,
+    loPx: mk(pc2 == null ? null : pc2 - fc.sdEw), hiPx: mk(pc2 == null ? null : pc2 + fc.sdEw),
+    // 日內最低自己的區間。掛限價買進看的是這一個，不是收盤那一個，
+    // 原本只有收盤有範圍，等於把最該有不確定性的那個數字寫成一個確定的價。
+    lLoPx: (function () { var q = ev(fl); return (q == null || !fl) ? null : mk(q - fl.sdEw); })(),
+    lHiPx: (function () { var q = ev(fl); return (q == null || !fl) ? null : mk(q + fl.sdEw); })(),
+    lCover: fl ? fl.cover : null, lCoverN: fl ? fl.coverN : null,
+    sd: fc.sdEw, sdFull: fc.sd, cover: fc.cover, coverN: fc.coverN, r2: fc.r2,
     sdUp: _ovSd(fc.resU), sdDn: _ovSd(fc.resD),
     medUp: _ovMed(fc.resU), medDn: _ovMed(fc.resD),
     nUp: fc.resU.length, nDn: fc.resD.length
@@ -563,7 +599,17 @@ function ovHtml(view) {
   ovRecord(rows);
   var hasAct = rows.some(function (r) { return r.act; });
 
+  var ana = (view === 'ana');
   var sox = _ovSox();
+  // 實測覆蓋率放提示，不放欄位：它是用來驗證區間的，不是你每天要讀的數字。
+  // 樣本少的時候連這個覆蓋率自己都估不準，所以把標準誤一起寫進去。
+  var cvTip = function (cv, n2, nm) {
+    if (cv == null || !n2) return '';
+    var se = Math.sqrt(0.68 * 0.32 / n2) * 100;
+    return ' title="' + nm + '區間實測罩住了 ' + Math.round(cv) + '% 的日子（' + n2 + ' 天，誤差 ±'
+      + se.toFixed(1) + ' 個百分點）。目標是 68%，' +
+      (Math.abs(cv - 68) <= 2 * se ? '目前在誤差範圍內' : (cv < 68 ? '目前偏窄' : '目前偏寬')) + '"';
+  };
   var pct = function (v, dec) {
     if (v == null) return '—';
     return (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(dec == null ? 2 : dec) + '%';
@@ -609,15 +655,17 @@ function ovHtml(view) {
     rbSortTh(_ovSort, 'ovSort', 'live', '現價', '券商即時快照，盤中每 30 秒更新；13:35 之後不再抓，停在收盤價。'
       + '下面那一行是對前收的漲跌，與右邊幾欄的推估是同一個基準，可以直接比') +
     rbSortTh(_ovSort, 'ovSort', 'oPx', '預估開盤', '當天開盤價的推估') +
-    rbSortTh(_ovSort, 'ovSort', 'lPx', '預估日內最低', '當天盤中最低價的推估。掛限價買進要跟這個比，不是跟收盤比') +
+    rbSortTh(_ovSort, 'ovSort', 'lPx', '掛買參考', '當天盤中最低價的推估，下面那一行是它的區間。'
+      + '掛限價買進看這一欄，不是看收盤。字越亮代表這兩個訊號解釋得越多；暗的代表區間跟隨便猜差不多寬') +
     rbSortTh(_ovSort, 'ovSort', 'cPx', '預估收盤', '範圍的中心。別把它當成一個會到的價') +
-    rbSortTh(_ovSort, 'ovSort', 'range', '典型範圍', '收盤推估上下各一個典型偏移，約三分之二的日子落在這個範圍。排序依下界的價格') +
+    rbSortTh(_ovSort, 'ovSort', 'range', '收盤區間', '收盤推估上下各一個典型偏移。'
+      + '寬度用近 10 日半衰的加權殘差，滑到價格上看得到這一檔實測罩住了幾成的日子') +
     (hasAct ? rbSortTh(_ovSort, 'ovSort', 'actC', '實際收盤', '那一天實際的收盤')
             + rbSortTh(_ovSort, 'ovSort', 'actL', '實際日內最低') : '') +
     rbSortTh(_ovSort, 'ovSort', 'prem', '折溢價', '市價相對預估淨值：正數代表買貴了。開高跳空當下容易跑到溢價') +
     rbSortTh(_ovSort, 'ovSort', 'volX', '量能', '當日成交量 ÷ 近 20 日均量。跳空上去有沒有量跟上') +
-    rbSortTh(_ovSort, 'ovSort', 'r2', '說明力', '這兩個訊號說明得了多少起伏；1 是完全說中、0 是完全說不中') +
-    rbSortTh(_ovSort, 'ovSort', 'n', '樣本') + '</tr></thead><tbody>';
+    (ana ? rbSortTh(_ovSort, 'ovSort', 'r2', '說明力', '這兩個訊號說明得了多少起伏；1 是完全說中、0 是完全說不中')
+         + rbSortTh(_ovSort, 'ovSort', 'n', '樣本') : '') + '</tr></thead><tbody>';
   rows.forEach(function (r) {
     h += '<tr><td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span></td>' +
       // 成本均價是固定的事實，它沒有漲跌。紅綠在這一頁的意思是「今天動了多少」，
@@ -627,13 +675,18 @@ function ovHtml(view) {
           : '<span class="dm-dim" title="只在關注清單，沒有持股">—</span>') + '</td>' +
       '<td class="num" style="color:' + _rbCol(r.baseChg) + '">' + _ovPx(r.base) + '</td>' +
       _ovLiveCell(r, t) +
-      '<td class="num">' + _ovPx(r.oPx)
+      '<td class="num ov-side">' + _ovPx(r.oPx)
         + '<span class="ov-sub" style="color:' + _rbCol(r.oPct) + '">' + pct(r.oPct) + '</span></td>' +
-      '<td class="num ov-key">' + _ovPx(r.lPx)
+      // 掛買參考與收盤區間是這張表唯一要讀的兩個東西，放大加粗；
+      // 開盤與收盤那兩個點估值降成小字，它們只是區間的中心。
+      '<td class="num ov-big ' + _ovTier(r.r2) + '"' + cvTip(r.lCover, r.lCoverN, '日內最低') + '>'
+        + _ovPx(r.lPx)
+        + '<span class="ov-rng">' + _ovPx(r.lLoPx) + ' ～ ' + _ovPx(r.lHiPx) + '</span>'
         + '<span class="ov-sub" style="color:' + _rbCol(r.lPct) + '">' + pct(r.lPct) + '</span></td>' +
-      '<td class="num">' + _ovPx(r.cPx)
+      '<td class="num ov-side">' + _ovPx(r.cPx)
         + '<span class="ov-sub" style="color:' + _rbCol(r.cPct) + '">' + pct(r.cPct) + '</span></td>' +
-      '<td class="num ov-range">' + _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) + '</td>' +
+      '<td class="num ov-big ' + _ovTier(r.r2) + '"' + cvTip(r.cover, r.coverN, '收盤') + '>'
+        + _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) + '</td>' +
       (hasAct ? '<td class="num" style="color:' + _rbCol(r.act ? r.act.cPct : null) + ';font-weight:700">'
           + (r.act ? _ovPx(r.act.c) : '—')
           + (r.act ? '<span class="ov-sub">' + pct(r.act.cPct) + '</span>' : '') + '</td>'
@@ -643,15 +696,19 @@ function ovHtml(view) {
         + (r.prem == null ? '—' : pct(r.prem)) + '</td>' +
       '<td class="num' + (r.volX != null && r.volX >= 1.5 ? ' ov-key' : '') + '">'
         + (r.volX == null ? '—' : r.volX.toFixed(2) + ' 倍') + '</td>' +
-      '<td class="num rs-dim">' + (r.r2 == null ? '—' : r.r2.toFixed(2)) + '</td>' +
-      '<td class="num rs-dim">' + r.n + ' 天</td></tr>';
+      (ana ? '<td class="num rs-dim">' + (r.r2 == null ? '—' : r.r2.toFixed(2)) + '</td>'
+           + '<td class="num rs-dim">' + r.n + ' 天</td>' : '') + '</tr>';
   });
   h += '</tbody></table></div>';
   // 解釋全部在這裡，收合後點了才看得到
   h += '<div class="detail-note"><dl>'
-    + '<dt>要看哪一欄</dt><dd>看<b>典型範圍</b>，不是預估收盤那一個數字。'
-    + '兩個訊號只說明得了一半上下的起伏（見「說明力」欄），'
-    + '預估收盤只是範圍的中心。掛限價買進看「預估日內最低」。'
+    + '<dt>要看哪一欄</dt><dd>只看放大的那兩欄：<b>掛買參考</b>與<b>收盤區間</b>。'
+    + '掛限價買進用前者（並且看它底下那一行的區間，不是上面那一個點）。'
+    + '預估開盤與預估收盤故意縮成小字：它們只是區間的中心，不是會到的價。'
+    + '<br><b>字的亮度就是可信度</b>：亮白代表這兩個訊號解釋掉一半以上的起伏，'
+    + '中灰代表四分之一到一半，暗灰代表不到四分之一、區間跟隨便猜差不多寬。'
+    + '不用紅綠是因為那兩個色在這一頁是漲跌。'
+    + '滑到價格上看得到這一檔的區間實測罩住了幾成的日子。'
     + '所有價格以 ' + (rows[0] ? rows[0].basePrev : '') + ' 的收盤為基準，已對齊升降單位。</dd>'
     + '<dt>現價</dt><dd>券商即時快照。盤中每 30 秒更新，13:35 之後那一輪就不再抓，停在收盤價——'
     + '收盤之後它本來就不會再變，不是畫面卡住。下面那一行的漲跌對的是前收，'
