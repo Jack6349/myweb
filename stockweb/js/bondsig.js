@@ -285,9 +285,10 @@ function bsHtml() {
       // 價格放主體、成交率降為小字：掛單要抄的是價格，成交率是用來決定抄哪一欄。
       // 與股票那張成交率表同一個主從關係。
       h += '<tr><td><span class="tx-ocode">' + c + '</span><span class="tx-oname">' + _rbName(c) + '</span></td>'
-        + '<td class="num" style="color:' + _rbCol(_rbLastChg(_bsBars[c] || [])) + '">' + _bsPx(base.last)
-        + (base.lastD ? '<span class="bs-sub">' + base.lastD.slice(5).replace('-', '/') + '</span>' : '')
+        + '<td class="num" style="color:' + _rbCol(_rbLastChg(_bsBars[c] || [])) + '">'
+        + '<span class="rb-bpx">' + _bsPx(base.last) + '</span>'
         + (typeof _rbStreakSub === 'function' ? _rbStreakSub(_bsBars[c] || []) : '')
+        + (base.lastD ? '<span class="bs-sub">' + base.lastD.slice(5).replace('-', '/') + '</span>' : '')
         + '</td>';
       BS_OFFS.forEach(function (k, idx) {
         var px = _bsAlign(base.last + (isBuy ? -1 : 1) * k * base.tick);

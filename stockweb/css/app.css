@@ -2191,12 +2191,16 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .rb-frate { display: block; font-size: 11px; margin-top: 1px; }
 /* 日內形狀：百分比底下補換算後的價格 */
 .rb-gsub { display: block; font-size: 11px; color: var(--text2); font-weight: 400; }
-/* 前收底下的「目前狀態」：▲N／▼N 連續、⤴／⤵ 轉向、— 平盤。
-   方框是為了把它跟上面的價格切開——兩者都上紅綠，不框起來會黏成一團。 */
-.rb-bpx { display: block; }
-.rb-bsub { display: inline-block; margin-top: 3px; padding: 0 5px;
+/* 前收旁邊的「目前狀態」：▲N／▼N 連續、⤴／⤵ 轉向、— 平盤。
+   方框是為了把它跟金額切開：兩者都上紅綠，不框起來會黏成一團。
+   放右側而不放下方，是使用者選的；固寬則是為了保住右對齊。
+   不固寬的話，▲5 跟 ⤴ 寬度不同會把每一列的金額右緣推成鎖狀，整欄就掃不了。
+   固寬之後金額的右緣仍然齊。 */
+.rb-bpx { display: inline; }
+.rb-bsub { display: inline-block; margin-left: 6px; padding: 0 4px;
+  min-width: 34px; text-align: center; vertical-align: 1px;
   border: 1px solid transparent; border-radius: 4px;
-  font-size: 11px; font-weight: 700; line-height: 1.7; cursor: help;
+  font-size: 11px; font-weight: 700; line-height: 1.6; cursor: help;
   font-variant-numeric: tabular-nums; }
 .rb-bs-up { color: var(--up);
   border-color: color-mix(in srgb, var(--up) 45%, transparent);
