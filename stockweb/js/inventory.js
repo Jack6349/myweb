@@ -299,9 +299,9 @@ function invValRow(p) {
   var dotColor = (typeof _liveColorMap !== 'undefined' && _liveColorMap[code]) || '#888';
   // 成份股按鈕在資料載入完成後才會出現 → 載入中先放同寬的佔位（轉圈），避免整列/整頁事後位移
   var constWait = (typeof constLoading === 'function') && constLoading(code);
-  return '<td class="inv-detail"><button class="btn-detail" onclick="openTradeDetail(\'' + code + '\',' + p.id + ')">明細</button>' +
-      (cm ? '<button class="btn-detail" style="margin-left:4px" onclick="openConstituents(\'' + code + '\')">成份股</button>'
-          : (constWait ? '<span class="btn-detail btn-ghost" style="margin-left:4px" title="成份股資料載入中"><i class="spin"></i></span>' : '')) + '</td>' +
+  return '<td class="inv-detail"><button class="btn-detail btn-1w" title="建倉明細" onclick="openTradeDetail(\'' + code + '\',' + p.id + ')">細</button>' +
+      (cm ? '<button class="btn-detail btn-1w" style="margin-left:4px" title="成份股" onclick="openConstituents(\'' + code + '\')">成</button>'
+          : (constWait ? '<span class="btn-detail btn-1w btn-ghost" style="margin-left:4px" title="成份股資料載入中"><i class="spin"></i></span>' : '')) + '</td>' +
     '<td class="live-dot-cell"><button class="live-dot' + (dotOn ? ' on' : '') + '" style="--dot:' + dotColor +
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + code + '\',this)"></button></td>' +
     // 代號格左緣的直條：現價對成本均價的方向（紅＝高於成本、綠＝低於）。
@@ -324,7 +324,10 @@ function invValRow(p) {
       (p.lent && p.lentShares ? '<span class="dexm-lent">(借出 ' +
         (p.lentShares / 1000).toLocaleString('zh-TW') + ' 張)</span> ' : '') +
       shares.toLocaleString('zh-TW') + '</td>' +
-    '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
+    // 按鈕縮成單字騰出來的寬度，用在這裡：現價右側的狀態徽章（精簡版）。
+    '<td class="num ' + ccls + '">'
+      + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
+      + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code, true) : '') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
     '<td class="num inv-cchg ' + estCls + '" ' + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
@@ -614,6 +617,7 @@ function renderInvTable() {
     var al = invAlert(p);
     return '<tr id="inv-tr-' + String(p.code) + '"' + (al ? ' class="alert-' + al + '"' : '') + '>' + invValRow(p) + '</tr>';
   }).join('');
+  if (typeof rbStreakFill === 'function') rbStreakFill(tb);
   // 分類配置已移到頂欄抽屜，跟表格同一個重繪周期，隨行情與稅費切換同步
   if (typeof renderDrawer === 'function') renderDrawer();
 }
