@@ -14,7 +14,93 @@
 // 只用 HYG 一個參數——多加 TLT、殖利率會讓參數變多、彼此重疊，反而難判讀。
 
 var BS_OFFS = [0, 1, 2, 3, 4, 5];          // 掛價距前收幾個升降單位
-var _bsHyg = null, _bsBars = {}, _bsBusy = false;
+var _bsHyg = null, _bsBars = {}, _bsBusy = false, _bsFx = null;
+
+// ══════ 匯率曝險 ══════
+//
+// 為什麼要有這一段：這兩檔持有的是美元計價的債券，在台股以台幣掛牌。
+// 你看到的淨值同時含兩件事：債券本身的漲跌，以及台幣兌美元的變動。
+// 帳面跌 3% 可能是債券跌 6%、台幣貶值補回 3%，兩者導向的決定不一樣。
+//
+// 頻率的選擇不是隨便挑的。逐日報酬幾乎測不到相關（2026-11-14 實測
+// 00981B 近 90 天 0.055、00984D 近 90 天 0.100，都不顯著），但不重疊的
+// 5 日報酬測得到（最近 20 段 0.587 與 0.476，顯著）。原因是這兩檔成交稀疏、
+// 買賣價差相對波動很大，單日報酬裡雜訊佔比太高，把真訊號稀釋掉；
+// 彙總到一週雜訊互相抵消，匯率的成分才浮出來。
+//
+// 用不重疊而不是滾動：滾動窗彼此重疊，看起來樣本幾百個、實際獨立的只有幾十個，
+// 顯著性會被灌水好幾倍。
+var BS_FXSEG = 5;        // 幾個交易日算一段
+var BS_FXN = 20;         // 取最近幾段估 beta
+var BS_FX_SYM = 'TWD=X'; // USD/TWD，上漲＝台幣貶值
+
+// 把日收盤接成不重疊的 N 日報酬配對
+function _bsFxPairs(code, seg) {
+  if (!_bsFx || !_bsBars[code]) return null;
+  var pm = {}, pd = [];
+  _bsBars[code].forEach(function (b) { if (b.c > 0) { pm[b.d] = b.c; pd.push(b.d); } });
+  var ds = pd.filter(function (d) { return _bsFx[d] > 0; });
+  var X = [], Y = [], T = [];
+  for (var i = seg; i < ds.length; i += seg) {
+    X.push((_bsFx[ds[i]] / _bsFx[ds[i - seg]] - 1) * 100);
+    Y.push((pm[ds[i]] / pm[ds[i - seg]] - 1) * 100);
+    T.push(ds[i]);
+  }
+  return { x: X, y: Y, t: T };
+}
+// 最小平方 ＋ beta 的標準誤。標準誤一定要給：20 段估出來的 beta 很鬆，
+// 寫成一個精確數字會被當成已知常數用。
+function _bsFxFit(X, Y) {
+  var n = X.length;
+  if (n < 8) return null;
+  var mx = 0, my = 0, i;
+  for (i = 0; i < n; i++) { mx += X[i]; my += Y[i]; }
+  mx /= n; my /= n;
+  var sxy = 0, sxx = 0, syy = 0;
+  for (i = 0; i < n; i++) { var a = X[i] - mx, b = Y[i] - my; sxy += a * b; sxx += a * a; syy += b * b; }
+  if (!(sxx > 0) || !(syy > 0)) return null;
+  var beta = sxy / sxx, alpha = my - beta * mx, sr = 0;
+  for (i = 0; i < n; i++) { var e = Y[i] - alpha - beta * X[i]; sr += e * e; }
+  var se = Math.sqrt((sr / (n - 2)) / sxx);
+  var r = sxy / Math.sqrt(sxx * syy);
+  return { n: n, beta: beta, se: se, r: r, t: se > 0 ? beta / se : null };
+}
+// 最近 BS_FXN 段的 beta
+function bsFxBeta(code) {
+  var p = _bsFxPairs(code, BS_FXSEG);
+  if (!p || p.x.length < 8) return null;
+  var k = Math.min(BS_FXN, p.x.length);
+  var f = _bsFxFit(p.x.slice(-k), p.y.slice(-k));
+  if (f) { f.from = p.t[p.t.length - k]; f.to = p.t[p.t.length - 1]; }
+  return f;
+}
+// beta 隨時間：不重疊的區塊各估一次。曝險是會變的，不是固定屬性：
+// 2026-11-14 實測 00984D 前半段 −0.18、後半段 0.53，它原本沒有匯率曝險。
+function bsFxBetaHist(code) {
+  var p = _bsFxPairs(code, BS_FXSEG);
+  if (!p) return [];
+  // 由新往舊切。最前面那一塊不足 BS_FXN 段也收，只要還有 8 段以上，
+  // 否則上市較晚的那一檔只會切出一塊，看不出「這個曝險是不是近期才出現的」。
+  var out = [], k = BS_FXN;
+  for (var e = p.x.length; e >= 8; e -= k) {
+    var st = Math.max(0, e - k);
+    if (e - st < 8) break;
+    var f = _bsFxFit(p.x.slice(st, e), p.y.slice(st, e));
+    if (f) out.push({ from: p.t[st], to: p.t[e - 1], beta: f.beta, se: f.se, n: f.n });
+  }
+  return out;   // 新的在前，兩檔的第一欄才是同一個期間
+}
+// 報酬拆解：這一段期間，有多少是匯率給的
+function bsFxDecomp(code, beta, days) {
+  if (!_bsFx || !_bsBars[code] || beta == null) return null;
+  var pm = {}, pd = [];
+  _bsBars[code].forEach(function (b) { if (b.c > 0) { pm[b.d] = b.c; pd.push(b.d); } });
+  var ds = pd.filter(function (d) { return _bsFx[d] > 0; });
+  if (ds.length <= days) return null;
+  var a = ds[ds.length - 1 - days], b = ds[ds.length - 1];
+  var fx = (_bsFx[b] / _bsFx[a] - 1) * 100, etf = (pm[b] / pm[a] - 1) * 100;
+  return { from: a, to: b, fx: fx, contrib: fx * beta, etf: etf, rest: etf - fx * beta };
+}
 
 // 債券型：持股中代號結尾 B（債券）或 D（組合／多重資產債）
 function bsCodes() {
@@ -44,7 +130,7 @@ async function bsPrepare(force) {
   _bsBusy = true;
   try {
     var cfg = _rbCfg();
-    if (force) { _bsHyg = null; _bsBars = {}; }
+    if (force) { _bsHyg = null; _bsBars = {}; _bsFx = null; }
     if (!_bsHyg) {
       var h = await _rbSeries('HYG', cfg.years);
       if (h && h.length > 60) {
@@ -54,6 +140,14 @@ async function bsPrepare(force) {
           rets[h[i].d] = (h[i].c / h[i - 1].c - 1) * 100; ds.push(h[i].d);
         }
         _bsHyg = { rets: rets, dates: ds, prev: _rbPrevFn(ds), last: ds.length ? { d: ds[ds.length - 1], r: rets[ds[ds.length - 1]] } : null };
+      }
+    }
+    if (!_bsFx) {
+      // 匯率日線。走的是股票那條共用的序列抓取，所以快取、缺口補值都一樣。
+      var fb = await _rbSeries(BS_FX_SYM, cfg.years);
+      if (fb && fb.length > 60) {
+        _bsFx = {};
+        fb.forEach(function (b) { if (b.c > 0) _bsFx[b.d] = b.c; });
       }
     }
     var codes = bsCodes();
@@ -221,8 +315,135 @@ function bsHtml() {
     h += '</tbody></table></div>';
   });
 
-  h += '<div class="detail-note"><dl>' + bsNoteHtml() + '</dl></div></div>';
+  h += bsFxHtml();
+  h += '<div class="detail-note"><dl>' + bsNoteHtml() + bsFxNoteHtml() + '</dl></div></div>';
   return h;
+}
+
+// ── 匯率曝險區 ──
+// 這一區不預測任何事，只說明「你現在同時持有多大的美元部位」。
+function bsFxHtml() {
+  var codes = bsCodes();
+  if (!_bsFx) {
+    return '<div class="sec-title bs-side">匯率曝險</div>'
+      + '<div class="rb-caveat nb-keep">匯率日線取不到（代理服務無回應），這一區略過。</div>';
+  }
+  var pc = function (v, dp) {
+    if (v == null) return '—';
+    return (v > 0 ? '＋' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(dp == null ? 2 : dp) + '%';
+  };
+  // 負號用排版用的減號，跟全站一致（ASCII 的短橫線在數字旁邊會矮一截）
+  var bt = function (v) { return (v < 0 ? '−' : '') + Math.abs(v).toFixed(2); };
+  var rows = codes.map(function (c) { return { c: c, b: bsFxBeta(c) }; }).filter(function (r) { return r.b; });
+  if (!rows.length) {
+    return '<div class="sec-title bs-side">匯率曝險</div>'
+      + '<div class="rb-caveat nb-keep">樣本不足，估不出匯率敏感度。</div>';
+  }
+
+  var h = '<div class="sec-title bs-side">匯率曝險</div>';
+  h += '<div class="rb-sox-hd on">這兩件事混在同一個淨值裡：<b>債券本身的漲跌</b>與<b>台幣兌美元的變動</b>。'
+    + '下表把它們拆開。敏感度是用不重疊的 ' + BS_FXSEG + ' 日報酬、最近 ' + BS_FXN + ' 段估的，'
+    + '逐日報酬測不到（雜訊蓋過訊號），理由在下方說明。</div>';
+
+  var HS = [20, 60, 120];
+  h += '<div class="rs-cat-wrap"><table class="inv-table rb-table bs-table"><thead><tr>'
+    + '<th>代號 / 名稱</th>'
+    + '<th class="num" title="台幣兌美元每變動 1%，淨值跟著變動幾 %。正值＝台幣貶值對淨值有利">匯率敏感度</th>';
+  HS.forEach(function (d) {
+    h += '<th class="num" title="這段期間的實際報酬，以及把匯率那一塊扣掉之後剩下的（債券本身）">'
+      + '近 ' + d + ' 日</th>';
+  });
+  h += '</tr></thead><tbody>';
+
+  rows.forEach(function (r) {
+    var b = r.b;
+    // beta 一律連同正負一個標準誤一起寫。20 段估出來的 beta 很鬆，
+    // 只給點估計會被當成已知常數用在心算上。
+    h += '<tr><td><span class="tx-ocode">' + r.c + '</span><span class="tx-oname">' + _rbName(r.c) + '</span></td>'
+      + '<td class="num"><span class="bs-px">' + bt(b.beta) + '</span>'
+      + '<span class="bs-sub">±' + b.se.toFixed(2)
+      + (b.t != null && Math.abs(b.t) >= 2 ? '　測得到' : '　<b>測不到</b>') + '</span></td>';
+    HS.forEach(function (d) {
+      var k = bsFxDecomp(r.c, b.beta, d);
+      if (!k) { h += '<td class="num rs-dim">—</td>'; return; }
+      h += '<td class="num"><span class="bs-px" style="color:' + _rbCol(k.etf) + '">' + pc(k.etf) + '</span>'
+        + '<span class="bs-sub">匯率 ' + pc(k.contrib) + '</span>'
+        + '<span class="bs-sub">債券 <b style="color:' + _rbCol(k.rest) + '">' + pc(k.rest) + '</b></span></td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+
+  // 同期間的台幣變動，整段只說一次（它對每一檔都一樣，不該在每一格重複）
+  var any = bsFxDecomp(rows[0].c, 1, 120), a60 = bsFxDecomp(rows[0].c, 1, 60), a20 = bsFxDecomp(rows[0].c, 1, 20);
+  h += '<div class="rb-caveat">同期間台幣兌美元：近 20 日 ' + (a20 ? pc(a20.fx) : '—')
+    + '、近 60 日 ' + (a60 ? pc(a60.fx) : '—') + '、近 120 日 ' + (any ? pc(any.fx) : '—')
+    + '（正值＝台幣貶值）。'
+    + '「匯率」那一列＝台幣變動 × 這一檔的敏感度；「債券」＝實際報酬減掉匯率那一塊，'
+    + '也就是把匯率影響拿掉之後，債券部位自己的表現。</div>';
+
+  // 敏感度隨時間：收合，屬於進階追蹤
+  var hist = rows.map(function (r) { return { c: r.c, h: bsFxBetaHist(r.c) }; })
+                 .filter(function (r) { return r.h.length > 1; });
+  if (hist.length) {
+    h += '<details class="bs-fxh"><summary>敏感度隨時間的變化（' + BS_FXN + ' 段一組）</summary>'
+      + '<div class="rs-cat-wrap"><table class="inv-table rb-table bs-table"><tbody>';
+    // 欄數取最多的那一檔，短的在右邊補空格，第一欄才會是同一個期間
+    var wide = hist.reduce(function (a, r) { return Math.max(a, r.h.length); }, 0);
+    hist.forEach(function (r) {
+      h += '<tr><td><span class="tx-ocode">' + r.c + '</span></td>';
+      for (var i = 0; i < wide; i++) {
+        var x = r.h[i];
+        if (!x) { h += '<td class="num rs-dim">—</td>'; continue; }
+        h += '<td class="num"><span class="bs-px">' + bt(x.beta) + '</span>'
+          + '<span class="bs-sub">' + x.from.slice(2).replace(/-/g, '/') + '～</span>'
+          + '<span class="bs-sub">' + x.to.slice(2).replace(/-/g, '/')
+          + '（' + x.n + ' 段）</span></td>';
+      }
+      h += '</tr>';
+    });
+    h += '</tbody></table></div>'
+      + '<div class="rb-caveat">左邊是最近的一段，越往右越早。'
+      + '曝險會變，不是固定屬性，列在這裡是為了讓你看得出「現在這個數字是常態還是近期才出現的」。'
+      + '段數不足 ' + BS_FXN + ' 的那一欄是上市後資料就只有那麼多，標在日期後面。</div>'
+      + '</details>';
+  }
+  return h;
+}
+
+function bsFxNoteHtml() {
+  var rows = bsCodes().map(function (c) { return { c: c, b: bsFxBeta(c) }; }).filter(function (r) { return r.b; });
+  var ex = rows.length ? rows[0] : null;
+  return '<dt>匯率敏感度 · 定義</dt><dd>把每 ' + BS_FXSEG + ' 個交易日接成一段<b>不重疊</b>的報酬，'
+    + '拿這一檔的段報酬對 USD/TWD 的段報酬做最小平方，斜率就是敏感度，取最近 ' + BS_FXN + ' 段。'
+    + '匯率上漲代表台幣貶值，所以正的敏感度＝台幣貶值時淨值上升。'
+    + '旁邊的 ± 是這個斜率的標準誤，不是波動範圍。</dd>'
+    + '<dt>匯率敏感度 · 比較基準</dt><dd>兩個。一是跟 0 比：標示「測得到」代表斜率離 0 有兩個標準誤以上，'
+    + '「測不到」代表這段期間分不出它有沒有匯率曝險。二是跟自己的歷史比，在收合的那張表裡。'
+    + '沒有跟同類基金比，因為避險與否是各檔自己的政策，不存在一個「正常值」。</dd>'
+    + '<dt>匯率敏感度 · 白話意義</dt><dd>台幣兌美元每變動 1%，這一檔的淨值大約跟著變動幾 %，'
+    + '這一塊跟債券漲跌無關。數字接近 1 等於幾乎沒有避險，接近 0 等於避掉了。</dd>'
+    + '<dt>匯率敏感度 · 機制</dt><dd>這幾檔持有的是美元計價的債券，在台股以台幣報價。'
+    + '傳導路徑：<code>台幣貶值 → 同一批美元債券換算回台幣的金額變大 → 淨值上升</code>，'
+    + '跟債券價格本身沒有關係。基金若做了匯率避險，這條路徑會被鎖掉一部分，敏感度就往 0 靠。'
+    + '為什麼逐日看不到：這兩檔成交稀疏、買賣價差相對日波動很大，'
+    + '單日報酬裡雜訊佔比太高，把匯率的成分稀釋掉；彙總成一週，雜訊互相抵消就浮出來了。'
+    + '2026-11-14 實測 00981B 逐日近 90 天相關 0.055（測不到），同期不重疊 5 日是 0.587（測得到）。</dd>'
+    + '<dt>匯率敏感度 · 行動含義</dt><dd>它改變的是你怎麼讀帳面損益，不是買賣訊號。'
+    + '看到帳上跌幾 %，要先扣掉匯率那一塊，才知道債券部位本身發生了什麼。'
+    + '兩檔的敏感度不同時，它們在你的部位裡就不是同一種東西，即使名字都叫非投等債。</dd>'
+    + '<dt>匯率敏感度 · 不能告訴你什麼</dt><dd>五件事。'
+    + '一、<b>它不能用來擇時</b>。實測匯率自己的日自相關是 −0.065，昨天的變動對今天沒有資訊；'
+    + '前一日匯率對今日報酬的相關是 −0.005 與 −0.015。拆解是在解釋已經發生的事，不是預測。'
+    + '二、它<b>進不了上面那張成交率表</b>。條件要在你下單前就知道，而台幣是在台股盤中同步變動的；'
+    + '開盤前唯一拿得到的匯率類訊號是隔夜美元指數，實測它對這兩檔的相關只有 −0.07。'
+    + '三、' + BS_FXN + ' 段的樣本很小'
+    + (ex ? '，' + ex.c + ' 的標準誤是 ±' + ex.b.se.toFixed(2) + '，佔斜率本身的 '
+        + Math.round(Math.abs(ex.b.se / ex.b.beta) * 100) + '%' : '')
+    + '。把它當成精確常數去心算會高估精度。'
+    + '四、敏感度是估出來的，不是基金公布的避險比例。它同時吃到真實避險政策與期間內的巧合。'
+    + '五、拆解假設敏感度在整段期間是固定的。近 120 日那一欄跨了半年，而收合表裡看得到它會變，'
+    + '所以期間越長、那個拆解越粗。</dd>';
 }
 
 function bsNoteHtml() {

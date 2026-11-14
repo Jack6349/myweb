@@ -2112,6 +2112,9 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .bs-r30 td { color: var(--text3); background: color-mix(in srgb, var(--text3) 5%, transparent); }
 .bs-r30 td.bs-r30-l { color: var(--text2); }
 .bs-r30 .bs-sub { color: var(--text3); }
+.bs-fxh { margin-top: 8px; }
+.bs-fxh > summary { cursor: pointer; color: var(--text2); font-size: 12px; padding: 4px 0; }
+.bs-fxh > summary:hover { color: var(--text); }
 .bs-sub { display: block; font-size: 10.5px; color: var(--text2); line-height: 1.4; }
 .bs-all { display: block; font-size: 10px; color: var(--text3); line-height: 1.3; }
 .bs-off { color: var(--text3); }
