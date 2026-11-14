@@ -2125,7 +2125,17 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ov-base { color: var(--text3); border-bottom: 1px dotted var(--text3); cursor: help; }
 .rb-sideb { display: flex; gap: 6px; margin: 0 0 8px; }
 /* 典型範圍才是這張表的主數字：兩個訊號只說明得了一半的起伏，點估值是區間的中心而已 */
-.rb-table td.ov-range { color: var(--text); font-weight: 700; }
+/* 掛買參考與收盤區間：這張表唯一要讀的兩個東西，放大加粗 */
+.rb-table td.ov-big { font-size: 16px; }
+/* 顏色接說明力。紅綠在這一頁是漲跌，只能用亮度 */
+.rb-table td.ov-t3 { color: var(--text); font-weight: 700; }
+.rb-table td.ov-t2 { color: var(--text2); font-weight: 700; }
+.rb-table td.ov-t1 { color: var(--text3); font-weight: 400; }
+.rb-table td.ov-t0 { color: var(--text3); font-weight: 400; }
+/* 點估值降為配角 */
+.rb-table td.ov-side { font-size: 12px; color: var(--text2); }
+/* 掛買參考底下的區間 */
+.ov-rng { display: block; font-size: 11px; font-weight: 400; color: var(--text3); line-height: 1.5; }
 /* 已出清且領完的檔不再列：數字變少時標一句，否則看起來像壞了 */
 .divest-dropnote { margin: 2px 0 8px; font-size: 12px; color: var(--text3); }
 /* 單次配：金額固定寬右對齊後接殖利率。每一列都有金額，所以同一行不會毀掉整欄對齊 */
