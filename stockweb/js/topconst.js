@@ -98,6 +98,7 @@ function renderTopConstTable() {
     '<dt>更新</dt><dd>現價與漲跌盤中即時；總權重於進入時計算。僅列台股成分股。</dd>' +
     '</dl></div>';
   wrap.innerHTML = html;
+  if (typeof rbStreakFill === 'function') rbStreakFill(wrap);
 }
 
 function topConstRowHtml(r) {
@@ -115,7 +116,8 @@ function topConstRowHtml(r) {
   return '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
     '<td class="inv-name">' + ((c && c.name) || r.name || '') + '</td>' +
     '<td class="num" title="曝險 $' + Math.round(r.expo).toLocaleString('zh-TW') + '"><b>' + r.pct.toFixed(2) + '%</b></td>' +
-    '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
+    '<td class="num ' + ccls + '">' + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
+      + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code) : '') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (chgPct == null ? '—' : fmtPct(chgPct)) + '</td>' +
     '<td class="tc-holders">' + holders + '</td>';

@@ -91,7 +91,9 @@ async function startAlerts() {
         (lim ? ' title="' + (lim === 'up' ? '漲停' : '跌停') + '"' : '') + '>' + code + '</td>' +
       '<td class="inv-name">' + ((c && c.name) || names[code] || '') + '</td>' +
       costCellHtml(m ? m.avg : p.price, price) +
-      '<td class="num">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
+      // 現價旁邊接「目前狀態」徽章。它數的是收盤序列，所以盤中會落後一天（提示裡有講）。
+      '<td class="num">' + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
+        + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code) : '') + '</td>' +
       '<td class="num ' + (wrate == null ? 'flat' : (wrate >= 0 ? 'up' : 'down')) + '"' +
         (m && m.div != null ? ' title="價差 ' + (prate == null ? '—' : prate.toFixed(2) + '%') +
           ' ＋ 已配息 ' + Math.round(m.div).toLocaleString('zh-TW') + '"' : '') + '>' +
@@ -111,4 +113,5 @@ async function startAlerts() {
     '<dt>其他</dt><dd>僅以底色標示，不顯示文字。設定即時儲存於本機。</dd>' +
     '</dl></div>';
   wrap.innerHTML = html;
+  if (typeof rbStreakFill === 'function') rbStreakFill(wrap);
 }
