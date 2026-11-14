@@ -285,7 +285,7 @@ function bsHtml() {
       // 價格放主體、成交率降為小字：掛單要抄的是價格，成交率是用來決定抄哪一欄。
       // 與股票那張成交率表同一個主從關係。
       h += '<tr><td><span class="tx-ocode">' + c + '</span><span class="tx-oname">' + _rbName(c) + '</span></td>'
-        + '<td class="num rs-dim">' + _bsPx(base.last)
+        + '<td class="num" style="color:' + _rbCol(_rbLastChg(_bsBars[c] || [])) + '">' + _bsPx(base.last)
         + (base.lastD ? '<span class="bs-sub">' + base.lastD.slice(5).replace('-', '/') + '</span>' : '')
         + '</td>';
       BS_OFFS.forEach(function (k, idx) {

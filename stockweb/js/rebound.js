@@ -327,6 +327,27 @@ function _rbPrevFn(dates) {
     return ans;
   };
 }
+// 前收那一欄自己的漲跌（對再前一個交易日），用來決定字色。
+//
+// 用還原收盤算，不用未還原：除息當天未還原價會憑空掉一截，
+// 拿它上色會把配息標成下跌，而紅綠在這一頁的意思是「價格動了多少」。
+// 個股沒有還原資料時退回未還原，指數本來就沒有配息，兩者相同。
+function _rbLastChg(bars) {
+  if (!bars || bars.length < 2) return null;
+  var b = bars[bars.length - 1], p = bars[bars.length - 2];
+  var c1 = (b.a > 0) ? b.a : b.c, c0 = (p.a > 0) ? p.a : p.c;
+  if (!(c0 > 0) || !(c1 > 0)) return null;
+  return (c1 / c0 - 1) * 100;
+}
+// 前收儲存格：數字照舊，字色是它自己的漲跌
+function _rbBaseTd(pc, bars) {
+  if (!(pc > 0)) return '<td class="num rs-dim">—</td>';
+  var ch = _rbLastChg(bars);
+  return '<td class="num" style="color:' + _rbCol(ch) + '"'
+    + (ch == null ? '' : ' title="前收對再前一個交易日 ' + _rbPct(ch, 2) + '（還原後，除息不算下跌）"')
+    + '>' + pc.toFixed(2) + '</td>';
+}
+
 // 費半日報酬分布與門檻。指數沒有配息，用未還原收盤。
 //
 // 門檻是對稱的兩個：第 pct 百分位（大漲）與第 100−pct 百分位（大跌）。
@@ -828,7 +849,7 @@ function _rbSoxDnHtml(sox, hit, head, sideBtn, on, pending) {
     var pc = d.last;
     var h = '<tr' + (isIdx ? ' class="rb-sysrow"' : '') + '>'
       + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span></td>'
-      + '<td class="num rs-dim">' + (pc > 0 ? pc.toFixed(2) : '—') + '</td>'
+      + _rbBaseTd(pc, isIdx ? idx : (_rbData.series[code] || []))
       + '<td class="num rs-dim">' + d.n + ' 天</td>'
       + pxCell(pc, d.gap)
       + pxCell(pc, d.lo, true)        // 掛限價買進接得到的位置，這一欄放最大
@@ -966,7 +987,7 @@ function _rbSoxHtml(view) {
         + '">沒有可算的樣本</td></tr>';
     }
     var pc = f.last, tk = (typeof ovTick === 'function') ? null : null;
-    h += '<td class="num rs-dim">' + pc.toFixed(2) + '</td>'
+    h += _rbBaseTd(pc, isIdx ? _rbData.idx : (_rbData.series[code] || []))
       + '<td class="num" style="font-weight:700">' + (st ? st.up.toFixed(0) + '%' : '—') + '</td>'
       + '<td class="num" style="color:' + _rbCol(g ? g.gap : null) + '">' + (g ? _rbPct(g.gap, 2) : '—') + '</td>';
     RB_FILL_OFFS.forEach(function (k, j) {
@@ -1032,7 +1053,7 @@ function _rbSoxHtml(view) {
       var gline = function (code, name, g, isIdx, pc) {
         return '<tr' + (isIdx ? ' class="rb-sysrow"' : '') + '>'
           + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span></td>'
-          + '<td class="num rs-dim">' + (pc > 0 ? pc.toFixed(2) : '—') + '</td>'
+          + _rbBaseTd(pc, isIdx ? idx : (_rbData.series[code] || []))
           + '<td class="num rs-dim">' + g.n + ' 天</td>'
           + gcell(pc, g.gap)
           + '<td class="num" style="color:' + _rbCol(g.oc) + ';font-weight:700">' + _rbPct(g.oc, 2) + '</td>'
