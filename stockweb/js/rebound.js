@@ -448,7 +448,7 @@ async function rbStreakFill(root) {
       if (!el.isConnected) continue;
       var k = bars ? _rbStreak(bars) : null;
       if (!k) { el.remove(); continue; }
-      var h = _rbStreakSub(bars);
+      var h = _rbStreakSub(bars, el.getAttribute('data-sm') === '1');
       var tmp = document.createElement('div'); tmp.innerHTML = h;
       var fresh = tmp.firstChild;
       el.className = fresh.className;
@@ -460,18 +460,20 @@ async function rbStreakFill(root) {
   await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
 }
 // 佔位：先畫空框佔住寬度，資料回來再填
-function rbStreakSlot(code) {
-  return '<span class="rb-bsub rb-bs-wait" data-sc="' + code + '"></span>';
+function rbStreakSlot(code, compact) {
+  return '<span class="rb-bsub rb-bs-wait' + (compact ? ' rb-bs-sm' : '')
+    + '" data-sc="' + code + '"' + (compact ? ' data-sm="1"' : '') + '></span>';
 }
 
-function _rbStreakSub(bars) {
+function _rbStreakSub(bars, compact) {
   var k = _rbStreak(bars);
   if (!k) return '';
   var icon, cls, tip;
   if (k.dir === 0) {
     icon = '—'; cls = 'rb-bs-fl'; tip = '前收跟再前一天收在同一個價';
   } else if (k.n >= 2) {
-    icon = (k.dir > 0 ? '▲' : '▼') + k.n;
+    // 精簡版省掉天數，欄位擠不下時用；天數仍然寫在提示裡，不是把資訊丟掉。
+    icon = (k.dir > 0 ? '▲' : '▼') + (compact ? '' : k.n);
     cls = k.dir > 0 ? 'rb-bs-up' : 'rb-bs-dn';
     tip = '連續第 ' + k.n + ' 天' + (k.dir > 0 ? '上漲' : '下跌');
   } else if (k.txt.length === 3) {          // 跌轉漲／漲轉跌
@@ -479,13 +481,13 @@ function _rbStreakSub(bars) {
     cls = k.dir > 0 ? 'rb-bs-up' : 'rb-bs-dn';
     tip = k.txt + '：' + k.txt.charAt(0) + '了一段之後，這一天轉' + k.txt.charAt(2);
   } else {                                   // 再前一天持平，等於只有 1 天
-    icon = (k.dir > 0 ? '▲' : '▼') + '1';
+    icon = (k.dir > 0 ? '▲' : '▼') + (compact ? '' : '1');
     cls = k.dir > 0 ? 'rb-bs-up' : 'rb-bs-dn';
     tip = '前收' + k.txt + '，再前一天持平';
   }
   // 補一句「數的是收盤序列」：停損停利與成份股曝險那兩張接的是現價，
   // 盤中那個徽章會落後一天（不含今天還沒收的那一根）。
-  return '<span class="rb-bsub ' + cls + '" title="' + tip
+  return '<span class="rb-bsub ' + cls + (compact ? ' rb-bs-sm' : '') + '" title="' + tip
     + '（數的是收盤序列，盤中不含今天；還原後，除息不算下跌）">' + icon + '</span>';
 }
 // 前收儲存格：數字照舊，字色是它自己的漲跌，底下一行是目前的狀態

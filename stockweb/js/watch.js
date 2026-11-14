@@ -272,6 +272,7 @@ function renderWatch() {
   var keep = _wtOpen ? wrap.querySelector('.es-detail[data-code="' + _wtOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
+  if (typeof rbStreakFill === 'function') rbStreakFill(wrap);
   if (typeof wtFitWrap === 'function') wtFitWrap();   // 先定表格要不要捲動，明細才量得到正確的可視寬
   if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
 }
@@ -316,7 +317,11 @@ function _wtRowHtml(code) {
   return '<td>' + (isEtf ? '<button class="btn-detail" onclick="openConstituents(\'' + code + '\')">成份股</button>' : '') + '</td>' +
     '<td><button class="btn-detail' + (_wtOpen === code ? ' active' : '') + '" onclick="wtToggleDetail(\'' + code + '\')">明細 ' + (_wtOpen === code ? '▼' : '▶') + '</button></td>' +
     '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"><span class="code-link" title="' + (name ? name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖') + '" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
-    '<td class="num ' + ccls + '">' + (price != null ? price.toFixed(2) : '—') + '</td>' +
+    // 徽章用精簡版（不帶天數，22px）：這幾張表當初是砲了不橫向捲動才挤出來的，
+    // 完整版 34px 會超出容器。天數收到提示裡。
+    '<td class="num ' + ccls + '">'
+      + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
+      + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code, true) : '') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt) + '　' + fmtPct(chgPct)) + '</td>' +
     (typeof esWatchCells === 'function' ? esWatchCells(code) : '') +      // ETF 評比指標（etf-screen.js）
     '<td><button class="swap-mini" onclick="wtRemove(\'' + code + '\')">移除</button></td>';
@@ -325,7 +330,11 @@ function _wtRowHtml(code) {
 // SSE tick：單列即時更新
 function renderWatchRow(code) {
   var tr = document.getElementById('wt-tr-' + String(code));
-  if (tr) tr.innerHTML = _wtRowHtml(String(code));
+  if (!tr) return;
+  tr.innerHTML = _wtRowHtml(String(code));
+  // 單列重畫（盤中每筆 tick）也要補，否則徽章會變回空框。
+  // rbDayBars 有快取，不會重複發請求。
+  if (typeof rbStreakFill === 'function') rbStreakFill(tr);
 }
 
 // ── 除息紀錄彈窗（近 2 年）──
@@ -805,7 +814,9 @@ function renderWatchBond() {
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-name">' + r.name + '</td>' +
       (function () { var pc = wtPxCell(r.code, r.px);
-        return '<td class="' + pc.cls + '">' + (pc.txt || '—') + '</td>'; })() +
+        return '<td class="' + pc.cls + '">'
+          + (pc.txt ? '<span class="rb-bpx">' + pc.txt + '</span>' : '—')
+          + (pc.txt && typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code, true) : '') + '</td>'; })() +
       '<td class="num">' + r.amount.toFixed(4) + '</td>' +
       '<td class="num swap-yield">' + r.mY.toFixed(2) + '%</td>' +
       '<td class="num swap-yield" title="' + (r.guessed ? '僅 1 筆配息紀錄，頻率推定為月配（新上市債券 ETF 慣例），待累積紀錄後自動修正'
@@ -833,6 +844,7 @@ function renderWatchBond() {
   var keep = _wtBondOpen ? wrap.querySelector('.es-detail[data-code="' + _wtBondOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
+  if (typeof rbStreakFill === 'function') rbStreakFill(wrap);
   if (typeof wtFitWrap === 'function') wtFitWrap();   // 先定表格要不要捲動，明細才量得到正確的可視寬
   if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
 }
@@ -905,7 +917,9 @@ function renderWatchAct() {
         + '<button class="swap-mini wt-cst" title="看成份股" onclick="openConstituents(\'' + r.code + '\')">份</button></td>' +
       (function () { var pc = wtPxCell(r.code, r.px);
         return '<td class="' + pc.cls + '">'
-          + (pc.txt || gapX('券商快照與 Yahoo 都取不到價')) + '</td>'; })() +
+          + (pc.txt ? '<span class="rb-bpx">' + pc.txt + '</span>'
+                    : gapX('券商快照與 Yahoo 都取不到價'))
+          + (pc.txt && typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code, true) : '') + '</td>'; })() +
       '<td class="num"' + dtip(r) + '>' + yld(r.y1) + '</td>' +
       '<td class="num"' + dtip(r) + '>' + yld(r.yEst) + '</td>' +
       '<td class="num">' + pctR(r.r1, r, '上市不足 20 個交易日，沒有一個月前的錨點') + '</td>' +
@@ -944,6 +958,7 @@ function renderWatchAct() {
   var keep = _wtActOpen ? wrap.querySelector('.es-detail[data-code="' + _wtActOpen + '"]') : null;
   if (keep) keep.remove();
   wrap.innerHTML = h;
+  if (typeof rbStreakFill === 'function') rbStreakFill(wrap);
   if (typeof wtFitWrap === 'function') wtFitWrap();   // 先定表格要不要捲動，明細才量得到正確的可視寬
   if (typeof esMountDetail === 'function') esMountDetail(wrap.querySelector('.es-dslot'), keep);
 }
