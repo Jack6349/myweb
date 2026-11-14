@@ -116,7 +116,9 @@ function liveRowHtml(p) {
     '<td class="num">' + (p.quantity != null ? Math.round(p.quantity).toLocaleString('zh-TW') : '—') + '</td>' +
     costCellHtml(v.avg, v.price) +
     _liveBuyCell(v.code) +
-    '<td class="num ' + ccls + '">' + (v.price != null ? v.price.toFixed(2) : '—') + '</td>' +
+    '<td class="num ' + ccls + '">'
+      + (v.price != null ? '<span class="rb-bpx">' + v.price.toFixed(2) + '</span>' : '—')
+      + (v.price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(v.code) : '') + '</td>' +
     _liveDiffCell(v.code, v.price) +
     '<td class="num ' + ccls + '">' + (v.chgAmt == null ? '—' : fmtChg(v.chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (v.chg == null ? '—' : fmtPct(v.chg)) + '</td>' +
@@ -176,6 +178,7 @@ function renderLiveTables() {
       return '<tr id="live-tr-' + c + '"' + (al ? ' class="alert-' + al + '"' : '') + '>' + liveRowHtml(p) +
         '<td class="lc-cell">' + _lcCellHtml(c) + '</td></tr>';
     }).join('') + '</tbody></table></div>';
+  if (typeof rbStreakFill === 'function') rbStreakFill(box);
   liveChartLoadAll();
   _lcStartTimer();
 }

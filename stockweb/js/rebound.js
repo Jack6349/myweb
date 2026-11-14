@@ -446,9 +446,12 @@ async function rbStreakFill(root) {
       var bars = null;
       try { bars = await rbDayBars(code); } catch (e) { hush('rebound', e); }
       if (!el.isConnected) continue;
+      var sm = el.getAttribute('data-sm') === '1';
+      var key = String(code) + (sm ? '|s' : '');
       var k = bars ? _rbStreak(bars) : null;
-      if (!k) { el.remove(); continue; }
-      var h = _rbStreakSub(bars, el.getAttribute('data-sm') === '1');
+      if (!k) { _rbStreakDone[key] = ''; el.remove(); continue; }
+      var h = _rbStreakSub(bars, sm);
+      _rbStreakDone[key] = h;
       var tmp = document.createElement('div'); tmp.innerHTML = h;
       var fresh = tmp.firstChild;
       el.className = fresh.className;
@@ -459,8 +462,15 @@ async function rbStreakFill(root) {
   }
   await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
 }
+// 算好的徽章 HTML。即時持股逐筆行情每一筆就整表重建，
+// 若每次都從空框重新填，徽章會跳一下（填的那一段是非同步的）。
+// 有快取就能同步畫出來，第二筆以後不再闪。
+// 值是空字串代表「這檔沒有日線」，也要快取，不要每次再放一個空框。
+var _rbStreakDone = {};
 // 佔位：先畫空框佔住寬度，資料回來再填
 function rbStreakSlot(code, compact) {
+  var key = String(code) + (compact ? '|s' : '');
+  if (_rbStreakDone[key] !== undefined) return _rbStreakDone[key];
   return '<span class="rb-bsub rb-bs-wait' + (compact ? ' rb-bs-sm' : '')
     + '" data-sc="' + code + '"' + (compact ? ' data-sm="1"' : '') + '></span>';
 }
