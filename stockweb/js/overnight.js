@@ -484,7 +484,15 @@ function ovEstimate(code) {
     code: code, n: fc.n, base: base, basePrev: raw[bi].d,
     basePx: base,   // 偏移度要把百分點換回元
     cost: _ovCost(code),                                   // 持股成本均價，沒持股為 null
-    baseChg: (bi > 0 && raw[bi - 1].c > 0) ? (base / raw[bi - 1].c - 1) * 100 : null,
+    // 前收字色用還原收盤算：未還原價在除息當天會憑空掉一截，
+    // 拿它上色會把配息標成下跌。與 rebound.js 的 _rbLastChg 同一個算法，
+    // 否則同一檔在兩張表上會是不同顏色。
+    baseChg: (function () {
+      if (!(bi > 0)) return null;
+      var c1 = (raw[bi].a > 0) ? raw[bi].a : raw[bi].c;
+      var c0 = (raw[bi - 1].a > 0) ? raw[bi - 1].a : raw[bi - 1].c;
+      return (c0 > 0 && c1 > 0) ? (c1 / c0 - 1) * 100 : null;
+    })(),
     prem: _ovPrem(code), volX: _ovVolX(raw, act ? bi + 1 : bi),
     act: act ? { o: act.o, l: act.l, c: act.c,
                  cPct: (act.c / base - 1) * 100, lPct: (act.l / base - 1) * 100 } : null,
