@@ -2191,6 +2191,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .rb-frate { display: block; font-size: 11px; margin-top: 1px; }
 /* 日內形狀：百分比底下補換算後的價格 */
 .rb-gsub { display: block; font-size: 11px; color: var(--text2); font-weight: 400; }
+/* 前收底下的「目前狀態」：陣述性的，不跟著漲跌上色也不加重 */
+.rb-bsub { display: block; font-size: 10.5px; font-weight: 400; color: var(--text3); line-height: 1.5; cursor: help; }
 /* 成本均價：固定的事實，不是漲跌，用標頭的橘黃而不是紅綠 */
 .ov-cost { color: var(--accent2); }
 /* 債券 ETF：9 欄撐滿 1644px 時瀏覽器按內容比例分配，名稱 307、現價 130、除息日 205，

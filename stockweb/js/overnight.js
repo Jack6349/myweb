@@ -776,7 +776,8 @@ function ovHtml(view) {
       '<td class="num">' + (r.cost > 0
           ? '<span class="ov-cost">' + _ovPx(r.cost) + '</span>'
           : '<span class="dm-dim" title="只在關注清單，沒有持股">—</span>') + '</td>' +
-      '<td class="num" style="color:' + _rbCol(r.baseChg) + '">' + _ovPx(r.base) + '</td>' +
+      '<td class="num" style="color:' + _rbCol(r.baseChg) + '">' + _ovPx(r.base)
+        + (typeof _rbStreakSub === 'function' ? _rbStreakSub(_rbData.series[r.code] || []) : '') + '</td>' +
       _ovLiveCell(r, t) +
       '<td class="num ov-side">' + _ovPx(r.oPx)
         + '<span class="ov-sub" style="color:' + _rbCol(r.oPct) + '">' + pct(r.oPct) + '</span></td>' +
