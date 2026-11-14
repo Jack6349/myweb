@@ -363,15 +363,32 @@ function _rbStreak(bars) {
   if (prev === -d0) return { n: 1, dir: d0, txt: (d0 > 0 ? '跌轉漲' : '漲轉跌') };
   return { n: 1, dir: d0, txt: (d0 > 0 ? '漲' : '跌') };
 }
+// 圖示的選擇：連續用「方向＋天數」，轉向用弧線。
+//
+// 兩種狀態本質不同，不該共用一套符號：連續是數量（▲5 比 ▲×5 乾淨），
+// 轉向是事件（⤴ 一眼就是折返，不需要數字）。
+// 硬用同一套會變成 ▼▲ 或 ○● 那種要想一下才讀得懂的東西。
 function _rbStreakSub(bars) {
   var k = _rbStreak(bars);
   if (!k) return '';
-  var tip;
-  if (k.dir === 0) tip = '前收跟再前一天收在同一個價';
-  else if (k.n >= 2) tip = '前收是連續第 ' + k.n + ' 天' + (k.dir > 0 ? '上漲' : '下跌');
-  else if (k.txt.length === 3) tip = '前收' + k.txt.charAt(0) + '了一段之後，這一天轉' + k.txt.charAt(2);
-  else tip = '前收' + k.txt + '，再前一天持平';
-  return '<span class="rb-bsub" title="' + tip + '（還原後，除息不算下跌）">' + k.txt + '</span>';
+  var icon, cls, tip;
+  if (k.dir === 0) {
+    icon = '—'; cls = 'rb-bs-fl'; tip = '前收跟再前一天收在同一個價';
+  } else if (k.n >= 2) {
+    icon = (k.dir > 0 ? '▲' : '▼') + k.n;
+    cls = k.dir > 0 ? 'rb-bs-up' : 'rb-bs-dn';
+    tip = '連續第 ' + k.n + ' 天' + (k.dir > 0 ? '上漲' : '下跌');
+  } else if (k.txt.length === 3) {          // 跌轉漲／漲轉跌
+    icon = k.dir > 0 ? '⤴' : '⤵';
+    cls = k.dir > 0 ? 'rb-bs-up' : 'rb-bs-dn';
+    tip = k.txt + '：' + k.txt.charAt(0) + '了一段之後，這一天轉' + k.txt.charAt(2);
+  } else {                                   // 再前一天持平，等於只有 1 天
+    icon = (k.dir > 0 ? '▲' : '▼') + '1';
+    cls = k.dir > 0 ? 'rb-bs-up' : 'rb-bs-dn';
+    tip = '前收' + k.txt + '，再前一天持平';
+  }
+  return '<span class="rb-bsub ' + cls + '" title="' + tip + '（還原後，除息不算下跌）">'
+    + icon + '</span>';
 }
 // 前收儲存格：數字照舊，字色是它自己的漲跌，底下一行是目前的狀態
 function _rbBaseTd(pc, bars) {
@@ -379,7 +396,9 @@ function _rbBaseTd(pc, bars) {
   var ch = _rbLastChg(bars);
   return '<td class="num" style="color:' + _rbCol(ch) + '"'
     + (ch == null ? '' : ' title="前收對再前一個交易日 ' + _rbPct(ch, 2) + '（還原後，除息不算下跌）"')
-    + '>' + pc.toFixed(2) + _rbStreakSub(bars) + '</td>';
+    // 金額包成整行，徽章落到下一行。
+    // 接在金額後面會讓每一列的數字右邊美不齊，整欄就掃不了了。
+    + '><span class="rb-bpx">' + pc.toFixed(2) + '</span>' + _rbStreakSub(bars) + '</td>';
 }
 
 // 費半日報酬分布與門檻。指數沒有配息，用未還原收盤。
