@@ -804,10 +804,15 @@ function _rbSoxDnHtml(sox, hit, head, sideBtn, on, pending) {
   });
   html += '</tr></thead><tbody>';
 
-  var px = function (pc, v) {
-    if (!(pc > 0) || v == null) return '';
+  // 價格放主體、百分比降為小字。掛單要抄的是價格，百分比只是用來判斷哪一欄。
+  // 與成交率表、債券表、隔夜推估同一個主從關係。
+  var pxCell = function (pc, v, bold) {
+    if (v == null) return '<td class="num rs-dim">—</td>';
+    var body = '<span class="rb-gsub" style="color:' + _rbCol(v) + '">' + _rbPct(v, 2) + '</span>';
+    if (!(pc > 0)) return '<td class="num">' + body + '</td>';
     var q = pc * (1 + v / 100), t = q < 50 ? 0.01 : 0.05;
-    return '<span class="rb-gsub">' + (Math.round(q / t) * t).toFixed(2) + '</span>';
+    return '<td class="num"><span class="rb-fpx"' + (bold ? ' style="font-size:15px"' : '') + '>'
+      + (Math.round(q / t) * t).toFixed(2) + '</span>' + body + '</td>';
   };
   var wcell = function (f) {
     if (!f || !f.n) return '<td class="num rs-dim">—</td>';
@@ -825,9 +830,9 @@ function _rbSoxDnHtml(sox, hit, head, sideBtn, on, pending) {
       + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span></td>'
       + '<td class="num rs-dim">' + (pc > 0 ? pc.toFixed(2) : '—') + '</td>'
       + '<td class="num rs-dim">' + d.n + ' 天</td>'
-      + '<td class="num" style="color:' + _rbCol(d.gap) + ';font-weight:700">' + _rbPct(d.gap, 2) + px(pc, d.gap) + '</td>'
-      + '<td class="num" style="color:' + _rbCol(d.lo) + ';font-weight:700">' + _rbPct(d.lo, 2) + px(pc, d.lo) + '</td>'
-      + '<td class="num" style="color:' + _rbCol(d.cc) + '">' + _rbPct(d.cc, 2) + px(pc, d.cc) + '</td>';
+      + pxCell(pc, d.gap)
+      + pxCell(pc, d.lo, true)        // 掛限價買進接得到的位置，這一欄放最大
+      + pxCell(pc, d.cc);
     d.fwd.forEach(function (f) { h += wcell(f); });
     return h + '</tr>';
   };
@@ -1016,21 +1021,24 @@ function _rbSoxHtml(view) {
         + '</tr></thead><tbody>';
       // 百分比不能抄進委託單：每一欄都把中位數換成價格（前收×(1+%)，對齊升降單位）。
       // 開盤→收盤是同一天兩個價相除，沒有「對前收」的基準，維持百分比。
-      var gpx = function (pc, v) {
-        if (!(pc > 0) || v == null) return '';
-        var px = pc * (1 + v / 100), t = px < 50 ? 0.01 : 0.05;
-        return '<span class="rb-gsub">' + (Math.round(px / t) * t).toFixed(2) + '</span>';
+      // 同樣是價格主體、百分比小字。「開盤→收盤」沒有對前收的基準，維持純百分比。
+      var gcell = function (pc, v) {
+        if (v == null) return '<td class="num rs-dim">—</td>';
+        var sub = '<span class="rb-gsub" style="color:' + _rbCol(v) + '">' + _rbPct(v, 2) + '</span>';
+        if (!(pc > 0)) return '<td class="num">' + sub + '</td>';
+        var q = pc * (1 + v / 100), t = q < 50 ? 0.01 : 0.05;
+        return '<td class="num"><span class="rb-fpx">' + (Math.round(q / t) * t).toFixed(2) + '</span>' + sub + '</td>';
       };
       var gline = function (code, name, g, isIdx, pc) {
         return '<tr' + (isIdx ? ' class="rb-sysrow"' : '') + '>'
           + '<td><span class="tx-ocode">' + code + '</span><span class="tx-oname">' + name + '</span></td>'
           + '<td class="num rs-dim">' + (pc > 0 ? pc.toFixed(2) : '—') + '</td>'
           + '<td class="num rs-dim">' + g.n + ' 天</td>'
-          + '<td class="num" style="color:' + _rbCol(g.gap) + ';font-weight:700">' + _rbPct(g.gap, 2) + gpx(pc, g.gap) + '</td>'
+          + gcell(pc, g.gap)
           + '<td class="num" style="color:' + _rbCol(g.oc) + ';font-weight:700">' + _rbPct(g.oc, 2) + '</td>'
-          + '<td class="num" style="color:' + _rbCol(g.hi) + '">' + _rbPct(g.hi, 2) + gpx(pc, g.hi) + '</td>'
-          + '<td class="num" style="color:' + _rbCol(g.lo) + '">' + _rbPct(g.lo, 2) + gpx(pc, g.lo) + '</td>'
-          + '<td class="num" style="color:' + _rbCol(g.cc) + '">' + _rbPct(g.cc, 2) + gpx(pc, g.cc) + '</td>'
+          + gcell(pc, g.hi)
+          + gcell(pc, g.lo)
+          + gcell(pc, g.cc)
           + '<td class="num rs-dim">' + g.fade.toFixed(0) + '%</td></tr>';
       };
       var lastC = function (c) {
