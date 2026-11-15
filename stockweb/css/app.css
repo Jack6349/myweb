@@ -2129,7 +2129,13 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .bs-off { color: var(--text3); }
 .bs-slash { color: var(--text3); margin: 0 3px; font-size: 11px; }
 /* 窄視窗收起「已領配息」：累計值、盤中不跳，是頂欄五項裡最不急著看的 */
-@media (max-width: 1460px) { .topbar-totals .tt-div { display: none; } }
+/* 損益表塞不下時往回收。門檻是量出來的（即時行情頁，右側按鈕最多、
+   留給損益表的空間最少，其他頁更寬鬆）：
+   五項全開要 1680，收掉「已領息」要 1553，再收掉「原始成本」要 1403。
+   先收這兩項的理由：它們是累計值、盤中不跳，五項裡最不急著看。
+   1403 以下才讓它橫向捲。 */
+@media (max-width: 1679px) { .topbar-totals .tt-div { display: none; } }
+@media (max-width: 1552px) { .topbar-totals .tt-cost { display: none; } }
 .ov-at { display: inline-block; margin-left: 10px; font-size: 11px; color: var(--text3); }
 .ov-base { color: var(--text3); border-bottom: 1px dotted var(--text3); cursor: help; }
 .rb-sideb { display: flex; gap: 6px; margin: 0 0 8px; }

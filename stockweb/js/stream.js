@@ -694,10 +694,10 @@ function renderTopbarTotals() {
     : (t.withDiv >= 0 ? '+' : '') + t.withDiv.toLocaleString('zh-TW') +
       (t.wrate == null ? '' : '<span class="tt-sub">(' + (t.wrate > 0 ? '+' : '') + t.wrate.toFixed(2) + '%)</span>');
   el.innerHTML =
-    tt('原始成本', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', 'var(--text2)') +
-    tt('現值(含借出)', t.curVal.toLocaleString('zh-TW') + noPxTag, 'var(--accent2)') +
+    tt('原始成本', _totalCost ? _totalCost.toLocaleString('zh-TW') : '—', 'var(--text2)', 'tt-cost') +
+    tt('現值(含借)', t.curVal.toLocaleString('zh-TW') + noPxTag, 'var(--accent2)') +
     // 窄視窗時收起來：它是累計值、盤中不跳，是這五項裡最不急著看的
-    tt('已領配息', t.div == null ? '—' : t.div.toLocaleString('zh-TW'), 'var(--text2)', 'tt-div') +
+    tt('已領息', t.div == null ? '—' : t.div.toLocaleString('zh-TW'), 'var(--text2)', 'tt-div') +
     tt('損益', pl, cvar[pcls]) +
     tt('今日', t.wpct == null ? '—' : fmtPct(t.wpct), cvar[wcls]);
   if (btn) {
