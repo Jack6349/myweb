@@ -260,6 +260,13 @@ function _divMetaRow(code) {
     yld1: yld1, yld12: yld12, mgmt: mgmt, cust: cust };
 }
 
+// 補登輸入格。寫成函式是為了把 onchange 裡的引號集中在一處。
+function _dmManInp(code, mv, esc) {
+  return '<input class="sbl-inp dm-next-inp' + (mv ? ' dm-manual' : '') + '" type="text"'
+    + ' value="' + esc(mv) + '" placeholder="10/05 [金額] [發放日]"'
+    + ' onchange="divMetaNextEx(&quot;' + code + '&quot;,this.value)">';
+}
+
 function renderDivMeta() {
   var wrap = document.getElementById('divmeta-wrap');
   if (!wrap) return;
@@ -275,6 +282,7 @@ function renderDivMeta() {
   var srcName = { manual: '手動', code: '程式登錄', mdj: 'MoneyDJ', TWSE: 'TWSE', TPEx: 'TPEx', infer: '紀錄推算', guess: '推定', none: '官方' };
   var lvTip = { red: '頻率靠推定（紀錄 ≤1 筆、無官方或手動資料），或除息紀錄與券商實領金額不符，請確認', yellow: '頻率由除息紀錄推算', green: '頻率來自 MoneyDJ、官方或手動輸入', gray: '官方標示不配息' };
   var rfMan = (typeof _rfManLoad === 'function') ? _rfManLoad() : {};
+  var manRows = [];                       // 下方「補登下次除息」那張表的資料
 
   var store = _divManStore === 'firestore'
     ? '<span class="st-pill st-ok">手動輸入存於雲端（Firestore）</span>'
@@ -348,11 +356,11 @@ function renderDivMeta() {
       ? md(r.next.exDate) + '　' + (r.next.amount > 0 ? r.next.amount.toFixed(4) : dim('待公告')) +
         (r.next.payDate ? dim('　發 ' + md(r.next.payDate)) : '') + (rfMan[r.code] ? ' <span class="dm-src dm-src-manual" title="已手動補登">補登</span>' : '')
       : dim('—');
-    // 手動補登下次除息：投信已公告、但官方預告表（約前兩週）與 e添富 都還沒收錄時用；官方收錄後以官方值為準
+    // 補登的輸入格搬到下方自己一張表：它 150px 寬，把「下次除息」撐到 312px，
+    // 是第二寬欄位的 1.6 倍，整表因此超過可用寬、冒出橫向捲軸。
+    // 補登是偶爾才做的事，不該每一列都常駐一個輸入格。
     var mv = rfMan[r.code] && rfMan[r.code].exDate >= _divTwDate().iso ? _rfManStr(rfMan[r.code]) : '';
-    nextTxt += '<input class="sbl-inp dm-next-inp' + (mv ? ' dm-manual' : '') + '" type="text" value="' + esc(mv) + '"' +
-      ' placeholder="補登 10/05 [金額] [發放日]" title="投信已公告但尚未收錄時手動輸入：除息日必填，金額、發放日可省略（省略發放日時依該檔過去的除息→發放天數推算）。清空即移除"' +
-      ' onchange="divMetaNextEx(\'' + r.code + '\',this.value)">';
+    manRows.push({ code: r.code, name: r.name, next: nextTxt, mv: mv });
     var y12 = r.yld12 == null ? dim('—')
       : r.yld12.toFixed(2) + '%' + (r.step && r.in12.length < 12 / r.step ? dim('（' + r.in12.length + ' 次）') : '');
 
@@ -374,15 +382,30 @@ function renderDivMeta() {
       '<td>' + _divChkCell(r.chk) + '</td>' +
       '</tr>';
   });
-  h += '</tbody></table></div>' +
-    '<div class="detail-note"><dl>' +
+  h += '</tbody></table></div>';
+
+  // 補登下次除息：投信已公告、官方預告表（約前兩週）與 e添富 還沒收錄時用。
+  h += '<div class="dm-sec">補登下次除息</div>' +
+    '<div class="dm-sec-n">投信已公告、上面還抓不到時手動填。' +
+    '除息日必填，金額與發放日可省略（省略發放日時依該檔過去的除息至發放天數推算）。' +
+    '清空即移除。官方收錄之後以官方值為準。</div>' +
+    '<div class="inv-table-wrap"><table class="inv-table dm-man-t"><thead><tr>' +
+    '<th>代號</th><th>名稱</th><th>目前的下次除息</th><th>補登</th></tr></thead><tbody>' +
+    manRows.map(function (m) {
+      return '<tr><td class="inv-code">' + m.code + '</td><td class="inv-name">' + esc(m.name) + '</td>' +
+        '<td>' + m.next + '</td>' +
+        '<td>' + _dmManInp(m.code, m.mv, esc) + '</td></tr>';
+    }).join('') +
+    '</tbody></table></div>';
+
+  h += '<div class="detail-note"><dl>' +
     '<dt>燈號</dt><dd><span class="dm-lv dm-lv-red"></span> 頻率靠推定，需確認　' +
     '<span class="dm-lv dm-lv-yellow"></span> 由除息紀錄推算　' +
     '<span class="dm-lv dm-lv-green"></span> 官方或手動　<span class="dm-lv dm-lv-gray"></span> 不配息</dd>' +
     '<dt>資料來源</dt><dd>配息頻率優先採 MoneyDJ（每月 1 號更新，資料日見上方）；' +
     '官方規格：上市＝TWSE、上櫃＝TPEx「ETF 商品資訊」，每 30 天更新。</dd>' +
     '<dt>手動輸入</dt><dd>配息頻率、管理費、保管費會覆蓋官方值，清空即回到自動。' +
-    '「下次除息」可補登投信已公告、官方尚未收錄的除息日（金額與發放日可省略）。</dd>' +
+    '下次除息的補登在表下方自己一張表。</dd>' +
     '</dl></div>';
   wrap.innerHTML = h;
 }
