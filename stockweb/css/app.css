@@ -1102,6 +1102,13 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
    也被設成 top:119px，表頭就黏在自己捲動區往下 119px 的地方，看起來像插在資料中間。
    2026-11-09 實測：.es-evt 上緣 520、表頭 639，差正好 119。 */
 .wt-wrap > .inv-table > thead > tr > th { top: var(--h-chrome); }
+/* 加上 wt-scroll 之後 overflow 不再是 visible，這個容器本身就成了捲動容器，
+   sticky 的基準從頁面換成容器。top: 119px 於是把表頭往下推 119px，
+   剛好插在前三列之後，上方留下一塊空白。
+   2026-11-16 實測：容器上緘 232、表頭 351，差正好 119。
+   表格比容器寬才會加 wt-scroll（見 wtFitWrap），所以欄位一變多就會觸發。
+   這種情況下容器沒有高度上限、不會垂直捲動，黏不黏沒差，歸零就對了。 */
+.wt-wrap.wt-scroll > .inv-table > thead > tr > th { top: 0; }
 
 /* 關注股票：頁籤內工具列 */
 .wt-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text2); margin-bottom: 10px; }
