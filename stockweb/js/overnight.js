@@ -397,7 +397,17 @@ function _ovLiveCell(r, t) {
 function _ovCost(code) {
   var ps = (typeof _positions !== 'undefined' && _positions) || [];
   for (var i = 0; i < ps.length; i++) {
-    if (String(ps[i].code) === String(code) && ps[i].price > 0) return ps[i].price;
+    if (String(ps[i].code) !== String(code)) continue;
+    // 券商的 price 是「付出的錢 − 領到的配息」，配息領愈多成本看起來愈低。
+    // 持股庫存、即時持股、停損停利、進場訊號板的部位欄都走 invMetrics 還原過，
+    // 這裡也要走同一個，否則同一個「成本均價」在兩頁會是兩個數字。
+    if (typeof invMetrics === 'function') {
+      try {
+        var m = invMetrics(ps[i]);
+        if (m && m.avg > 0) return m.avg;
+      } catch (e) { hush('overnight', e); }
+    }
+    return ps[i].price > 0 ? ps[i].price : null;      // 庫存頁還沒載入時的退路
   }
   return null;
 }

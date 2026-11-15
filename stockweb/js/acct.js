@@ -159,6 +159,14 @@ function _abDivInBalance(payDate) {
   var d = abAtDay();
   return !!(d && payDate && payDate <= d);
 }
+// 已經發放過的。這張表的題目是「還會進來多少錢」，過去的不算預估。
+//
+// 為什麼不能只靠 _abDivInBalance：它比的是「你填餘額的那一天」，
+// 餘額沒填時 abAtDay() 回空字串，比較恒為 false，整年從一月起全部被當成「未來」列出來，
+// 累計欄會做出一個幾百萬的數字。餘額填得很早也一樣，只是沒那麼誇張。
+function _abDivPast(payDate) {
+  return !!(payDate && payDate < _abToday());
+}
 
 // 未來的配息入帳：取自股利估算已經算好的月度結果（可領張數已依建倉明細判定）。
 // 那一頁沒載過就回 null —— 回空陣列會讓畫面以為「沒有配息」，那是兩件事。
@@ -170,6 +178,7 @@ function abDivIn() {
     (s.res.months || []).forEach(function (m) {
       if (!m.payDate || !(m.total > 0)) return;
       if (_abDivInBalance(m.payDate)) return;        // 已經在餘額裡
+      if (_abDivPast(m.payDate)) return;            // 發放日已經過了
       out.push({ d: m.payDate, kind: 'div', label: s.code, amt: Math.round(m.total) });
     });
   });
