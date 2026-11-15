@@ -742,11 +742,14 @@ function _wtSortTh(state, fn, k, label, cls, tip) {
 // ±關注：與 ETF 評比同一顆按鈕、同一句話。
 // 按鈕上的字是「按下去會發生什麼」，不是「現在是什麼狀態」。
 var _wtWmsg = '';
+// 按鈕只留一個星號：債券 ETF 與主動式 ETF 兩張表各 23 欄，
+// 「＋ 關注」吃掉 70px，加上現價旁的狀態徽章就超過容器寬、冒出橫向捲軸。
+// 實測：債券 1604 / 主動 1586，容器 1579。全名在 title。
 function wtWatchBtn(code) {
   var on = _wtLoad().indexOf(code) >= 0;
   return '<button class="swap-mini es-wbtn ' + (on ? 'on' : 'off') + '" title="'
     + (on ? '取消關注' : '加入關注清單') + '" onclick="wtWatchToggle(\'' + code + '\')">'
-    + (on ? '－ 關注' : '＋ 關注') + '</button>';
+    + (on ? '★' : '☆') + '</button>';
 }
 function wtWatchToggle(code) {
   code = String(code);

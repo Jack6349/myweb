@@ -1432,7 +1432,7 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .es-held { background: color-mix(in srgb, var(--up) 18%, transparent); color: var(--up); }
 .es-watch { background: rgba(90,169,255,.18); color: var(--accent3); }
 .es-wcell { text-align: center; }
-.es-wbtn { white-space: nowrap; min-width: 64px; }
+.es-wbtn { white-space: nowrap; min-width: 28px; font-size: 13px; line-height: 1; }
 .es-wbtn.on { color: var(--accent3); border-color: rgba(90,169,255,.5); }
 .wt-table .es-wm { font-size: 12px; white-space: nowrap; }
 /* ETF 評比／關注股票：點列展開明細 */
