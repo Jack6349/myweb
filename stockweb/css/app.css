@@ -1380,7 +1380,11 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .tx-ahead-high { color: var(--up); }      /* >500 張：排很後面 */
 .tx-dim { color: var(--text3); }
 
-.dm-next-inp { width: 150px; margin-left: 6px; font-size: 12px; padding: 1px 4px; }
+.dm-next-inp { width: 170px; font-size: 12px; padding: 1px 4px; }
+/* 補登表：只有四欄，不跟上面那張拿同一個寬度。 */
+.dm-man-t { width: auto; max-width: 780px; }
+.dm-sec { margin: 20px 0 4px; font-size: 14px; font-weight: 700; color: var(--text); }
+.dm-sec-n { margin-bottom: 8px; font-size: 12px; color: var(--text2); line-height: 1.7; max-width: 780px; }
 
 /* ── 成交提示（全站，顯示 5 秒）── 置頂置中，蓋在 Header 上方；多筆往下疊 */
 #fill-toasts { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: var(--z-toast);
