@@ -324,10 +324,10 @@ function invValRow(p) {
       (p.lent && p.lentShares ? '<span class="dexm-lent">(借出 ' +
         (p.lentShares / 1000).toLocaleString('zh-TW') + ' 張)</span> ' : '') +
       shares.toLocaleString('zh-TW') + '</td>' +
-    // 按鈕縮成單字騰出來的寬度，用在這裡：現價右側的狀態徽章（精簡版）。
+    // 現價右側的狀態徽章。
     '<td class="num ' + ccls + '">'
       + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
-      + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code, true) : '') + '</td>' +
+      + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code) : '') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
     '<td class="num inv-cchg ' + estCls + '" ' + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +

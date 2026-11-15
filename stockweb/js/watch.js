@@ -321,7 +321,7 @@ function _wtRowHtml(code) {
     // 完整版 34px 會超出容器。天數收到提示裡。
     '<td class="num ' + ccls + '">'
       + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
-      + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code, true) : '') + '</td>' +
+      + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code) : '') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt) + '　' + fmtPct(chgPct)) + '</td>' +
     (typeof esWatchCells === 'function' ? esWatchCells(code) : '') +      // ETF 評比指標（etf-screen.js）
     '<td><button class="swap-mini" onclick="wtRemove(\'' + code + '\')">移除</button></td>';
@@ -742,14 +742,11 @@ function _wtSortTh(state, fn, k, label, cls, tip) {
 // ±關注：與 ETF 評比同一顆按鈕、同一句話。
 // 按鈕上的字是「按下去會發生什麼」，不是「現在是什麼狀態」。
 var _wtWmsg = '';
-// 按鈕只留一個星號：債券 ETF 與主動式 ETF 兩張表各 23 欄，
-// 「＋ 關注」吃掉 70px，加上現價旁的狀態徽章就超過容器寬、冒出橫向捲軸。
-// 實測：債券 1604 / 主動 1586，容器 1579。全名在 title。
 function wtWatchBtn(code) {
   var on = _wtLoad().indexOf(code) >= 0;
   return '<button class="swap-mini es-wbtn ' + (on ? 'on' : 'off') + '" title="'
     + (on ? '取消關注' : '加入關注清單') + '" onclick="wtWatchToggle(\'' + code + '\')">'
-    + (on ? '★' : '☆') + '</button>';
+    + (on ? '－ 關注' : '＋ 關注') + '</button>';
 }
 function wtWatchToggle(code) {
   code = String(code);
@@ -819,7 +816,7 @@ function renderWatchBond() {
       (function () { var pc = wtPxCell(r.code, r.px);
         return '<td class="' + pc.cls + '">'
           + (pc.txt ? '<span class="rb-bpx">' + pc.txt + '</span>' : '—')
-          + (pc.txt && typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code, true) : '') + '</td>'; })() +
+          + (pc.txt && typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code) : '') + '</td>'; })() +
       '<td class="num">' + r.amount.toFixed(4) + '</td>' +
       '<td class="num swap-yield">' + r.mY.toFixed(2) + '%</td>' +
       '<td class="num swap-yield" title="' + (r.guessed ? '僅 1 筆配息紀錄，頻率推定為月配（新上市債券 ETF 慣例），待累積紀錄後自動修正'
@@ -922,7 +919,7 @@ function renderWatchAct() {
         return '<td class="' + pc.cls + '">'
           + (pc.txt ? '<span class="rb-bpx">' + pc.txt + '</span>'
                     : gapX('券商快照與 Yahoo 都取不到價'))
-          + (pc.txt && typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code, true) : '') + '</td>'; })() +
+          + (pc.txt && typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code) : '') + '</td>'; })() +
       '<td class="num"' + dtip(r) + '>' + yld(r.y1) + '</td>' +
       '<td class="num"' + dtip(r) + '>' + yld(r.yEst) + '</td>' +
       '<td class="num">' + pctR(r.r1, r, '上市不足 20 個交易日，沒有一個月前的錨點') + '</td>' +
