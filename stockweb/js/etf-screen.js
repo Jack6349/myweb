@@ -902,8 +902,8 @@ function renderEtfScreen() {
       // 按鈕上的字是「按下去會發生什麼」，不是「現在是什麼狀態」。
       // 「✓ 已關注」讀起來像狀態標示，讓人不確定點下去會不會取消。
       case 'watch': return watched[r.code]
-        ? '<button class="swap-mini es-wbtn on" title="取消關注" onclick="esWatchToggle(\'' + r.code + '\')">★</button>'
-        : '<button class="swap-mini es-wbtn off" title="加入關注清單" onclick="esWatchToggle(\'' + r.code + '\')">☆</button>';
+        ? '<button class="swap-mini es-wbtn on" title="取消關注" onclick="esWatchToggle(\'' + r.code + '\')">－ 關注</button>'
+        : '<button class="swap-mini es-wbtn off" title="加入關注清單" onclick="esWatchToggle(\'' + r.code + '\')">＋ 關注</button>';
     }
     return '';
   };

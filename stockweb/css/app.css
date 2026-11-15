@@ -335,6 +335,9 @@ html, body { overflow-x: clip; }
 .btn-detail:hover { background: rgba(240,204,122,.2); }
 /* 單字按鈕：9px 的左右 padding 是為兩三個字設的，只剩一個字時顯得寬。 */
 .btn-detail.btn-1w { padding: 3px 6px; }
+/* 表格寬度的真正上限是 main-area 的 max-width 1800 減左右 padding 28，等於 1744px。
+   視窗再寬、瀏覽器再縮小都不會超過這個數字，所以判斷「塞不塞得下」要拿 1744 比，
+   不是拿量到的視窗寬。目前最寬的是配息資料那張 1691px。 */
 
 /* ── 即時持股（左右雙欄） ── */
 .live-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -1432,7 +1435,7 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .es-held { background: color-mix(in srgb, var(--up) 18%, transparent); color: var(--up); }
 .es-watch { background: rgba(90,169,255,.18); color: var(--accent3); }
 .es-wcell { text-align: center; }
-.es-wbtn { white-space: nowrap; min-width: 28px; font-size: 13px; line-height: 1; }
+.es-wbtn { white-space: nowrap; min-width: 64px; }
 .es-wbtn.on { color: var(--accent3); border-color: rgba(90,169,255,.5); }
 .wt-table .es-wm { font-size: 12px; white-space: nowrap; }
 /* ETF 評比／關注股票：點列展開明細 */
