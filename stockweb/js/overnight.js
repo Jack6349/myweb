@@ -29,6 +29,46 @@ function kbarMin(iso) {
 
 var OV_SD_HL = 10;       // 區間寬度的半衰期（交易日），見 _ovFit 檔頭
 
+// ── 區間的上下緣要分開定，而且下緣要隨「隔夜費半跌幅」切換 ──
+//
+// 原本上下各一個半衰加權殘差，對稱。走查回測（八檔、319 個交易日、953 筆，
+// 每一天只用該日之前的資料重新配適，不讓模型看到未來）顯示這在費半大跌的
+// 隔天不成立：
+//   隔夜費半 ≤ −3% 的隔天，收盤跌破下緣 32.9%，其餘日子 15.7%；
+//   但跌破上緣兩組一樣，15.1% 對 14.6%。
+// 也就是那天的殘差分布是整個往下拖，不是變寬。對稱放寬會兩邊都錯：實測把
+// 寬度一律乘 1.59，破上緣掉到 3.6%（上緣幾乎碰不到），下緣還是破 24.6%。
+//
+// 所以改成四個邊界各自取走查殘差的分位數，p16 當下緣、p84 當上緣，
+// 單位是一個半衰加權殘差。數字是量出來的：
+//   收盤下緣      門檻日 2.30，其餘 0.96
+//   收盤上緣      兩組都用 0.95（門檻日量到 0.96，差距在雜訊內，不另外分）
+//   日內最低下緣  門檻日 2.31，其餘 1.09
+//   日內最低上緣  兩組都用 0.78（門檻日量到 0.73）
+//
+// 前瞻驗證：用前半段（切在 2026-03-24）估出的倍率套到後半段，門檻日破下緣
+// 18.1%、其餘日 17.0%，對照目標 16%。改之前門檻日是 29% 到 33%。
+// 倍率在時間上也穩：門檻日的收盤下緣前半段 2.20、後半段 2.30。
+//
+// 門檻為什麼設在 −3% 而不是更低：−4% 到 −3% 這一段破下緣 36.7%（16 天），
+// ≤ −4% 反而降到 23.5%（27 天），關係不是單調的，費半漲跌與破下緣比例的線性
+// 相關只有 −0.08。它只能當門檻用，不能當連續訊號。27 天分不出「極端大跌當天
+// 就反應完了」是原因還是雜訊，所以不往下再切一層。
+//
+// 門檻日總共只有 43 天，這幾個倍率自己的誤差不小。
+var OV_SD_GATE = -3;      // 隔夜費半的門檻（%）
+var OV_K = {
+  cLo: { gate: 2.30, base: 0.96 },    // 收盤下緣
+  cHi: { gate: 0.95, base: 0.95 },    // 收盤上緣
+  lLo: { gate: 2.31, base: 1.09 },    // 日內最低下緣
+  lHi: { gate: 0.78, base: 0.78 }     // 日內最低上緣
+};
+function _ovGate(sox) { return sox != null && sox <= OV_SD_GATE; }
+function _ovK(which, sox) {
+  var k = OV_K[which] || OV_K[which.slice(-2) === 'Lo' ? 'cLo' : 'cHi'];
+  return _ovGate(sox) ? k.gate : k.base;
+}
+
 // ── 海外指數要不要當第三個因子：兩道閘，兩道都過才納入 ──
 //
 // 第一道是結構：這一檔的成份股有多少比例在海外。純台股的基金沒有理由掛 Nasdaq，
@@ -185,7 +225,7 @@ async function ovTodayNight() {
 // ── 最小平方（常數＋任意個因子），高斯消去直接解 ──
 // 原本寫死兩個因子。改成吃陣列是為了讓少數幾檔可以多掛一個海外指數，
 // 判準寫在 _ovFactors。
-function _ovFit(Xs, Y) {
+function _ovFit(Xs, Y, tgt) {
   var n = Y.length, K = Xs.length + 1;
   if (n < 40 + (Xs.length - 2) * 10) return null;   // 多一個因子就多要 10 天
   var X1 = Xs[0], X2 = Xs[1];
@@ -231,7 +271,14 @@ function _ovFit(Xs, Y) {
     ss += e * e; tot += (Y[i2] - my) * (Y[i2] - my);
     if (X1[i2] > 0) resU.push(e); else if (X1[i2] < 0) resD.push(e);
     // 實測覆蓋率：當下那條區間有沒有罩住當天的實際值。前 40 天讓 EWMA 先收斂。
-    if (v != null && i2 >= 40) { if (Math.abs(e) <= Math.sqrt(v)) hit++; cvn++; }
+    // 覆蓋率要用當天自己的那一組邊界算，而且上下緣不同。用對稱寬度算出來的
+    // 覆蓋率講的是另一條區間，畫面上那個「罩住幾成」就會跟實際畫出來的對不起來。
+    // tgt 指明算的是收盤（'c'）還是日內最低（'l'）。
+    if (v != null && i2 >= 40) {
+      var sd0 = Math.sqrt(v), gx = X2[i2], tg = tgt || 'c';
+      if (e >= -_ovK(tg + 'Lo', gx) * sd0 && e <= _ovK(tg + 'Hi', gx) * sd0) hit++;
+      cvn++;
+    }
     v = (v == null) ? e * e : lam * v + (1 - lam) * e * e;
   }
   return {
@@ -479,16 +526,16 @@ function ovEstimate(code) {
   }
   // 第二道閘：Nasdaq 在夜盤與費半之上還能不能多解釋一截（以收盤那條判定，三條共用同一個決定，
   // 否則同一列三個價會各用各的模型，解釋不了）
-  var base = [X1, X2], f2 = _ovFit(base, Yc), ixOn = false, addF = null;
+  var base = [X1, X2], f2 = _ovFit(base, Yc, 'c'), ixOn = false, addF = null;
   if (useIx && f2) {
-    var f3 = _ovFit([X1, X2, X3], Yc);
+    var f3 = _ovFit([X1, X2, X3], Yc, 'c');
     if (f3) {
       addF = ((f2.ss - f3.ss) / 1) / (f3.ss / (f3.n - f3.k));
       ixOn = addF > OV_ADD_F;
     }
   }
   var Xs = ixOn ? [X1, X2, X3] : base;
-  var fo = _ovFit(Xs, Yo), fl = _ovFit(Xs, Yl), fc = _ovFit(Xs, Yc);
+  var fo = _ovFit(Xs, Yo, 'c'), fl = _ovFit(Xs, Yl, 'l'), fc = _ovFit(Xs, Yc, 'c');
   if (!fc) return null;
   var t = _ovToday;
   if (!t) return null;
@@ -497,7 +544,7 @@ function ovEstimate(code) {
   if (ixOn) {
     var un = _ovIxic.prev(t.d);
     ixNow = (un && _ovIxic.rets[un] != null) ? _ovIxic.rets[un] : null;
-    if (ixNow == null) { ixOn = false; Xs = base; fo = _ovFit(Xs, Yo); fl = _ovFit(Xs, Yl); fc = _ovFit(Xs, Yc); if (!fc) return null; }
+    if (ixNow == null) { ixOn = false; Xs = base; fo = _ovFit(Xs, Yo, 'c'); fl = _ovFit(Xs, Yl, 'l'); fc = _ovFit(Xs, Yc, 'c'); if (!fc) return null; }
   }
   var ev = function (f) {
     if (!f) return null;
@@ -516,6 +563,8 @@ function ovEstimate(code) {
   var act = (bi + 1 < raw.length && raw[bi + 1].d === t.d) ? raw[bi + 1] : null;
   var mk = function (p) { return p == null ? null : ovTick(base * (1 + p / 100)); };
   var pc2 = ev(fc);
+  // 今天的費半決定用哪一組邊界。費半是全市場共用的一個數字，所以八檔同一天同一組
+  var gs = _ovSox();
   return {
     code: code, n: fc.n, base: base, basePrev: raw[bi].d,
     basePx: base,   // 偏移度要把百分點換回元
@@ -534,13 +583,14 @@ function ovEstimate(code) {
                  cPct: (act.c / base - 1) * 100, lPct: (act.l / base - 1) * 100 } : null,
     oPct: ev(fo), lPct: ev(fl), cPct: pc2,
     oPx: mk(ev(fo)), lPx: mk(ev(fl)), cPx: mk(pc2),
-    loPx: mk(pc2 == null ? null : pc2 - fc.sdEw), hiPx: mk(pc2 == null ? null : pc2 + fc.sdEw),
+    loPx: mk(pc2 == null ? null : pc2 - fc.sdEw * _ovK('cLo', gs)),
+    hiPx: mk(pc2 == null ? null : pc2 + fc.sdEw * _ovK('cHi', gs)),
     // 日內最低自己的區間。掛限價買進看的是這一個，不是收盤那一個，
     // 原本只有收盤有範圍，等於把最該有不確定性的那個數字寫成一個確定的價。
-    lLoPx: (function () { var q = ev(fl); return (q == null || !fl) ? null : mk(q - fl.sdEw); })(),
-    lHiPx: (function () { var q = ev(fl); return (q == null || !fl) ? null : mk(q + fl.sdEw); })(),
+    lLoPx: (function () { var q = ev(fl); return (q == null || !fl) ? null : mk(q - fl.sdEw * _ovK('lLo', gs)); })(),
+    lHiPx: (function () { var q = ev(fl); return (q == null || !fl) ? null : mk(q + fl.sdEw * _ovK('lHi', gs)); })(),
     lCover: fl ? fl.cover : null, lCoverN: fl ? fl.coverN : null,
-    sd: fc.sdEw, sdFull: fc.sd, cover: fc.cover, coverN: fc.coverN, r2: fc.r2,
+    sd: fc.sdEw, sdFull: fc.sd, cover: fc.cover, coverN: fc.coverN, r2: fc.r2, gate: _ovGate(gs),
     fgnW: fgn, ixOn: ixOn, ixF: addF, ixNow: ixNow,
     sdUp: _ovSd(fc.resU), sdDn: _ovSd(fc.resD),
     medUp: _ovMed(fc.resU), medDn: _ovMed(fc.resD),
@@ -778,6 +828,12 @@ function ovHtml(view) {
               : (_ovSoxLive.open === false ? '，已收盤'
                 : '，盤別不明')) + '）'
         : '（日線收盤值）')
+    + (_ovGate(sox)
+        ? '<span class="ov-gate" title="隔夜費半跌超過 ' + Math.abs(OV_SD_GATE)
+          + '%。這種日子收盤跌破區間下緣的比例是 32.9%，其餘日子 15.7%，而跌破上緣的'
+          + '比例兩組一樣，所以偏的是方向不是幅度。下緣已經從 0.96 個殘差放到 2.30 個，'
+          + '上緣不動。詳見下方說明。">下緣已放寬</span>'
+        : '')
     + (_ovAt ? '<span class="ov-at">' + _ovAt + ' 抓取</span>' : '')
     + (_ovLiveAt ? '<span class="ov-at">現價 ' + _ovLiveAt
         + (_ovLiveOpen ? '，盤中每 30 秒更新' : '，已收盤、不再更新') + '</span>' : '')
@@ -796,8 +852,9 @@ function ovHtml(view) {
     rbSortTh(_ovSort, 'ovSort', 'lPx', '掛買參考', '當天盤中最低價的推估，下面那一行是它的區間。'
       + '掛限價買進看這一欄，不是看收盤。字越亮代表這兩個訊號解釋得越多；暗的代表區間跟隨便猜差不多寬') +
     rbSortTh(_ovSort, 'ovSort', 'cPx', '預估收盤', '範圍的中心。別把它當成一個會到的價') +
-    rbSortTh(_ovSort, 'ovSort', 'range', '收盤區間', '收盤推估上下各一個典型偏移。'
-      + '寬度用近 10 日半衰的加權殘差，滑到價格上看得到這一檔實測罩住了幾成的日子') +
+    rbSortTh(_ovSort, 'ovSort', 'range', '收盤區間', '收盤推估的上下緣，兩邊不對稱。'
+      + '下緣＝近 10 日半衰的加權殘差 × 0.96，上緣 × 0.95；隔夜費半跌破 3% 的那天'
+      + '下緣改用 2.30 倍，上緣不動。滑到價格上看得到這一檔實測罩住了幾成的日子') +
     (hasAct ? rbSortTh(_ovSort, 'ovSort', 'actC', '實際收盤', '那一天實際的收盤')
             + rbSortTh(_ovSort, 'ovSort', 'actL', '實際日內最低') : '') +
     rbSortTh(_ovSort, 'ovSort', 'prem', '折溢價', '市價相對預估淨值：正數代表買貴了。開高跳空當下容易跑到溢價') +
@@ -867,6 +924,36 @@ function ovHtml(view) {
             + '。成交價兩邊同一個，差的是分母。'
             + '用收盤是因為要推的 ETF 漲跌也是對前一日收盤。</dd>'
         : '')
+    + '<dt>區間的上下緣</dt><dd>'
+    + '<b>定義</b>：下緣與上緣各自是「近 10 日半衰的加權殘差 × 一個倍率」。'
+    + '平常日收盤下緣用 0.96 倍、上緣 0.95，掛買參考的下緣用 1.09、上緣 0.78。'
+    + '隔夜費半跌破 3% 的那天，只有下緣改用 2.30（收盤）與 2.31（掛買參考），上緣不動。'
+    + '<br><b>比較基準</b>：倍率不是自訂的數字，是走查殘差的分位數：下緣取第 16 百分位、'
+    + '上緣取第 84 百分位，兩者之間就是 68%。門檻日與其餘日各自算一組。'
+    + '<br><b>白話</b>：費半大跌的隔天，這一頁推的價會系統性偏高，但偏的只有下面那一邊。'
+    + '所以那天下緣會明顯往下掉、上緣看起來沒動，那不是畫錯。'
+    + '<br><b>機制</b>：這一頁的兩個輸入都是隔夜已經定價完的資訊，台股自己盤中新生的'
+    + '賣壓不在輸入裡，所以推估抓得住跳空、抓不住當日跌幅。費半大跌只標示出'
+    + '「今天盤中比較可能繼續賣」，沒辦法告訴你會賣多深，表現出來就是殘差整個往下拖'
+    + '而不是變寬：破下緣 32.9% 對 15.7%，破上緣 15.1% 對 14.6%。'
+    + '<br><b>行動含義</b>：門檻亮起時掛限價買進要用放寬後的下緣，不是原本那一個。'
+    + '門檻亮起本身不等於「別進場」：門檻日收盤進場的後 5 日報酬中位數 +1.31%、'
+    + '其餘日子 +0.30%；等一天再掛的話，隔日收盤比當天低的機率只有 41.1%。'
+    + '<br><b>不能告訴你什麼</b>：倍率校準的是大多數日子，不是極端日。'
+    + '2026-11-16 那天八檔需要 1.66 到 2.59 個殘差（中位數 2.25），放寬後的 2.30 '
+    + '只勉強罩住其中幾檔。它也分不出「還會再跌」與「已經跌完」，區間只給範圍不給方向。'
+    + '倍率自己也是估出來的，門檻日總共只有 43 天。'
+    + '<details class="ov-bt"><summary>回測怎麼做的</summary>'
+    + '走查：每一天只用該日之前的資料重新配適一次，不讓模型看到未來。八檔全跑，'
+    + '953 筆（檔 × 日）、319 個交易日，其中門檻日 43 天、146 筆。'
+    + '前瞻驗證把樣本切在 2026-03-24，用前半段估倍率、後半段驗收：'
+    + '門檻日破下緣 18.1%、其餘日 17.0%，對照目標 16%，改之前門檻日是 29% 到 33%。'
+    + '倍率在時間上穩定：門檻日的收盤下緣前半段 2.20、後半段 2.30。'
+    + '日層級的置換檢定把費半標籤在天之間隨機重排兩萬次，單尾 p=0.0115；'
+    + '用日層級是因為同一天八檔會一起破，有效樣本是天數不是筆數。'
+    + '門檻設在 −3% 的理由：−4% 到 −3% 破下緣 36.7%（16 天），≤ −4% 降到 23.5%'
+    + '（27 天），關係不單調，線性相關只有 −0.08，所以只當門檻用，不當連續訊號。'
+    + '</details></dd>'
     + '</dl></div>';
 
   // 偏移度：這一檔照不照劇本走。跟「會漲多少」無關，跟「掛價要留多少餘裕」直接相關。
