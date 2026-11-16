@@ -319,6 +319,16 @@ html, body { overflow-x: clip; }
    欄序：代號／趨勢／名稱／總權重／現價／漲跌／漲跌幅／持有明細。
    趨勢插在第 2 欄，後面所有 nth-child 都往後移一格；
    table-layout:fixed 配 nth-child 定寬，漏改的話整張表的欄寬會全部配錯。 */
+/* 列數從 15 增到 20 之後，表格 908px 超過 .inv-table-wrap 的
+   max-height: calc(100vh - 150px)（視窗 1000 時是 850），內框凒出垂直捲軸。
+   而頁面本來就在捲（表格上緘 y=236，實際可用高只有 764），
+   等於一張表配兩條捲軸。解法跟關注清單、ETF 評比一致：
+   解掉高度上限，改用頁面自己的捲軸。
+   overflow 跟著改 visible，否則 sticky 表頭會以這個容器為準而它已經不捲。
+   這張是 table-layout: fixed、最後一欄吃剩餘寬，永遠不會橫向溢出，
+   所以不需要關注清單那個 wt-scroll 的配套判斷。 */
+.tc-wrap { max-height: none; overflow: visible; }
+.tc-wrap > .tc-table > thead > tr > th { top: var(--h-chrome); }
 .tc-table { table-layout: fixed; }
 .tc-table th:nth-child(1), .tc-table td:nth-child(1) { width: 66px; }   /* 代號 */
 .tc-table th:nth-child(2), .tc-table td:nth-child(2) { width: 46px; }   /* 趨勢 */
