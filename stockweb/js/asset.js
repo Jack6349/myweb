@@ -142,37 +142,75 @@ function _asWan(v) {
 }
 function _asPct(v) { return (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(2) + '%'; }
 function _asEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
-// 圓餅。從 12 點鐘（−90°）開始順時針，切片順序就是傳進來的順序。
-// 只剩一類時走 circle：360° 的弧起點與終點重疊，A 指令畫不出來。
-// segs = [{ pct, cls, tip }]。比例小於 7% 的不標數字，標了會疊在一起。
+// 圓餅，標註在外側用引線拉出來。
+// 標在切片裡的做法小片根本放不下，之前是「≧ 7% 才標」，
+// 等於小片的名稱與百分比只能靠圖例或滑滑鼠。拉到外面就每一片都標得到。
+//
+// 重疊處理：左右兩半各自依 y 排序，不足最小間距就往下推，推到底再從下往上修一次。
+// 不做的話相鄰的小片（例如 1.1% 跟 0.8%）標籤會疊成一團。
+//
+// segs = [{ pct, cls, tip, lb }]。lb 是標籤文字，空的就不拉引線。
+// W 與 CX 是量出來的：最長的標籤「海外成分股、債券與現金：20.9%」
+// 實測 193px，而它左右兩側都可能落。左右各留 201：
+//   CX = 201 + R 116 + GAP 46 = 363，W = 363 + 116 + 46 + 201 = 726。
+// 原本 CX 偏左（268），左側只剩 106，實測有五個標籤超出左緣，最多 −87px。
+var _AS_PIE = { W: 726, H: 330, CX: 363, CY: 165, R: 116, ELB: 16, GAP: 46, MINY: 17 };
 function _asPieSvg(segs) {
-  var R = 118, CX = 132, CY = 132, acc = -90;
-  var rad = function (d) { return d * Math.PI / 180; };
-  var body = segs.map(function (sg) {
-    var p = sg.pct, a0 = acc, a1 = acc + p * 3.6;
+  var C = _AS_PIE, rad = function (d) { return d * Math.PI / 180; };
+  var acc = -90, arcs = '', labs = [];
+  segs.forEach(function (sg) {
+    var pct = sg.pct;
+    if (!(pct > 0)) return;
+    var a0 = acc, a1 = acc + pct * 3.6;
     acc = a1;
     var tip = _asEsc(sg.tip || ''), cls = 'as-pie-s ' + (sg.cls || '');
-    if (p >= 99.99) {
-      return '<circle class="' + cls + '" cx="' + CX + '" cy="' + CY + '" r="' + R + '">'
+    if (pct >= 99.99) {
+      arcs += '<circle class="' + cls + '" cx="' + C.CX + '" cy="' + C.CY + '" r="' + C.R + '">'
         + '<title>' + tip + '</title></circle>';
+    } else {
+      var x0 = C.CX + C.R * Math.cos(rad(a0)), y0 = C.CY + C.R * Math.sin(rad(a0));
+      var x1 = C.CX + C.R * Math.cos(rad(a1)), y1 = C.CY + C.R * Math.sin(rad(a1));
+      var big = (a1 - a0) > 180 ? 1 : 0;
+      arcs += '<path class="' + cls + '" d="M' + C.CX + ' ' + C.CY + 'L' + x0.toFixed(2) + ' ' + y0.toFixed(2)
+        + 'A' + C.R + ' ' + C.R + ' 0 ' + big + ' 1 ' + x1.toFixed(2) + ' ' + y1.toFixed(2) + 'Z">'
+        + '<title>' + tip + '</title></path>';
     }
-    if (p <= 0) return '';
-    var x0 = CX + R * Math.cos(rad(a0)), y0 = CY + R * Math.sin(rad(a0));
-    var x1 = CX + R * Math.cos(rad(a1)), y1 = CY + R * Math.sin(rad(a1));
-    var big = (a1 - a0) > 180 ? 1 : 0;
-    var d = 'M' + CX + ' ' + CY + 'L' + x0.toFixed(2) + ' ' + y0.toFixed(2) +
-      'A' + R + ' ' + R + ' 0 ' + big + ' 1 ' + x1.toFixed(2) + ' ' + y1.toFixed(2) + 'Z';
-    var lb = '';
-    if (p >= 7) {
-      var am = rad((a0 + a1) / 2), lr = R * 0.62;
-      lb = '<text class="as-pie-t" x="' + (CX + lr * Math.cos(am)).toFixed(1) +
-        '" y="' + (CY + lr * Math.sin(am) + 4).toFixed(1) + '" text-anchor="middle">' +
-        p.toFixed(0) + '%</text>';
+    if (!sg.lb) return;
+    var am = rad((a0 + a1) / 2);
+    labs.push({
+      lb: sg.lb, tip: tip,
+      ax: C.CX + C.R * Math.cos(am), ay: C.CY + C.R * Math.sin(am),
+      ex: C.CX + (C.R + C.ELB) * Math.cos(am), ey: C.CY + (C.R + C.ELB) * Math.sin(am),
+      right: Math.cos(am) >= 0, y: C.CY + (C.R + C.ELB) * Math.sin(am)
+    });
+  });
+  // 左右各自散開
+  [true, false].forEach(function (side) {
+    var g = labs.filter(function (l) { return l.right === side; })
+      .sort(function (a, b) { return a.y - b.y; });
+    var lo = 12, hi = C.H - 12;
+    for (var i = 1; i < g.length; i++) {
+      if (g[i].y - g[i - 1].y < C.MINY) g[i].y = g[i - 1].y + C.MINY;
     }
-    return '<path class="' + cls + '" d="' + d + '"><title>' + tip + '</title></path>' + lb;
-  }).join('');
-  return '<svg class="as-pie" viewBox="0 0 264 264" preserveAspectRatio="xMidYMid meet">'
-    + body + '</svg>';
+    for (var k = g.length - 1; k >= 0; k--) {
+      if (g[k].y > hi) g[k].y = hi;
+      if (k && g[k].y - g[k - 1].y < C.MINY) g[k - 1].y = g[k].y - C.MINY;
+    }
+    for (var m = 0; m < g.length; m++) if (g[m].y < lo) g[m].y = lo;
+  });
+  var lines = '', texts = '';
+  labs.forEach(function (l) {
+    var tx = l.right ? (C.CX + C.R + C.GAP) : (C.CX - C.R - C.GAP);
+    var hx = l.right ? tx - 7 : tx + 7;
+    lines += '<path class="as-pie-ld" d="M' + l.ax.toFixed(1) + ' ' + l.ay.toFixed(1)
+      + 'L' + l.ex.toFixed(1) + ' ' + l.ey.toFixed(1)
+      + 'L' + hx.toFixed(1) + ' ' + l.y.toFixed(1) + '"/>';
+    texts += '<text class="as-pie-lb" x="' + tx.toFixed(1) + '" y="' + (l.y + 4).toFixed(1)
+      + '" text-anchor="' + (l.right ? 'start' : 'end') + '">' + _asEsc(l.lb)
+      + '<title>' + l.tip + '</title></text>';
+  });
+  return '<svg class="as-pie" viewBox="0 0 ' + C.W + ' ' + C.H + '" preserveAspectRatio="xMidYMid meet">'
+    + arcs + lines + texts + '</svg>';
 }
 function _asKpi(lb, v, tip, sign) {
   var cls = sign == null ? '' : (sign > 0 ? ' up' : (sign < 0 ? ' down' : ''));
@@ -263,14 +301,11 @@ function asRenderMix() {
 
   var bar = _asPieSvg(segs.map(function (sg, i) {
     return { pct: pctOf(sg.val), cls: 'as-f' + (i % 8),
+      lb: sg.cat + '：' + pctOf(sg.val).toFixed(1) + '%',
       tip: sg.cat + '　' + _asMoney(sg.val) + ' 元　' + pctOf(sg.val).toFixed(1) + '%　'
         + sg.n + ' 檔：' + sg.codes.join('、') };
   }));
 
-  var lg = '<div class="as-legend">' + segs.map(function (s, i) {
-    return '<span class="as-lg"><i class="as-c' + (i % 8) + '"></i>' + s.cat +
-      '<b>' + pctOf(s.val).toFixed(1) + '%</b><span class="as-lg-n">' + s.n + ' 檔</span></span>';
-  }).join('') + '</div>';
 
   var tb = '<div class="inv-table-wrap as-wrap"><table class="inv-table as-table"><thead><tr>' +
     '<th>分類</th><th class="num">檔數</th><th class="num">現值</th><th class="num">占比</th><th>代號</th>' +
@@ -284,7 +319,7 @@ function asRenderMix() {
     '</tbody></table></div>';
 
   return '<div class="sec-title">持股結構</div>' +
-    '<div class="as-pie-wrap">' + bar + '<div class="as-pie-lg">' + lg + '</div></div>' + tb +
+    '<div class="as-pie-wrap">' + bar + '</div>' + tb +
     '<div class="detail-note"><dl>' +
     '<dt>說明</dt><dd>依現值占比。分類由代號尾碼與名稱決定：尾碼定結構' +
     '（個股／主動 A／債券 B、D／槓反 L、R），名稱定策略（高息／非投等／投等／公債）。' +
@@ -391,16 +426,11 @@ function _asSectorHtml() {
       : sg.name + '　' + sg.pct.toFixed(2) + '%　' + sg.n + ' 檔'
         + (sg.note ? '：' + sg.note : (sg.codes.length ? '：' + sg.codes.slice(0, 12).join('、')
             + (sg.codes.length > 12 ? ' 等 ' + sg.codes.length + ' 檔' : '') : ''));
-    return { pct: sg.pct, cls: sg.rest ? 'as-f-rest' : (sg.tail ? 'as-f-tail' : 'as-f' + (i % 8)), tip: tip };
+    return { pct: sg.pct, cls: sg.rest ? 'as-f-rest' : (sg.tail ? 'as-f-tail' : 'as-f' + (i % 8)),
+      lb: sg.name + '：' + sg.pct.toFixed(1) + '%', tip: tip };
   });
-  var lg = '<div class="as-legend">' + m.slices.map(function (sg, i) {
-    var cls = sg.rest ? 'as-f-rest' : (sg.tail ? 'as-f-tail' : 'as-f' + (i % 8));
-    return '<span class="as-lg"><i class="' + cls + '"></i>' + _asEsc(sg.name) +
-      '<b>' + sg.pct.toFixed(1) + '%</b><span class="as-lg-n">' +
-      (sg.n ? sg.n + ' 檔' : '') + '</span></span>';
-  }).join('') + '</div>';
   return '<div class="sec-title">類股組成</div>' +
-    '<div class="as-pie-wrap">' + _asPieSvg(segs) + '<div class="as-pie-lg">' + lg + '</div></div>' +
+    '<div class="as-pie-wrap">' + _asPieSvg(segs) + '</div>' +
     '<div class="detail-note"><dl>' +
     '<dt>說明</dt><dd>把持股 ETF 透視到底層台股，再依交易所的產業別彙總，'
     + '加上直接持有的個股。分母是總持股現值，與下面那條累計曲線相同，'

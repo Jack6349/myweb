@@ -495,7 +495,7 @@ html, body { overflow-x: clip; }
 .macro-asof b { color: var(--accent2); font-weight: 700; }
 .macro-dim { color: var(--text3); }
 @media (max-width: 1100px) { .macro-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 680px) { .macro-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 740px) { .macro-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .macro-bar:empty { display: none; }
 .macro-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; display: flex; align-items: baseline; gap: 8px; }
 /* 非投債警示：⚠ 用文字字形（不加 VS16）才吃得到 CSS 顏色，emoji 形態會固定成彩色 */
@@ -768,7 +768,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .iq-k { font-size: 12px; color: var(--text2); }
 .iq-v { font-size: 14px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .iq-v.y { color: var(--accent2); }
-@media (max-width: 680px) { .iq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 740px) { .iq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* 買賣五檔 */
 .bid-head { display: flex; gap: 18px; align-items: center; font-size: 13px; color: var(--text2); margin-bottom: 10px; font-variant-numeric: tabular-nums; }
@@ -1777,7 +1777,7 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .rt-mon { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
 .rt-mon span { min-width: 30px; }
 .rt-mon input { width: 100%; }
-.set-cash { margin-top: 10px; max-width: 680px; }
+.set-cash { margin-top: 10px; max-width: 740px; }
 
 @media (max-width: 900px) {
   .set-shell { grid-template-columns: 1fr; }
@@ -1903,19 +1903,15 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
       原本的 #5ad8a6 薄荷綠跟 --down 同色系，會被讀成「跟跌有關」，已換掉。
    二、兩度要夠高：切片裡的百分比是深色字，底色太暗就讀不到。
       #5d7092 本來就偶四十，改成淺一階的 #9aa7c7。 */
-/* 圓餅：圖與圖例並排，窄螢幕才折行。
-   切片描一條底色邊：相鄰兩片顏色接近時，沒有邊框分不出界。 */
-.as-pie-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 32px; margin: 10px 0 14px; }
-.as-pie { width: 264px; height: 264px; flex: 0 0 auto; }
+/* 圓餅：標註在外側用引線拉出來，所以不再需要旁邊的圖例。
+   切片描一條底色邊：相鄰兩片顏色接近時，沒有邊框分不出界。
+   viewBox 660×330，圓心偏左（CX 268）：右側的標籤文字比左側長。 */
+.as-pie-wrap { margin: 10px 0 14px; }
+.as-pie { display: block; width: 100%; max-width: 740px; height: auto; }
 .as-pie-s { stroke: var(--bg); stroke-width: 2; cursor: help; }
-.as-pie-t { fill: #1b2736; font-size: 13px; font-weight: 700; pointer-events: none; }
-/* 圖例寬度要封頂。不封的話 flex 會把剩下的 1100px 全吃掉，
-   分類名在最左、百分比與檔數被推到最右，中間空一大段，對不起來。 */
-.as-pie-lg { flex: 0 1 360px; min-width: 0; }
-.as-pie-lg .as-legend { display: block; margin-bottom: 0; }
-.as-pie-lg .as-lg { display: flex; align-items: baseline; padding: 3px 0; }
-.as-pie-lg .as-lg b { margin-left: auto; }
-.as-pie-lg .as-lg-n { min-width: 48px; text-align: right; }
+/* 引線與標籤：線要淡到不搶視線，字要讀得清楚。 */
+.as-pie-ld { fill: none; stroke: var(--text3); stroke-width: 1; opacity: .7; }
+.as-pie-lb { fill: var(--text); font-size: 13px; }
 .as-f0 { fill: #5b8ff9; } .as-f1 { fill: #6dc8ec; } .as-f2 { fill: #9aa7c7; } .as-f3 { fill: #f6bd16; }
 .as-f4 { fill: #b08ad6; } .as-f5 { fill: #4fb3b0; } .as-f6 { fill: #ff9845; } .as-f7 { fill: #c7cdd8; }
 /* 類股圓餅最後兩片不是類股，用灰階跟彩色分開：
