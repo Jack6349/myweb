@@ -1289,7 +1289,7 @@ function _macroSparkHtml(m) {
   var pct = ref ? (last - ref) / ref * 100 : null;
   var tip = '近 ' + n + ' 個交易日收盤走勢　基準線＝區間起點 ' + _fmtNum(ref, m.fmt) +
     (pct == null ? '' : '　至今 ' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%') +
-    '　（此處比的是一個月前，與右邊的當日漲跌不同基準）' + (m.note || '');
+    '　（這一格比的是一個月前，與右邊的當日漲跌不同基準；旁邊其他格是當盤分時）' + (m.note || '');
   // hover 用的點位。寫在 data 屬性上，滑鼠移上來直接讀，不必每次重繪都重算。
   // 格式：日期|收盤|x|y|相對基準%，以 ; 分隔；最後一點若是現價，日期寫成空字串。
   // 百分比在這裡就算好，hover 時只讀不算。比的是基準線（區間起點），
@@ -1405,7 +1405,11 @@ function _intraVaries(i) {
   var hi = Math.max.apply(null, i.c), lo = Math.min.apply(null, i.c);
   return hi > lo;
 }
-var MACRO_INTRA_SYMS = ['^IXIC', '^SOX', '^VIX', '^TNX', 'HYG'];
+// 哪幾檔要額外抓分時。沒在這裡的格會退回畫近一個月的日 K，
+// 基準線跟著變成「區間起點」而不是「參考價」。
+// ^GSPC 是 2026-11-16 補進來的：它原本不在抽屜裡所以沒抓分時，
+// 加回抽屜之後整排只有它一格是近一個月的圖，兩種基準橫向排在一起比不了。
+var MACRO_INTRA_SYMS = ['^IXIC', '^SOX', '^VIX', '^TNX', 'HYG', '^GSPC'];
 async function fetchYahooIntra(sym) {
   var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?interval=5m&range=1d';
   var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
@@ -1536,7 +1540,7 @@ function _intraSparkHtml(o) {
       y(c[p]).toFixed(1) + '|' + (dp > 0 ? '+' : '') + dp.toFixed(2));
   }
   var tip = o.note + '　基準線＝參考價 ' + _fmtNum(ref, fmt) +
-    '　（此處比的是參考價，與其他格的近一個月不同基準）' +
+    '　（基準線＝這一盤的參考價，與右邊那個百分比同一個基準）' +
     (o.span && o.span.from ? '　橫軸＝' + o.span.from + '～' + o.span.to
       + '，右側留白是還沒走完的那一段' : '');
   return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '"' +
