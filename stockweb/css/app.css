@@ -2242,6 +2242,10 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
    不固寬的話，▲5 跟 ⤴ 寬度不同會把每一列的金額右緣推成鎖狀，整欄就掃不了。
    固寬之後金額的右緣仍然齊。 */
 .rb-bpx { display: inline; }
+/* 趨勢徽章自己一欄（持股庫存、即時持股）。
+   固定寬度：沒徽章的列也要占住位置，否則整欄會忑寬忑窄。
+   左對齊：它是標記不是數字，跟旁邊的圓點、代號同一條左緣。 */
+.inv-st-cell { width: 42px; text-align: left; padding-left: 4px; padding-right: 4px; white-space: nowrap; }
 .rb-bsub { display: inline-block; margin-left: 6px; padding: 0 4px;
   min-width: 34px; text-align: center; vertical-align: 1px;
   border: 1px solid transparent; border-radius: 4px;
