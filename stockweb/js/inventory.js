@@ -315,6 +315,11 @@ function invValRow(p) {
           return cc ? ' code-cost' + cc : '';
         })()
       + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + code + '\')">' + code + '</span></td>' +
+    // 趨勢徽章自己一欄。原本接在現價後面，把現價欄從 48px 撐到 88px，
+    // 有徽章和沒徽章的列數字右緣對不齊，整欄掃不動。
+    // 不塞進名稱格裡：那樣有徽章的列名稱會往右移 34px，左緣變鋸齒。
+    '<td class="inv-st-cell">'
+      + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code) : '') + '</td>' +
     '<td class="inv-name">' + ((c && c.name) || '') + _invFreqTag(code) + '</td>' +
     '<td class="num inv-trd">' + invTradeCell(code) + '</td>' +
     // 餘額是「股」，借出註記用「張」：與股利估算的持有張數同一種寫法。
@@ -324,10 +329,9 @@ function invValRow(p) {
       (p.lent && p.lentShares ? '<span class="dexm-lent">(借出 ' +
         (p.lentShares / 1000).toLocaleString('zh-TW') + ' 張)</span> ' : '') +
       shares.toLocaleString('zh-TW') + '</td>' +
-    // 現價右側的狀態徽章。
     '<td class="num ' + ccls + '">'
       + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
-      + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code) : '') + '</td>' +
+      + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
     '<td class="num inv-cchg ' + estCls + '" ' + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +

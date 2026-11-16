@@ -1,5 +1,5 @@
 // 股利總管 Web — 即時持股（單欄精簡表＋每列當日分時走勢小圖，盤中逐筆即時更新）
-// 欄位：代號｜餘額(股)｜成本均價｜最後買入｜現價｜差價｜漲跌幅｜現值｜含息損益｜含息獲利率｜走勢
+// 欄位：趨勢｜代號｜餘額(股)｜成本均價｜最後買入｜現價｜差價｜漲跌幅｜現值｜含息損益｜含息獲利｜走勢
 // （無明細鈕、無名稱）
 // 成本一律用原始成本（券商的成本已扣掉累積配息），與持股庫存同一套；
 // 顯示的損益與獲利率都含息，與停損停利的觸發基準一致
@@ -112,13 +112,17 @@ function liveRowHtml(p) {
   var dotColor = _liveColorMap[v.code] || '#888';
   return '<td class="live-dot-cell"><button class="live-dot' + (on ? ' on' : '') + '" style="--dot:' + dotColor +
       '" title="標記注意股" onclick="event.stopPropagation();toggleWatch(\'' + v.code + '\',this)"></button></td>' +
+    // 趨勢徽章自己一欄（與持股庫存同一個做法）。
+    // 這張表沒有名稱欄，所以擺在代號前、挨著它自己的圓點。
+    '<td class="inv-st-cell">'
+      + (v.price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(v.code) : '') + '</td>' +
     '<td class="inv-code' + (typeof limitState === 'function' && limitState(v.code, v.price) ? ' lim-' + limitState(v.code, v.price) : '') + '"><span class="code-link" title="看線圖" onclick="event.stopPropagation();openChartPop(\'' + v.code + '\')">' + v.code + '</span></td>' +
     '<td class="num">' + (p.quantity != null ? Math.round(p.quantity).toLocaleString('zh-TW') : '—') + '</td>' +
     costCellHtml(v.avg, v.price) +
     _liveBuyCell(v.code) +
     '<td class="num ' + ccls + '">'
       + (v.price != null ? '<span class="rb-bpx">' + v.price.toFixed(2) + '</span>' : '—')
-      + (v.price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(v.code) : '') + '</td>' +
+      + '</td>' +
     _liveDiffCell(v.code, v.price) +
     '<td class="num ' + ccls + '">' + (v.chgAmt == null ? '—' : fmtChg(v.chgAmt)) + '</td>' +
     '<td class="num ' + ccls + '">' + (v.chg == null ? '—' : fmtPct(v.chg)) + '</td>' +
@@ -155,6 +159,7 @@ function _liveSortTh(label, key, numCls, tip) {
 }
 function liveHead() {
   return '<thead><tr><th class="live-dot-cell"></th>' +
+    '<th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th>' +
     _liveSortTh('代號', 'code') +
     '<th class="num">餘額</th><th class="num">成本均價</th>' +
     '<th class="num lb-cell" title="建倉明細裡日期最新的那一批：(買進日) 每股買價">最後買入</th>' +
@@ -164,7 +169,7 @@ function liveHead() {
     _liveSortTh('漲跌幅', 'chg', true) +
     '<th class="num">現值</th>' +
     _liveSortTh('含息損益', 'pnl', true) +
-    _liveSortTh('含息獲利率', 'prate', true) +
+    _liveSortTh('含息獲利', 'prate', true) +
     '<th class="lc-cell">走勢</th></tr></thead>';
 }
 

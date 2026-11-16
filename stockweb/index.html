@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=390">
+<link rel="stylesheet" href="css/app.css?v=391">
 </head>
 <body>
 
@@ -153,7 +153,7 @@
           <th></th>
           <th class="live-dot-cell sort-th" data-key="dot" onclick="invSortCol('dot')" title="依注意股標記排序（已標記優先）"><span class="sort-ind">↕</span></th>
           <th class="sort-th" data-key="code" onclick="invSortCol('code')" title="點擊排序">代號<span class="sort-ind">↕</span></th>
-          <th>名稱</th>
+          <th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th><th>名稱</th>
           <th class="num sort-th" data-key="trd" onclick="invSortCol('trd')" title="今日進出。亮色＝已成交、暗色＝還掛著；部分成交時主數字是成交量、上標是在途量。紅買綠賣，同一檔今天有買也有賣就列兩行，不做淨額。整股以張計、零股以股計，單位標在數字後。滑鼠移上去看委託價、成交均價與目前價差。點擊依今日交易量排序（買＋賣，無交易墊底）">交易<span class="sort-ind">↕</span></th>
           <th class="num sort-th" data-key="shares" onclick="invSortCol('shares')" title="目前持有股數，出借中的也在裡面（出借期間所有權仍是你的）；括號標出其中有多少張在外面。點擊排序">餘額<span class="sort-ind">↕</span></th>
           <th class="num">現價</th><th class="num">漲跌</th>
@@ -163,8 +163,8 @@
           <th class="num sort-th" data-key="pnl" onclick="invSortCol('pnl')" title="現值 － 原始成本，純價差，不含配息；點擊排序">資本損益<span class="sort-ind">↕</span></th>
           <th class="num" title="自買進以來累積領到的配息，僅目前仍持有的批次。券商帳務記錄的實收金額">已配息</th>
           <th class="num sort-th" data-key="wdiv" onclick="invSortCol('wdiv')" title="資本損益 ＋ 已配息。等同券商自己報的損益，因為券商的成本已扣過配息；點擊排序">含息損益<span class="sort-ind">↕</span></th>
-          <th class="num sort-th" data-key="prate" onclick="invSortCol('prate')" title="資本損益 ÷ 原始成本，純價差；點擊排序">資本報酬率<span class="sort-ind">↕</span></th>
-          <th class="num sort-th" data-key="wrate" onclick="invSortCol('wrate')" title="含息損益 ÷ 原始成本。累積數不是年化，持有期間不同的兩檔不能直接比；點擊排序">含息獲利率<span class="sort-ind">↕</span></th>
+          <th class="num sort-th" data-key="prate" onclick="invSortCol('prate')" title="資本損益 ÷ 原始成本，純價差；點擊排序">資本報酬<span class="sort-ind">↕</span></th>
+          <th class="num sort-th" data-key="wrate" onclick="invSortCol('wrate')" title="含息損益 ÷ 原始成本。累積數不是年化，持有期間不同的兩檔不能直接比；點擊排序">含息獲利<span class="sort-ind">↕</span></th>
           <th class="num sort-th" data-key="vratio" onclick="invSortCol('vratio')" title="該檔現值佔總現值%；點擊排序">現值比<span class="sort-ind">↕</span></th>
           <th class="num sort-th" data-key="ex" onclick="invSortCol('ex')" title="本月有除息就顯示本月那次（灰＝已過、橘＝尚未到）；本月沒有則顯示下月起到年底最近一次（含預估，標*）；點擊排序">最近除息<span class="sort-ind">↕</span></th>
         </tr></thead>
@@ -473,9 +473,9 @@
 <script src="js/nav-usage.js?v=2"></script>
 <script src="js/daily-refresh.js?v=1"></script>
 <script src="js/category.js?v=2"></script>
-<script src="js/inventory.js?v=105"></script>
+<script src="js/inventory.js?v=106"></script>
 <script src="js/constituents.js?v=18"></script>
-<script src="js/live.js?v=59"></script>
+<script src="js/live.js?v=60"></script>
 <script src="js/touch.js?v=5"></script>
 <script src="js/trades.js?v=11"></script>
 <script src="js/txinfo.js?v=39"></script>
