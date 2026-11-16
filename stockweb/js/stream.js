@@ -781,7 +781,7 @@ function renderDrawer() {
   if (!_dwOpen) { d.innerHTML = ''; return; }   // 收起時不留 DOM，盤中不跟著重繪
   var t = portfolioTotals();
   var cvar = { up: 'var(--up)', down: 'var(--down)', flat: 'var(--text3)' };
-  // 兩個頁籤而不是上下三段：八個盤勢格擠在一排，每格的圖只有 26px 高，
+  // 兩個頁籤而不是上下三段：盤勢格全擠在一排時每格的圖只有 26px 高，
   // 橫軸改成時間刻度之後更需要寬度才看得出「還剩多少」。
   // 部位與配置移到第二頁，第一頁的格子就放得下。
   var h = '<button class="dw-close" onclick="toggleDrawer()" title="收起">✕</button>';

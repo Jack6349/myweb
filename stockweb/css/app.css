@@ -1274,8 +1274,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   padding: 2px 2px 2px 8px; line-height: 1; }
 .dw-close:hover { color: var(--text); }
 /* 盤勢：1fr 的最小尺寸是內容寬度，抽屜比新聞情勢頁窄會被撐出去。
-   minmax(0,1fr) 強制等分，八格排四欄兩列，跟下方的配置對齊。 */
-.dw .macro-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+   minmax(0,1fr) 強制等分，九格排三欄三列，跟下方的配置對齊。 */
+.dw .macro-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .dw .macro-cell { padding: 7px 10px; gap: 6px; min-width: 0; }
 /* 配置要跟上方對齊：.cat-bar 自帶的框與內距會把四欄整體向右推。 */
 .dw .cat-bar { padding: 0; border: 0; background: none; margin-bottom: 0; }
@@ -2229,10 +2229,13 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   font-size: 13px; padding: 5px 14px; border-radius: 8px; cursor: pointer; font-family: var(--font); }
 .dw-tab.on { background: var(--accent2); border-color: var(--accent2); color: #1b2736; font-weight: 600; }
 .dw-tabs .macro-fetch { margin-left: auto; }
-/* 盤勢頁只剩八格，一排四個、圖加高（原本 26px，時間刻度的留白看不出來） */
-.dw .macro-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+/* 盤勢頁九格（補回 S&P 500），一排三個、排成 3×3。
+   四欄改三欄每格寬約 1.3 倍，圖跟著加高：這排圖的橫軸是時間刻度，
+   格子越寬越看得出「還剩多少」，图太矮則振幅被壓平。
+   48 → 76px（3×3 比 4×2 多一列，加高之後抽屜會變高，這是有意的）。 */
+.dw .macro-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .dw .macro-cell { padding: 10px 12px; gap: 7px; }
-.dw .macro-spark { height: 48px; }
+.dw .macro-spark { height: 76px; }
 @media (max-width: 900px) { .dw .macro-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* 成交率表：價格是要抄進委託單的數字，放主體；成交率降為輔助小字 */
 .rb-fpx { display: block; font-weight: 700; color: var(--text); }
