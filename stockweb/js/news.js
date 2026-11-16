@@ -1222,6 +1222,23 @@ function _chgTxt(pct) {
 }
 function _chgCls(pct) { return pct == null ? 'flat' : (pct > 0 ? 'up' : (pct < 0 ? 'down' : 'flat')); }
 
+// 殖利率這種「本身就是百分比」的標的，漲跌要額外標基點。
+// 5.103 → 5.154 的相對變動是 +1.00%，但金融上講的是「升 5.1 個基點」。
+// 只寫 1.00% 會被讀成升了 1 個百分點（100bp），差 20 倍。
+// 同一格的警示本來就用 bp（MACRO_ALERT 的 mode: 'diff'），
+// 漲跌欄跟著標出來，同一格內兩個數字才是同一個單位語言。
+// 基準優先用分時的 chartPreviousClose（精確），沒抓分時時從漲跌％回推。
+function _chgBpTxt(m) {
+  var cfg = MACRO_ALERT[m.sym];
+  if (!cfg || cfg.mode !== 'diff' || m.price == null) return '';
+  var ref = (m.intra && m.intra.ref != null) ? m.intra.ref
+    : (m.changePct != null && (1 + m.changePct / 100) !== 0 ? m.price / (1 + m.changePct / 100) : null);
+  if (ref == null) return '';
+  var bp = (m.price - ref) * 100;
+  return '<span class="macro-dim">（' + (bp > 0 ? '+' : (bp < 0 ? '−' : ''))
+    + Math.abs(bp).toFixed(1) + 'bp）</span>';
+}
+
 // 報價時間（台北）與距今多久：美股收盤後這些數字會停在收盤價，標明時間才不會誤以為是即時
 function _asOfTxt(ms) {
   if (!ms) return '';
@@ -1659,7 +1676,8 @@ function _macroCellHtml(m, intra) {
       '>' + icon + '<span class="macro-nm"><span class="macro-name">' + m.name + tag + '</span>' +
       _macroAtHtml(m.asOf) + '</span>' +
       '<span class="macro-price">' + _fmtNum(m.price, m.fmt) + '</span>' +
-      '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—') + cumTxt + '</span>' +
+      '<span class="macro-chg ' + _chgCls(m.changePct) + '">' + (_chgTxt(m.changePct) || '—')
+        + _chgBpTxt(m) + cumTxt + '</span>' +
       ((intra && m.intra && _intraVaries(m.intra))
       ? _intraSparkHtml({ t: m.intra.t, c: m.intra.c, avg: m.intra.avg, span: m.intra.span,
       ref: m.intra.ref, fmt: m.fmt, note: '當盤分時（' + (m.intra.tz || '當地') + '）　灰線＝當盤累計平均' })
