@@ -86,6 +86,21 @@ async function ovLoadNight() {
 }
 // 當天那一筆：檔案由排程每日更新，可能還沒跑，所以直接問本機伺服器。
 // 伺服器沒開就退回檔案裡最後一筆（並標示日期，讓使用者看得出是不是舊的）。
+// 往後頂到下一個交易日。週六日一律不算：辦公日曆裡的「補班星期六」
+// 是上班日、不是開盤日，只拿日曆判會把它當成交易日。
+// 日曆沒涵蓋到的年份 _divIsOff 回 null，那時就只跳週六日，漏掉國定假日。
+function _ovRollTrade(iso) {
+  if (!iso) return iso;
+  var d = new Date(iso + 'T00:00:00Z');
+  for (var i = 0; i < 14; i++) {
+    var cur = d.toISOString().slice(0, 10), g = d.getUTCDay();
+    var off = (g === 0 || g === 6);
+    if (!off && typeof _divIsOff === 'function') { var h = _divIsOff(cur); if (h === true) off = true; }
+    if (!off) return cur;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return iso;                                  // 連 14 天都不開盤＝日曆有問題，原值回去
+}
 async function ovTodayNight() {
   if (_ovToday) return _ovToday;
   var nm = await ovLoadNight();
@@ -153,6 +168,13 @@ async function ovTodayNight() {
     var nd = dt[nIdx].slice(0, 10);
     var drive = (nd > lastDayDate) ? nd
       : new Date(Date.parse(lastDayDate) + 86400000).toISOString().slice(0, 10);
+    // 算出來的可能不是交易日，要往後頂到下一個開盤日。
+    // 週五夜盤 15:00 跨到週六 05:00，nd 就是週六；
+    // 週五晚上還沒跨午夜時走下面那條，算出來也是週六。
+    // 不頂的後果：週一盤中打開時，這一頁認為自己推的是週六那一盤，
+    // 現價（今天）跟它對不上，整欄被當成「別的盤的價」標灰並拿掉漲跌。
+    // 2026-11-16（週一）10:52 實例：nd＝11/14（週六），現價 11/16。
+    drive = _ovRollTrade(drive);
     _ovToday = { d: drive, pct: (cl[nIdx] / baseClose - 1) * 100, src: 'live',
                  base: lastDayDate, at: kbarMin(dt[nIdx]), pending: pending,
                  bp: baseClose, np: cl[nIdx] };
@@ -726,7 +748,12 @@ function ovHtml(view) {
     return (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(dec == null ? 2 : dec) + '%';
   };
   var h = '<div class="rb-sox">';
-  h += '<div class="sec-title">隔夜推估（明天的價格）</div>';
+  // 標題要講明是哪一盤。「明天」在週一盤中打開時是錯的：
+  // 那時推的是今天這一盤，而且現價欄就是拿來跟它對答案的。
+  var _ovTw = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+  var dLab = t.d ? t.d.slice(5).replace('-', '/') : '';
+  h += '<div class="sec-title">隔夜推估（'
+    + (!t.d ? '明天的價格' : (t.d === _ovTw ? dLab + ' 這一盤' : dLab + ' 的價格')) + '）</div>';
   var nf = function (v) { return v == null ? '—' : Math.round(v).toLocaleString('zh-TW'); };
   // 標額區只留「現在是什麼狀況」的事實，解釋全改放到下方的說明裡。
   // 舊版這一塊 418 字，而且用的是標額標記，全站的說明收合機制根本收不到它。
