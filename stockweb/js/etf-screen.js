@@ -911,8 +911,8 @@ function renderEtfScreen() {
     var sortable = c[0] !== 'rank' && c[0] !== 'watch';
     var k = c[0] === 'rank' ? 'score' : c[0];
     var on = sortable && _esSort.indexOf(k) === 0 && _esSort.replace(/(Asc|Desc)$/, '') === k;
-    return '<th class="' + (/^(code|name)$/.test(c[0]) ? '' : 'num ') + (sortable ? 'sort-th' + (on ? ' sorted' : '') : '') + '"' +
-      (sortable ? ' onclick="esSortCol(\'' + k + '\')"' : '') + (c[3] ? ' title="' + c[3] + '"' : '') + '>' + c[1] +
+    return '<th class="' + (/^(code|name)$/.test(c[0]) ? '' : 'num ') + (sortable ? 'sort-th' + (on ? ' sorted' : '') : '') + _esStaticCls(c[0]) + '"' +
+      (sortable ? ' onclick="esSortCol(\'' + k + '\')"' : '') + (_esStaticTip(c[0], c[3]) ? ' title="' + _esStaticTip(c[0], c[3]) + '"' : '') + '>' + c[1] +
       (sortable ? '<span class="sort-ind">' + (on ? (asc ? '▲' : '▼') : '↕') + '</span>' : '') + '</th>';
   }).join('') + '</tr></thead><tbody>';
   rows.forEach(function (r) {
@@ -924,6 +924,7 @@ function renderEtfScreen() {
   });
   h += '</tbody></table></div>' +
     '<div class="detail-note"><dl>' +
+    esStaticNote(ES_COLS.map(function (c) { return c[0]; }).filter(function (k) { return !/^(watch|code|px)$/.test(k); })) +
     '<dt>綜合分</dt><dd>各指標在同類中的<b>百分位</b>加權：' +
     '<code>一年含息 25 ＋ 近12月殖利率 25 ＋ 填息率 20 ＋ 一年價格 15 ＋ 規模 10 ＋ 內扣費用 5</code>。' +
     '內扣費用只對前 ' + ES_TOP1 + ' 名計算；填息率表上每一列都算。</dd>' +
@@ -1026,9 +1027,15 @@ function esMetricsFor(code) {
   // 連單次配的 1.80% 也是用 7.65 除的——跟旁邊顯示的現價對不起來。
   // 這裡拿得到即時價就重算一次（只重算跟價格有關的欄位，
   // 排名與分數不動，與評比頁盤中的做法一致）。
-  var live = (_esLive && _esLive[String(code)] > 0) ? _esLive[String(code)]
-    : ((typeof _rows !== 'undefined' && _rows[String(code)] && _rows[String(code)].close > 0)
-        ? _rows[String(code)].close : null);
+  // SSE 優先、快照當退路。順序原本是反的，而 _esLive 只有「ETF 評比」
+  // 子頁籤顯示時才更新（_esLiveTick 第一行就檢查容器是不是隱藏的）。
+  // 結果：進過評比再切回關注股票，快照停在離開那一刻且不再更新，
+  // 現價欄繼續跳（它走 SSE），配息％卻一直除那個舊價，而且看不出來。
+  // 展開「除息紀錄」算「距現價」本來就是 SSE 優先，這裡跟它對齊。
+  // 沒有 SSE 訂閱的代號（非持股、非關注）_rows 是空的，照樣走快照，行為不變。
+  var live = (typeof _rows !== 'undefined' && _rows[String(code)] && _rows[String(code)].close > 0)
+    ? _rows[String(code)].close
+    : ((_esLive && _esLive[String(code)] > 0) ? _esLive[String(code)] : null);
   if (live && r.px !== live) _esDerive(r, live);
   var f = _esFill[r.code];
   r.fill = f && f.n ? f.filled / f.n * 100 : null;
@@ -1067,6 +1074,35 @@ async function esMetricsPrep(key, codes, render) {
 function esWatchPrep(codes) {
   return esMetricsPrep('list', codes, function () { if (typeof renderWatch === 'function') renderWatch(); });
 }
+// 不隨現價重算的欄。其餘指標欄的分母都是現價，盤中每一筆 tick 跟著變；
+// 這七欄不是。排名要全市場同一時點比，盤中逐筆重排會讓名次跳個不停；
+// 配息走向看的是金額序列；填息率、平均填息、規模、內扣是每日資料。
+// 欄名後面標 * ，讀表時才分得出哪個數字是活的。
+var ES_STATIC = { rank: 1, score: 1, trend: 1, fill: 1, fillDays: 1, size: 1, fee: 1 };
+// 標記用欄名顏色，不加符號。加一個 * 實測讓債券 ETF 那張從 1619 變 1636，
+// 容器只有 1619，直接冲出橫向捲軸（使用者剛確認過那張本來沒有）。
+// 顏色不吃寬度：活的欄維持表頭的暖褐 --th，不動的改冷灰 --text3，
+// 冷暖分群掃一眼就分得出來。
+function _esStaticCls(k) { return ES_STATIC[k] ? ' es-th-static' : ''; }
+// 四張表共用的說明條目。像像各寫一份的話，日後動了欄位定會漏改其中一張。
+// cols 要傳進來：債券與主動式那兩張用 ES_WCOLS2，沒有單次配與預估年配。
+function esStaticNote(cols) {
+  cols = cols || ES_WCOLS;
+  var nm = function (k) {
+    var c = ES_COLS.filter(function (x) { return x[0] === k; })[0];
+    return k === 'score' ? '類別排名' : (k === 'rank' ? '評比排名' : (c ? c[1] : k));
+  };
+  var live = cols.filter(function (k) { return !ES_STATIC[k]; }).map(nm).join('、');
+  var stat = cols.filter(function (k) { return ES_STATIC[k]; }).map(nm).join('、');
+  return '<dt>哪幾欄是活的</dt><dd>這幾欄的分母是現價，盤中每一筆報價跟著重算：'
+    + live + '。<b>欄名標冷灰色</b>的不隨現價動：' + stat + '。'
+    + '排名要全市場同一時點比，盤中逐筆重排名次會跳個不停；'
+    + '配息走向看的是金額序列；填息率、規模、內扣是每日資料。</dd>';
+}
+function _esStaticTip(k, tip) {
+  if (!ES_STATIC[k]) return tip;
+  return (tip ? tip + '&#10;&#10;' : '') + '這一欄不隨現價重算（欄名標冷灰色）。';
+}
 var ES_WCOLS = ['rank', 'score', 'y1', 'yEst', 'yCons', 'trend', 'y12', 'fill', 'fillDays',
                 'g6', 'g12', 'tr6', 'tr12', 'size', 'fee', 'prem'];
 // 債券 ETF 與主動式 ETF 兩張表用的子集：少了「單次配、預估年配」。
@@ -1087,7 +1123,8 @@ function esWatchHeads(cols, sortState, sortFn) {
           + '與左邊「類別排名」的差別：那一欄是在同類全部 ETF 裡的名次，每一檔都有' : c[3]);
     var on = sortState.replace(/(Asc|Desc)$/, '') === k;
     var asc = on && /Asc$/.test(sortState);
-    return '<th class="num sort-th' + (on ? ' sorted' : '') + '" onclick="' + sortFn + '(\'' + k + '\')"' + (tip ? ' title="' + tip + '"' : '') + '>' + label +
+    tip = _esStaticTip(k, tip);
+    return '<th class="num sort-th' + (on ? ' sorted' : '') + _esStaticCls(k) + '" onclick="' + sortFn + '(\'' + k + '\')"' + (tip ? ' title="' + tip + '"' : '') + '>' + label +
       '<span class="sort-ind">' + (on ? (asc ? '▲' : '▼') : '↕') + '</span></th>';
   }).join('');
 }

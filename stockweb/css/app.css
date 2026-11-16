@@ -1447,6 +1447,11 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .es-watch { background: rgba(90,169,255,.18); color: var(--accent3); }
 .es-wcell { text-align: center; }
 .es-wbtn { white-space: nowrap; min-width: 64px; }
+/* 不隨現價重算的欄：欄名改冷灰，跟活的欄那個暖褐 --th 分開。
+   不用符號是因為寬度沒空間：加一個 * 實測讓債券 ETF 那張從 1619 變 1636，
+   容器只有 1619，直接冲出橫向捲軸。顏色吃 0px。 */
+.inv-table th.es-th-static { color: var(--text3); }
+
 .es-wbtn.on { color: var(--accent3); border-color: rgba(90,169,255,.5); }
 .wt-table .es-wm { font-size: 12px; white-space: nowrap; }
 /* ETF 評比／關注股票：點列展開明細 */
