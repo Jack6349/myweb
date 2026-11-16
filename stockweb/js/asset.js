@@ -31,9 +31,7 @@ var AS_MENU = [
   { id: 'src', label: '錢從哪來', need: 'feed', render: asRenderSrc },
   { id: 'mix', label: '持股結構', need: 'feed', render: asRenderMix },
   { id: 'cap', label: '本金走勢', need: 'pv', render: asRenderCap },
-  { id: 'div', label: '每月配息', need: 'pv', render: asRenderDiv },
-  { id: 'conc', label: '集中度', need: 'const', render: asRenderConc },
-  { id: 'pull', label: '出力不對稱', need: 'feed', render: asRenderPull }
+  { id: 'conc', label: '集中度', need: 'const', render: asRenderConc }
 ];
 
 function openAsset() {
@@ -208,8 +206,9 @@ function asRenderSrc() {
 }
 
 // ══════════ 持股結構（水平堆疊長條）══════════
-// 不用圓餅：圓餅比不出相近的切片，而且佔一大塊版面只放幾個數字。
-// 一條長條佔一行，剩下的空間留給逐項明細。
+// 圓餅圖。切片依占比由大到小、從 12 點鐘順時針排，
+// 相近的切片靠圖形本身分不出來，所以百分比一律寫在圖例與下面的表裡，
+// 圖上只在切片夠大（≧ 7%）時標數字，小切片不標以免疊在一起。
 function asRenderMix() {
   var rows = _asRows();
   if (!rows.length) return '<div class="modal-loading">沒有持股資料</div>';
@@ -223,12 +222,36 @@ function asRenderMix() {
     .sort(function (a, b) { return b.val - a.val; });
   var pctOf = function (v) { return tot ? v / tot * 100 : 0; };
 
-  var bar = '<div class="as-stack">' + segs.map(function (s, i) {
-    var p = pctOf(s.val);
-    return '<div class="as-seg as-c' + (i % 8) + '" style="width:' + p.toFixed(3) + '%" title="' +
-      _asEsc(s.cat + '　' + _asMoney(s.val) + ' 元　' + p.toFixed(1) + '%　' + s.n + ' 檔：' + s.codes.join('、')) +
-      '">' + (p >= 7 ? '<span>' + p.toFixed(0) + '%</span>' : '') + '</div>';
-  }).join('') + '</div>';
+  // 圓餅：從 12 點鐘（−90°）開始順時針。
+  // 只剩一類時走 circle：360° 的弧起點與終點重疊，A 指令畫不出來。
+  var R = 118, CX = 132, CY = 132, acc = -90;
+  var pie = segs.map(function (sg, i) {
+    var p = pctOf(sg.val), a0 = acc, a1 = acc + p * 3.6;
+    acc = a1;
+    var tip = _asEsc(sg.cat + '　' + _asMoney(sg.val) + ' 元　' + p.toFixed(1) + '%　'
+      + sg.n + ' 檔：' + sg.codes.join('、'));
+    var cls = 'as-pie-s as-f' + (i % 8);
+    if (p >= 99.99) {
+      return '<circle class="' + cls + '" cx="' + CX + '" cy="' + CY + '" r="' + R + '">'
+        + '<title>' + tip + '</title></circle>';
+    }
+    var rad = function (d) { return d * Math.PI / 180; };
+    var x0 = CX + R * Math.cos(rad(a0)), y0 = CY + R * Math.sin(rad(a0));
+    var x1 = CX + R * Math.cos(rad(a1)), y1 = CY + R * Math.sin(rad(a1));
+    var big = (a1 - a0) > 180 ? 1 : 0;
+    var d = 'M' + CX + ' ' + CY + 'L' + x0.toFixed(2) + ' ' + y0.toFixed(2) +
+      'A' + R + ' ' + R + ' 0 ' + big + ' 1 ' + x1.toFixed(2) + ' ' + y1.toFixed(2) + 'Z';
+    var lb = '';
+    if (p >= 7) {
+      var am = rad((a0 + a1) / 2), lr = R * 0.62;
+      lb = '<text class="as-pie-t" x="' + (CX + lr * Math.cos(am)).toFixed(1) +
+        '" y="' + (CY + lr * Math.sin(am) + 4).toFixed(1) + '" text-anchor="middle">' +
+        p.toFixed(0) + '%</text>';
+    }
+    return '<path class="' + cls + '" d="' + d + '"><title>' + tip + '</title></path>' + lb;
+  }).join('');
+  var bar = '<svg class="as-pie" viewBox="0 0 264 264" preserveAspectRatio="xMidYMid meet">'
+    + pie + '</svg>';
 
   var lg = '<div class="as-legend">' + segs.map(function (s, i) {
     return '<span class="as-lg"><i class="as-c' + (i % 8) + '"></i>' + s.cat +
@@ -246,7 +269,8 @@ function asRenderMix() {
     '<td class="num">' + _asMoney(tot) + '</td><td class="num">100.0%</td><td></td></tr>' +
     '</tbody></table></div>';
 
-  return '<div class="sec-title">持股結構</div>' + bar + lg + tb +
+  return '<div class="sec-title">持股結構</div>' +
+    '<div class="as-pie-wrap">' + bar + '<div class="as-pie-lg">' + lg + '</div></div>' + tb +
     '<div class="detail-note"><dl>' +
     '<dt>說明</dt><dd>依現值占比。分類由代號尾碼與名稱決定：尾碼定結構' +
     '（個股／主動 A／債券 B、D／槓反 L、R），名稱定策略（高息／非投等／投等／公債）。' +
@@ -310,89 +334,6 @@ function asRenderCap() {
     '所以這張圖是純價差。配息的時間維度在「每月配息」那一項。</dd>' +
     '<dt>補價的日子</dt><dd>成交清淡的日子沒有分 K，該檔當天用前一日收盤補。' +
     '本段共 <b>' + noPx + '</b> 天有補價' + (noPx ? '（那幾天的現值略為失真，不影響趨勢）' : '') + '。</dd>' +
-    '</dl></div>';
-}
-
-// ══════════ 每月配息（月長條 ＋ 12 個月移動平均）══════════
-// 資料不必重建：pvhist 的序列每一天就有 x ＝ 當天除息金額 × 當時持股張數。
-// 單月高低主要由「那個月有幾檔除息」決定，不是配得多，所以一定要配移動平均，
-// 否則會把月份分布誤讀成趨勢。
-function asRenderDiv() {
-  var by = {};
-  _pvData.days.forEach(function (r) {
-    if (!r.x) return;
-    var m = r.d.slice(0, 7);
-    by[m] = (by[m] || 0) + r.x;
-  });
-  var ms = Object.keys(by).sort();
-  if (!ms.length) return '<div class="modal-loading">這段期間沒有除息紀錄</div>';
-  // 月份要補齊：中間完全沒除息的月份也得是一根 0，否則 x 軸會把時間壓縮
-  var full = [], cur = ms[0], endM = ms[ms.length - 1];
-  while (cur <= endM && full.length < 240) {
-    full.push({ m: cur, v: by[cur] || 0 });
-    var yy = +cur.slice(0, 4), mm = +cur.slice(5, 7) + 1;
-    if (mm > 12) { yy++; mm = 1; }
-    cur = yy + '-' + ('0' + mm).slice(-2);
-  }
-  var n = full.length, MA = 12;
-  var ma = full.map(function (_, i) {
-    if (i < MA - 1) return null;
-    var s = 0;
-    for (var k = i - MA + 1; k <= i; k++) s += full[k].v;
-    return s / MA;
-  });
-  var W = 940, H = 320, PL = 78, PR = 18, PT = 22, PB = 46;
-  var hi = Math.max.apply(null, full.map(function (r) { return r.v; })) * 1.12 || 1;
-  var y = function (v) { return PT + (1 - v / hi) * (H - PT - PB); };
-  var gap = (W - PL - PR) / n, bw = Math.max(2, gap * 0.62);
-  var cx = function (i) { return PL + gap * i + gap / 2; };
-  var svg = '<svg class="as-svg as-svg-wide" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
-  for (var g = 0; g <= 4; g++) {
-    var gv = hi / 4 * g, gy = y(gv);
-    svg += '<line class="as-grid" x1="' + PL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PR) + '" y2="' + gy.toFixed(1) + '"/>' +
-      '<text class="as-ax" x="' + (PL - 6) + '" y="' + (gy + 4).toFixed(1) + '" text-anchor="end">' + _asWan(gv) + '</text>';
-  }
-  full.forEach(function (r, i) {
-    var yy = y(r.v);
-    svg += '<rect class="as-mbar" x="' + (cx(i) - bw / 2).toFixed(1) + '" y="' + yy.toFixed(1) +
-      '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, H - PB - yy).toFixed(1) + '" rx="1">' +
-      '<title>' + r.m + '　' + _asMoney(r.v) + ' 元</title></rect>';
-    var mm2 = r.m.slice(5);
-    var show = (mm2 === '01') || (n <= 18) || (n <= 40 && /^(04|07|10)$/.test(mm2));
-    if (show) {
-      svg += '<text class="as-ax" x="' + cx(i).toFixed(1) + '" y="' + (H - PB + 18) + '" text-anchor="middle">' +
-        (mm2 === '01' ? r.m.slice(2, 4) + '/01' : mm2) + '</text>';
-    }
-  });
-  var mp = ma.map(function (v, i) {
-    return v == null ? null : ((i && ma[i - 1] != null ? 'L' : 'M') + cx(i).toFixed(1) + ' ' + y(v).toFixed(1));
-  }).filter(Boolean).join('');
-  if (mp) svg += '<path class="as-ln as-ln-ma" d="' + mp + '"/>';
-  svg += '</svg>';
-
-  var tot = full.reduce(function (a, b) { return a + b.v; }, 0);
-  var last12 = full.slice(-12).reduce(function (a, b) { return a + b.v; }, 0);
-  var prev12 = full.length >= 24 ? full.slice(-24, -12).reduce(function (a, b) { return a + b.v; }, 0) : null;
-  var yoy = (prev12 != null && prev12) ? (last12 / prev12 - 1) * 100 : null;
-  var nz = full.filter(function (r) { return r.v > 0; }).length;
-  return _asPvBanner() + '<div class="sec-title">每月配息</div>' +
-    '<div class="as-legend"><span class="as-lg"><i class="as-sw-bar"></i>當月應領</span>' +
-    (mp ? '<span class="as-lg"><i class="as-sw-ma"></i>12 個月移動平均</span>' : '') +
-    '<span class="as-lg-n">' + full[0].m + ' 起　' + n + ' 個月，其中 ' + nz + ' 個月有除息</span></div>' + svg +
-    '<div class="as-kpis">' +
-    _asKpi('區間合計', _asMoney(tot), '這段期間的應領配息合計') +
-    _asKpi('近 12 個月', _asMoney(last12), '最近 12 個月的應領配息合計') +
-    _asKpi('月均（近 12 個月）', _asMoney(last12 / 12), '近 12 個月合計 ÷ 12') +
-    (yoy == null ? '' : _asKpi('對前 12 個月', _asPct(yoy), '近 12 個月 ÷ 前 12 個月 − 1', yoy)) +
-    '</div>' +
-    '<div class="detail-note"><dl>' +
-    '<dt>說明</dt><dd>長條是當月的除息金額 × 當時持有張數。單月高低主要由' +
-    '「那個月有幾檔除息」決定，不是配得多或少，所以趨勢要看折線那條 12 個月移動平均。</dd>' +
-    '<dt>這是應領，不是實收</dt><dd>沒有扣稅（二代健保、股利所得稅都不在券商回傳裡）。' +
-    '另外，借出期間的配息由借券人支付權益補償、與直接入帳分成兩筆，' +
-    '金額對得上但入帳方式不同（見股利估算的借出張數）。</dd>' +
-    '<dt>這張圖不能告訴你什麼</dt><dd>它反映的是「當時持有多少」，後來加碼或減碼不會回頭修改過去的長條。' +
-    '要問「照現在的持股，未來每個月領多少」要看股利估算，那是另一個問題。</dd>' +
     '</dl></div>';
 }
 
@@ -480,97 +421,5 @@ function asRenderConc() {
     '<dt>這張圖不能告訴你什麼</dt><dd>只涵蓋台股成分。海外成分、債券部位不在裡面，' +
     '所以曲線的終點不會到 100%。也不代表收入集中度：' +
     '權重高的公司不一定是配息的來源，那要看「出力不對稱」。</dd>' +
-    '</dl></div>';
-}
-
-// ══════════ 出力不對稱（成對水平長條）══════════
-// 逐檔比「它佔了多少錢」與「它生了多少息」。兩個比例不一致的地方就是答案：
-// 哪幾檔用較少的錢扛了較多的收入，哪幾檔佔了位子但不生息。
-//
-// 年配息金額的來源有兩個，優先序是固定的：
-//   1. 股利估算的 _divRoll（逐月預估，處理過補登與配息頻率）── 這一頁問的是「我的收入」，
-//      就該跟顯示你收入的那一頁同一個數字。但它要先進過股利估算那一頁才會存在。
-//   2. ETF 評比的 esMetricsFor(code).yEst（預估年配％）× 現值 ── 退路。
-// 兩者絕對值可能差一截，但這張圖畫的是比例，分母同時放大或縮小大致互相抵銷，
-// 所以不會因為來源不同而指向不同結論。實際用的是哪一個，標在圖上。
-function _asAnnualDiv(rows) {
-  var src = '', out = {};
-  if (typeof _divRoll !== 'undefined' && _divRoll && typeof _divStatRows === 'function') {
-    try {
-      _divStatRows(_divRoll.stocks).forEach(function (r) {
-        var a = 0;
-        for (var i = 1; i <= 12; i++) a += (r.m[i] || 0);
-        if (a > 0) out[String(r.code)] = a;
-      });
-      if (Object.keys(out).length) src = '股利估算（逐月預估合計）';
-    } catch (e) { hush('asset', e); out = {}; }
-  }
-  if (!src && typeof esMetricsFor === 'function') {
-    rows.forEach(function (r) {
-      var m = null;
-      try { m = esMetricsFor(r.code); } catch (e) { hush('asset', e); }
-      if (m && m.yEst > 0) out[r.code] = m.yEst / 100 * r.val;
-    });
-    if (Object.keys(out).length) src = 'ETF 評比的預估年配％ × 現值（退路；進過「股利估算」之後會改用那邊的數字）';
-  }
-  return { map: out, src: src };
-}
-
-function asRenderPull() {
-  var rows = _asRows();
-  if (!rows.length) return '<div class="modal-loading">沒有持股資料</div>';
-  var ad = _asAnnualDiv(rows);
-  if (!ad.src) return '<div class="modal-loading">取不到預估年配息（請先開啟「股利估算」或「ETF 評比」一次）</div>';
-  var totVal = 0, totDiv = 0;
-  rows.forEach(function (r) { r.ann = ad.map[r.code] || 0; totVal += r.val; totDiv += r.ann; });
-  if (!totDiv) return '<div class="modal-loading">預估年配息合計為 0</div>';
-  rows.forEach(function (r) {
-    r.pv = totVal ? r.val / totVal * 100 : 0;
-    r.pd = totDiv ? r.ann / totDiv * 100 : 0;
-    r.gap = r.pd - r.pv;
-  });
-  rows.sort(function (a, b) { return b.gap - a.gap; });
-  var mx = Math.max.apply(null, rows.map(function (r) { return Math.max(r.pv, r.pd); })) || 1;
-
-  var bars = rows.map(function (r) {
-    return '<div class="as-pr">' +
-      '<div class="as-pr-nm"><b>' + r.code + '</b><span>' + _asEsc(r.name) + '</span></div>' +
-      '<div class="as-pr-bars">' +
-      '<div class="as-pr-row" title="' + _asEsc('現值比 ' + r.pv.toFixed(2) + '%　' + _asMoney(r.val) + ' 元') + '">' +
-        '<i class="as-pr-b as-pr-v" style="width:' + (r.pv / mx * 100).toFixed(2) + '%"></i>' +
-        '<span>' + r.pv.toFixed(1) + '%</span></div>' +
-      '<div class="as-pr-row" title="' + _asEsc('配息貢獻比 ' + r.pd.toFixed(2) + '%　年配息約 ' + _asMoney(r.ann) + ' 元') + '">' +
-        '<i class="as-pr-b as-pr-d" style="width:' + (r.pd / mx * 100).toFixed(2) + '%"></i>' +
-        '<span>' + r.pd.toFixed(1) + '%</span></div>' +
-      '</div>' +
-      '<div class="as-pr-gap ' + (r.gap > 0.5 ? 'pos' : (r.gap < -0.5 ? 'neg' : '')) + '">' +
-        (r.gap > 0 ? '+' : (r.gap < 0 ? '−' : '')) + Math.abs(r.gap).toFixed(1) + 'pp</div>' +
-      '</div>';
-  }).join('');
-
-  var over = rows.filter(function (r) { return r.gap > 0.5; });
-  var under = rows.filter(function (r) { return r.gap < -0.5; });
-  return '<div class="sec-title">出力不對稱</div>' +
-    '<div class="as-legend"><span class="as-lg"><i class="as-sw-pv"></i>現值比</span>' +
-    '<span class="as-lg"><i class="as-sw-pd"></i>配息貢獻比</span>' +
-    '<span class="as-lg-n">依差距排序，右欄是兩者相減的百分點</span></div>' +
-    '<div class="as-pairs">' + bars + '</div>' +
-    '<div class="as-kpis">' +
-    _asKpi('預估年配息合計', _asMoney(totDiv), '來源：' + ad.src) +
-    _asKpi('出力高於佔比', over.length + ' 檔', '配息貢獻比高於現值比 0.5 個百分點以上：' +
-      (over.map(function (r) { return r.code; }).join('、') || '無')) +
-    _asKpi('佔比高於出力', under.length + ' 檔', '現值比高於配息貢獻比 0.5 個百分點以上：' +
-      (under.map(function (r) { return r.code; }).join('、') || '無')) +
-    '</div>' +
-    '<div class="detail-note"><dl>' +
-    '<dt>說明</dt><dd>上面那根是這一檔佔總現值多少，下面那根是它佔預估年配息多少。' +
-    '下根比上根長代表它用較少的錢扛了較多的收入，反過來代表它佔了位子但不太生息。' +
-    '右邊的 pp 是兩者相減的百分點。</dd>' +
-    '<dt>年配息的來源</dt><dd>' + _asEsc(ad.src) + '。' +
-    '這張圖畫的是比例，來源不同時絕對值會差一截，但分母同時放大或縮小大致互相抵銷，' +
-    '不會因此指向不同結論。</dd>' +
-    '<dt>這張圖不能告訴你什麼</dt><dd>不生息不等於不該持有：債券部位與市值型本來就不是為了配息而持有的，' +
-    '它們的任務是分散與本金。這張圖只標出不對稱在哪裡，不判斷對錯。' +
-    '另外預估年配息是前瞻值，配息政策改變會讓它整個移動。</dd>' +
     '</dl></div>';
 }
