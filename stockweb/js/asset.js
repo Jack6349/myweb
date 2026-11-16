@@ -20,6 +20,7 @@ var AS_SEL_LS = 'as_sel_v1', AS_COL_LS = 'as_nav_collapsed_v1';
 var _asSel = (function () {
   try { return localStorage.getItem(AS_SEL_LS) || 'src'; } catch (e) { return 'src'; }
 })();
+var _asSecMix = null;            // 類股組成，進集中度頁時算好
 var _asCollapsed = (function () {
   try { return localStorage.getItem(AS_COL_LS) === '1'; } catch (e) { return false; }
 })();
@@ -92,8 +93,14 @@ async function asRender() {
   if (_asSel !== it.id) return;                    // 載入期間使用者又換了一項
   if (it.need === 'const') {
     pane.innerHTML = '<div class="modal-loading">載入成分股清單…</div>';
-    try { await ensureFeed(); if (typeof initConstituents === 'function') await initConstituents(); }
-    catch (e) { pane.innerHTML = '<div class="modal-loading">載入失敗：' + (e.message || e) + '</div>'; return; }
+    try {
+      await ensureFeed();
+      if (typeof initConstituents === 'function') await initConstituents();
+      // 類股組成要補合約拿產業別，是非同步的，在這裡算好，
+      // 渲染那一段才能維持同步。合約進 _contracts 快取，第二次就快。
+      _asSecMix = (typeof tcSectorMix === 'function') ? await tcSectorMix() : null;
+    }
+    catch (e) { hush('asset', e); pane.innerHTML = '<div class="modal-loading">載入失敗：' + (e.message || e) + '</div>'; return; }
     if (_asSel !== it.id) return;
   }
   if (it.need === 'pv') {
@@ -135,6 +142,38 @@ function _asWan(v) {
 }
 function _asPct(v) { return (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(2) + '%'; }
 function _asEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+// 圓餅。從 12 點鐘（−90°）開始順時針，切片順序就是傳進來的順序。
+// 只剩一類時走 circle：360° 的弧起點與終點重疊，A 指令畫不出來。
+// segs = [{ pct, cls, tip }]。比例小於 7% 的不標數字，標了會疊在一起。
+function _asPieSvg(segs) {
+  var R = 118, CX = 132, CY = 132, acc = -90;
+  var rad = function (d) { return d * Math.PI / 180; };
+  var body = segs.map(function (sg) {
+    var p = sg.pct, a0 = acc, a1 = acc + p * 3.6;
+    acc = a1;
+    var tip = _asEsc(sg.tip || ''), cls = 'as-pie-s ' + (sg.cls || '');
+    if (p >= 99.99) {
+      return '<circle class="' + cls + '" cx="' + CX + '" cy="' + CY + '" r="' + R + '">'
+        + '<title>' + tip + '</title></circle>';
+    }
+    if (p <= 0) return '';
+    var x0 = CX + R * Math.cos(rad(a0)), y0 = CY + R * Math.sin(rad(a0));
+    var x1 = CX + R * Math.cos(rad(a1)), y1 = CY + R * Math.sin(rad(a1));
+    var big = (a1 - a0) > 180 ? 1 : 0;
+    var d = 'M' + CX + ' ' + CY + 'L' + x0.toFixed(2) + ' ' + y0.toFixed(2) +
+      'A' + R + ' ' + R + ' 0 ' + big + ' 1 ' + x1.toFixed(2) + ' ' + y1.toFixed(2) + 'Z';
+    var lb = '';
+    if (p >= 7) {
+      var am = rad((a0 + a1) / 2), lr = R * 0.62;
+      lb = '<text class="as-pie-t" x="' + (CX + lr * Math.cos(am)).toFixed(1) +
+        '" y="' + (CY + lr * Math.sin(am) + 4).toFixed(1) + '" text-anchor="middle">' +
+        p.toFixed(0) + '%</text>';
+    }
+    return '<path class="' + cls + '" d="' + d + '"><title>' + tip + '</title></path>' + lb;
+  }).join('');
+  return '<svg class="as-pie" viewBox="0 0 264 264" preserveAspectRatio="xMidYMid meet">'
+    + body + '</svg>';
+}
 function _asKpi(lb, v, tip, sign) {
   var cls = sign == null ? '' : (sign > 0 ? ' up' : (sign < 0 ? ' down' : ''));
   return '<div class="as-kpi" title="' + _asEsc(tip) + '"><div class="as-kpi-lb">' + lb + '</div>' +
@@ -222,36 +261,11 @@ function asRenderMix() {
     .sort(function (a, b) { return b.val - a.val; });
   var pctOf = function (v) { return tot ? v / tot * 100 : 0; };
 
-  // 圓餅：從 12 點鐘（−90°）開始順時針。
-  // 只剩一類時走 circle：360° 的弧起點與終點重疊，A 指令畫不出來。
-  var R = 118, CX = 132, CY = 132, acc = -90;
-  var pie = segs.map(function (sg, i) {
-    var p = pctOf(sg.val), a0 = acc, a1 = acc + p * 3.6;
-    acc = a1;
-    var tip = _asEsc(sg.cat + '　' + _asMoney(sg.val) + ' 元　' + p.toFixed(1) + '%　'
-      + sg.n + ' 檔：' + sg.codes.join('、'));
-    var cls = 'as-pie-s as-f' + (i % 8);
-    if (p >= 99.99) {
-      return '<circle class="' + cls + '" cx="' + CX + '" cy="' + CY + '" r="' + R + '">'
-        + '<title>' + tip + '</title></circle>';
-    }
-    var rad = function (d) { return d * Math.PI / 180; };
-    var x0 = CX + R * Math.cos(rad(a0)), y0 = CY + R * Math.sin(rad(a0));
-    var x1 = CX + R * Math.cos(rad(a1)), y1 = CY + R * Math.sin(rad(a1));
-    var big = (a1 - a0) > 180 ? 1 : 0;
-    var d = 'M' + CX + ' ' + CY + 'L' + x0.toFixed(2) + ' ' + y0.toFixed(2) +
-      'A' + R + ' ' + R + ' 0 ' + big + ' 1 ' + x1.toFixed(2) + ' ' + y1.toFixed(2) + 'Z';
-    var lb = '';
-    if (p >= 7) {
-      var am = rad((a0 + a1) / 2), lr = R * 0.62;
-      lb = '<text class="as-pie-t" x="' + (CX + lr * Math.cos(am)).toFixed(1) +
-        '" y="' + (CY + lr * Math.sin(am) + 4).toFixed(1) + '" text-anchor="middle">' +
-        p.toFixed(0) + '%</text>';
-    }
-    return '<path class="' + cls + '" d="' + d + '"><title>' + tip + '</title></path>' + lb;
-  }).join('');
-  var bar = '<svg class="as-pie" viewBox="0 0 264 264" preserveAspectRatio="xMidYMid meet">'
-    + pie + '</svg>';
+  var bar = _asPieSvg(segs.map(function (sg, i) {
+    return { pct: pctOf(sg.val), cls: 'as-f' + (i % 8),
+      tip: sg.cat + '　' + _asMoney(sg.val) + ' 元　' + pctOf(sg.val).toFixed(1) + '%　'
+        + sg.n + ' 檔：' + sg.codes.join('、') };
+  }));
 
   var lg = '<div class="as-legend">' + segs.map(function (s, i) {
     return '<span class="as-lg"><i class="as-c' + (i % 8) + '"></i>' + s.cat +
@@ -366,6 +380,42 @@ function asPvReload() {
 // ══════════ 集中度（累計曝險曲線）══════════
 // 問的不是「分散得好不好」，是「哪一檔減配或出事會打掉多少收入」。
 // 成分股曝險那一頁只列前 20，看不出前幾名吃掉多少、曲線在哪裡轉平。
+// 類股組成（集中度頁最上面）。跟下面那條累計曲線同分母（總持股現值），
+// 所以兩張圖的百分比可以直接對讀。最後兩片不是類股，用灰階跟彩色分開。
+function _asSectorHtml() {
+  var m = _asSecMix;
+  if (!m || !m.slices || !m.slices.length) return '';
+  var segs = m.slices.map(function (sg, i) {
+    var tip = sg.rest
+      ? sg.name + '　' + sg.pct.toFixed(1) + '%：不是透過 ETF 持有的台股那一塊'
+      : sg.name + '　' + sg.pct.toFixed(2) + '%　' + sg.n + ' 檔'
+        + (sg.note ? '：' + sg.note : (sg.codes.length ? '：' + sg.codes.slice(0, 12).join('、')
+            + (sg.codes.length > 12 ? ' 等 ' + sg.codes.length + ' 檔' : '') : ''));
+    return { pct: sg.pct, cls: sg.rest ? 'as-f-rest' : (sg.tail ? 'as-f-tail' : 'as-f' + (i % 8)), tip: tip };
+  });
+  var lg = '<div class="as-legend">' + m.slices.map(function (sg, i) {
+    var cls = sg.rest ? 'as-f-rest' : (sg.tail ? 'as-f-tail' : 'as-f' + (i % 8));
+    return '<span class="as-lg"><i class="' + cls + '"></i>' + _asEsc(sg.name) +
+      '<b>' + sg.pct.toFixed(1) + '%</b><span class="as-lg-n">' +
+      (sg.n ? sg.n + ' 檔' : '') + '</span></span>';
+  }).join('') + '</div>';
+  return '<div class="sec-title">類股組成</div>' +
+    '<div class="as-pie-wrap">' + _asPieSvg(segs) + '<div class="as-pie-lg">' + lg + '</div></div>' +
+    '<div class="detail-note"><dl>' +
+    '<dt>說明</dt><dd>把持股 ETF 透視到底層台股，再依交易所的產業別彙總，'
+    + '加上直接持有的個股。分母是總持股現值，與下面那條累計曲線相同，'
+    + '兩張圖的百分比可以直接對讀。低於 1% 的類股併成「其他類股」：'
+    + '實際有 ' + m.sectors + ' 類，全畫出來後段是一堆看不見的細線。</dd>' +
+    '<dt>類股名從哪來</dt><dd>券商合約的 category 就是交易所的產業別代碼，'
+    + '上市上櫃共用同一套編碼。對照表寫死在程式裡，來源是證交所每日收盤行情的回傳標題。'
+    + '查不到的代碼會顯示成「類別 39」這種原樣，不猜。</dd>' +
+    '<dt>這張圖不能告訴你什麼</dt><dd>交易所的分類很粗：晶圓代工、IC 設計、'
+    + '封測全部歸在「半導體業」一塊，所以那一塊大不等於集中在同一種生意。'
+    + '要看是哪幾檔擐起來的，看下面的累計曲線與前十名。'
+    + (m.noCat.length ? '另外 ' + m.noCat.length + ' 檔拿不到產業別（'
+        + _asEsc(m.noCat.slice(0, 8).join('、')) + '），會歸到「類別 —」。' : '') + '</dd>' +
+    '</dl></div>';
+}
 function asRenderConc() {
   if (typeof computeTopConst !== 'function') return '<div class="modal-loading">成分股模組未載入</div>';
   var all = computeTopConst(999) || [];
@@ -408,7 +458,7 @@ function asRenderConc() {
         '<td class="num">' + r.pct.toFixed(2) + '%</td><td class="num">' + cum[i].toFixed(1) + '%</td></tr>';
     }).join('') + '</tbody></table></div>';
 
-  return '<div class="sec-title">集中度</div>' +
+  return _asSectorHtml() + '<div class="sec-title">集中度</div>' +
     '<div class="as-legend"><span class="as-lg-n">橫軸＝依曝險排名，縱軸＝累計總權重；共 ' + n + ' 檔台股成分</span></div>' + svg +
     '<div class="as-kpis">' +
     _asKpi('第 1 名', all[0].code + '　' + all[0].pct.toFixed(2) + '%', '曝險最高的那一檔佔總持股現值的比重') +

@@ -1918,6 +1918,14 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .as-pie-lg .as-lg-n { min-width: 48px; text-align: right; }
 .as-f0 { fill: #5b8ff9; } .as-f1 { fill: #6dc8ec; } .as-f2 { fill: #9aa7c7; } .as-f3 { fill: #f6bd16; }
 .as-f4 { fill: #b08ad6; } .as-f5 { fill: #4fb3b0; } .as-f6 { fill: #ff9845; } .as-f7 { fill: #c7cdd8; }
+/* 類股圓餅最後兩片不是類股，用灰階跟彩色分開：
+   「其他類股」是底下 1% 以下的併類，「海外成分股、債券與現金」是根本不在台股裡。 */
+.as-f-tail { fill: #8a94a6; } .as-f-rest { fill: #4a5568; }
+.as-lg i.as-f0 { background: #5b8ff9; } .as-lg i.as-f1 { background: #6dc8ec; }
+.as-lg i.as-f2 { background: #9aa7c7; } .as-lg i.as-f3 { background: #f6bd16; }
+.as-lg i.as-f4 { background: #b08ad6; } .as-lg i.as-f5 { background: #4fb3b0; }
+.as-lg i.as-f6 { background: #ff9845; } .as-lg i.as-f7 { background: #c7cdd8; }
+.as-lg i.as-f-tail { background: #8a94a6; } .as-lg i.as-f-rest { background: #4a5568; }
 .as-c0, .as-lg i.as-c0 { background: #5b8ff9; }
 .as-c1, .as-lg i.as-c1 { background: #6dc8ec; }
 .as-c2, .as-lg i.as-c2 { background: #9aa7c7; }
