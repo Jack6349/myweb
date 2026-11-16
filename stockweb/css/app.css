@@ -2026,7 +2026,12 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .rb-sysbox:hover { color: var(--text); }
 .rb-sysbox.on { border-left-color: var(--up); background: color-mix(in srgb, var(--up) 7%, transparent); color: var(--text); }
 .rb-sysbox input { cursor: pointer; }
-.rb-table { max-width: 1200px; width: auto; min-width: 560px; }
+/* 上限從 1200 放到 1600：1200 會把「實際收盤」那兩欄出現時的
+   14 欄版本（1494）夾回去。視窗 1690 時容器 1634，1600 還在裡面。 */
+.rb-table { max-width: 1600px; width: auto; min-width: 560px; }
+/* 欄距：預設左右 8px，16 欄擠在一起時分不出欄位。
+   漲跌標改排到下一行之後表格窄了一大截，把那段寬度轉成欄距。 */
+.rb-table td, .rb-table th { padding-left: 18px; padding-right: 18px; }
 .rb-table th.rb-grp { text-align: center; border-left: 1px solid var(--border); }
 .rb-table th.rb-sub2 { font-size: 11px; font-weight: 400; color: var(--text2); }
 .rb-eps { min-width: 520px; }
@@ -2103,8 +2108,15 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .nt-done > summary { cursor: pointer; font-size: 12.5px; color: var(--text2); padding: 4px 2px; }
 
 /* 隔夜推估：價格為主、百分比為輔。小字固定寬度，價格才上下對齊 */
-.ov-sub { display: inline-block; min-width: 4.8em; text-align: right; margin-left: 6px; font-size: .8em; color: var(--text3); }
+/* 漲跌標在數字下面自己一行。接在數字右邊時它和下一欄的距離
+   跟它和本欄數字的距離差不多，看不出欄位分界，整欄的右對齊也被打掉。
+   排成上下兩行後每一欄窄約 4.8em，空出來的寬度回館給欄距。 */
+.ov-sub { display: block; text-align: right; font-size: .8em; color: var(--text3); line-height: 1.5; }
 .rb-table td.ov-key { color: var(--accent2); font-weight: 700; }
+/* 快照不是推估那一盤的價（晚上看明天時的常態）。
+   原本連數字一起壓暗，結果是最常見的狀態反而最難讀。
+   改成數字正常亮度，「哪一天」由下面那行日期負責標註。 */
+.rb-table td.ov-stale { color: var(--text); cursor: help; }
 .es-tag.es-new-tag { background: rgba(120,180,245,.2); color: #8fc4ff; }
 
 /* ETF 評比：配息走向 */
@@ -2162,7 +2174,9 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .rb-table td.ov-t1 { color: var(--text3); font-weight: 400; }
 .rb-table td.ov-t0 { color: var(--text3); font-weight: 400; }
 /* 點估值降為配角 */
-.rb-table td.ov-side { font-size: 12px; color: var(--text2); }
+/* 字色不在這裡寫死：改由 JS 按各自的漲跌上，跟前收、實際收盤同一套語言。
+   原本固定 var(--text2) 讓這兩欄比周圍暴，而且數字本身不帶方向。 */
+.rb-table td.ov-side { font-size: 12px; }
 /* 掛買參考底下的區間 */
 .ov-rng { display: block; font-size: 11px; font-weight: 400; color: var(--text3); line-height: 1.5; }
 /* 已出清且領完的檔不再列：數字變少時標一句，否則看起來像壞了 */

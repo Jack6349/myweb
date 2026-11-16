@@ -384,11 +384,15 @@ function _ovLiveCell(r, t) {
     var tip = lv.d < t.d
       ? '這是 ' + lv.d + ' 的收盤，推估的 ' + t.d + ' 那一盤還沒開始'
       : '這是 ' + lv.d + ' 的價，推估的是 ' + t.d + ' 那一盤，已經過去了';
-    return '<td class="num"><span class="dm-dim" title="' + tip + '">' + _ovPx(lv.px)
-      + '<span class="ov-sub dm-dim">' + lv.d.slice(5).replace('-', '/') + '</span></span></td>';
+    // 數字要讀得到，暗的只留日期那一行。
+    // 這裡不給漲跌：快照不是推估那一盤的價，跟前收相減沒有意義。
+    return '<td class="num ov-stale" title="' + tip + '">' + _ovPx(lv.px)
+      + '<span class="ov-sub">' + lv.d.slice(5).replace('-', '/') + '</span></td>';
   }
   var ch = (r.base > 0) ? (lv.px / r.base - 1) * 100 : null;
-  return '<td class="num ov-key">' + _ovPx(lv.px)
+  // 數字本身帶漲跌色：下面那一行已經是對前收的漲跌，
+  // 數字卻用一個跟方向無關的橘黃，掃整欄時讀不出読漲跌。
+  return '<td class="num ov-key" style="color:' + _rbCol(ch) + '">' + _ovPx(lv.px)
     + '<span class="ov-sub" style="color:' + _rbCol(ch) + '">'
     + (ch == null ? '—' : (ch > 0 ? '+' : (ch < 0 ? '\u2212' : '')) + Math.abs(ch).toFixed(2) + '%')
     + '</span></td>';
@@ -789,7 +793,7 @@ function ovHtml(view) {
       '<td class="num" style="color:' + _rbCol(r.baseChg) + '"><span class="rb-bpx">' + _ovPx(r.base) + '</span>'
         + (typeof _rbStreakSub === 'function' ? _rbStreakSub(_rbData.series[r.code] || []) : '') + '</td>' +
       _ovLiveCell(r, t) +
-      '<td class="num ov-side">' + _ovPx(r.oPx)
+      '<td class="num ov-side" style="color:' + _rbCol(r.oPct) + '">' + _ovPx(r.oPx)
         + '<span class="ov-sub" style="color:' + _rbCol(r.oPct) + '">' + pct(r.oPct) + '</span></td>' +
       // 掛買參考與收盤區間是這張表唯一要讀的兩個東西，放大加粗；
       // 開盤與收盤那兩個點估值降成小字，它們只是區間的中心。
@@ -797,7 +801,7 @@ function ovHtml(view) {
         + _ovPx(r.lPx)
         + '<span class="ov-rng">' + _ovPx(r.lLoPx) + ' ～ ' + _ovPx(r.lHiPx) + '</span>'
         + '<span class="ov-sub" style="color:' + _rbCol(r.lPct) + '">' + pct(r.lPct) + '</span></td>' +
-      '<td class="num ov-side">' + _ovPx(r.cPx)
+      '<td class="num ov-side" style="color:' + _rbCol(r.cPct) + '">' + _ovPx(r.cPx)
         + '<span class="ov-sub" style="color:' + _rbCol(r.cPct) + '">' + pct(r.cPct) + '</span></td>' +
       '<td class="num ov-big ' + _ovTier(r.r2) + '"' + cvTip(r.cover, r.coverN, '收盤') + '>'
         + _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) + '</td>' +
