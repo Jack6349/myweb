@@ -482,7 +482,11 @@ function _txDiffHtml(code, base, byOrder) {
   if (px == null || !(base > 0)) return '<span class="swap-dim">—</span>';
   var d = Math.round((px - base) * 100) / 100;
   var cls = d > 0 ? 'up' : (d < 0 ? 'down' : 'tx-flat');
-  return '<span class="' + cls + '">' + (d > 0 ? '+' : '') + d.toFixed(2) + '</span>'
+  // ▲∕▼ 跟全站的漲跌一致（關注股票、新上市 ETF、即時行情都是這一組）。
+  // 正負號要停下來讀才知道方向，三角形掃一眼就是。數字改用絕對值，
+  // 不再留 toFixed 帶出來的負號，否則會變成「▼-0.15」。
+  var ar = d > 0 ? '▲' : (d < 0 ? '▼' : '');
+  return '<span class="' + cls + '">' + ar + Math.abs(d).toFixed(2) + '</span>'
     + (byOrder ? '<span class="tx-ddbase">對委託價</span>' : '');
 }
 // 差額那一格。無論是否成交都算：
