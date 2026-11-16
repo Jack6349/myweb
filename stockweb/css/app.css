@@ -2310,8 +2310,12 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .dvs-amt { color: var(--text); }
 /* 空值兩種：✕＝資料源沒給（重抓有機會有）、—＝算不出來（重抓也不會變） */
 .na-gap { color: var(--text3); opacity: .75; cursor: help; font-size: .9em; }
-/* 關注清單 22 欄：欄距 8px→4px，1920 就從捲動 116px 變成剛好塞得下 */
-.wt-table td, .wt-table th { padding-left: 4px; padding-right: 4px; }
+/* 關注清單、債券 ETF、主動式 ETF 這三張欄最多。
+   8px → 4px 是為了 1920 塞得下；4px → 3px 是為了搶出趨勢那一欄。
+   23 欄 × 左右各 1px 省下 46px，搬一欄的淨成本約 17px，三張都够。
+   3px 不夠：使用者視窗窄的那一端容器約 1617，頁面一捲再扣捲軸 15 → 約 1602，
+   而 3px 時三張是 1605／1611／1630，都過了。2px 時降到約 1559／1565／1582。 */
+.wt-table td, .wt-table th { padding-left: 2px; padding-right: 2px; }
 /* 評比表 25 列加上展開明細就超過 .inv-table-wrap 的高度上限，冒出一條跟頁面捲軸
    並列的內層垂直捲軸（實測可視 603、內容 1013）。與新上市那張同一個解法：
    解掉高度上限讓頁面自己捲，橫向仍由 overflow:auto 把關。 */
@@ -2387,8 +2391,10 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 /* 債券與主動式兩張表都是 23 欄。固定欄寬放不下，改回讓瀏覽器依內容分配，
    並把左右內距從 4px 收到 3px —— 23 欄省下 46px，那是這兩張表能不能不出現
    橫向捲軸的差別（實測最壞內容：4px 時 1581 與 1587，容器只有 1579）。 */
+/* 這兩張本來就比 .wt-table 的基礎值緊一級（曾經是 4 對 3）。
+   搬趨勢那一欄時兩邊一起降到 2px，不然三張兄弟表的欄距會不一致。 */
 .wt-bond-t td, .wt-bond-t th,
-.wt-act-t td, .wt-act-t th { padding-left: 3px; padding-right: 3px; }
+.wt-act-t td, .wt-act-t th { padding-left: 2px; padding-right: 2px; }
 .wt-bond-t .inv-name { overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
 /* 成份股按鈕併進代號格：它不值得自己佔一欄 */
 .wt-act-t .wt-cst { margin-left: 4px; padding: 1px 4px; }

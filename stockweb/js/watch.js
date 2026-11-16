@@ -244,9 +244,11 @@ function renderWatch() {
     return;
   }
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
-    '<th></th><th></th>' + _wtTh('code', '代號') + _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num') +
+    '<th></th><th></th>' + _wtTh('code', '代號') +
+    '<th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th>' +
+    _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num') +
     (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
-  var ncol = 6 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);
+  var ncol = 7 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);   // 7：原本 6 欄加上趨勢
   _wtSorted(list).forEach(function (code) {
     h += '<tr id="wt-tr-' + code + '" class="es-row' + (_wtOpen === code ? ' es-row-open' : '') + '" onclick="wtRowClick(event,\'' + code + '\')">' + _wtRowHtml(code) + '</tr>';
     if (_wtOpen === code) h += '<tr class="es-drow"><td colspan="' + ncol + '" class="es-dslot" data-code="' + code + '"></td></tr>';
@@ -320,9 +322,10 @@ function _wtRowHtml(code) {
     '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"><span class="code-link" title="' + (name ? name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖') + '" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     // 徽章用精簡版（不帶天數，22px）：這幾張表當初是砲了不橫向捲動才挤出來的，
     // 完整版 34px 會超出容器。天數收到提示裡。
-    '<td class="num ' + ccls + '">'
-      + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
+    '<td class="inv-st-cell">'
       + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code) : '') + '</td>' +
+    '<td class="num ' + ccls + '">'
+      + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—') + '</td>' +
     '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt) + '　' + fmtPct(chgPct)) + '</td>' +
     (typeof esWatchCells === 'function' ? esWatchCells(code) : '') +      // ETF 評比指標（etf-screen.js）
     '<td><button class="swap-mini" onclick="wtRemove(\'' + code + '\')">移除</button></td>';
@@ -798,10 +801,12 @@ function renderWatchBond() {
     wrap.innerHTML = h; return;
   }
   var mh = (typeof esWatchHeads === 'function') ? esWatchHeads(ES_WCOLS2, _wtBondSort, 'wtBondSort') : '';
-  var ncol = 9 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);
+  var ncol = 10 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);  // 10：原本 9 欄加上趨勢
   var sh = function (k, label, cls, tip) { return _wtSortTh(_wtBondSort, 'wtBondSort', k, label, cls, tip); };
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table wt-bond-t"><thead><tr>' +
-    '<th>關注</th>' + sh('code', '代號') + '<th>名稱</th>' +
+    '<th>關注</th>' + sh('code', '代號') +
+    '<th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th>' +
+    '<th>名稱</th>' +
     sh('px', '現價', 'num') + sh('amount', '每股金額', 'num') +
     sh('mY', '月配', 'num', '月殖利率：每股金額 ÷ 現價') +
     sh('yY', '預估年配', 'num', '預估年殖利率：最近一次配息 × 配息期數 ÷ 現價') +
@@ -813,11 +818,13 @@ function renderWatchBond() {
     h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="wtBondRowClick(event,\'' + r.code + '\')">' +
       '<td class="es-wcell">' + wtWatchBtn(r.code) + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
+      '<td class="inv-st-cell">'
+        + (typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code) : '') + '</td>' +
       '<td class="inv-name">' + r.name + '</td>' +
       (function () { var pc = wtPxCell(r.code, r.px);
         return '<td class="' + pc.cls + '">'
           + (pc.txt ? '<span class="rb-bpx">' + pc.txt + '</span>' : '—')
-          + (pc.txt && typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code) : '') + '</td>'; })() +
+          + '</td>'; })() +
       '<td class="num">' + r.amount.toFixed(4) + '</td>' +
       '<td class="num swap-yield">' + r.mY.toFixed(2) + '%</td>' +
       '<td class="num swap-yield" title="' + (r.guessed ? '僅 1 筆配息紀錄，頻率推定為月配（新上市債券 ETF 慣例），待累積紀錄後自動修正'
@@ -903,9 +910,11 @@ function renderWatchAct() {
     return ' title="最近一次 ' + r.exDate + ' 每股 ' + r.amount + ' 元，年 ' + r.freq + ' 次"';
   };
   var mh = (typeof esWatchHeads === 'function') ? esWatchHeads(ES_WCOLS2, _wtActSort, 'wtActSort') : '';
-  var ncol = 9 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);
+  var ncol = 10 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);  // 10：原本 9 欄加上趨勢
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table wt-act-t"><thead><tr>' +
-    '<th>關注</th>' + sh('code', '代號', '') + sh('px', '現價') +
+    '<th>關注</th>' + sh('code', '代號', '') +
+    '<th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th>' +
+    sh('px', '現價') +
     sh('y1', '單次配', 'num', '單次殖利率：最近一次配息 ÷ 現價。滑過數字看除息日與每股金額') +
     sh('yEst', '預估年配', 'num', '預估年殖利率：最近一次配息 × 年配息次數 ÷ 現價') +
     sh('r1', '近1月') + sh('r3', '近3月') + sh('rAll', '成立以來') +
@@ -917,11 +926,13 @@ function renderWatchAct() {
       '<td class="inv-code"><span class="code-link" title="' + (r.name ? r.name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖')
         + '" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span>'
         + '<button class="swap-mini wt-cst" title="看成份股" onclick="openConstituents(\'' + r.code + '\')">成</button></td>' +
+      '<td class="inv-st-cell">'
+        + (typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code) : '') + '</td>' +
       (function () { var pc = wtPxCell(r.code, r.px);
         return '<td class="' + pc.cls + '">'
           + (pc.txt ? '<span class="rb-bpx">' + pc.txt + '</span>'
                     : gapX('券商快照與 Yahoo 都取不到價'))
-          + (pc.txt && typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code) : '') + '</td>'; })() +
+          + '</td>'; })() +
       '<td class="num"' + dtip(r) + '>' + yld(r.y1) + '</td>' +
       '<td class="num"' + dtip(r) + '>' + yld(r.yEst) + '</td>' +
       '<td class="num">' + pctR(r.r1, r, '上市不足 20 個交易日，沒有一個月前的錨點') + '</td>' +
