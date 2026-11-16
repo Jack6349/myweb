@@ -315,18 +315,21 @@ html, body { overflow-x: clip; }
 .tc-holder .tc-c { color: var(--accent2); }
 .tc-holder .tc-w { color: var(--warn); text-align: right; }
 .tc-sep { color: var(--text3); margin: 0 5px; }
-/* 固定佈局：前 6 欄定寬，持有明細取剩餘寬並換行，避免最後一欄撐出橫向捲軸 */
+/* 固定佈局：前 7 欄定寬，持有明細取剩餘寬並換行，避免最後一欄撐出橫向捲軸。
+   欄序：代號／趨勢／名稱／總權重／現價／漲跌／漲跌幅／持有明細。
+   趨勢插在第 2 欄，後面所有 nth-child 都往後移一格；
+   table-layout:fixed 配 nth-child 定寬，漏改的話整張表的欄寬會全部配錯。 */
 .tc-table { table-layout: fixed; }
-.tc-table th:nth-child(1), .tc-table td:nth-child(1) { width: 66px; }
-.tc-table th:nth-child(2), .tc-table td:nth-child(2) { width: 96px; }
-.tc-table th:nth-child(3), .tc-table td:nth-child(3) { width: 78px; }
-/* 現價欄要容得下「價格＋狀態徽章」。這張是 table-layout:fixed，
-   寬度不夠時內容不會撠寬欄位，而是直接溢出到下一欄（跟漲跌疊在一起），
-   而且溢出時右對齊會失效、每一列的金額右緣變成鍿狀。
-   2350.00 約 52px ➕ 間距 6 ➕ 徽章 34 ➕ 左右 padding 16 ≈ 108。 */
-.tc-table th:nth-child(4), .tc-table td:nth-child(4) { width: 112px; }
-.tc-table th:nth-child(5), .tc-table td:nth-child(5) { width: 74px; }
-.tc-table th:nth-child(6), .tc-table td:nth-child(6) { width: 78px; }
+.tc-table th:nth-child(1), .tc-table td:nth-child(1) { width: 66px; }   /* 代號 */
+.tc-table th:nth-child(2), .tc-table td:nth-child(2) { width: 46px; }   /* 趨勢 */
+.tc-table th:nth-child(3), .tc-table td:nth-child(3) { width: 96px; }   /* 名稱 */
+.tc-table th:nth-child(4), .tc-table td:nth-child(4) { width: 78px; }   /* 總權重 */
+/* 現價：徽章搬走之後不再需要 112px。2350.00 約 52 加左右 padding 16 約 68，
+   留 74 跟漲跌欄一致。這張是 table-layout:fixed，寬度不夠時內容不會撐寬欄位，
+   而是直接溢出到下一欄，而且溢出時右對齊會失效。 */
+.tc-table th:nth-child(5), .tc-table td:nth-child(5) { width: 74px; }   /* 現價 */
+.tc-table th:nth-child(6), .tc-table td:nth-child(6) { width: 74px; }   /* 漲跌 */
+.tc-table th:nth-child(7), .tc-table td:nth-child(7) { width: 78px; }   /* 漲跌幅 */
 .tc-table .tc-holders { white-space: normal; line-height: 2; }
 .tc-table .inv-name { overflow: hidden; text-overflow: ellipsis; }
 .inv-name { color: var(--text2); }
