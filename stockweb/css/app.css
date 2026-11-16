@@ -2380,6 +2380,12 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .rb-bs-wait { border-color: color-mix(in srgb, var(--border) 60%, transparent); }
 /* 成本均價：固定的事實，不是漲跌，用標頭的橘黃而不是紅綠 */
 .ov-cost { color: var(--accent2); }
+/* 費半門檻亮起時的標記。紅綠在這一頁是漲跌，拿來標狀態會被讀成下跌，改用標頭的橘黃 */
+.ov-gate { display: inline-block; margin-left: 10px; padding: 0 6px; font-size: 12px;
+  color: var(--accent2); border: 1px solid var(--accent2); border-radius: 4px; cursor: help; }
+/* 回測紀錄屬於方法論的實測過程，預設收起，不與主要說明並列在同一條閱讀動線上 */
+.ov-bt { margin-top: 6px; }
+.ov-bt > summary { cursor: pointer; color: var(--text3); }
 /* 債券 ETF：9 欄撐滿 1644px 時瀏覽器按內容比例分配，名稱 307、現價 130、除息日 205，
    寬窄不一。改成固定配置，六個資料欄等寬，剩餘全給名稱。 */
 /* 不強制撐滿：撐滿時剩餘空間全被名稱吸走（實測 630px），比原本更不均。
