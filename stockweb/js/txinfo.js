@@ -467,9 +467,12 @@ function _txPxHtml(code) {
   if (px == null) return '<span class="swap-dim">—</span>';
   var ref = (typeof _contracts !== 'undefined' && _contracts[code] && _contracts[code].reference) || null;
   var cls = ref == null ? '' : (px > ref ? 'up' : (px < ref ? 'down' : 'tx-flat'));
-  // 漲跌幅（與昨收比）；小字接在價格後，同色
+  // 漲跌幅（與昨收比）；小字接在價格後，同色。
+  // 方向用 ▲∕▼，跟左邊「差額」欄和全站的漲跌同一組符號。
   var pct = ref ? (px - ref) / ref * 100 : null;
-  var pctTxt = pct == null ? '' : '<span class="tx-pct">' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%</span>';
+  var pctTxt = pct == null ? ''
+    : '<span class="tx-pct">' + (pct > 0 ? '▲' : (pct < 0 ? '▼' : ''))
+      + Math.abs(pct).toFixed(2) + '%</span>';
   return '<span class="' + cls + '">' + (+px).toFixed(2) + pctTxt + '</span>';
 }
 // 成交欄的價差＝現價－成交均價：正紅（現價高於成交價）、負綠、0 黃
