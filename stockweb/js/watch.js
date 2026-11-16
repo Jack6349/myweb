@@ -255,6 +255,7 @@ function renderWatch() {
     '<div class="detail-note"><dl>' +
     '<dt>展開</dt><dd>點列或〔明細〕看歷年配息、近 12 個月填息與一年走勢，一次一列。</dd>' +
     '<dt>即時性</dt><dd>現價與漲跌盤中即時（進頁訂閱、離開退訂）。</dd>' +
+    (typeof esStaticNote === 'function' ? esStaticNote() : '') +
     '<dt>名稱怎麼看</dt><dd>名稱欄拿掉了（它是最寬的文字欄，而〔明細〕裡已經有）。' +
       '滑過代號也會顯示名稱。</dd>' +
     '<dt>配息頻率</dt><dd>標在〔評比排名〕排名的前面，一個字：' +
@@ -830,6 +831,7 @@ function renderWatchBond() {
   });
   h += '</tbody></table></div>' +
     '<div class="detail-note"><dl>' +
+    (typeof esStaticNote === 'function' ? esStaticNote(ES_WCOLS2) : '') +
     '<dt>預估年殖利率</dt><dd><code>最近一次配息 × 配息期數 ÷ 現價</code>，期數由歷次除息間隔推得。' +
     '預設依此由高至低排序，點欄位可改，排序會記住。</dd>' +
     '<dt>後面 14 欄</dt><dd>與「ETF 評比」「關注股票」同一份當日資料、同一套算法，欄位定義見評比頁說明。' +
@@ -933,6 +935,7 @@ function renderWatchAct() {
   });
   h += '</tbody></table></div>' +
     '<div class="detail-note"><dl>' +
+    (typeof esStaticNote === 'function' ? esStaticNote(ES_WCOLS2) : '') +
     '<dt>現價</dt><dd>券商即時快照，與關注清單、債券 ETF、ETF 評比同一個來源，盤中回到本頁籤會自動刷新。' +
     'Yahoo 當天那根日 K 的收盤常常是空值，只靠它會慢一個交易日。</dd>' +
     '<dt>名稱與成份股</dt><dd>名稱欄拿掉了，它是這張表唯一長短差很多的文字欄，留著就會出現橫向捲軸。' +
