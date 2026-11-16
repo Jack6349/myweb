@@ -148,3 +148,102 @@ function stopTopConst() {
   });
   _topSubbed = [];
 }
+
+// ══════════ 類股組成（資產統計的集中度頁用）══════════
+//
+// 交易所產業別代碼 → 名稱。券商合約的 category 欄位就是這組代碼，
+// 上市與上櫃共用同一套編碼（櫃買的公司基本資料 SecuritiesIndustryCode 與它一致）。
+//
+// 來源與抓法（2026-11-16）：
+//   01–31、35–38 共 34 碼，逐碼打證交所每日收盤行情取回傳標題
+//   https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=YYYYMMDD&type=NN&response=json
+//   標題長這樣：「115年11月13日 每日收盤行情(半導體業)」
+//   32、33、34 沒有上市公司，證交所那支查不到。32 由櫃買的公司基本資料佐證：
+//   該碼 26 家含誠品生活、桂田文創、智崴、鈊象、智冠，是文化創意業無疑。
+//   33、34 目前的持股裡沒有，沒有去查，查不到的碼一律原樣顯示代碼。
+//
+// 不做自動更新：2022 年一次加了綠能環保、數位雲端、運動休閒、居家生活四類，
+// 這種事幾年一次，而且查不到就顯示代碼，退化方式是安全的。
+var TWSE_IND = {
+  '01': '水泥工業', '02': '食品工業', '03': '塑膠工業', '04': '紡織纖維',
+  '05': '電機機械', '06': '電器電纜', '07': '化學生技醫療', '08': '玻璃陶瓷',
+  '09': '造紙工業', '10': '鋼鐵工業', '11': '橡膠工業', '12': '汽車工業',
+  '13': '電子工業', '14': '建材營造', '15': '航運業', '16': '觀光餐旅',
+  '17': '金融保險', '18': '貿易百貨', '19': '綜合', '20': '其他',
+  '21': '化學工業', '22': '生技醫療業', '23': '油電燃氣業', '24': '半導體業',
+  '25': '電腦及週邊設備業', '26': '光電業', '27': '通信網路業', '28': '電子零組件業',
+  '29': '電子通路業', '30': '資訊服務業', '31': '其他電子業', '32': '文化創意業',
+  '35': '綠能環保', '36': '數位雲端', '37': '運動休閒', '38': '居家生活'
+};
+function tcIndName(c) { return TWSE_IND[c] || ('類別 ' + (c || '—')); }
+
+var TC_SEC_MIN = 1;          // 低於這個百分比併成「其他類股」。26 類裡有 18 類不到 1%，不併就讀不了
+
+// 類股組成。回傳 { slices, twPct, rest, n, noCat }
+//   slices  已排序的切片（大→小），末兩片是「其他類股」與「海外成分股、債券與現金」
+//   twPct   台股曝險合計（ETF 透視 ＋ 直接持有）
+//
+// 與下面那條累計曲線的涵蓋範圍差一檔：computeTopConst 只走 ETF 的成分股清單，
+// 直接持有的個股沒有成分表會被整個跳過，它進了分母卻沒進任何一塊。
+// 那樣的話直接持有的台股會落進「海外成分股、債券與現金」，名稱就是錯的，所以這裡補進來。
+async function tcSectorMix() {
+  var rows = computeTopConst(999) || [];
+  // 分母要與 computeTopConst 同一個：各檔現價 × 股數
+  var totalVal = 0;
+  (_positions || []).forEach(function (p) {
+    var r = _rows[String(p.code)];
+    var px = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
+    if (px != null) totalVal += px * p.quantity;
+  });
+  // 直接持有的台股（四碼純數字＝個股，與 getCategory 同一個判準）；
+  // 同一檔若又是某 ETF 的成分，曝險相加，不重複列。
+  var byCode = {};
+  rows.forEach(function (r) { byCode[r.code] = { code: r.code, name: r.name, pct: r.pct }; });
+  (_positions || []).forEach(function (p) {
+    var c = String(p.code);
+    if (!/^\d{4}$/.test(c)) return;
+    var r = _rows[c];
+    var px = (r && r.close != null) ? r.close : (p.last_price != null ? p.last_price : null);
+    if (px == null || !totalVal) return;
+    var pct = px * p.quantity / totalVal * 100;
+    if (byCode[c]) byCode[c].pct += pct;
+    else byCode[c] = { code: c, name: ((_contracts[c] || {}).name) || '', pct: pct, direct: true };
+  });
+  var list = Object.keys(byCode).map(function (k) { return byCode[k]; });
+
+  // 補合約（只補沒有的），拿 category。本機伺服器，176 檔平行實測 288ms。
+  var need = list.filter(function (r) { return !(_contracts[r.code] && _contracts[r.code].category); });
+  if (need.length) {
+    await Promise.all(need.map(function (r) {
+      return fetchContract(r.code).then(function (c) { if (c && c.code) _contracts[c.code] = c; })
+        .catch(function (e) { hush('topconst', e); });
+    }));
+  }
+
+  var agg = {}, twPct = 0, noCat = [];
+  list.forEach(function (r) {
+    var c = (_contracts[r.code] || {}).category || '';
+    if (!c) noCat.push(r.code);
+    var a = agg[c] || (agg[c] = { cat: c, name: tcIndName(c), pct: 0, n: 0, codes: [] });
+    a.pct += r.pct; a.n++; a.codes.push(r.code);
+    twPct += r.pct;
+  });
+  var all = Object.keys(agg).map(function (k) { return agg[k]; })
+    .sort(function (a, b) { return b.pct - a.pct; });
+  var big = all.filter(function (a) { return a.pct >= TC_SEC_MIN; });
+  var small = all.filter(function (a) { return a.pct < TC_SEC_MIN; });
+  var slices = big.slice();
+  if (small.length) {
+    slices.push({
+      cat: '', name: '其他類股', tail: true,
+      pct: small.reduce(function (s, a) { return s + a.pct; }, 0),
+      n: small.reduce(function (s, a) { return s + a.n; }, 0),
+      codes: [], note: small.map(function (a) { return a.name + ' ' + a.pct.toFixed(2) + '%'; }).join('、')
+    });
+  }
+  var rest = Math.max(0, 100 - twPct);
+  if (rest > 0.01) {
+    slices.push({ cat: '', name: '海外成分股、債券與現金', tail: true, rest: true, pct: rest, n: 0, codes: [] });
+  }
+  return { slices: slices, twPct: twPct, rest: rest, n: list.length, noCat: noCat, sectors: all.length };
+}
