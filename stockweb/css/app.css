@@ -1855,11 +1855,110 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 /* 外層 nav 放收合鈕與選單清單；按鈕在內層 #dv-items 裡，那一層也要是直欄 flex，
    否則 button 會以 inline-block 橫排、排不下才換行。 */
 .dv-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 8px; }
-#dv-items { display: flex; flex-direction: column; gap: 2px; }
+/* 資產統計沿用這組選單樣式，但 ID 在同一份 DOM 裡不能有第二個，
+   所以多收一個 class。舊頁行為不變。 */
+#dv-items, .dv-items { display: flex; flex-direction: column; gap: 2px; }
 .dv-colbtn { align-self: flex-end; background: var(--bg3); border: 1px solid var(--border);
   color: var(--text3); font-family: var(--font); font-size: 12px; width: 26px; height: 24px;
   border-radius: 6px; cursor: pointer; margin-bottom: 6px; }
 .dv-colbtn:hover { color: var(--text); }
+
+/* ── 資產統計 ── */
+/* 圖寬度不設上限：瓦全圖只有四根，擐滿會讓根與根之間拉到難以對讀。 */
+.as-svg { display: block; width: 100%; max-width: 760px; height: auto; margin: 6px 0 2px; }
+.as-grid { stroke: var(--border); stroke-width: 1; opacity: .5; }
+.as-ax { fill: var(--text3); font-size: 11px; }
+.as-lb { fill: var(--text2); font-size: 12px; }
+.as-val { fill: var(--text); font-size: 13px; font-weight: 700; }
+/* 瓦全圖四根的顏色：頭尾兩根是「水位」用中性藍，
+   中間兩根是「變動」。資本損益走全站的紅漲綠跌；
+   已配息不能用紅綠：它不是漲跌，永遠是正的，上紅會被讀成「漲」。 */
+.as-wf-base { fill: var(--accent2); opacity: .75; }
+.as-wf-up { fill: var(--up); }
+.as-wf-dn { fill: var(--down); }
+.as-wf-div { fill: var(--pv-rate, #6fb3d9); }
+.as-wf-link { stroke: var(--text3); stroke-width: 1; stroke-dasharray: 3 3; }
+.as-kpis { display: flex; flex-wrap: wrap; gap: 10px 26px; margin: 10px 0 4px; }
+.as-kpi-lb { font-size: 11px; color: var(--text3); letter-spacing: .5px; }
+.as-kpi-v { font-size: 16px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.as-kpi-v.up { color: var(--up); }
+.as-kpi-v.down { color: var(--down); }
+/* 堆疊長條：一條占一行，切片寬度就是占比 */
+.as-stack { display: flex; height: 34px; border-radius: 6px; overflow: hidden; margin: 8px 0 10px;
+  background: var(--bg3); border: 1px solid var(--border); }
+.as-seg { display: flex; align-items: center; justify-content: center; min-width: 2px; cursor: help; }
+.as-seg span { font-size: 11px; font-weight: 700; color: #1b2736; }
+.as-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 12px; font-size: 12px; color: var(--text2); }
+.as-lg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+.as-lg b { margin-left: 5px; color: var(--text); font-variant-numeric: tabular-nums; }
+.as-lg-n { margin-left: 5px; color: var(--text3); }
+/* 分類色階的兩條約束：
+   一、不得接近 --up #ff5252 與 --down #26d962，那兩個全站保給漲跌。
+      原本的 #5ad8a6 薄荷綠跟 --down 同色系，會被讀成「跟跌有關」，已換掉。
+   二、兩度要夠高：切片裡的百分比是深色字，底色太暗就讀不到。
+      #5d7092 本來就偶四十，改成淺一階的 #9aa7c7。 */
+.as-c0, .as-lg i.as-c0 { background: #5b8ff9; }
+.as-c1, .as-lg i.as-c1 { background: #6dc8ec; }
+.as-c2, .as-lg i.as-c2 { background: #9aa7c7; }
+.as-c3, .as-lg i.as-c3 { background: #f6bd16; }
+.as-c4, .as-lg i.as-c4 { background: #b08ad6; }
+.as-c5, .as-lg i.as-c5 { background: #4fb3b0; }
+.as-c6, .as-lg i.as-c6 { background: #ff9845; }
+.as-c7, .as-lg i.as-c7 { background: #c7cdd8; }
+/* 表格不擐滿：只有五欄，擐到 1600 會讓欄距大到讀不起來 */
+.as-wrap { max-height: none; overflow: visible; }
+.as-table { width: auto; max-width: 900px; }
+.as-table td, .as-table th { padding-left: 12px; padding-right: 12px; }
+.as-codes { color: var(--text3); font-size: 12px; white-space: normal; }
+.as-table tr.as-tot td { border-top: 2px solid var(--border); font-weight: 700; color: var(--text); }
+/* 折線與月長條。現值用金色（跟頭欄的總現值同一個語彙），
+   成本用灰虛線：它是參考水位不是走勢。一樣不用紅綠。 */
+.as-svg-wide { max-width: 1000px; }
+.as-ln { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.as-ln-val { stroke: var(--accent2); }
+.as-ln-cost { stroke: var(--text3); stroke-dasharray: 4 3; }
+.as-ln-ma { stroke: #f6bd16; stroke-width: 2; }
+.as-mbar { fill: #5b8ff9; }
+.as-mbar:hover { fill: #8ab0fb; }
+.as-lg i.as-sw-val { background: var(--accent2); }
+.as-lg i.as-sw-cost { background: var(--text3); }
+.as-lg i.as-sw-bar { background: #5b8ff9; }
+.as-lg i.as-sw-ma { background: #f6bd16; }
+/* 序列不完整的橫幅：擋在圖前面，不是寫在說明裡。
+   少掉的部分不是略為失真，是整個數量級不對。 */
+.as-warn { border: 1px solid var(--up); border-left-width: 4px; border-radius: 8px;
+  background: color-mix(in srgb, var(--up) 8%, transparent); padding: 10px 14px; margin: 0 0 14px;
+  font-size: 13px; color: var(--text); max-width: 1000px; }
+.as-warn-d { font-size: 12px; color: var(--text2); margin: 6px 0; line-height: 1.7; }
+.as-warn .btn-query { margin-top: 2px; }
+/* 集中度曲線與前 20 的參考線 */
+.as-ln-cum { stroke: #5b8ff9; stroke-width: 2; }
+.as-mark { stroke: var(--text3); stroke-width: 1; stroke-dasharray: 3 3; }
+.as-marktx { fill: var(--text2); font-size: 11px; }
+/* 出力不對稱：一列一檔，兩根上下疊。
+   兩根共用同一個最大值做比例尺，否則長短不能對讀。 */
+.as-pairs { max-width: 1000px; margin: 8px 0 4px; }
+.as-pr { display: grid; grid-template-columns: 150px minmax(0, 1fr) 62px; gap: 10px;
+  align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.as-pr:last-child { border-bottom: 0; }
+/* 名稱太長時截斷，不換行：換行會讓那一列變高，整條掃下來的節奏就斷了。
+   全名在全欄的 title 裡讀得到。 */
+.as-pr-nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.as-pr-nm b { color: var(--accent2); font-weight: 700; }
+.as-pr-nm span { color: var(--text3); font-size: 12px; margin-left: 6px; }
+.as-pr-bars { display: flex; flex-direction: column; gap: 3px; }
+.as-pr-row { display: flex; align-items: center; gap: 6px; cursor: help; }
+.as-pr-b { display: block; height: 11px; border-radius: 2px; min-width: 1px; }
+.as-pr-v { background: #9aa7c7; }
+.as-pr-d { background: #5b8ff9; }
+.as-pr-row span { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.as-pr-gap { text-align: right; font-size: 12px; font-weight: 700; color: var(--text3);
+  font-variant-numeric: tabular-nums; }
+/* 差距不用紅綠：它不是漲跌，而且「出力高」也不等於好。 */
+.as-pr-gap.pos { color: #5b8ff9; }
+.as-pr-gap.neg { color: var(--text2); }
+.as-lg i.as-sw-pv { background: #9aa7c7; }
+.as-lg i.as-sw-pd { background: #5b8ff9; }
 .dv-navitem { text-align: left; background: none; border: 0; border-left: 3px solid transparent;
   color: var(--text2); font-family: var(--font); font-size: 14px; padding: 9px 12px;
   border-radius: 0 6px 6px 0; cursor: pointer; }
