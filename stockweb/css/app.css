@@ -1894,10 +1894,6 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .as-kpi-v.up { color: var(--up); }
 .as-kpi-v.down { color: var(--down); }
 /* 堆疊長條：一條占一行，切片寬度就是占比 */
-.as-stack { display: flex; height: 34px; border-radius: 6px; overflow: hidden; margin: 8px 0 10px;
-  background: var(--bg3); border: 1px solid var(--border); }
-.as-seg { display: flex; align-items: center; justify-content: center; min-width: 2px; cursor: help; }
-.as-seg span { font-size: 11px; font-weight: 700; color: #1b2736; }
 .as-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 12px; font-size: 12px; color: var(--text2); }
 .as-lg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
 .as-lg b { margin-left: 5px; color: var(--text); font-variant-numeric: tabular-nums; }
@@ -1907,6 +1903,21 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
       原本的 #5ad8a6 薄荷綠跟 --down 同色系，會被讀成「跟跌有關」，已換掉。
    二、兩度要夠高：切片裡的百分比是深色字，底色太暗就讀不到。
       #5d7092 本來就偶四十，改成淺一階的 #9aa7c7。 */
+/* 圓餅：圖與圖例並排，窄螢幕才折行。
+   切片描一條底色邊：相鄰兩片顏色接近時，沒有邊框分不出界。 */
+.as-pie-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 32px; margin: 10px 0 14px; }
+.as-pie { width: 264px; height: 264px; flex: 0 0 auto; }
+.as-pie-s { stroke: var(--bg); stroke-width: 2; cursor: help; }
+.as-pie-t { fill: #1b2736; font-size: 13px; font-weight: 700; pointer-events: none; }
+/* 圖例寬度要封頂。不封的話 flex 會把剩下的 1100px 全吃掉，
+   分類名在最左、百分比與檔數被推到最右，中間空一大段，對不起來。 */
+.as-pie-lg { flex: 0 1 360px; min-width: 0; }
+.as-pie-lg .as-legend { display: block; margin-bottom: 0; }
+.as-pie-lg .as-lg { display: flex; align-items: baseline; padding: 3px 0; }
+.as-pie-lg .as-lg b { margin-left: auto; }
+.as-pie-lg .as-lg-n { min-width: 48px; text-align: right; }
+.as-f0 { fill: #5b8ff9; } .as-f1 { fill: #6dc8ec; } .as-f2 { fill: #9aa7c7; } .as-f3 { fill: #f6bd16; }
+.as-f4 { fill: #b08ad6; } .as-f5 { fill: #4fb3b0; } .as-f6 { fill: #ff9845; } .as-f7 { fill: #c7cdd8; }
 .as-c0, .as-lg i.as-c0 { background: #5b8ff9; }
 .as-c1, .as-lg i.as-c1 { background: #6dc8ec; }
 .as-c2, .as-lg i.as-c2 { background: #9aa7c7; }
@@ -1927,13 +1938,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .as-ln { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .as-ln-val { stroke: var(--accent2); }
 .as-ln-cost { stroke: var(--text3); stroke-dasharray: 4 3; }
-.as-ln-ma { stroke: #f6bd16; stroke-width: 2; }
-.as-mbar { fill: #5b8ff9; }
-.as-mbar:hover { fill: #8ab0fb; }
 .as-lg i.as-sw-val { background: var(--accent2); }
 .as-lg i.as-sw-cost { background: var(--text3); }
-.as-lg i.as-sw-bar { background: #5b8ff9; }
-.as-lg i.as-sw-ma { background: #f6bd16; }
 /* 序列不完整的橫幅：擋在圖前面，不是寫在說明裡。
    少掉的部分不是略為失真，是整個數量級不對。 */
 .as-warn { border: 1px solid var(--up); border-left-width: 4px; border-radius: 8px;
@@ -1945,30 +1951,6 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .as-ln-cum { stroke: #5b8ff9; stroke-width: 2; }
 .as-mark { stroke: var(--text3); stroke-width: 1; stroke-dasharray: 3 3; }
 .as-marktx { fill: var(--text2); font-size: 11px; }
-/* 出力不對稱：一列一檔，兩根上下疊。
-   兩根共用同一個最大值做比例尺，否則長短不能對讀。 */
-.as-pairs { max-width: 1000px; margin: 8px 0 4px; }
-.as-pr { display: grid; grid-template-columns: 150px minmax(0, 1fr) 62px; gap: 10px;
-  align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); }
-.as-pr:last-child { border-bottom: 0; }
-/* 名稱太長時截斷，不換行：換行會讓那一列變高，整條掃下來的節奏就斷了。
-   全名在全欄的 title 裡讀得到。 */
-.as-pr-nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.as-pr-nm b { color: var(--accent2); font-weight: 700; }
-.as-pr-nm span { color: var(--text3); font-size: 12px; margin-left: 6px; }
-.as-pr-bars { display: flex; flex-direction: column; gap: 3px; }
-.as-pr-row { display: flex; align-items: center; gap: 6px; cursor: help; }
-.as-pr-b { display: block; height: 11px; border-radius: 2px; min-width: 1px; }
-.as-pr-v { background: #9aa7c7; }
-.as-pr-d { background: #5b8ff9; }
-.as-pr-row span { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.as-pr-gap { text-align: right; font-size: 12px; font-weight: 700; color: var(--text3);
-  font-variant-numeric: tabular-nums; }
-/* 差距不用紅綠：它不是漲跌，而且「出力高」也不等於好。 */
-.as-pr-gap.pos { color: #5b8ff9; }
-.as-pr-gap.neg { color: var(--text2); }
-.as-lg i.as-sw-pv { background: #9aa7c7; }
-.as-lg i.as-sw-pd { background: #5b8ff9; }
 .dv-navitem { text-align: left; background: none; border: 0; border-left: 3px solid transparent;
   color: var(--text2); font-family: var(--font); font-size: 14px; padding: 9px 12px;
   border-radius: 0 6px 6px 0; cursor: pointer; }
