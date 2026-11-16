@@ -1800,11 +1800,13 @@ function _nightFutCellHtml() {
     spark + '</div>';
 }
 
-// 頂欄抽屜的盤勢：加權指數（當日分時）＋ 五檔 ＋ 日圓即期 ＋ 台指夜盤，排 4×2。
-// 不含美元指數與美元兌台幣（抽屜只有四欄）。
-// S&P 500 只在抽屜略過，不從 MACRO_TICKERS 刪：新聞情勢頁那排要留，
-// 而且加減碼報告的系統性風險評分也在用它。
-var MACRO_DRAWER_SKIP = ['DX-Y.NYB', 'TWD=X', '^GSPC'];
+// 頂欄抽屜的盤勢：大盤（加權指數當日分時）起頭，
+// 中間是美股與債券那一組，最後是日圓即期與台指夜盤，共 9 格、排 3×3。
+// S&P 500 原本跟著跳過，理由是「抽屜只有四欄」；
+// 欄數改成三之後這個理由不存在了，美股大盤補回來。
+// 美元指數與美元兌台幣仍不列：它們不是「這一盤怎麼走」的訊號，
+// 新聞情勢頁那排有，要看去那裡。
+var MACRO_DRAWER_SKIP = ['DX-Y.NYB', 'TWD=X'];
 function macroDrawerHtml() {
   if (!_macroSnap.length) return '<div class="macro-cell"><span class="macro-name">載入中…</span></div>';
   // 大盤排第一格：這是台股投資組合的工具，本地市場應該在美股前面
