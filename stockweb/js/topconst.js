@@ -1,10 +1,13 @@
-// 股利總管 Web — 成分股曝險（持股 ETF 的台股成分股，依實際曝險加權取前 10，盤中即時）
+// 股利總管 Web — 成分股曝險（持股 ETF 的台股成分股，依實際曝險加權取前 20，盤中即時）
 // 曝險(B)：Σ(各 ETF 現值 × 該檔在此 ETF 的權重%)；總權重% = 曝險 ÷ 總持股現值 ×100
 // 僅台股（Shioaji 即時報價）；進入時訂閱 tick、離開時退訂（排除已是自身持股者）
 
-var _topConstRows = [];   // 前 10：{code,name,expo,pct,holders:[{etf,weight}]}
+var _topConstRows = [];   // 前 20：{code,name,expo,pct,holders:[{etf,weight}]}
 var _topSubbed = [];      // 本卡片新訂閱的代號（離開退訂）
-var TOPCONST_N = 15;
+// 前 N 大。從 15 改 20：多出來的五檔會多五個 tick 訂閱
+// （非自身持股的成分股進頁時才訂閱、離開退訂）。
+// 即時行情那邊用自己的 STREAM_OTHER_N，不受這裡影響。
+var TOPCONST_N = 20;
 
 // 計算前 n 大台股成分（依曝險 B）；供「成分股曝險」卡片與「即時行情」共用
 // 曝險 = Σ(各 ETF 現值 × 該檔權重%)；pct = 曝險 ÷ 總持股現值 ×100
