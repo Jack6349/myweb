@@ -373,7 +373,7 @@ async function loadOrderBox() {
     for (var code in needName) {
       try { _contracts[code] = await fetchContract(code); } catch (e) { console.warn('[txinfo contract]', code, e); }
     }
-    var buyAmt = 0, sellAmt = 0, buyOpen = 0, sellOpen = 0;
+    var buyAmt = 0, sellAmt = 0, buyOpen = 0, sellOpen = 0, sumAgg = {};
     var html = '<div class="tx-otable-wrap"><table class="tx-otable"><thead><tr>' +
       '<th class="sort-th" data-key="code" onclick="txSortCol(\'code\')">商品<span class="sort-ind">↕</span></th><th class="sort-th" data-key="side" onclick="txSortCol(\'side\')">買賣<span class="sort-ind">↕</span></th><th class="num">委託</th><th class="num" title="盤中隨報價更新；漲跌幅與昨收比：紅漲、綠跌、黃平">現價</th><th class="num" title="現價 － 基準價。已成交部分的基準價是成交均價；&#10;未成交（含已取消、失敗）用委託價，標「對委託價」；&#10;部分成交兩個都列，小字那個是剩餘量。&#10;紅＝現價高於基準價（買單即尚未輪到），綠＝低於">差額</th><th class="num sort-th" data-key="pnl" onclick="txSortCol(\'pnl\')" title="買進：現值（扣賣出手續費＋交易稅）－成本（含買進手續費），同持股庫存明細的未實現損益&#10;賣出：(成交均價－現價)×股數×(1−手續費－交易稅)，正＝賣在現價之上。兩邊都扣賣出成本，同價為 0">損益<span class="sort-ind">↕</span></th><th class="num sort-th" data-key="stl" onclick="txSortCol(\'stl\')" title="這一筆實際會扣款或入帳多少。&#10;買進＝−成交均價×股數×(1＋買進手續費)，賣出＝＋成交均價×股數×(1−賣出手續費與交易稅)。&#10;費率與左邊「損益」同一組。這是估值，券商的正式數字在上方「台幣交割」">交割金額<span class="sort-ind">↕</span></th><th class="num" title="成交數量、成交均價；與現價的差額在現價後面那一欄">成交</th>' +
       '<th class="sort-th" data-key="status" onclick="txSortCol(\'status\')">狀態<span class="sort-ind">↕</span></th>' + '<th class="num" title="推估仍排在你前面的張數：以委託後第一筆逐筆成交的同價位總量為基準，扣掉自己並減去之後該價位的成交量">前方(張)</th>' +
@@ -391,6 +391,14 @@ async function loadOrderBox() {
       deals.forEach(function (d) { dq += d.quantity; dsum += d.price * d.quantity; });
       var avg = dq ? (dsum / dq) : null;
       if (buy) buyAmt += dsum * mult; else sellAmt += dsum * mult;
+      // 彙總用：只收已成交的那一段，一律折算成股再累加。
+      // 用張數加權的話，同一檔混到零股單就會算錯平均價。
+      if (dq) {
+        var sk = code + '|' + (buy ? 'B' : 'S');
+        var sa = sumAgg[sk] || (sumAgg[sk] = { code: code, name: (c && c.name) || '', buy: buy, n: 0, sh: 0, amt: 0, lots: [] });
+        sa.n++; sa.sh += dq * mult; sa.amt += dsum * mult;
+        sa.lots.push({ avg: dsum / dq, sh: dq * mult });
+      }
       // 未成交金額＝（委託量 － 已成交量）× 委託價。只計仍在簿上的委託：
       // 已取消／失敗的單也有未成交數量，但那些不會再成交，算進來等於虛報。
       // 價用 _txPx（改價後的有效價），不是 order.price。
@@ -427,7 +435,7 @@ async function loadOrderBox() {
         '<td class="tx-dseq">' + ((o.ordno || '').trim() || '—') + '</td>' +
         '<td class="num">' + _hms(s.order_ts) + '</td></tr>';
     });
-    html += '</tbody></table></div>';
+    html += '</tbody></table></div>' + _txSumTableHtml(sumAgg);
     el.innerHTML = html;
     _txApplySort();
     _txPxStart();
@@ -555,7 +563,10 @@ function _txPnlHtml(code, avg, sh, buy) {
 // 今日損益合計：下方各筆損益儲存格的加總（任一筆尚無現價時，以已有價格者加總）
 function _txPnlSumHtml() {
   var tot = 0, n = 0;
-  document.querySelectorAll('#tx-order-body .tx-pnl[data-code]').forEach(function (td) {
+  // 只數明細那一張。彙總表的列用的是同一組 class 與 data 屬性
+  // （故意的，這樣才能沿用 _txPxTick 的更新迴圈），不排除就會被數兩次。
+  // 2026-11-16 實測：額外加上彙總表後頂部顯示 −17,830，真值 −8,914。
+  document.querySelectorAll('#tx-order-body .tx-otable:not(.tx-sumt) .tx-pnl[data-code]').forEach(function (td) {
     var v = _txPnlVal(td.getAttribute('data-code'), +td.getAttribute('data-avg'), +td.getAttribute('data-sh'), td.getAttribute('data-side') === 'B');
     if (v != null) { tot += v; n++; }
   });
@@ -602,6 +613,20 @@ async function _txPxTick() {
   });
   var sumEl = document.getElementById('tx-pnl-sum');
   if (sumEl) { var sh2 = _txPnlSumHtml(); if (sumEl.innerHTML !== sh2) sumEl.innerHTML = sh2; }
+  // 彙總表的小計與總計：它們橫跨多個代號，沒有單一 data-code，
+  // 走不到上面那個 .tx-pnl 迴圈，要在這裡重算。各列本身走既有迴圈。
+  if (_txSumRows) {
+    document.querySelectorAll('#tx-order-body .tx-spnl[data-grp]').forEach(function (td) {
+      var g = td.getAttribute('data-grp'), list;
+      if (g === 'ALL') list = _txSumRows;
+      else if (g.indexOf('|') > 0) {
+        var pp = g.split('|');
+        list = _txSumRows.filter(function (r) { return r.code === pp[1] && r.buy === (pp[0] === 'B'); });
+      } else list = _txSumRows.filter(function (r) { return r.buy === (g === 'B'); });
+      var h2 = _txSumPnlHtml(list);
+      if (td.innerHTML !== h2) td.innerHTML = h2;
+    });
+  }
   document.querySelectorAll('#tx-order-body .tx-dd[data-code]').forEach(function (sp) {
     var html = _txDiffHtml(sp.getAttribute('data-code'), +sp.getAttribute('data-avg'),
                            sp.getAttribute('data-basis') === 'order');
@@ -642,7 +667,9 @@ function _txRowPnl(tr) {
   return _txPnlVal(td.getAttribute('data-code'), +td.getAttribute('data-avg'), +td.getAttribute('data-sh'), td.getAttribute('data-side') === 'B');
 }
 function _txApplySort() {
-  var tb = document.querySelector('#tx-order-body .tx-otable tbody');
+  // 排序只動明細那張。不排除的話是靠 DOM 順序幸存（彙總在後面），
+  // 將來調一下位置就會把小計與總計排進資料裡。
+  var tb = document.querySelector('#tx-order-body .tx-otable:not(.tx-sumt) tbody');
   if (!tb) return;
   var key = _txSort.replace(/(Asc|Desc)$/, ''), asc = /Asc$/.test(_txSort);
   var rows = [].slice.call(tb.rows);
@@ -673,4 +700,118 @@ function _txApplySort() {
     var ind = th.querySelector('.sort-ind');
     if (ind) ind.textContent = on ? (asc ? '▲' : '▼') : '↕';
   });
+}
+
+// ══════════ 今日委託與成交：依代碼彙總 ══════════
+//
+// 明細回答「每一筆發生了什麼」，彙總回答三件明細答不了的事：
+//   這一檔今天總共進了幾張、平均買在多少、離現價多遠。
+// 分批買的時候單看任何一筆都沒意義：2026-11-16 實例，00406A 分四筆
+// 買在 7.27／7.23／7.23／7.17，要知道的是平均 7.225、離現價 0.125。
+//
+// 只彙整已成交的部分。未成交、已取消、失敗都不進來，部分成交只取成交那一段。
+// 未成交的金額頂部那行已經有「未成交 買／賣」。
+//
+// 金額給兩欄，因為它們差一筆手續費：
+//   成交金額＝均價×股數（毛額），與頂部的「買進／賣出」同基準
+//   交割金額＝再乘上費率，是實際扣款
+// 2026-11-16 實測：十筆的毛額合計 458,350（＝頂部買進），交割金額合計
+// 459,003，差 653 ＝ 458,350 × 0.1425%。只放一個就會跟頂部對不起來。
+//
+// 盤中更新不必另寫：現價、差額、損益三欄沿用明細那一套 class 與 data 屬性
+//   .tx-px[data-code] / .tx-dd[data-code][data-avg] / .tx-pnl[data-code][data-avg][data-sh][data-side]
+// _txPxTick 的選擇器是 #tx-order-body 底下全部，彙總列自動跟著跳。
+// 這也順便保證數字一致：損益對固定均價是股數的線性函數，
+// 用「加權均價 ＋ 總股數」算出來的值，等於各筆分別算再相加。
+var _txSumRows = null;        // [{code,name,buy,n,sh,amt}]，給小計與總計重算損益用
+
+function _txSumQty(sh) {
+  return (sh % 1000 === 0) ? (sh / 1000).toLocaleString('zh-TW') + '張' : sh.toLocaleString('zh-TW') + '股';
+}
+function _txSumMoney(v) {
+  return (v < 0 ? '−' : '') + Math.round(Math.abs(v)).toLocaleString('zh-TW');
+}
+// 一組列的損益合計（小計／總計用）。與各列同一個函式，不另立算法。
+// 一組列的損益合計。逐筆算完再相加，不是拿加權均價算一次：
+// _txPnlVal 自己會四捨五入，兩種算法差幾塊錢。頂部那一行是逐筆相加的，
+// 同一頁出現 −8,914 與 −8,916 兩個數字會被當成算錯。
+function _txSumPnlVal(rows) {
+  var t = 0, any = false;
+  rows.forEach(function (r) {
+    r.lots.forEach(function (l) {
+      var v = _txPnlVal(r.code, l.avg, l.sh, r.buy);
+      if (v != null) { t += v; any = true; }
+    });
+  });
+  return any ? t : null;
+}
+function _txSumPnlHtml(rows) {
+  var v = _txSumPnlVal(rows);
+  if (v == null) return '<span class="swap-dim">—</span>';
+  var cls = v > 0 ? 'up' : (v < 0 ? 'down' : 'tx-flat');
+  return '<span class="' + cls + '">' + (v > 0 ? '+' : (v < 0 ? '−' : '')) +
+    Math.abs(Math.round(v)).toLocaleString('zh-TW') + '</span>';
+}
+
+function _txSumTableHtml(agg) {
+  var rows = Object.keys(agg).map(function (k) { return agg[k]; });
+  if (!rows.length) return '';
+  _txSumRows = rows;
+  // 依成交金額由大到小：彙總要回答「今天錢主要花在哪」，不是代號順序
+  var mk = function (list, label, cls, grp) {
+    var sh = 0, amt = 0, stl = 0, n = 0;
+    list.forEach(function (r) {
+      sh += r.sh; amt += r.amt; n += r.n;
+      stl += _txSettleVal(r.amt / r.sh, r.sh, r.buy) || 0;
+    });
+    return '<tr class="' + cls + '"><td>' + label + '</td><td class="num">' + n + '</td>' +
+      '<td class="num">' + _txSumQty(sh) + '</td><td class="num"><span class="swap-dim">—</span></td>' +
+      '<td class="num"><span class="swap-dim">—</span></td><td class="num"><span class="swap-dim">—</span></td>' +
+      '<td class="num tx-spnl" data-grp="' + grp + '">' + _txSumPnlHtml(list) + '</td>' +
+      '<td class="num">' + _txSumMoney(amt) + '</td><td class="num">' + _txSumMoney(stl) + '</td></tr>';
+  };
+  var h = '<div class="tx-sum-ttl">依代碼彙總（只計已成交）</div>' +
+    '<div class="tx-otable-wrap"><table class="tx-otable tx-sumt"><thead><tr>' +
+    '<th>商品</th><th class="num" title="這一檔今天分幾筆成交">筆數</th>' +
+    '<th class="num">張數</th><th class="num" title="依股數加權；同一檔若整股與零股混單，一律折算成股再平均">成交均價</th>' +
+    '<th class="num">現價</th>' +
+    '<th class="num" title="現價 − 成交均價。這是彙總的重點：分批買的時候單看任何一筆都沒意義">差額</th>' +
+    '<th class="num" title="與明細同一個算法，加總而得">損益</th>' +
+    '<th class="num" title="成交均價 × 股數，毛額，未扣費。與標題右側的「買進／賣出」同一個基準">成交金額</th>' +
+    '<th class="num" title="含手續費與交易稅的實際扣款或入帳，與明細同一組費率">交割金額</th>' +
+    '</tr></thead><tbody>';
+  [true, false].forEach(function (buy) {
+    var side = rows.filter(function (r) { return r.buy === buy; })
+      .sort(function (a, b) { return b.amt - a.amt; });
+    if (!side.length) return;                     // 今天沒有這一邊就整區不畫，不留空標題
+    h += '<tr class="tx-sum-sec"><td colspan="9">' + (buy ? '買進' : '賣出') + '</td></tr>';
+    side.forEach(function (r) {
+      var avg = r.amt / r.sh;
+      var c = (typeof _contracts !== 'undefined' && _contracts[r.code]) || null;
+      h += '<tr><td><span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' +
+        ((c && c.name) || r.name || '') + '</span></td>' +
+        '<td class="num">' + r.n + '</td><td class="num">' + _txSumQty(r.sh) + '</td>' +
+        '<td class="num">' + avg.toFixed(2) + '</td>' +
+        '<td class="num tx-px" data-code="' + r.code + '">' + _txPxHtml(r.code) + '</td>' +
+        '<td class="num"><span class="tx-dd" data-code="' + r.code + '" data-avg="' + avg + '">' +
+          _txDiffHtml(r.code, avg) + '</span></td>' +
+        '<td class="num tx-spnl" data-grp="' + (buy ? 'B' : 'S') + '|' + r.code + '">' +
+          _txSumPnlHtml([r]) + '</td>' +
+        '<td class="num">' + _txSumMoney(r.amt) + '</td>' +
+        '<td class="num">' + _txSumMoney(_txSettleVal(avg, r.sh, buy)) + '</td></tr>';
+    });
+    h += mk(side, (buy ? '買進' : '賣出') + '小計', 'tx-sum-sub', buy ? 'B' : 'S');
+  });
+  h += mk(rows, '總計', 'tx-sum-tot', 'ALL');
+  return h + '</tbody></table></div>' +
+    '<div class="detail-note"><dl>' +
+    '<dt>說明</dt><dd>只彙整已成交的部分，未成交與已取消不計（未成交的金額在標題右側）。' +
+    '同一檔今天同時有買有賣就出兩列，不給淨額：當沖與非當沖的稅不同，淨額會是一個稅上不存在的數字。</dd>' +
+    '<dt>兩個金額欄的差別</dt><dd><b>成交金額</b>是均價 × 股數的毛額，與標題右側的「買進／賣出」同一個基準；' +
+    '<b>交割金額</b>再乘上手續費與交易稅，是實際扣款或入帳。兩欄的差就是費用。</dd>' +
+    '<dt>差額怎麼算</dt><dd>現價 − 成交均價，不是各筆差額的加總。' +
+    '分批進場時這個數字才是「今天平均買在哪裡，離現價多遠」。</dd>' +
+    '<dt>這張表不能告訴你什麼</dt><dd>損益是相對現價的當下值，盤中一直在動，不是已實現損益。' +
+    '已實現的在「交易紀錄」與「年度損益」。</dd>' +
+    '</dl></div>';
 }

@@ -654,6 +654,16 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-otable th { text-align: left; padding: 5px 8px; border-bottom: 2px solid var(--border); }
 .tx-otable td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .tx-otable tbody tr:last-child td { border-bottom: none; }
+/* ── 今日委託與成交：依代碼彙總 ── */
+.tx-sum-ttl { margin: 22px 0 6px; font-size: 14px; font-weight: 700; color: var(--accent2); }
+/* 買進／賣出的區塊標題列：橫跨整列，不跟欄位對齊。 */
+.tx-sumt tr.tx-sum-sec td { background: var(--bg3); color: var(--th); font-weight: 600;
+  font-size: 12px; letter-spacing: .8px; padding-top: 7px; padding-bottom: 7px; }
+.tx-sumt tr.tx-sum-sub td { border-top: 1px solid var(--border); font-weight: 700; color: var(--text2); }
+.tx-sumt tr.tx-sum-tot td { border-top: 2px solid var(--border); font-weight: 700; color: var(--text); }
+/* 表不擐滿：只有九欄，擐到 1600 會讓欄距大到對讀不起來。 */
+.tx-sumt { width: auto; max-width: 1100px; }
+.tx-sumt td, .tx-sumt th { padding-left: 14px; padding-right: 14px; }
 .tx-otable .num { text-align: right; font-variant-numeric: tabular-nums; }
 .tx-ocode { font-weight: 700; }
 .tx-oname { color: var(--text2); font-size: 12px; margin-left: 6px; }
