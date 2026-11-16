@@ -70,7 +70,7 @@ async function startAlerts() {
   info.textContent = '共 ' + rows.length + ' 檔｜留白＝不設定，輸入即存';
 
   var html = '<div class="inv-table-wrap"><table class="inv-table al-table"><thead><tr>' +
-    '<th>代號</th><th>名稱</th><th class="num" title="原始成本 ÷ 股數">成本均價</th><th class="num">現價</th>' +
+    '<th>代號</th><th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th><th>名稱</th><th class="num" title="原始成本 ÷ 股數">成本均價</th><th class="num">現價</th>' +
     '<th class="num" title="(價差 ＋ 已落袋配息) ÷ 原始成本。停利率／停損率比對的就是這個數字">含息獲利率</th>' +
     '<th class="num al-red">停利價≥</th><th class="num al-red">停利率%≥</th>' +
     '<th class="num al-red">停損價≤</th><th class="num al-red">停損率%≤</th>' +
@@ -89,11 +89,12 @@ async function startAlerts() {
     html += '<tr>' +
       '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"' +
         (lim ? ' title="' + (lim === 'up' ? '漲停' : '跌停') + '"' : '') + '>' + code + '</td>' +
+      // 趨勢徽章自己一欄，與持股庫存、即時持股、成分股曝險同一個做法。
+      '<td class="inv-st-cell">'
+        + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code) : '') + '</td>' +
       '<td class="inv-name">' + ((c && c.name) || names[code] || '') + '</td>' +
       costCellHtml(m ? m.avg : p.price, price) +
-      // 現價旁邊接「目前狀態」徽章。它數的是收盤序列，所以盤中會落後一天（提示裡有講）。
-      '<td class="num">' + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
-        + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code) : '') + '</td>' +
+      '<td class="num">' + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—') + '</td>' +
       '<td class="num ' + (wrate == null ? 'flat' : (wrate >= 0 ? 'up' : 'down')) + '"' +
         (m && m.div != null ? ' title="價差 ' + (prate == null ? '—' : prate.toFixed(2) + '%') +
           ' ＋ 已配息 ' + Math.round(m.div).toLocaleString('zh-TW') + '"' : '') + '>' +
