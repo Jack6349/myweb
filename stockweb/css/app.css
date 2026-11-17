@@ -2401,8 +2401,103 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 /* 漲跌幅超過門檻的標記。顏色吃 currentColor，所以漲是紅線、跌是綠線，
    字色改了線也會跟著改。底線不佔高度，數字欄的右對齊不受影響。 */
 .chg-mk { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+
+/* ══════ 夜推股票（方框版隔夜推估）══════
+   一檔一框，框裡一條共用刻度的價格軸。紅綠在這一頁仍然只代表漲跌，
+   框架、標記、引線一律用中性色或 accent，不跟漲跌搶同一個維度。 */
+
+/* 刻度尺釘在頂端：往下捲看後面幾排時，還要知道橫軸的刻度在哪 */
+.ovc-axiswrap { position: sticky; top: var(--h-chrome); z-index: var(--z-table);
+  background: var(--bg); padding: 6px 0 10px; margin: 6px 0 20px;
+  border-bottom: 1px solid var(--border); }
+.ovc-axis { position: relative; height: 20px; margin: 0 14px; }
+.ovc-axis i { position: absolute; top: 0; font-size: 11px; color: var(--text3);
+  font-style: normal; transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.ovc-axis i::after { content: ""; position: absolute; left: 50%; bottom: -6px;
+  width: 1px; height: 6px; background: var(--border); }
+.ovc-legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+  margin: 12px 14px 0; font-size: 11.5px; color: var(--text2); }
+.ovc-legend em { display: inline-block; vertical-align: middle; margin-right: 5px; }
+.ovc-e1 { width: 24px; height: 10px; border-radius: 5px;
+  background: linear-gradient(90deg, rgba(38, 217, 98, .35), rgba(255, 82, 82, .35)); }
+.ovc-e2 { width: 24px; height: 5px; border-radius: 3px; background: rgba(240, 204, 122, .40); }
+.ovc-e3 { width: 3px; height: 16px; background: var(--accent2); }
+.ovc-e4 { width: 9px; height: 18px; border-radius: 5px; background: var(--accent3); }
+.ovc-e5 { width: 2px; height: 14px; background: var(--text3); }
+.ovc-legend .ovc-note { color: var(--text3); }
+
+.ovc-sortbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; }
+.ovc-slb { font-size: 11.5px; color: var(--th); font-weight: 600; }
+.ovc-sb { background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
+  font: 12px/1 inherit; padding: 6px 11px; border-radius: 6px; cursor: pointer; }
+.ovc-sb.on { border-color: var(--accent3); color: var(--text); }
+
+.ovc-grid { display: grid; gap: 26px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.ovc-card { position: relative; border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--bg2); padding: 22px 16px 10px; }
+.ovc-calc { background: rgba(240, 204, 122, 0.05); }
+/* 框頭壓在上框線上，靠左。一排多框往下掃代號時靠左比置中快 */
+.ovc-head { position: absolute; top: -12px; left: 14px; background: var(--bg2);
+  padding: 0 10px; white-space: nowrap; line-height: 22px; }
+.ovc-calc .ovc-head { background: #19222f; }   /* 校準後底色變了，框頭要跟著遮住框線 */
+
+.ovc-bar { position: relative; height: 26px; margin: 0 8px; }
+.ovc-gl { position: absolute; top: 2px; bottom: 2px; width: 1px;
+  background: color-mix(in srgb, var(--border) 55%, transparent); }
+.ovc-gl.ovc-zero { top: 0; bottom: 0; background: var(--border-strong); }
+.ovc-band { position: absolute; top: 5px; height: 12px; border-radius: 6px;
+  background: linear-gradient(90deg, rgba(38, 217, 98, .35), rgba(255, 82, 82, .35)); }
+.ovc-bandb { position: absolute; top: 19px; height: 5px; border-radius: 3px;
+  background: rgba(240, 204, 122, .40); }
+.ovc-mk { position: absolute; }
+.ovc-mk.ovc-buy { top: 3px; width: 3px; height: 22px; background: var(--accent2);
+  transform: translateX(-1.5px); }
+.ovc-mk.ovc-now { top: 2px; width: 9px; height: 22px; border-radius: 5px;
+  background: var(--accent3); border: 2px solid var(--bg2); transform: translateX(-4.5px); }
+.ovc-mk.ovc-est { top: 4px; width: 2px; height: 14px; background: var(--text3);
+  transform: translateX(-1px); }
+
+/* 標記底下（或上面）的數字。同一側兩個靠太近時後面那個掉到第二行，
+   引線拉長指回自己的標記，所以引線與方塊分開定位。 */
+.ovc-labs { position: relative; margin: 0 8px; }
+.ovc-stem { position: absolute; width: 1px; background: var(--border); }
+.ovc-lab { position: absolute; transform: translateX(-50%); width: 66px;
+  text-align: center; line-height: 1.3; }
+.ovc-dn .ovc-stem { top: 0; }
+.ovc-dn .ovc-stem.ovc-r0 { height: 5px; }
+.ovc-dn .ovc-stem.ovc-r1 { height: 40px; }
+.ovc-dn .ovc-lab.ovc-r0 { top: 5px; }
+.ovc-dn .ovc-lab.ovc-r1 { top: 40px; }
+.ovc-dn .ovc-stem.ovc-r2 { height: 76px; }
+.ovc-dn .ovc-lab.ovc-r2 { top: 76px; }
+.ovc-up .ovc-stem { bottom: 0; }
+.ovc-up .ovc-stem.ovc-r0 { height: 5px; }
+.ovc-up .ovc-stem.ovc-r1 { height: 40px; }
+.ovc-up .ovc-lab.ovc-r0 { bottom: 5px; }
+.ovc-up .ovc-lab.ovc-r1 { bottom: 40px; }
+.ovc-up .ovc-stem.ovc-r2 { height: 76px; }
+.ovc-up .ovc-lab.ovc-r2 { bottom: 76px; }
+/* 貼邊的方塊推回框內；引線留在原位，所以還看得出它指的是誰 */
+.ovc-lab.ovc-pinl { left: 0 !important; transform: none; text-align: left; }
+.ovc-lab.ovc-pinr { left: auto !important; right: 0; transform: none; text-align: right; }
+.ovc-t { display: block; font-size: 10.5px; white-space: nowrap; }
+.ovc-k { color: var(--th); font-weight: 600; }
+.ovc-p { margin-left: 4px; font-variant-numeric: tabular-nums; }
+.ovc-v { display: block; font-size: 14px; font-variant-numeric: tabular-nums; }
+.ovc-lab.ovc-key .ovc-k { color: var(--accent2); }
+.ovc-lab.ovc-key .ovc-v { font-weight: 700; font-size: 15.5px; }
+.ovc-lab.ovc-now .ovc-k { color: var(--accent3); }
+.ovc-lab.ovc-now .ovc-v { font-weight: 700; font-size: 15px; }
+.ovc-lab.ovc-edge .ovc-v { font-size: 13px; opacity: .85; }
+.ovc-lab.ovc-base .ovc-k { color: var(--text3); }
+
+.ovc-foot { display: flex; gap: 14px; flex-wrap: wrap; border-top: 1px solid var(--border);
+  padding-top: 7px; margin-top: 2px; font-size: 11.5px; color: var(--text2); }
+.ovc-foot b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ovc-foot b.ovc-hot { color: var(--caution); }
 .tx-src { display: inline-block; margin-left: 6px; padding: 0 5px; font-size: 11px;
-  color: var(--text3); border: 1px solid var(--line); border-radius: 3px; cursor: help; }
+  color: var(--text3); border: 1px solid var(--border); border-radius: 3px; cursor: help; }
 /* 盤中校準亮起時的標記。與費半門檻同一種樣式：紅綠在這一頁是漲跌，不能拿來標狀態 */
 .ov-cal { display: inline-block; margin-left: 10px; padding: 0 6px; font-size: 12px;
   color: var(--accent2); border: 1px solid var(--accent2); border-radius: 4px; cursor: help; }
