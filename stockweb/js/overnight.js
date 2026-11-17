@@ -84,6 +84,88 @@ function _ovK(which, sox) {
 //   其餘六檔外股 0%，第一道就擋下，不進統計。
 //
 // 所以這不是「替 00988A 開特例」，是一條規則；哪一檔過關由它自己的持股與資料決定。
+// ── 開盤之後改用「今天走到現在的價」重新定心（盤中校準）──
+//
+// 開盤前這一頁的兩個輸入都是隔夜已經定價完的資訊，台股自己盤中新生的買賣壓不在裡面。
+// 開盤之後那股力道已經部分表現在價格上，拿它回頭修正推估，比抱著開盤前那條不動好。
+//
+// 條件變數只有一個數字，單位是百分點：現在的價對前收的漲幅，減掉開盤模型推的開盤漲幅。
+// 所以執行期只需要開盤模型與現價，不需要任何盤中歷史，也不需要新的資料檔。
+//
+// 單位一定要是百分點，不能先除以殘差寬度再乘回來。兩種寫法在配適時 R² 一樣，
+// 但推論時不同：標準化那版的斜率換回百分點之後，等效斜率會隨「收盤殘差寬度 ÷ 開盤殘差寬度」
+// 這個比值跑，實測散在 0.48 到 1.72。2026-11-17 盤中踩到過：那天這個比值偏大，
+// 等效斜率變成 1.33，八檔的推估收盤全部被外推到低於現價，其中兩檔的現價跑到區間上緣之外。
+// 原始百分點下 09:30 之後穩定在 1.02 到 1.08，而且八檔一致（0.88 到 1.12）。
+//
+// 量測用八檔的分鐘 K（953 筆、313 個交易日），每個時點各自走查：
+// 每一天只用該日之前的資料重新配適，不讓模型看到未來。
+//
+// 另一種做法是替每個時點各配一條迴歸（需要把盤中歷史存成資料檔、每天重算）。
+// 兩者實測幾乎同分，所以不做：同覆蓋率下收盤區間窄掉的幅度，
+// 09:30 是 30% 對 29%、10:30 是 48% 對 46%、11:30 是 62% 對 62%、13:00 是 70% 對 79%。
+// 只有 12:30 之後落後 4 到 9 個百分點，而那時區間本來就只剩零點幾毛。
+//
+// 收盤的斜率幾乎是 1：現在偏離開盤推估多少，收盤大概就偏離多少，不系統性延續也不回吐。
+// 日內最低的斜率從 1.07 掉到 0.78，因為時間愈晚、還能破新低的時間愈短。
+//
+// 前瞻驗證（斜率只用前半段的日期估，跨距只在後半段量），同覆蓋率下區間窄掉的幅度：
+//   時點    收盤  最低        時點    收盤  最低
+//   開盤    16%   31%         11:00   59%   51%
+//   09:05   26%   39%         11:30   65%   54%
+//   09:15   31%   46%         12:00   70%   53%
+//   09:30   34%   46%         12:30   73%   56%
+//   10:00   46%   47%         13:00   77%   55%
+//   10:30   50%   48%
+// 門檻日的幅度更大：09:30 收盤就有 49%、12:00 有 76%。
+//
+// 日內最低在 12:00 之後停止改善（停在 53% 到 56%）：那時當日最低通常已經走出來，
+// 剩下的不確定性只有最後一個半小時會不會破新低，那一截不會因為時間過去而變小。
+//
+// 收盤那條到 12:30 之後已經不是推估：相關 0.93 到 0.98，意思是它跟現價幾乎同一件事。
+// 使用者決定做到 13:00，所以保留，但說明要講清楚那時候它在重複現價。
+//
+// 倍率是條件殘差的第 16 與第 84 百分位，門檻日與其餘日分開算。門檻日只有 146 筆、
+// 而且切點之前只有 14 到 30 天，所以門檻日那一組估不出前瞻驗證，只能標樣本不足。
+// 開盤那一格的斜率也最不穩：全樣本 1.18、前半段 0.97，逐檔散在 0.62 到 1.34。
+var OV_CAL_T = ['open', '09:05', '09:15', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00'];
+var OV_CAL = {
+  // bc／bl＝收盤與日內最低的修正斜率，單位是百分點對百分點；
+  // kc／kl＝區間倍率 [下緣, 上緣]，單位是一個半衰加權殘差，g 是門檻日、b 是其餘日
+  'open':  { bc: 1.178, bl: 1.071, kc: { g: [1.72, 0.94], b: [0.75, 0.73] }, kl: { g: [1.50, 0.67], b: [0.80, 0.59] } },
+  '09:05': { bc: 1.179, bl: 1.049, kc: { g: [1.33, 0.84], b: [0.74, 0.70] }, kl: { g: [1.28, 0.59], b: [0.74, 0.49] } },
+  '09:15': { bc: 1.096, bl: 0.951, kc: { g: [0.84, 0.79], b: [0.69, 0.65] }, kl: { g: [1.14, 0.46], b: [0.63, 0.48] } },
+  '09:30': { bc: 1.043, bl: 0.900, kc: { g: [0.82, 0.71], b: [0.63, 0.64] }, kl: { g: [0.90, 0.29], b: [0.66, 0.47] } },
+  '10:00': { bc: 1.045, bl: 0.845, kc: { g: [0.71, 0.58], b: [0.48, 0.50] }, kl: { g: [0.93, 0.41], b: [0.61, 0.46] } },
+  '10:30': { bc: 1.076, bl: 0.856, kc: { g: [0.76, 0.65], b: [0.44, 0.48] }, kl: { g: [0.93, 0.45], b: [0.60, 0.45] } },
+  '11:00': { bc: 1.062, bl: 0.843, kc: { g: [0.70, 0.51], b: [0.34, 0.43] }, kl: { g: [0.90, 0.39], b: [0.60, 0.43] } },
+  '11:30': { bc: 1.052, bl: 0.840, kc: { g: [0.48, 0.46], b: [0.30, 0.37] }, kl: { g: [0.66, 0.35], b: [0.59, 0.40] } },
+  '12:00': { bc: 1.021, bl: 0.805, kc: { g: [0.30, 0.50], b: [0.25, 0.31] }, kl: { g: [0.66, 0.36], b: [0.55, 0.42] } },
+  '12:30': { bc: 1.034, bl: 0.798, kc: { g: [0.32, 0.53], b: [0.21, 0.31] }, kl: { g: [0.64, 0.32], b: [0.54, 0.44] } },
+  '13:00': { bc: 1.042, bl: 0.776, kc: { g: [0.24, 0.34], b: [0.16, 0.28] }, kl: { g: [0.80, 0.26], b: [0.56, 0.44] } }
+};
+// 寬度的下限。半衰加權殘差會塌到近乎零：量測時 09:15 那一組有一列算出 0.0006，
+// 標準化之後是 1018 倍，整個相關係數被一列吃掉。連續幾天殘差接近零就會這樣。
+// 不設下限的後果是某一天的區間縮成一條線，而畫面不會告訴你那是算壞的。
+var OV_SD_FLOOR = 0.30;   // 不低於訓練期全樣本殘差標準差的三成
+function _ovSdF(f) {
+  if (!f) return null;
+  var a = f.sdEw, b = OV_SD_FLOOR * f.sd;
+  return (a > 0 && b > 0) ? Math.max(a, b) : (a > 0 ? a : b);
+}
+// 幾點幾分落在哪一組倍率。取「不晚於現在」的最後一個時點，所以 09:20 用 09:15 那一組，
+// 寧可用早一點、比較寬的那一組。09:00 之前與 13:35 之後都不校準。
+function _ovCalSlot(hm) {
+  if (!hm || hm < '09:00' || hm > '13:35') return null;
+  var best = null;
+  for (var i = 0; i < OV_CAL_T.length; i++) {
+    var T = OV_CAL_T[i], at = (T === 'open') ? '09:00' : T;
+    if (hm >= at) best = T; else break;
+  }
+  return best;
+}
+function _ovCalLab(slot) { return slot === 'open' ? '開盤' : slot; }
+
 var OV_FGN_W = 50;       // 外股權重門檻（%）
 var OV_ADD_F = 3.95;     // 增量 F 門檻，約 p<0.05
 var _ovIxic = null;      // Nasdaq 日報酬
@@ -416,7 +498,10 @@ async function _ovLiveTick(always) {
     var sn = await fetchSnapshots(_rbData.codes.map(function (c) { return { exchange: _ovEx(c), code: c }; }));
     (sn || []).forEach(function (x) {
       if (x && x.code && x.close > 0) {
-        _ovLive[String(x.code)] = { px: +x.close, d: (x.datetime || '').slice(0, 10), at: (x.datetime || '').slice(11, 19) };
+        // 開盤價與當日最低也存下來：盤中校準要用開盤當基準，日內最低要用它封頂
+        _ovLive[String(x.code)] = { px: +x.close, op: (x.open > 0 ? +x.open : null),
+          lo: (x.low > 0 ? +x.low : null), d: (x.datetime || '').slice(0, 10),
+          at: (x.datetime || '').slice(11, 19) };
       }
     });
     _ovLiveAt = new Date(Date.now() + 8 * 3600000).toISOString().slice(11, 19);
@@ -565,6 +650,44 @@ function ovEstimate(code) {
   var pc2 = ev(fc);
   // 今天的費半決定用哪一組邊界。費半是全市場共用的一個數字，所以八檔同一天同一組
   var gs = _ovSox();
+  // ── 盤中校準 ──
+  // 要同時滿足：快照是「推估這一盤」當天的、有開盤價、現在落在 09:00～13:35、開盤模型存在。
+  // 任一項不成立就維持開盤前那條，不做半套。
+  var sdo = _ovSdF(fo), sdc = _ovSdF(fc), sdl = _ovSdF(fl);
+  var po = ev(fo), pl = ev(fl);
+  var cal = null;
+  (function () {
+    var lv = _ovLive[String(code)];
+    if (!lv || !(lv.px > 0) || !(lv.op > 0)) return;
+    if (!t.d || (lv.d && lv.d !== t.d)) return;
+    var slot = _ovCalSlot((lv.at || '').slice(0, 5));
+    if (!slot || po == null || !(base > 0)) return;
+    var C = OV_CAL[slot]; if (!C) return;
+    var nowPct = (lv.px / base - 1) * 100;
+    var dev = nowPct - po;        // 單位是百分點，不再除以開盤殘差的寬度
+    var kc = _ovGate(gs) ? C.kc.g : C.kc.b, kl = _ovGate(gs) ? C.kl.g : C.kl.b;
+    cal = { slot: slot, at: lv.at, dev: dev, z: (sdo > 0 ? dev / sdo : null), nowPct: nowPct,
+            oActPct: (lv.op / base - 1) * 100,
+            // 當日最低是確定的事實：日內最低不可能高於已經走出來的最低，
+            // 所以中心與區間上緣都要被它壓住。歷史 1350 根日 K 全部成立。
+            runLoPct: (lv.lo > 0) ? (lv.lo / base - 1) * 100 : null,
+            kc: kc, kl: kl };
+    if (pc2 != null && sdc > 0) { cal.cPct = pc2 + C.bc * dev; }
+    if (pl != null && sdl > 0) {
+      var q = pl + C.bl * dev;
+      cal.lPct = (cal.runLoPct != null) ? Math.min(q, cal.runLoPct) : q;
+    }
+  })();
+  // 校準成功就用校準後的中心與倍率，否則維持原本的
+  var cMid = (cal && cal.cPct != null) ? cal.cPct : pc2;
+  var lMid = (cal && cal.lPct != null) ? cal.lPct : pl;
+  var cLoK = cal ? cal.kc[0] : _ovK('cLo', gs), cHiK = cal ? cal.kc[1] : _ovK('cHi', gs);
+  var lLoK = cal ? cal.kl[0] : _ovK('lLo', gs), lHiK = cal ? cal.kl[1] : _ovK('lHi', gs);
+  var cLoP = (cMid == null || !(sdc > 0)) ? null : cMid - sdc * cLoK;
+  var cHiP = (cMid == null || !(sdc > 0)) ? null : cMid + sdc * cHiK;
+  var lLoP = (lMid == null || !fl || !(sdl > 0)) ? null : lMid - sdl * lLoK;
+  var lHiP = (lMid == null || !fl || !(sdl > 0)) ? null : lMid + sdl * lHiK;
+  if (cal && cal.runLoPct != null && lHiP != null) lHiP = Math.min(lHiP, cal.runLoPct);
   return {
     code: code, n: fc.n, base: base, basePrev: raw[bi].d,
     basePx: base,   // 偏移度要把百分點換回元
@@ -581,16 +704,18 @@ function ovEstimate(code) {
     prem: _ovPrem(code), volX: _ovVolX(raw, act ? bi + 1 : bi),
     act: act ? { o: act.o, l: act.l, c: act.c,
                  cPct: (act.c / base - 1) * 100, lPct: (act.l / base - 1) * 100 } : null,
-    oPct: ev(fo), lPct: ev(fl), cPct: pc2,
-    oPx: mk(ev(fo)), lPx: mk(ev(fl)), cPx: mk(pc2),
-    loPx: mk(pc2 == null ? null : pc2 - fc.sdEw * _ovK('cLo', gs)),
-    hiPx: mk(pc2 == null ? null : pc2 + fc.sdEw * _ovK('cHi', gs)),
+    oPct: po, lPct: lMid, cPct: cMid,
+    // 校準前的那一組也帶出去：提示要講得出「原本推多少、現在推多少」
+    rawLPct: pl, rawCPct: pc2, cal: cal,
+    oPx: mk(po), lPx: mk(lMid), cPx: mk(cMid),
+    loPx: mk(cLoP),
+    hiPx: mk(cHiP),
     // 日內最低自己的區間。掛限價買進看的是這一個，不是收盤那一個，
     // 原本只有收盤有範圍，等於把最該有不確定性的那個數字寫成一個確定的價。
-    lLoPx: (function () { var q = ev(fl); return (q == null || !fl) ? null : mk(q - fl.sdEw * _ovK('lLo', gs)); })(),
-    lHiPx: (function () { var q = ev(fl); return (q == null || !fl) ? null : mk(q + fl.sdEw * _ovK('lHi', gs)); })(),
+    lLoPx: mk(lLoP),
+    lHiPx: mk(lHiP),
     lCover: fl ? fl.cover : null, lCoverN: fl ? fl.coverN : null,
-    sd: fc.sdEw, sdFull: fc.sd, cover: fc.cover, coverN: fc.coverN, r2: fc.r2, gate: _ovGate(gs),
+    sd: sdc, sdFull: fc.sd, cover: fc.cover, coverN: fc.coverN, r2: fc.r2, gate: _ovGate(gs),
     fgnW: fgn, ixOn: ixOn, ixF: addF, ixNow: ixNow,
     sdUp: _ovSd(fc.resU), sdDn: _ovSd(fc.resD),
     medUp: _ovMed(fc.resU), medDn: _ovMed(fc.resD),
@@ -784,18 +909,46 @@ function ovHtml(view) {
 
   var ana = (view === 'ana');
   var sox = _ovSox();
+  // 八檔同一天同一個時點，所以挑第一個有校準的那一列來標標頭
+  var calOn = null;
+  for (var ci = 0; ci < rows.length; ci++) { if (rows[ci].cal) { calOn = rows[ci].cal; break; } }
   // 實測覆蓋率放提示，不放欄位：它是用來驗證區間的，不是你每天要讀的數字。
   // 樣本少的時候連這個覆蓋率自己都估不準，所以把標準誤一起寫進去。
-  var cvTip = function (cv, n2, nm) {
-    if (cv == null || !n2) return '';
+  var cvTip = function (cv, n2, nm, extra) {
+    if (cv == null || !n2) return extra ? ' title="' + extra + '"' : '';
     var se = Math.sqrt(0.68 * 0.32 / n2) * 100;
     return ' title="' + nm + '區間實測罩住了 ' + Math.round(cv) + '% 的日子（' + n2 + ' 天，誤差 ±'
       + se.toFixed(1) + ' 個百分點）。目標是 68%，' +
-      (Math.abs(cv - 68) <= 2 * se ? '目前在誤差範圍內' : (cv < 68 ? '目前偏窄' : '目前偏寬')) + '"';
+      (Math.abs(cv - 68) <= 2 * se ? '目前在誤差範圍內' : (cv < 68 ? '目前偏窄' : '目前偏寬'))
+      + (extra ? '。' + extra : '') + '"';
   };
   var pct = function (v, dec) {
     if (v == null) return '—';
     return (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(dec == null ? 2 : dec) + '%';
+  };
+  // 校準後的那一格要講得出「原本推多少、現在推多少」，不然使用者只看到數字變了
+  // 偏離要用「幾個殘差」講：那是跨標的可比的單位，百分點不可比。
+  // 寬度算不出來（新上市、樣本不足）就退回百分點，不要印 NaN。
+  var calDev = function (c) {
+    if (c.z != null) {
+      return (c.z > 0 ? '+' : (c.z < 0 ? '\u2212' : '')) + Math.abs(c.z).toFixed(2) + ' 個殘差';
+    }
+    return pct(c.dev);
+  };
+  var calTip = function (r, which) {
+    var c = r.cal; if (!c) return '';
+    var raw = (which === 'c') ? r.rawCPct : r.rawLPct;
+    var now = (which === 'c') ? r.cPct : r.lPct;
+    var zs = calDev(c);
+    var s = '已用 ' + (c.at || '').slice(0, 5) + ' 的價校準，套 ' + _ovCalLab(c.slot) + ' 那一組倍率。'
+      + '現在的價偏離開盤推估 ' + zs + '，中心從 ' + pct(raw) + ' 移到 ' + pct(now) + '。';
+    if (which === 'l' && c.runLoPct != null) {
+      s += '日內最低另外被「今天到現在的最低 ' + pct(c.runLoPct) + '」壓住：最低不可能高於已經走出來的最低。';
+    }
+    if (c.slot >= '12:30') {
+      s += '這個時點的收盤推估與現價的相關已經到 0.93 以上，它在重複現價、不再是推估。';
+    }
+    return s.replace(/"/g, '&quot;');
   };
   var h = '<div class="rb-sox">';
   // 標題要講明是哪一盤。「明天」在週一盤中打開時是錯的：
@@ -832,7 +985,15 @@ function ovHtml(view) {
         ? '<span class="ov-gate" title="隔夜費半跌超過 ' + Math.abs(OV_SD_GATE)
           + '%。這種日子收盤跌破區間下緣的比例是 32.9%，其餘日子 15.7%，而跌破上緣的'
           + '比例兩組一樣，所以偏的是方向不是幅度。下緣已經從 0.96 個殘差放到 2.30 個，'
-          + '上緣不動。詳見下方說明。">下緣已放寬</span>'
+          + '上緣不動。以上是開盤之前的那一組；開盤成交之後整組會換成校準後的倍率，'
+          + '看旁邊那顆標記與下方說明。">下緣已放寬</span>'
+        : '')
+    + (calOn
+        ? '<span class="ov-cal" title="開盤之後改用今天走到現在的價重新定心。條件變數是'
+          + '「現在的漲幅 − 開盤模型推的開盤漲幅」，單位是百分點，所以不需要盤中歷史。'
+          + '同覆蓋率下收盤區間窄掉的幅度，前瞻驗證量到開盤 16%、09:30 是 34%、11:00 是 59%、'
+          + '13:00 是 77%。目前套的是 ' + _ovCalLab(calOn.slot) + ' 那一組。詳見下方說明。">'
+          + '已用 ' + (calOn.at || '').slice(0, 5) + ' 的價校準</span>'
         : '')
     + (_ovAt ? '<span class="ov-at">' + _ovAt + ' 抓取</span>' : '')
     + (_ovLiveAt ? '<span class="ov-at">現價 ' + _ovLiveAt
@@ -848,7 +1009,9 @@ function ovHtml(view) {
     rbSortTh(_ovSort, 'ovSort', 'base', '前收', '字色是前收自己的漲跌（對再前一日）') +
     rbSortTh(_ovSort, 'ovSort', 'live', '現價', '券商即時快照，盤中每 30 秒更新；13:35 之後不再抓，停在收盤價。'
       + '下面那一行是對前收的漲跌，與右邊幾欄的推估是同一個基準，可以直接比') +
-    rbSortTh(_ovSort, 'ovSort', 'oPx', '預估開盤', '當天開盤價的推估') +
+    rbSortTh(_ovSort, 'ovSort', 'oPx', calOn ? '開盤' : '預估開盤',
+      calOn ? '當天實際的開盤價，下面那一行是它偏離推估幾個殘差。這個偏離就是校準用的條件變數'
+            : '當天開盤價的推估') +
     rbSortTh(_ovSort, 'ovSort', 'lPx', '掛買參考', '當天盤中最低價的推估，下面那一行是它的區間。'
       + '掛限價買進看這一欄，不是看收盤。字越亮代表這兩個訊號解釋得越多；暗的代表區間跟隨便猜差不多寬') +
     rbSortTh(_ovSort, 'ovSort', 'cPx', '預估收盤', '範圍的中心。別把它當成一個會到的價') +
@@ -877,17 +1040,28 @@ function ovHtml(view) {
       '<td class="num" style="color:' + _rbCol(r.baseChg) + '"><span class="rb-bpx">' + _ovPx(r.base) + '</span>'
         + (typeof _rbStreakSub === 'function' ? _rbStreakSub(_rbData.series[r.code] || []) : '') + '</td>' +
       _ovLiveCell(r, t) +
-      '<td class="num ov-side" style="color:' + _rbCol(r.oPct) + '">' + _ovPx(r.oPx)
-        + '<span class="ov-sub" style="color:' + _rbCol(r.oPct) + '">' + pct(r.oPct) + '</span></td>' +
+      // 開盤已經成交之後，這一格的推估值就沒有用了，換成實際開盤與它的偏離。
+      // 推估值不是丟掉，移到提示裡，要對答案還查得到。
+      (r.cal
+        ? '<td class="num ov-side" style="color:' + _rbCol(r.cal.oActPct) + '" title="'
+            + '開盤推估 ' + _ovPx(r.oPx) + '（' + pct(r.oPct) + '），實際開盤偏離 '
+            + calDev(r.cal)
+            + '">' + _ovPx(ovTick(r.base * (1 + r.cal.oActPct / 100)))
+            + '<span class="ov-sub" style="color:' + _rbCol(r.cal.oActPct) + '">'
+            + pct(r.cal.oActPct) + '</span></td>'
+        : '<td class="num ov-side" style="color:' + _rbCol(r.oPct) + '">' + _ovPx(r.oPx)
+            + '<span class="ov-sub" style="color:' + _rbCol(r.oPct) + '">' + pct(r.oPct) + '</span></td>') +
       // 掛買參考與收盤區間是這張表唯一要讀的兩個東西，放大加粗；
       // 開盤與收盤那兩個點估值降成小字，它們只是區間的中心。
-      '<td class="num ov-big ' + _ovTier(r.r2) + '"' + cvTip(r.lCover, r.lCoverN, '日內最低') + '>'
+      '<td class="num ov-big ' + (r.cal ? 'ov-calc ' : '') + _ovTier(r.r2) + '"'
+        + cvTip(r.lCover, r.lCoverN, '日內最低', calTip(r, 'l')) + '>'
         + _ovPx(r.lPx)
         + '<span class="ov-rng">' + _ovPx(r.lLoPx) + ' ～ ' + _ovPx(r.lHiPx) + '</span>'
         + '<span class="ov-sub" style="color:' + _rbCol(r.lPct) + '">' + pct(r.lPct) + '</span></td>' +
       '<td class="num ov-side" style="color:' + _rbCol(r.cPct) + '">' + _ovPx(r.cPx)
         + '<span class="ov-sub" style="color:' + _rbCol(r.cPct) + '">' + pct(r.cPct) + '</span></td>' +
-      '<td class="num ov-big ' + _ovTier(r.r2) + '"' + cvTip(r.cover, r.coverN, '收盤') + '>'
+      '<td class="num ov-big ' + (r.cal ? 'ov-calc ' : '') + _ovTier(r.r2) + '"'
+        + cvTip(r.cover, r.coverN, '收盤', calTip(r, 'c')) + '>'
         + _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) + '</td>' +
       (hasAct ? '<td class="num" style="color:' + _rbCol(r.act ? r.act.cPct : null) + ';font-weight:700">'
           + (r.act ? _ovPx(r.act.c) : '—')
@@ -928,6 +1102,7 @@ function ovHtml(view) {
     + '<b>定義</b>：下緣與上緣各自是「近 10 日半衰的加權殘差 × 一個倍率」。'
     + '平常日收盤下緣用 0.96 倍、上緣 0.95，掛買參考的下緣用 1.09、上緣 0.78。'
     + '隔夜費半跌破 3% 的那天，只有下緣改用 2.30（收盤）與 2.31（掛買參考），上緣不動。'
+    + '以上是<b>開盤之前</b>的倍率。開盤成交之後整組會換掉，看下一條「盤中校準」。'
     + '<br><b>比較基準</b>：倍率不是自訂的數字，是走查殘差的分位數：下緣取第 16 百分位、'
     + '上緣取第 84 百分位，兩者之間就是 68%。門檻日與其餘日各自算一組。'
     + '<br><b>白話</b>：費半大跌的隔天，這一頁推的價會系統性偏高，但偏的只有下面那一邊。'
@@ -953,6 +1128,54 @@ function ovHtml(view) {
     + '用日層級是因為同一天八檔會一起破，有效樣本是天數不是筆數。'
     + '門檻設在 −3% 的理由：−4% 到 −3% 破下緣 36.7%（16 天），≤ −4% 降到 23.5%'
     + '（27 天），關係不單調，線性相關只有 −0.08，所以只當門檻用，不當連續訊號。'
+    + '</details></dd>'
+    + '<dt>盤中校準</dt><dd>'
+    + '<b>定義</b>：開盤成交之後，收盤與日內最低的推估中心各往「現在的價偏離開盤推估的方向」'
+    + '移動一個固定倍數，區間倍率也換成該時點自己的一組。條件變數只有一個數字：'
+    + '現在對前收的漲幅，減掉開盤模型推的開盤漲幅，單位就是百分點。'
+    + '收盤的斜率幾乎是 1（1.02 到 1.18）：現在偏離開盤推估多少，收盤大概就偏離多少，'
+    + '不系統性延續也不回吐。日內最低的斜率從 1.07 掉到 0.78，因為愈晚、還能破新低的時間愈短。'
+    + '時點取不晚於現在的那一格，所以 09:20 用 09:15 那一組，寧可用早一點、比較寬的。'
+    + '<br><b>比較基準</b>：比的是「同一個覆蓋率之下，區間能窄多少」，'
+    + '算法是校準後的條件殘差跨距除以原本殘差的跨距，兩者都取第 16 到第 84 百分位。'
+    + '前瞻驗證把斜率只用前半段的日期估、跨距只在後半段量（697 筆，其中門檻日 122 筆）：'
+    + '開盤 16%、09:30 是 34%、10:00 是 46%、11:00 是 59%、12:00 是 70%、13:00 是 77%；'
+    + '日內最低對應 31%、46%、47%、51%、53%、55%。門檻日的幅度更大，09:30 收盤就有 49%。'
+    + '<br><b>白話</b>：開盤前這一頁只知道隔夜發生什麼事，開盤之後它多知道一件事，'
+    + '就是今天實際走成什麼樣。愈晚看區間愈窄，因為還沒走完的時間愈短。'
+    + '<br><b>機制</b>：台指期夜盤與隔夜費半都是隔夜已經定價完的資訊，台股盤中新生的買賣壓'
+    + '不在輸入裡，所以開盤前的推估抓得住跳空、抓不住當日走勢。價格本身已經把那股力道顯示出來，'
+    + '拿它回頭修正等於把模型看不到的那一塊補回去。日內最低還多一層確定的事實壓著：'
+    + '當日最低不可能高於今天已經走出來的最低，所以它的中心與上緣都會被現在的最低壓住。'
+    + '<br><b>行動含義</b>：掛限價買進要用校準後的掛買參考下緣，不是開盤前那一個。'
+    + '想要窄一點的區間就晚一點掛，代價是能掛的時間變短。'
+    + '<br><b>不能告訴你什麼</b>：12:30 之後收盤那條已經不是推估，'
+    + '它跟現價的相關到 0.93 以上，實際上在重複現價；那時區間窄到只剩零點幾毛，'
+    + '看起來很準是因為離收盤不到一小時，不是因為模型變強。'
+    + '日內最低在 12:00 之後停止改善（停在 53% 到 56%），因為當日最低通常已經走出來，'
+    + '剩下的只有最後一個半小時破新低的可能，那一截不會因為時間過去而變小。'
+    + '倍率是寫死的常數，而殘差的形狀會隨期間與標的漂移：實測用前半段的倍率套後半段，'
+    + '上緣會破到 20% 到 25%，而目標是 16%，也就是區間偏窄、實際跑出去的次數比設計值多。'
+    + '門檻日那一組倍率估不出前瞻驗證，門檻日總共只有 146 筆，而切點之前只有 14 到 30 天。'
+    + '開盤那一格的斜率也最不穩：全樣本 1.18、只用前半段估是 0.97，逐檔散在 0.62 到 1.34，'
+    + '所以開盤剛成交那一下的修正量比後面幾個時點更該打折看。'
+    + '它也不分方向：區間只給範圍，不告訴你接下來會往上還是往下。'
+    + '<details class="ov-bt"><summary>回測怎麼做的</summary>'
+    + '八檔的分鐘 K，953 筆、313 個交易日，11 個時點各自走查：'
+    + '每一天只用該日之前的資料重新配適，不讓模型看到未來。'
+    + '另一種做法是替每個時點各配一條自己的迴歸，那需要把盤中歷史存成資料檔、每天重算。'
+    + '兩者實測幾乎同分（同覆蓋率下收盤區間窄掉的幅度，只用開盤模型 vs 各時點配模型）：'
+    + '09:30 是 30% 對 29%、10:30 是 48% 對 46%、11:30 是 62% 對 62%、'
+    + '12:30 是 68% 對 72%、13:00 是 70% 對 79%。只有 12:30 之後落後 4 到 9 個百分點，'
+    + '而那時區間本來就只剩零點幾毛，所以不為它多養一個資料檔。'
+    + '量測過程中查到區間寬度用的半衰加權殘差會塌掉：09:15 那一組有一列算出 0.0006，'
+    + '標準化之後是 1018 倍，一列就把相關係數吃掉。原因是連續幾天殘差接近零。'
+    + '已經加上下限，不低於全樣本殘差標準差的三成，否則某一天的區間會縮成一條線'
+    + '而畫面不會告訴你那是算壞的。'
+    + '另外踩過一個單位的坑：先把條件變數除以開盤殘差的寬度、再乘回收盤殘差的寬度，'
+    + '配適時 R² 一樣，但推論時等效斜率會隨兩個寬度的比值跑，實測散在 0.48 到 1.72。'
+    + '2026-11-17 盤中踩到：那天比值偏大，等效斜率變成 1.33，八檔的推估收盤全部被外推到'
+    + '低於現價，其中兩檔的現價跑到區間上緣之外。改回百分點之後 09:30 之後穩定在 1.02 到 1.08。'
     + '</details></dd>'
     + '</dl></div>';
 

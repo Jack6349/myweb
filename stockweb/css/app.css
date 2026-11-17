@@ -2386,6 +2386,11 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 /* 回測紀錄屬於方法論的實測過程，預設收起，不與主要說明並列在同一條閱讀動線上 */
 .ov-bt { margin-top: 6px; }
 .ov-bt > summary { cursor: pointer; color: var(--text3); }
+/* 盤中校準亮起時的標記。與費半門檻同一種樣式：紅綠在這一頁是漲跌，不能拿來標狀態 */
+.ov-cal { display: inline-block; margin-left: 10px; padding: 0 6px; font-size: 12px;
+  color: var(--accent2); border: 1px solid var(--accent2); border-radius: 4px; cursor: help; }
+/* 已校準的那兩格給一點底色就好。不加左邊框：邊框會把數字往右推，整欄的右對齊會散掉 */
+.ov-calc { background: rgba(240, 204, 122, 0.07); }
 /* 債券 ETF：9 欄撐滿 1644px 時瀏覽器按內容比例分配，名稱 307、現價 130、除息日 205，
    寬窄不一。改成固定配置，六個資料欄等寬，剩餘全給名稱。 */
 /* 不強制撐滿：撐滿時剩餘空間全被名稱吸走（實測 630px），比原本更不均。
