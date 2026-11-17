@@ -65,7 +65,7 @@ function _ovcLive(code, t) {
 // 這一框自己用到的最大偏離（百分點）
 function _ovcSpan(r) {
   var m = 0;
-  [r.loPx, r.hiPx, r.lLoPx, r.lHiPx, r.lPx, r.cPx, r.oPx, r.live].forEach(function (v) {
+  [r.loPx, r.hiPx, r.lLoPx, r.lHiPx, r.lPx, r.cPx, r.oPx, r.live, r.liveLo].forEach(function (v) {
     if (v > 0 && r.base > 0) m = Math.max(m, Math.abs((v / r.base - 1) * 100));
   });
   if (r.act) {
@@ -103,24 +103,28 @@ function _ovcPctTxt(v, dec) {
 // 第二行，把現價擠回第一行去撞掛買。2026-11-17 實測六框有三框這樣疊，最多疊 19.5px。
 // 按重要性排就不會：掛買與現價先各拿一行，擠不下的是估收。
 //
-// 最多三行。兩行不夠是常態不是例外，寧可讓框高一點也不要疊字。
-// 三行還放不下才回到第一行疊著，至少不會憑空消失。
+// 行數上限等於這一側的標籤數（下方最多四個：掛買、現價、今低、估收），
+// 所以保證排得下、不會疊。只有真的擠在一起的那幾框會變高，其餘不受影響。
+// 2026-11-18 實測：今低加進來之後，四個落在 0.8 個百分點內時三行會不夠，
+// 第四個掉回第一行疊住掛買。
 function _ovcStagger(arr) {
-  var put = [[], [], []], rows = 1;
+  var put = [[], [], [], []], rows = 1;
   var free = function (r, x) {
     return put[r].every(function (q) { return Math.abs(x - q) >= OVC_GAP; });
   };
   arr.forEach(function (m) {
     // 按重要性挑，所以 x 不是由小到大進來的，要跟那一行已經放的每一個都比距離，
     // 只跟最後一個比會漏掉「這一個在已放的那個左邊」的情形
-    for (var r = 0; r < 3; r++) {
+    for (var r = 0; r < 4; r++) {
       if (free(r, m.x)) { m.row = r; put[r].push(m.x); rows = Math.max(rows, r + 1); return; }
     }
     m.row = 0; put[0].push(m.x);
   });
   return rows;
 }
-function _ovcLabsH(rows) { return rows === 1 ? 40 : (rows === 2 ? 76 : 112); }
+// 容器高度＝最後一行的底部。行的位移是 5／46／87，標籤本身高 40。
+// 這三個數字要一起改，只改其中一個會讓標籤壓到橫條或框底的那條線。
+function _ovcLabsH(rows) { return [46, 88, 129, 170][Math.min(rows, 4) - 1]; }
 
 function _ovcLabels(arr, side, rows, X) {
   var h = '<div class="ovc-labs ovc-' + side + '" style="height:' + _ovcLabsH(rows) + 'px">';
@@ -172,10 +176,17 @@ function _ovcCard(r, HI, ticks) {
     if (r.act.c > 0) DN.push({ pri: 1, k: '實收', v: r.act.c, p: r.act.cPct, cl: 'now', col: _rbCol(r.act.cPct),
       tip: '那一天實際的收盤。這一列已經可以對答案了。' });
   } else {
-    if (r.cPx > 0) DN.push({ pri: 2, k: '估收', v: r.cPx, p: P(r.cPx), cl: 'edge', col: _rbCol(P(r.cPx)),
+    if (r.cPx > 0) DN.push({ pri: 3, k: '估收', v: r.cPx, p: P(r.cPx), cl: 'edge', col: _rbCol(P(r.cPx)),
       tip: '收盤區間的中心。別把它當成一個會到的價。' });
     if (r.live > 0) DN.push({ pri: 1, k: '現價', v: r.live, p: P(r.live), cl: 'now', col: 'var(--accent3)',
-      tip: '券商即時快照' + (r.liveAt ? '，' + r.liveAt : '') + '。盤中每 30 秒更新。' });
+      tip: '券商即時快照' + (r.liveAt ? '，' + r.liveAt : '') + '。持股逐筆更新，關注清單每 30 秒一次。' });
+    // 今天實際走到的最低。它跟掛買參考是同一件事的兩面：
+    // 掛買是「模型推今天會跌到哪」，這一個是「今天實際已經跌到哪」。
+    // 已經走過的最低是確定的事實，推估的最低不可能比它高。
+    if (r.liveLo > 0) DN.push({ pri: 2, k: '今低', v: r.liveLo, p: P(r.liveLo), cl: 'today', col: 'var(--sum)',
+      tip: '今天到現在走出來的最低價' + (r.liveLoAt ? '（' + r.liveLoAt + '）' : '')
+         + '。掛在它以上的買進價，今天都已經觸及過了。'
+         + '推估的最低不可能高於它，所以掛買參考那個數字也被它壓住。' });
   }
 
   UP.forEach(function (m) { m.x = X(m.p); });
@@ -235,6 +246,9 @@ function _ovcCard(r, HI, ticks) {
   if (!r.act && r.cPx > 0) h += '<div class="ovc-mk ovc-est" style="left:' + X(P(r.cPx)).toFixed(2) + '%"></div>';
   if (r.act && r.act.c > 0) h += '<div class="ovc-mk ovc-est" style="left:' + X(r.act.cPct).toFixed(2) + '%"></div>';
   if (r.lPx > 0) h += '<div class="ovc-mk ovc-buy" style="left:' + X(P(r.lPx)).toFixed(2) + '%"></div>';
+  if (!r.act && r.liveLo > 0) {
+    h += '<div class="ovc-mk ovc-low" style="left:' + X(P(r.liveLo)).toFixed(2) + '%"></div>';
+  }
   if (!r.act && r.live > 0) h += '<div class="ovc-mk ovc-now" style="left:' + X(P(r.live)).toFixed(2) + '%"></div>';
   if (r.act && r.act.l > 0) h += '<div class="ovc-mk ovc-now" style="left:' + X(r.act.lPct).toFixed(2) + '%"></div>';
   h += '</div>';
@@ -295,6 +309,12 @@ function ovcStockHtml() {
     // 框頭那一塊要分得出「連線沒開」與「這不是推估那一盤的價」，所以日期要帶著走
     var raw = (typeof _ovLiveOf === 'function') ? _ovLiveOf(r.code) : null;
     r.liveSame = !!(raw && (!raw.d || !t.d || raw.d === t.d));
+    // 今天走到的最低。只有「快照就是推估這一盤」時才算數，
+    // 晚上推估明天時快照是今天的收盤，那個最低不屬於要推的那一盤。
+    var snap = _ovLive[String(r.code)] || null;
+    r.liveLo = (r.liveSame && snap && snap.lo > 0 && (!snap.d || !t.d || snap.d === t.d))
+      ? snap.lo : null;
+    r.liveLoAt = snap ? (snap.at || '') : '';
     r.liveWhy = (raw && raw.d && t.d && raw.d !== t.d)
       ? (raw.d < t.d ? '這是 ' + raw.d + ' 的收盤，推估的 ' + t.d + ' 那一盤還沒開始'
                      : '這是 ' + raw.d + ' 的價，推估的是 ' + t.d + ' 那一盤，已經過去了')
@@ -347,6 +367,8 @@ function ovcStockHtml() {
     + '<span><em class="ovc-e3"></em>掛買參考</span>'
     + '<span><em class="ovc-e4"></em>' + (rows[0] && rows[0].act ? '實際日內最低' : '現價') + '</span>'
     + '<span><em class="ovc-e5"></em>' + (rows[0] && rows[0].act ? '實際收盤' : '預估收盤') + '</span>'
+    + (rows.some(function (r) { return r.liveLo > 0; })
+        ? '<span><em class="ovc-e6"></em>今天到現在的最低</span>' : '')
     + '<span class="ovc-note">橫軸是對前收的漲跌幅，刻度 ±' + HI + '%，取所有框的第 80 百分位，不取最大值。'
     + '所有框共用，所以框跟框之間可以直接比長度，但標了「超出刻度」的那幾框除外。</span></div></div>';
 
@@ -384,6 +406,12 @@ function ovcStockHtml() {
     + '剩下三成會走到區間外。要分辨這兩種，得配量能那一欄：'
     + '貼上限而且量能 1.5 倍以上，突破的成分比較大。</dd>'
 
+    + '<dt>今低</dt><dd>今天到現在走出來的最低價，橫條上那條淺青色的線。'
+    + '它跟<b>掛買參考</b>是同一件事的兩面：掛買是模型推今天會跌到哪，今低是今天實際已經跌到哪。'
+    + '<br>掛在今低以上的買進價，今天都已經觸及過了。推估的最低也不可能高於它，'
+    + '所以掛買參考那個數字被它壓住，兩者重合時代表今天已經跌破模型推的位置。'
+    + '<br>不能告訴你的是「還會不會再跌一次」。觸及過不代表掛得到：同一價位的委託照時間排隊，'
+    + '最低只掃到一次的那種日子不一定輪得到你。收盤之後這條線換成「實低」，那是當天的定論。</dd>'
     + '<dt>字的亮度</dt><dd>亮白代表這兩個訊號解釋掉一半以上的起伏，中灰是四分之一到一半，'
     + '暗灰是不到四分之一、區間跟隨便猜差不多寬。不用紅綠是因為那兩個色在這一頁是漲跌。</dd>'
     + '</dl></div>';
