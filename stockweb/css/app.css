@@ -2469,6 +2469,9 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
    而「今天走到哪」不是漲跌。與夜推債券的「今天已觸及」同一個色。 */
 .ovc-mk.ovc-low { top: 1px; width: 2px; height: 24px; background: var(--sum);
   transform: translateX(-1px); }
+/* 掛得到過半的掛買：數字加粗。顏色由 JS 給（亮白／壓暗），
+   這裡只負責字重，免得兩邊各寫一半。 */
+.ovc-lab.ovc-fillhi .ovc-v { font-weight: 700; }
 .ovc-lab.ovc-today .ovc-k { color: var(--sum); }
 .ovc-lab.ovc-today .ovc-v { font-weight: 600; }
 .ovc-e6 { width: 2px; height: 16px; background: var(--sum); }

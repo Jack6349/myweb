@@ -347,7 +347,12 @@ function _ovFit(Xs, Y, tgt) {
   //
   // 係數維持全部歷史：測過 45、60、75、90 日與各種加權，四檔裡三檔都比全部歷史差。
   // 係數的時變性偵測不到（分段變異 ÷ 估計誤差應有的變異＝0.72 與 0.21，都小於 1）。
-  var lam = Math.pow(0.5, 1 / OV_SD_HL), v = null, hit = 0, cvn = 0;
+  // fhit：實際值有沒有跌到當天推的那個中心（殘差 <= 0）。
+  // 只有 tgt='l' 的那一次有意義，因為 Y 是日內最低。
+  // 最小平方的殘差平均是 0，所以這個比例一定在五成附近打轉，
+  // 真正會把它推離五成的是殘差的偏態：最低價的殘差右偏（偶爾跌很深），
+  // 中位數就會落在 0 的另一邊。
+  var lam = Math.pow(0.5, 1 / OV_SD_HL), v = null, hit = 0, cvn = 0, fhit = 0;
   for (var i2 = 0; i2 < n; i2++) {
     var e = Y[i2] - pred(i2);
     ss += e * e; tot += (Y[i2] - my) * (Y[i2] - my);
@@ -359,6 +364,7 @@ function _ovFit(Xs, Y, tgt) {
     if (v != null && i2 >= 40) {
       var sd0 = Math.sqrt(v), gx = X2[i2], tg = tgt || 'c';
       if (e >= -_ovK(tg + 'Lo', gx) * sd0 && e <= _ovK(tg + 'Hi', gx) * sd0) hit++;
+      if (e <= 0) fhit++;
       cvn++;
     }
     v = (v == null) ? e * e : lam * v + (1 - lam) * e * e;
@@ -369,6 +375,7 @@ function _ovFit(Xs, Y, tgt) {
     sd: Math.sqrt(ss / (n - K)),
     sdEw: (v == null) ? Math.sqrt(ss / (n - K)) : Math.sqrt(v),
     cover: cvn ? hit / cvn * 100 : null, coverN: cvn,
+    fill: cvn ? fhit / cvn * 100 : null,
     resU: resU, resD: resD
   };
 }
@@ -839,6 +846,9 @@ function ovEstimate(code) {
     lLoPx: mk(lLoP),
     lHiPx: mk(lHiP),
     lCover: fl ? fl.cover : null, lCoverN: fl ? fl.coverN : null,
+    // 掛得到的比例：同一條迴歸、同一段樣本，數有多少比例的日子實際最低
+    // 真的跌到當天推的掛買參考。校準那一層沒有進這個回測（見卡片說明）。
+    lFill: fl ? fl.fill : null,
     sd: sdc, sdFull: fc.sd, cover: fc.cover, coverN: fc.coverN, r2: fc.r2, gate: _ovGate(gs),
     fgnW: fgn, ixOn: ixOn, ixF: addF, ixNow: ixNow,
     sdUp: _ovSd(fc.resU), sdDn: _ovSd(fc.resD),
