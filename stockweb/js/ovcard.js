@@ -138,6 +138,7 @@ function _ovcEstHtml(m, X) {
     + '<div class="ovc-stem ovc-eststem" style="left:' + x.toFixed(2) + '%"></div>'
     + '<div class="ovc-estlab' + pin + '" style="left:' + x.toFixed(2) + '%"'
     + ' title="' + String(m.tip).replace(/"/g, '&quot;') + '">'
+    + (m.dot || '')
     + '<span class="ovc-k">' + m.k + '</span>'
     + '<span class="ovc-v" style="color:' + m.col + '">' + _ovPx(m.v) + '</span>'
     + '<span class="ovc-p" style="color:' + _rbCol(m.p) + '">' + _ovcPctTxt(m.p) + '</span>'
@@ -155,7 +156,8 @@ function _ovcLabels(arr, side, rows, X) {
       + '<span class="ovc-t"><span class="ovc-k">' + m.k + '</span>'
       + '<span class="ovc-p" style="color:' + (m.base ? 'var(--text3)' : _rbCol(m.p)) + '">'
       + (m.base ? '基準' : _ovcPctTxt(m.p)) + '</span></span>'
-      + '<span class="ovc-v" style="color:' + m.col + '">' + _ovPx(m.v) + '</span>'
+      + '<span class="ovc-v" style="color:' + m.col + '">'
+      + (m.dot || '') + _ovPx(m.v) + '</span>'
       + '</div>';
   });
   return h + '</div>';
@@ -165,6 +167,29 @@ function _ovcLabels(arr, side, rows, X) {
 function _ovcTier(r2) {
   if (r2 == null) return 'var(--text3)';
   return r2 >= 0.5 ? 'var(--text)' : (r2 >= 0.25 ? 'var(--text2)' : 'var(--text3)');
+}
+
+// ── 今天碰到哪裡 ──
+//
+// 推估價講的是「今天可能走到哪」，圓點講的是「今天實際已經走到哪」。
+// 兩個合起來才知道現在站在哪一段：推估的下限已經碰到，代表今天走得比推的深；
+// 掛買還沒碰到，代表掛在那裡的單今天還沒有機會成交。
+//
+// 判定就是「今天的價格區間有沒有涵蓋這個價」：日內最低 <= 它 <= 日內最高。
+// 這一條對前收上下兩側都成立，不必分買賣兩套規則。
+// 開完盤的那一列（r.act）不畫：那一天的高低已成定論，表上另有實低、實收兩個標籤。
+function _ovcHit(r, v) {
+  if (r.act) return null;
+  if (!(v > 0) || !(r.liveLo > 0) || !(r.liveHi > 0)) return null;
+  var c = function (x) { return Math.round(x * 100); };
+  return c(r.liveLo) <= c(v) && c(v) <= c(r.liveHi);
+}
+function _ovcDot(hit, k, r) {
+  if (hit == null) return '';
+  var rng = (r.liveLo > 0 && r.liveHi > 0)
+    ? '（今天 ' + _ovPx(r.liveLo) + ' 到 ' + _ovPx(r.liveHi) + '）' : '';
+  return '<span class="ovc-dot' + (hit ? ' ovc-dot-on' : '') + '" title="'
+    + k + '：今天' + (hit ? '已經走到過這個價' : '還沒走到這個價') + rng + '"></span>';
 }
 
 function _ovcCard(r, HI, ticks) {
@@ -219,6 +244,12 @@ function _ovcCard(r, HI, ticks) {
          + '推估的最低不可能高於它，所以掛買參考那個數字也被它壓住。' });
   }
 
+  // 圓點只給推估出來的價。現價與今低本身就是今天走出來的，畫了必定實心，是噪音。
+  UP.concat(DN).forEach(function (m) {
+    if (m.k === '現價' || m.k === '今低') return;
+    m.dot = _ovcDot(_ovcHit(r, m.v), m.k, r);
+  });
+  if (est) est.dot = _ovcDot(_ovcHit(r, est.v), est.k, r);
   UP.forEach(function (m) { m.x = X(m.p); });
   DN.forEach(function (m) { m.x = X(m.p); });
   // 排位按重要性，畫的順序仍照價格由左到右，否則引線交錯看不出誰是誰
@@ -348,6 +379,10 @@ function ovcStockHtml() {
     var snap = _ovLive[String(r.code)] || null;
     r.liveLo = (r.liveSame && snap && snap.lo > 0 && (!snap.d || !t.d || snap.d === t.d))
       ? snap.lo : null;
+    // 今天的日內最高。圓點要判斷的是「今天的價格走到過這裡沒有」，
+    // 前收上方那幾個價要靠最高才答得出來，只有最低答不了。
+    r.liveHi = (r.liveSame && snap && snap.hi > 0 && (!snap.d || !t.d || snap.d === t.d))
+      ? snap.hi : null;
     r.liveLoAt = snap ? (snap.at || '') : '';
     r.liveWhy = (raw && raw.d && t.d && raw.d !== t.d)
       ? (raw.d < t.d ? '這是 ' + raw.d + ' 的收盤，推估的 ' + t.d + ' 那一盤還沒開始'
@@ -403,6 +438,9 @@ function ovcStockHtml() {
     + '<span><em class="ovc-e5"></em>' + (rows[0] && rows[0].act ? '實際收盤' : '預估收盤') + '</span>'
     + (rows.some(function (r) { return r.liveLo > 0; })
         ? '<span><em class="ovc-e6"></em>今天到現在的最低</span>' : '')
+    + (rows.some(function (r) { return !r.act && r.liveLo > 0 && r.liveHi > 0; })
+        ? '<span><em class="ovc-e7"></em>今天已走到</span>'
+          + '<span><em class="ovc-e8"></em>今天還沒走到</span>' : '')
     + '<span class="ovc-note">橫軸是對前收的漲跌幅，刻度 ±' + HI + '%，取所有框的第 80 百分位，不取最大值。'
     + '所有框共用，所以框跟框之間可以直接比長度，但標了「超出刻度」的那幾框除外。</span></div></div>';
 
@@ -456,6 +494,16 @@ function ovcStockHtml() {
     + '畫面上的掛買參考在校準成功時會再往下壓一點，實際掛得到的頻率會比這個數字低。'
     + '它也不含成交順序：同一價位的委託照時間排隊，最低只掃到一次的日子不一定輪得到你。'
     + '而且係數是用整段樣本配適的，不是當天只用當天以前的資料，這是樂觀的那一邊。</dd>'
+
+    + '<dt>今天碰到哪裡</dt><dd>每個推估價前面那顆圓點。實心代表今天的價格已經走到過這個價，'
+    + '空心代表還沒。判定就是「今天的日內最低到最高這一段有沒有涵蓋它」，'
+    + '前收上下兩側同一條規則。沒有今天的即時快照時整張框都不畫，不會拿昨天的高低充數。'
+    + '<br>現價與今低不畫：它們本身就是今天走出來的，畫了必定是實心。'
+    + '收盤之後那一列也不畫，當天的高低已成定論，表上另有實低與實收兩個標籤。'
+    + '<br>它跟推估價是同一件事的兩面：<b>推估講今天可能走到哪，圓點講今天實際已經走到哪。</b>'
+    + '下限已經實心代表今天走得比推的深；掛買還是空心代表掛在那裡的單今天還沒有機會成交。'
+    + '<br>不能告訴你什麼：走到過不代表掛得到。同一價位的委託照時間排隊，'
+    + '最低只掃到一次的那種日子不一定輪得到你。它也不說還會不會再走到一次。</dd>'
 
     + '<dt>今低</dt><dd>今天到現在走出來的最低價，橫條上那條淺青色的線。'
     + '它跟<b>掛買參考</b>是同一件事的兩面：掛買是模型推今天會跌到哪，今低是今天實際已經跌到哪。'
