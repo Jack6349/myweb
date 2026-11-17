@@ -113,6 +113,47 @@ function _ovbPxTag(code, ref) {
   return _ovPxTagHtml(code, ref.px, true, '');
 }
 
+// ── 今天已經碰到哪幾個檔位 ──
+//
+// 柱子講的是「歷史上碰得到的機率」，這一排講的是「今天實際碰到哪裡」。
+// 兩個合起來才知道現在該往下掛幾檔：柱子矮但今天已經碰到，代表今天走得比平常深；
+// 柱子高但今天還沒碰到，代表今天比平常強，再等一下或者往上挪一檔。
+//
+// 判定很直接：日內最低只要跌到某個價，那個價以上的買進掛價今天全都觸及過了。
+// 賣出那一側同理，用日內最高。價格一律換成「分」的整數再比，不留浮點數的容忍值，
+// 跟成交率的統計同一個作法。
+function _ovbToday(code) {
+  var lv = (typeof _ovLiveOf === 'function') ? _ovLiveOf(code) : null;
+  if (!lv) return null;
+  var tw = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+  if (lv.d && lv.d !== tw) return null;          // 不是今天的快照就不標
+  if (!(lv.lo > 0) && !(lv.hi > 0)) return null;
+  return { lo: (lv.lo > 0 ? lv.lo : null), hi: (lv.hi > 0 ? lv.hi : null), at: lv.at || '' };
+}
+// 一欄的標記。實心＝今天碰過，空心＝還沒，沒有今天的資料就整排不畫。
+function _ovbHit(tdy, side, px) {
+  if (!tdy) return null;
+  if (side === 'sell') {
+    if (!(tdy.hi > 0)) return null;
+    return _bsCents(tdy.hi) >= _bsCents(px);
+  }
+  if (!(tdy.lo > 0)) return null;
+  return _bsCents(tdy.lo) <= _bsCents(px);
+}
+function _ovbHitHtml(tdy, c, px) {
+  if (!tdy) return '';
+  var one2 = function (side, lb) {
+    var v = _ovbHit(tdy, side, px);
+    if (v == null) return '<span class="ovb-dot ovb-dot-na"></span>';
+    var what = (side === 'sell' ? '日內最高 ' + _bsPx(tdy.hi) : '日內最低 ' + _bsPx(tdy.lo));
+    return '<span class="ovb-dot' + (v ? ' ovb-dot-on' : '') + '" title="'
+      + _bsPx(px) + '：今天' + (v ? '已經觸及過' : '還沒碰到') + '（' + what
+      + (tdy.at ? '，' + tdy.at : '') + '）">' + (lb || '') + '</span>';
+  };
+  if (c.side === 'mid') return '<div class="ovb-hit">' + one2('buy') + one2('sell') + '</div>';
+  return '<div class="ovb-hit">' + one2(c.side) + '</div>';
+}
+
 function _ovbCard(code) {
   if (typeof bsFill !== 'function') return '';
   var dir = _ovbDir(), sel = _ovbSel(dir);
@@ -136,6 +177,7 @@ function _ovbCard(code) {
   }
 
   var ref = _ovbRef(code, base.last);
+  var tdy = _ovbToday(code);
   var tick = base.tick, last = ref.px;
   // 另一邊的方向：今天是跌就拿漲的那組當對照，反之亦然。
   // 兩邊都畫是為了看得到「萬一明天反過來，這個掛價變成多少」。
@@ -200,11 +242,17 @@ function _ovbCard(code) {
           : rate1(pick(main, c.side, c.k))) + '</div>'
       + '<div class="ovb-px">' + _bsPx(px) + '</div>'
       + '<div class="ovb-off">' + (c.k === 0 ? '前收' : (c.side === 'buy' ? '−' : '＋') + c.k + ' 檔') + '</div>'
+      + _ovbHitHtml(tdy, c, px)
       + '</div>';
   });
   h += '</div>';
 
   h += '<div class="ovb-foot">'
+    + (tdy ? '<span>今天 <b>'
+        + (tdy.lo > 0 ? '最低 ' + _bsPx(tdy.lo) : '')
+        + (tdy.lo > 0 && tdy.hi > 0 ? '　' : '')
+        + (tdy.hi > 0 ? '最高 ' + _bsPx(tdy.hi) : '')
+        + '</b>' + (tdy.at ? '<span class="ovb-at">' + tdy.at + '</span>' : '') + '</span>' : '')
     + '<span>資料到 <b>' + (base.lastD || '—') + '</b></span>'
     + '<span>HYG 跌／漲 <b>' + (dn ? dn.n : 0) + ' ／ ' + (up ? up.n : 0) + ' 日</b></span>'
     + '<span>近 30 日 <b>' + (r30 ? r30.n + ' 日' : '樣本不足') + '</b></span>'
@@ -240,6 +288,8 @@ function ovcBondHtml() {
     + '<span><em class="ovb-e2"></em>賣出成交率（日內最高有沒有漲到）</span>'
     + '<span><em class="ovb-e3"></em>反方向的日子</span>'
     + '<span><em class="ovb-e4"></em>近 30 日</span>'
+    + '<span><em class="ovb-e5"></em>今天已觸及</span>'
+    + '<span><em class="ovb-e6"></em>今天還沒碰到</span>'
     + '<span class="ovb-note">柱高是 0 到 100%，所有框共用，框跟框之間可以直接比高度。'
     + '橫軸是掛價距前收幾個升降單位，左邊便宜、右邊貴。</span></div>';
 
@@ -276,6 +326,13 @@ function ovcBondHtml() {
     + '照時間排隊，日內最低只碰到一次的那種日子不一定輪得到你。'
     + '要判斷划不划算得看別的東西，這一頁不回答。</dd>'
 
+    + '<dt>今天碰到哪裡</dt><dd>每一欄最底下那顆圓點。實心代表今天的日內最低（賣出那半邊是最高）'
+    + '已經走到這個價，空心代表還沒。沒有今天的即時快照時整排不畫，不會拿昨天的高低充數。'
+    + '<br>它跟柱子是兩件事：<b>柱子是歷史上碰得到的機率，圓點是今天實際碰到哪裡。</b>'
+    + '柱子矮但今天已經碰到，代表今天走得比平常深；柱子高但今天還沒碰到，'
+    + '代表今天比平常強，再等一下或者往上挪一檔。'
+    + '<br>不能告訴你的是「還會不會再碰一次」。已經觸及過不代表你掛得到：'
+    + '同一價位的委託照時間排隊，日內最低只掃到一次的那種日子不一定輪得到你。</dd>'
     + '<dt>近 30 日那一條橫線</dt><dd>同一個掛價在最近 30 個交易日的實際成交率，'
     + '回答的是「現在跟平常比是鬆還是緊」，不拆 HYG 方向。'
     + '<b>它不是更準的那個數字</b>：30 天的標準誤約 ±9 個百分點，'

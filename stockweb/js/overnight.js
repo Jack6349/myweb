@@ -519,7 +519,8 @@ async function _ovLiveTick(always) {
       if (x && x.code && x.close > 0) {
         // 開盤價與當日最低也存下來：盤中校準要用開盤當基準，日內最低要用它封頂
         _ovLive[String(x.code)] = { px: +x.close, op: (x.open > 0 ? +x.open : null),
-          lo: (x.low > 0 ? +x.low : null), d: (x.datetime || '').slice(0, 10),
+          lo: (x.low > 0 ? +x.low : null), hi: (x.high > 0 ? +x.high : null),
+          d: (x.datetime || '').slice(0, 10),
           at: (x.datetime || '').slice(11, 19) };
       }
     });

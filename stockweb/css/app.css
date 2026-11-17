@@ -2569,6 +2569,17 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-rate.ovb-na { color: var(--text3); font-weight: 400; }
 .ovb-px { font-size: 15.5px; color: var(--text); font-variant-numeric: tabular-nums; }
 .ovb-off { font-size: 12.5px; color: var(--th); font-weight: 600; }
+/* 今天碰到哪裡。實心＝已觸及，空心＝還沒。
+   不用紅綠：紅綠在這一站是漲跌，而「碰到了沒」不是漲跌。 */
+.ovb-hit { display: flex; justify-content: center; gap: 5px; margin-top: 4px; height: 10px; }
+.ovb-dot { width: 8px; height: 8px; border-radius: 50%;
+  border: 1px solid var(--text3); cursor: help; }
+.ovb-dot-on { background: var(--sum); border-color: var(--sum); }
+.ovb-dot-na { opacity: .25; }
+.ovb-at { margin-left: 6px; color: var(--text3); font-weight: 400; }
+.ovb-e5 { width: 8px; height: 8px; border-radius: 50%; background: var(--sum); }
+.ovb-e6 { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--text3); }
+
 .ovb-foot { display: flex; gap: 14px; flex-wrap: wrap; border-top: 1px solid var(--border);
   padding-top: 8px; margin-top: 10px; font-size: 13.5px; color: var(--text2); }
 .ovb-foot b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
