@@ -86,6 +86,12 @@ var SET_SECTIONS = [
       render: function () { if (typeof renderTouchSel === 'function') renderTouchSel(); },
       status: function () { return (typeof touchStatus === 'function') ? touchStatus() : null; } }
   ] },
+  { id: 'view', title: '顯示標記', rows: [
+    { key: 'chg-mark', title: '漲跌幅底線門檻', inline: _setChgMarkHtml,
+      desc: '漲跌幅超過門檻時，數字底下加一條線，顏色跟數字同色，所以漲是紅線、跌是綠線。'
+          + '持股庫存（漲跌、漲跌幅、成份股漲跌）、即時持股、關注股票、成份股曝險都適用。'
+          + '兩邊可以不對稱，清空代表關掉那一邊' }
+  ] },
   { id: 'cache', title: '快取與儲存', rows: [
     { key: 'cache-list', title: '本機快取', bodyId: 'params-cache-body',
       desc: '各項快取的大小與更新時間，可個別清除。清除只影響下次載入速度，不會刪掉你的設定',
@@ -152,6 +158,21 @@ function _setFxJpyHtml() {
   return '<span class="set-inline"><input id="fx-jpy-thr" type="number" step="0.0001" class="al-in" ' +
     'value="' + (t == null ? '' : t) + '" oninput="fxJpySet(this.value)"><span class="set-unit">TWD/JPY</span></span>' +
     '<span class="set-lb">目前 ' + (cur == null ? '—' : cur.toFixed(4)) + '</span>';
+}
+
+function _setChgMarkHtml() {
+  var t = (typeof chgMarkThr === 'function') ? chgMarkThr() : { hi: 2, lo: 2 };
+  var f = function (id, v, sign) {
+    return '<span class="set-inline"><span class="set-unit">' + sign + '</span>'
+      + '<input id="' + id + '" type="number" step="0.5" min="0" class="al-in" value="'
+      + (v == null ? '' : v) + '" oninput="chgMarkChanged()"><span class="set-unit">%</span></span>';
+  };
+  // 輸入格只收絕對值，方向用左邊那個符號講。讓使用者自己打負號的話，
+  // 少打一個就會變成「跌超過 +2%」，那是永遠成立的條件，整欄會全部亮起來。
+  return '<span class="set-triple">'
+    + '<span class="set-lb">漲幅</span>' + f('chg-mk-hi', t.hi, '\uff0b')
+    + '<span class="set-lb">跌幅</span>' + f('chg-mk-lo', t.lo, '\uff0d')
+    + '</span>';
 }
 
 function _setSblHtml() {

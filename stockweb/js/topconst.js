@@ -92,7 +92,7 @@ function renderTopConstTable() {
   if (!wrap) return;
   var html = '<div class="inv-table-wrap tc-wrap"><table class="inv-table tc-table"><thead><tr>' +
     '<th>代號</th><th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th><th>名稱</th><th class="num">總權重</th><th class="num">現價</th>' +
-    '<th class="num">漲跌</th><th class="num">漲跌幅</th><th>持有明細（ETF 權重）</th></tr></thead><tbody>';
+    '<th class="num" title="超過門檻的數字底下會多一條線，漲紅跌綠。門檻在參數設定的「顯示標記」">漲跌</th>' + '<th class="num" title="超過門檻的數字底下會多一條線，漲紅跌綠。門檻在參數設定的「顯示標記」">漲跌幅</th><th>持有明細（ETF 權重）</th></tr></thead><tbody>';
   _topConstRows.forEach(function (r) { html += '<tr id="tc-tr-' + r.code + '">' + topConstRowHtml(r) + '</tr>'; });
   html += '</tbody></table></div>' +
     '<div class="detail-note"><dl>' +
@@ -124,8 +124,8 @@ function topConstRowHtml(r) {
     '<td class="num" title="曝險 $' + Math.round(r.expo).toLocaleString('zh-TW') + '"><b>' + r.pct.toFixed(2) + '%</b></td>' +
     '<td class="num ' + ccls + '">' + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
       + '</td>' +
-    '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
-    '<td class="num ' + ccls + '">' + (chgPct == null ? '—' : fmtPct(chgPct)) + '</td>' +
+    '<td class="num ' + ccls + chgMark(chgPct) + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
+    '<td class="num ' + ccls + chgMark(chgPct) + '">' + (chgPct == null ? '—' : fmtPct(chgPct)) + '</td>' +
     '<td class="tc-holders">' + holders + '</td>';
 }
 

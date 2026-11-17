@@ -57,9 +57,10 @@ function _wtSorted(list) {
     return (asc ? c : -c) || idx[a] - idx[b];
   });
 }
-function _wtTh(key, label, cls) {
+function _wtTh(key, label, cls, tip) {
   var on = _wtSort.replace(/(Asc|Desc)$/, '') === key, asc = on && /Asc$/.test(_wtSort);
-  return '<th class="' + (cls ? cls + ' ' : '') + 'sort-th' + (on ? ' sorted' : '') + '" onclick="wtSortCol(\'' + key + '\')">' + label +
+  return '<th class="' + (cls ? cls + ' ' : '') + 'sort-th' + (on ? ' sorted' : '') + '"'
+    + (tip ? ' title="' + tip + '"' : '') + ' onclick="wtSortCol(\'' + key + '\')">' + label +
     '<span class="sort-ind">' + (on ? (asc ? '▲' : '▼') : '↕') + '</span></th>';
 }
 
@@ -246,7 +247,7 @@ function renderWatch() {
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
     '<th></th><th></th>' + _wtTh('code', '代號') +
     '<th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th>' +
-    _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num') +
+    _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num', '超過門檻的數字底下會多一條線，漲紅跌綠。門檻在參數設定的「顯示標記」') +
     (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
   var ncol = 7 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);   // 7：原本 6 欄加上趨勢
   _wtSorted(list).forEach(function (code) {
@@ -326,7 +327,8 @@ function _wtRowHtml(code) {
       + (price != null && typeof rbStreakSlot === 'function' ? rbStreakSlot(code) : '') + '</td>' +
     '<td class="num ' + ccls + '">'
       + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—') + '</td>' +
-    '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt) + '　' + fmtPct(chgPct)) + '</td>' +
+    '<td class="num ' + ccls + '">' + (chgAmt == null ? '—'
+      : chgMarkSpan(fmtChg(chgAmt), chgPct) + '　' + chgMarkSpan(fmtPct(chgPct), chgPct)) + '</td>' +
     (typeof esWatchCells === 'function' ? esWatchCells(code) : '') +      // ETF 評比指標（etf-screen.js）
     '<td><button class="swap-mini" onclick="wtRemove(\'' + code + '\')">移除</button></td>';
 }

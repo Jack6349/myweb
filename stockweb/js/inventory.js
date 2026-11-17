@@ -332,9 +332,11 @@ function invValRow(p) {
     '<td class="num ' + ccls + '">'
       + (price != null ? '<span class="rb-bpx">' + price.toFixed(2) + '</span>' : '—')
       + '</td>' +
-    '<td class="num ' + ccls + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
-    '<td class="num ' + ccls + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
-    '<td class="num inv-cchg ' + estCls + '" ' + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
+    // 金額那一欄沒有自己的百分比門檻，跟著同一列的漲跌幅一起標
+    '<td class="num ' + ccls + chgMark(chg) + '">' + (chgAmt == null ? '—' : fmtChg(chgAmt)) + '</td>' +
+    '<td class="num ' + ccls + chgMark(chg) + '">' + (chg == null ? '—' : fmtPct(chg)) + '</td>' +
+    '<td class="num inv-cchg ' + estCls + (cm ? chgMark(cm.est) : '') + '" '
+      + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
       (cm && cm.est != null ? fmtPct(cm.est) : (constWait ? '<i class="spin"></i>' : '—')) + '</td>' +
     costCellHtml(avgPx, price) +
     '<td class="num"' + notReady + '>' + Math.round(cost).toLocaleString('zh-TW') + '</td>' +
