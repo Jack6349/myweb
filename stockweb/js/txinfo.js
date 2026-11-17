@@ -42,6 +42,9 @@ async function loadSettleBox() {
   try {
     var rows = await fetchSettlements();
     _abSettle = rows || [];
+    // 券商只回今天、明天、後天。餘額起點到今天之間那幾天要先補出來，
+    // 不然這條餘額線從起點就是斷的（細節見 acct.js 的「過去的交割」）
+    try { await abSettlePrepare(); } catch (e) { hush('txinfo', e); }
     var sp = splitSettlements(rows || []);
     var f = abFlow(rows || []);
     var bal = f.start, abDay = abAtDay();
@@ -95,11 +98,27 @@ async function loadSettleBox() {
       var tag = x.kind === 'plan' ? '<span class="tx-kind k-plan">自訂</span>'
                                   : '<span class="tx-kind k-stl">交割</span>';
       // 已扣款但仍列出：它不在輸入當時的餘額裡（餘額是更早填的），所以照樣要扣
+      // 這一列的金額從哪裡來。券商只回今天、明天、後天，更早的是自己補的，
+      // 補的方式有兩種，可信度不同，不能混在一起看起來都像券商講的。
+      var src = '';
+      if (x.src === 'rebuild') {
+        src = '<span class="tx-src" title="券商已經不回這一天了。金額是從兩個交易日前的建倉明細'
+          + '重建的：買進金額加回該批已領的配息，再減掉當天賣出的淨收入。'
+          + '四個日子對過券商與銀行對帳單都吻合。補不到的只有一種：那天買的已經整批賣掉或出借，'
+          + '明細裡找不到。">由明細重建</span>';
+      } else if (x.src === 'broker') {
+        src = '<span class="tx-src" title="券商已經不回這一天了，這是更早之前抓到時存下來的數字，'
+          + '由券商自己算出。">先前的紀錄</span>';
+      } else if (x.src === 'zero') {
+        src = '<span class="tx-src" title="這幾天在建倉明細與已實現損益裡都找不到任何進出，當作 0：'
+          + (x.days || []).join('、')
+          + '。唯一會漏的情況是那天買的已經整批賣掉或出借。">' + (x.days || []).length + ' 天</span>';
+      }
       var pill = paid ? '<span class="tx-paid">已扣款</span>'
         : (due ? '<span class="tx-due">今日 ' + SETTLE_PAID_HOUR + ':00</span>' : '');
       html += '<tr class="' + (x.kind === 'plan' ? 'tx-cf-plan' : (due ? 'tx-settle-due' : '')) + '">'
         + '<td class="tx-sd">' + (x.d || '').slice(5).replace('-', '/') + '</td>'
-        + '<td>' + tag + x.label + pill + '</td>'
+        + '<td>' + tag + x.label + pill + src + '</td>'
         + amtCell(x.amt)
         + balCell(runS, !happened(x), !happened(x) ? '日期還沒到，這是推算' : '')
         + '<td class="tx-cf-act">' + (x.kind === 'plan'
@@ -135,6 +154,14 @@ async function loadSettleBox() {
       });
       html += '<tr class="tx-settle-total"><td></td><td>今年剩下合計</td>'
         + amtCell(runD) + '<td class="num tx-bal"></td><td></td></tr></tbody></table>';
+    }
+    // 跟自訂進出撞在一起、因此沒有列入的配息。略過是對的，但不能讓它無聲無息
+    var skip = (typeof abDivSkipped === 'function') ? abDivSkipped() : [];
+    if (skip.length) {
+      html += '<div class="tx-cf-none tx-sec-b">'
+        + skip.map(function (k) { return k.d.slice(5).replace('-', '/') + ' ' + k.code; }).join('、')
+        + ' 的配息沒有列入：同一天你自己排了一筆自訂進出，備註裡提到這一檔，'
+        + '估算再加一次會算兩次。自訂那筆如果沒有含配息，把備註裡的代號拿掉就會恢復。</div>';
     }
 
     // ── 兩邊合起來：要看「年底會有多少」才用這個數字 ──
@@ -173,6 +200,15 @@ async function loadSettleBox() {
       + '<span id="ap-msg" class="wt-dim"></span></div>';
 
     html += '<div class="detail-note nb">金額負數＝付出（銀行扣款、提領），正數＝收到（應收、入金、配息）。'
+      + '<br><b>比餘額起點晚、比今天早的那幾天</b>：券商的交割介面只回今天、明天、後天，'
+      + '沒有日期參數可以往回查，所以中間那幾天要自己補，補完才接得上餘額。'
+      + '有兩種補法，列上會標出來。標「先前的紀錄」是更早開這一頁時抓到並存下來的，'
+      + '由券商自己算，最準。標「由明細重建」是從建倉明細反推的：'
+      + '兩個交易日前那天的買進金額，加回那批已經領到的配息，再減掉當天賣出的淨收入。'
+      + '加回配息這一步不能省，券商在明細裡記的是扣掉配息之後的淨額，不是當初付出去的錢。'
+      + '實測四個日子（成交 11/10、11/12、11/13、11/16）對券商與銀行對帳單都分毫不差。'
+      + '重建唯一補不到的是「那天買的到今天已經整批賣掉或出借」，那種批次不在明細裡；'
+      + '賣出那邊不會漏，已實現損益查得到日期區間。完全查不到進出的日子當作 0，但照樣排一列。'
       + '<br><b>為什麼分成兩張</b>：交割是已經成立的應付，那筆錢一定會在那天離開帳戶；'
       + '配息是預估收入，金額與發放日都還可能變，而且要到那天才真的入帳。'
       + '合成一條線會讓「付得出來嗎」被還沒到手的錢蓋過去——'

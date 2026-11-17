@@ -47,7 +47,14 @@ async function fetchPositionDetail(detailId) {
 }
 // 台幣交割（T/T+1/T+2 應收付）：[{date:'YYYY-MM-DD', amount, T:0|1|2}]
 async function fetchSettlements() {
-  return brokerPost('settlements', {});
+  var rows = await brokerPost('settlements', {});
+  // 券商只回今天、明天、後天，沒有日期參數可以往回查。今天看到的 T+1、T+2
+  // 就是未來兩天的答案，所以看到就交給帳戶那邊記下來，過去的日子才補得回來。
+  // 細節寫在 acct.js 的「過去的交割」那一段。
+  if (typeof abSettleSeen === 'function') {
+    try { abSettleSeen(rows); } catch (e) { hush('broker', e); }
+  }
+  return rows;
 }
 // 交割扣款的時間門檻。
 //
