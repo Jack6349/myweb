@@ -54,15 +54,34 @@ function _ovcLive(code, t) {
 }
 
 // 軸寬由當天的資料決定
-function _ovcAxis(rows) {
+// 這一框自己用到的最大偏離（百分點）
+function _ovcSpan(r) {
   var m = 0;
-  rows.forEach(function (r) {
-    [r.loPx, r.hiPx, r.lLoPx, r.lHiPx, r.lPx, r.cPx, r.oPx].forEach(function (v) {
-      if (v > 0 && r.base > 0) m = Math.max(m, Math.abs((v / r.base - 1) * 100));
-    });
-    if (r.live > 0 && r.base > 0) m = Math.max(m, Math.abs((r.live / r.base - 1) * 100));
+  [r.loPx, r.hiPx, r.lLoPx, r.lHiPx, r.lPx, r.cPx, r.oPx, r.live].forEach(function (v) {
+    if (v > 0 && r.base > 0) m = Math.max(m, Math.abs((v / r.base - 1) * 100));
   });
-  return Math.max(2, Math.ceil(m * 1.1 * 2) / 2);
+  if (r.act) {
+    [r.act.cPct, r.act.lPct].forEach(function (v) { if (v != null) m = Math.max(m, Math.abs(v)); });
+  }
+  return m;
+}
+
+// ── 軸寬取第 80 百分位，不取最大值 ──
+//
+// 取最大值的話，只要清單裡有一檔樣本少、區間特別寬的，整頁每一框都被它壓扁。
+// 2026-11-18 實測：軸跑到 ±11.5%，而當天前四檔最寬的也只到 −5.53%，
+// 於是 00964 那條 3.0 個百分點的收盤區間只佔整條軸的 13%。
+//
+// 代價講清楚：超出刻度的那幾框，長度不再能跟其他框直接比，要看數字。
+// 它們的共同特徵就是樣本不足、殘差大，本來就不該拿長度去跟別人比。
+// 超出的框會在框頭標出來，不是悄悄裁掉。
+var OVC_AXIS_P = 0.80;
+function _ovcAxis(rows) {
+  var v = rows.map(_ovcSpan).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
+  if (!v.length) return 2;
+  // 最近位次法。只有一兩框時 p80 本來就等於最大值，不另外處理
+  var i = Math.min(v.length - 1, Math.max(0, Math.ceil(OVC_AXIS_P * v.length) - 1));
+  return Math.max(2, Math.ceil(v[i] * 1.1 * 2) / 2);
 }
 
 function _ovcPctTxt(v, dec) {
@@ -159,8 +178,15 @@ function _ovcCard(r, HI, ticks) {
   UP.sort(function (a2, b2) { return a2.x - b2.x; });
   DN.sort(function (a2, b2) { return a2.x - b2.x; });
 
-  var h = '<div class="ovc-card' + (r.cal ? ' ovc-calc' : '') + '"><div class="ovc-head">'
+  // 這一框有沒有畫到軸外。有的話長度不可信，要講出來
+  var over = _ovcSpan(r) > HI + 1e-9;
+  var h = '<div class="ovc-card' + (r.cal ? ' ovc-calc' : '') + (over ? ' ovc-over' : '')
+    + '"><div class="ovc-head">'
     + '<span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span>'
+    + (over ? '<span class="ovc-ovb" title="這一框用到的價格超出了共用刻度的範圍（±' + HI
+        + '%），超出的那一端被切在框邊。數字本身沒有被改，但這一框的長度不能再拿去跟其他框比。'
+        + '刻度取的是所有框的第 80 百分位，不取最大值：取最大值的話一檔特別寬的會把其餘每一框都壓扁。'
+        + '區間特別寬通常代表這一檔樣本少、殘差大。">超出刻度</span>' : '')
     + (r.ixOn ? '<span class="ov-fx" title="這一檔的成份股有 '
         + (r.fgnW == null ? '' : r.fgnW.toFixed(0)) + '% 在海外，實測 Nasdaq 在夜盤與費半之上還能多解釋一截，'
         + '所以這一框的推估多掛了 Nasdaq。">＋N</span>' : '')
@@ -174,13 +200,17 @@ function _ovcCard(r, HI, ticks) {
     if (Math.abs(t) > HI - 1e-9) return;        // 兩端的刻度就是框線，不重畫
     h += '<div class="ovc-gl' + (t === 0 ? ' ovc-zero' : '') + '" style="left:' + X(t).toFixed(2) + '%"></div>';
   });
+  // 被切到的那一端改成方角，一眼看得出它沒有畫完
+  var clip = function (a, b) {
+    return (P(a) < -HI ? ' ovc-clipl' : '') + (P(b) > HI ? ' ovc-clipr' : '');
+  };
   if (r.loPx > 0 && r.hiPx > 0) {
-    h += '<div class="ovc-band" style="left:' + X(P(r.loPx)).toFixed(2) + '%;width:'
-       + (X(P(r.hiPx)) - X(P(r.loPx))).toFixed(2) + '%"></div>';
+    h += '<div class="ovc-band' + clip(r.loPx, r.hiPx) + '" style="left:' + X(P(r.loPx)).toFixed(2)
+       + '%;width:' + (X(P(r.hiPx)) - X(P(r.loPx))).toFixed(2) + '%"></div>';
   }
   if (r.lLoPx > 0 && r.lHiPx > 0) {
-    h += '<div class="ovc-bandb" style="left:' + X(P(r.lLoPx)).toFixed(2) + '%;width:'
-       + (X(P(r.lHiPx)) - X(P(r.lLoPx))).toFixed(2) + '%"></div>';
+    h += '<div class="ovc-bandb' + clip(r.lLoPx, r.lHiPx) + '" style="left:' + X(P(r.lLoPx)).toFixed(2)
+       + '%;width:' + (X(P(r.lHiPx)) - X(P(r.lLoPx))).toFixed(2) + '%"></div>';
   }
   if (!r.act && r.cPx > 0) h += '<div class="ovc-mk ovc-est" style="left:' + X(P(r.cPx)).toFixed(2) + '%"></div>';
   if (r.act && r.act.c > 0) h += '<div class="ovc-mk ovc-est" style="left:' + X(r.act.cPct).toFixed(2) + '%"></div>';
@@ -288,8 +318,8 @@ function ovcStockHtml() {
     + '<span><em class="ovc-e3"></em>掛買參考</span>'
     + '<span><em class="ovc-e4"></em>' + (rows[0] && rows[0].act ? '實際日內最低' : '現價') + '</span>'
     + '<span><em class="ovc-e5"></em>' + (rows[0] && rows[0].act ? '實際收盤' : '預估收盤') + '</span>'
-    + '<span class="ovc-note">橫軸是對前收的漲跌幅，刻度 ±' + HI + '%，由當天最寬的那一檔決定。'
-    + '所有框共用，所以框跟框之間可以直接比長度。</span></div></div>';
+    + '<span class="ovc-note">橫軸是對前收的漲跌幅，刻度 ±' + HI + '%，取所有框的第 80 百分位，不取最大值。'
+    + '所有框共用，所以框跟框之間可以直接比長度，但標了「超出刻度」的那幾框除外。</span></div></div>';
 
   // ── 排序 ──
   h += '<div class="ovc-sortbar"><span class="ovc-slb">排序</span>';
