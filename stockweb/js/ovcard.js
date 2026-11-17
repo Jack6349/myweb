@@ -44,6 +44,14 @@ function ovcSort(k) {
 // 這一頁只收股票型。債券另外一個頁籤，兩者的橫軸意義不同，混在一起不能比。
 function _ovcIsBond(code) { return /^00\d+[BD]$/.test(String(code)); }
 
+// 有沒有持股。排序的第一順位，因為兩種框要做的事不一樣：
+// 持有的是「今天要不要加碼、掛在哪」，關注的是「還沒進場，看看掛得到嗎」。
+// 兩種混在一起由價格排，眼睛每掃幾框就要重新判斷一次這框屬於哪一種。
+function _ovcHeld(code) {
+  var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  return !!(m[String(code)] > 0);
+}
+
 // 現價快照。要跟推估的是同一盤，日期對不上就不顯示，寧可少一個標記
 // 也不要把別的交易日的價畫在今天的軸上。
 function _ovcLive(code, t) {
@@ -183,6 +191,8 @@ function _ovcCard(r, HI, ticks) {
   var h = '<div class="ovc-card' + (r.cal ? ' ovc-calc' : '') + (over ? ' ovc-over' : '')
     + '"><div class="ovc-head">'
     + '<span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span>'
+    + (_ovcHeld(r.code) ? ''
+        : '<span class="ovc-wt" title="這一檔在關注清單裡，目前沒有持股。推估的算法與持股的那幾檔完全相同。">關注</span>')
     + (over ? '<span class="ovc-ovb" title="這一框用到的價格超出了共用刻度的範圍（±' + HI
         + '%），超出的那一端被切在框邊。數字本身沒有被改，但這一框的長度不能再拿去跟其他框比。'
         + '刻度取的是所有框的第 80 百分位，不取最大值：取最大值的話一檔特別寬的會把其餘每一框都壓扁。'
@@ -284,6 +294,9 @@ function ovcStockHtml() {
 
   var sk = _ovcSort();
   rows.sort(function (a, b) {
+    // 第一順位永遠是持有與否，排序鈕選的那一欄只在各自的組內排
+    var ha = _ovcHeld(a.code) ? 0 : 1, hb = _ovcHeld(b.code) ? 0 : 1;
+    if (ha !== hb) return ha - hb;
     var x = _ovcSortVal(a, sk), y = _ovcSortVal(b, sk);
     if (sk === 'code') return x < y ? -1 : (x > y ? 1 : 0);
     if (x == null) return 1;
@@ -329,7 +342,7 @@ function ovcStockHtml() {
     + '所有框共用，所以框跟框之間可以直接比長度，但標了「超出刻度」的那幾框除外。</span></div></div>';
 
   // ── 排序 ──
-  h += '<div class="ovc-sortbar"><span class="ovc-slb">排序</span>';
+  h += '<div class="ovc-sortbar"><span class="ovc-slb" title="持有的一律排在前面，這幾顆鈕是在持有與關注各自的組內排。">持有優先，再依</span>';
   OVC_SORTS.forEach(function (s) {
     h += '<button class="ovc-sb' + (sk === s.k ? ' on' : '') + '" onclick="ovcSort(\'' + s.k + '\')">'
       + s.t + '</button>';

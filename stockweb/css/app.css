@@ -2574,6 +2574,9 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-foot b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* 超出共用刻度的框。用框線不用顏色：紅綠在這一頁是漲跌，
    拿顏色標狀態會跟數值的方向搶同一個維度。 */
+/* 關注但沒持股。中性框，與夜推債券同一個寫法 */
+.ovc-wt { display: inline-block; margin-left: 8px; padding: 0 6px; font-size: 12px;
+  color: var(--text3); border: 1px solid var(--border); border-radius: 4px; cursor: help; }
 .ovc-ovb { display: inline-block; margin-left: 8px; padding: 0 6px; font-size: 13px;
   color: var(--warn); border: 1px solid var(--warn); border-radius: 4px; cursor: help; }
 .ovc-over { border-color: var(--warn); }
