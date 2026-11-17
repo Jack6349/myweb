@@ -580,29 +580,99 @@ function _ovLiveCell(r, t) {
 // 混在一起，而且三角不必靠顏色就讀得出方向，色盲或螢幕偏色時仍然成立。
 //
 // base 要是「現價那一天的前一個收盤」。拿當天自己的收盤當基準會算出必定接近 0 的漲跌。
+// ── 現價取最新的那一個 ──
+//
+// 兩個來源：30 秒一次的券商快照（所有標的都有），以及逐筆推送（只有持股有）。
+// 同一天時取時間較晚的那一個，所以持股在推送進來的瞬間就是最新的，
+// 關注清單那幾檔仍然是半分鐘換一次。
+//
+// 只在「快照就是今天」時才讓推送蓋過去。推送那份沒有日期，晚上推估明天的時候
+// 拿它當今天用，會把昨天的收盤算成今天的現價。
+function _ovPxFresh(code) {
+  code = String(code);
+  var lv = _ovLive[code] || null;
+  var r = (typeof _rows !== 'undefined' && _rows && _rows[code]) || null;
+  var tw = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+  var sameDay = lv && (!lv.d || lv.d === tw);
+  if (r && r.close > 0 && (!lv || sameDay)) {
+    if (!lv || !lv.at || (r.time && r.time > lv.at)) {
+      return { px: +r.close, at: r.time || (lv ? lv.at : ''), src: 'tick' };
+    }
+  }
+  if (lv && lv.px > 0) return { px: lv.px, at: lv.at || '', src: 'snap' };
+  return (r && r.close > 0) ? { px: +r.close, at: r.time || '', src: 'tick' } : null;
+}
+
+function _ovPxBody(px, base, at) {
+  var d = (base > 0) ? (px - base) : null;
+  var p = (base > 0) ? (px / base - 1) * 100 : null;
+  var tri = function (v) { return v > 0 ? '\u25b2' : (v < 0 ? '\u25bc' : '\u2014'); };
+  var col = _rbCol(d);
+  return '<span class="ovx-px" style="color:' + col + '">' + _ovPx(px) + '</span>'
+    + '<span class="ovx-v" style="color:' + col + '">' + tri(d) + (d == null ? '' : Math.abs(d).toFixed(2)) + '</span>'
+    + '<span class="ovx-v" style="color:' + col + '">' + tri(p) + (p == null ? '' : Math.abs(p).toFixed(2) + '%') + '</span>';
+}
+
+function _ovPxTip(px, base, at) {
+  return '現價 ' + _ovPx(px) + (at ? '（' + at + '）' : '')
+    + '，對前收 ' + _ovPx(base) + ' 的漲跌。'
+    + '持股是逐筆更新，關注清單那幾檔是每 30 秒一次，13:35 之後停在收盤價。';
+}
+
 function _ovPxTagHtml(code, base, dayOk, whyStale) {
-  var lv = (typeof _ovLiveOf === 'function') ? _ovLiveOf(code) : null;
-  if (!lv || !(lv.px > 0)) {
+  var f = _ovPxFresh(code);
+  if (!f) {
     return '<span class="ovx" title="券商快照取不到（本機連線未開）"><span class="ovx-na">—</span></span>';
   }
   if (!dayOk) {
-    // 不是這一盤的價就不給漲跌：跟前收相減沒有意義，給了反而像真的
+    // 不是這一盤的價就不給漲跌：跟前收相減沒有意義，給了反而像真的。
+    // 這種狀態也不掛逐筆更新的標記，推送進來不會去動它。
+    var lv = _ovLive[String(code)] || null;
     return '<span class="ovx" title="' + String(whyStale || '').replace(/"/g, '&quot;') + '">'
-      + '<span class="ovx-stale">' + _ovPx(lv.px) + '</span>'
-      + (lv.d ? '<span class="ovx-d">' + lv.d.slice(5).replace('-', '/') + '</span>' : '')
+      + '<span class="ovx-stale">' + _ovPx(f.px) + '</span>'
+      + ((lv && lv.d) ? '<span class="ovx-d">' + lv.d.slice(5).replace('-', '/') + '</span>' : '')
       + '</span>';
   }
-  var d = (base > 0) ? (lv.px - base) : null;
-  var p = (base > 0) ? (lv.px / base - 1) * 100 : null;
-  var tri = function (v) { return v > 0 ? '\u25b2' : (v < 0 ? '\u25bc' : '\u2014'); };
-  var col = _rbCol(d);
-  var tip = '現價 ' + _ovPx(lv.px) + (lv.at ? '（' + lv.at + '）' : '')
-    + '，對前收 ' + _ovPx(base) + ' 的漲跌。盤中每 30 秒更新一次，13:35 之後停在收盤價。';
-  return '<span class="ovx" title="' + tip + '">'
-    + '<span class="ovx-px" style="color:' + col + '">' + _ovPx(lv.px) + '</span>'
-    + '<span class="ovx-v" style="color:' + col + '">' + tri(d) + (d == null ? '' : Math.abs(d).toFixed(2)) + '</span>'
-    + '<span class="ovx-v" style="color:' + col + '">' + tri(p) + (p == null ? '' : Math.abs(p).toFixed(2) + '%') + '</span>'
-    + '</span>';
+  // data-ovx 讓逐筆推送找得到這一塊，前收帶在屬性上，更新時不必重算
+  // 畫出來的當下就把價寫進屬性：少了它，重畫之後的第一筆推送比不出方向，不會閃
+  return '<span class="ovx" data-ovx="' + code + '" data-ovx-base="' + base + '"'
+    + ' data-ovx-px="' + f.px + '"'
+    + ' title="' + _ovPxTip(f.px, base, f.at).replace(/"/g, '&quot;') + '">'
+    + _ovPxBody(f.px, base, f.at) + '</span>';
+}
+
+// ── 逐筆推送進來時只改這一塊，不重畫整頁 ──
+//
+// 整頁重畫要把每一檔的迴歸重新配適一次（實測 20 檔 11.5 毫秒、組 HTML 16.3 毫秒）。
+// 30 秒一次無所謂，一秒好幾筆就是浪費，而且會把捲動位置與正在看的提示框打掉。
+// 所以推送只改這一塊的文字，其餘的圖與區間維持 30 秒一次。
+//
+// 圖上那顆現價膠囊故意不跟著逐筆動：它的位置要跟區間一起算，
+// 動一個不動另一個會看起來像兩個不同的現價。
+function ovPxRow(code) {
+  var view = document.getElementById('rebound-view');
+  if (!view || view.style.display === 'none') return;
+  var els = view.querySelectorAll('[data-ovx="' + String(code).replace(/[^0-9A-Za-z]/g, '') + '"]');
+  if (!els.length) return;
+  var f = _ovPxFresh(code);
+  if (!f || !(f.px > 0)) return;
+  for (var i = 0; i < els.length; i++) {
+    var el = els[i];
+    var base = parseFloat(el.getAttribute('data-ovx-base'));
+    if (!(base > 0)) continue;
+    var old = el.getAttribute('data-ovx-px');
+    if (old === String(f.px)) continue;            // 價沒變就不要動 DOM
+    el.setAttribute('data-ovx-px', String(f.px));
+    el.innerHTML = _ovPxBody(f.px, base, f.at);
+    el.setAttribute('title', _ovPxTip(f.px, base, f.at));
+    if (old != null) {
+      // 閃一下才看得出剛剛跳過。方向跟著漲跌，與全站的紅漲綠跌一致
+      var up = f.px > parseFloat(old);
+      el.classList.remove('ovx-fu', 'ovx-fd');
+      void el.offsetWidth;                          // 重新觸發動畫
+      el.classList.add(up ? 'ovx-fu' : 'ovx-fd');
+    }
+  }
 }
 
 function _ovCost(code) {
