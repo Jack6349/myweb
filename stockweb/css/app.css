@@ -2574,6 +2574,16 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-foot b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* 超出共用刻度的框。用框線不用顏色：紅綠在這一頁是漲跌，
    拿顏色標狀態會跟數值的方向搶同一個維度。 */
+/* 框頭右端的現價、漲跌、漲跌幅。兩個夜推頁籤共用。
+   前面加一條分隔線，免得它被讀成前一組區間的一部分。
+   方向靠三角不靠顏色：色盲或螢幕偏色時仍然讀得出來。 */
+.ovx { margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--border); }
+.ovx-px { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ovx-v { margin-left: 10px; font-variant-numeric: tabular-nums; }
+.ovx-na { color: var(--text3); }
+.ovx-stale { color: var(--text3); font-variant-numeric: tabular-nums; }
+.ovx-d { margin-left: 6px; font-size: 12px; color: var(--text3); }
+
 /* 關注但沒持股。中性框，與夜推債券同一個寫法 */
 .ovc-wt { display: inline-block; margin-left: 8px; padding: 0 6px; font-size: 12px;
   color: var(--text3); border: 1px solid var(--border); border-radius: 4px; cursor: help; }

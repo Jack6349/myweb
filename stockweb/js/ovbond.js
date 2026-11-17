@@ -86,6 +86,33 @@ function _ovbCls(v) {
   return v >= 60 ? 'ovb-s3' : (v >= 30 ? 'ovb-s2' : 'ovb-s1');
 }
 
+// 這一檔的「前收」要配合現價的日期挑：日線最後一根可能就是今天（盤中那一根是未完成的），
+// 拿它當基準會算出必定接近 0 的漲跌。所以取「早於現價那一天」的最後一根收盤。
+// 這一框的「前收」。成交率的統計本身與它無關（每一天各自跟自己的前一日收盤比），
+// 它只決定畫在柱子底下的那些價格要從哪裡往上下數。
+//
+// 不能直接拿日線最後一根的收盤：盤中資料來源會多出今天那一根未完成的 K，
+// 於是整排掛價會錨在一個還在動的數字上，而標題卻寫著「前收」。
+// 2026-11-18 實測：框頭寫前收 9.03（今天那根），現價算出來的前收是 9.05（昨天），
+// 同一行出現兩個前收。所以有現價時一律取「早於現價那一天」的最後一根收盤。
+function _ovbRef(code, fallback) {
+  var lv = (typeof _ovLiveOf === 'function') ? _ovLiveOf(code) : null;
+  if (!lv || !(lv.px > 0) || !lv.d) return { px: fallback, live: lv || null, why: '' };
+  var bars = (typeof _bsBars !== 'undefined' && _bsBars) ? (_bsBars[code] || []) : [];
+  for (var i = bars.length - 1; i >= 0; i--) {
+    if (bars[i].c > 0 && bars[i].d < lv.d) return { px: bars[i].c, live: lv, why: '' };
+  }
+  return { px: fallback, live: lv, why: '找不到比現價更早的收盤，算不出漲跌' };
+}
+function _ovbPxTag(code, ref) {
+  if (typeof _ovPxTagHtml !== 'function') return '';
+  if (!ref.live || !(ref.live.px > 0)) {
+    return _ovPxTagHtml(code, null, false, '券商快照取不到（本機連線未開）');
+  }
+  if (ref.why) return _ovPxTagHtml(code, null, false, ref.why);
+  return _ovPxTagHtml(code, ref.px, true, '');
+}
+
 function _ovbCard(code) {
   if (typeof bsFill !== 'function') return '';
   var dir = _ovbDir(), sel = _ovbSel(dir);
@@ -108,7 +135,8 @@ function _ovbCard(code) {
       + '這一檔要再累積一段時間才畫得出來。</div></div>';
   }
 
-  var tick = base.tick, last = base.last;
+  var ref = _ovbRef(code, base.last);
+  var tick = base.tick, last = ref.px;
   // 另一邊的方向：今天是跌就拿漲的那組當對照，反之亦然。
   // 兩邊都畫是為了看得到「萬一明天反過來，這個掛價變成多少」。
   var other = dir === 0 ? null : (dir < 0 ? up : dn);
@@ -117,6 +145,7 @@ function _ovbCard(code) {
     + '<span class="ovb-h2k">前收</span><b>' + _bsPx(last) + '</b>'
     + '<span class="ovb-h2k">升降單位</span><b>' + tick.toFixed(2) + '</b>'
     + '<span class="ovb-h2k">樣本</span><b>' + base.n + ' 日</b>'
+    + _ovbPxTag(code, ref)
     + '</div>';
 
   // ── 柱子。由便宜到貴，正中央是前收 ──

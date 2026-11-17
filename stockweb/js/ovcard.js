@@ -208,6 +208,8 @@ function _ovcCard(r, HI, ticks) {
     + (r.lLoPx > 0 ? _ovPx(r.lLoPx) + ' ～ ' + _ovPx(r.lHiPx) : '—') + '</b>'
     + '<span class="ovc-h2k">收盤</span><b>'
     + (r.loPx > 0 ? _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) : '—') + '</b>'
+    + ((typeof _ovPxTagHtml === 'function')
+        ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '')
     + '</div>';
 
   h += _ovcLabels(UP, 'up', rowsUp, X);
@@ -290,6 +292,13 @@ function ovcStockHtml() {
     var lv = _ovcLive(r.code, t);
     r.live = lv ? lv.px : null;
     r.liveAt = lv ? lv.at : null;
+    // 框頭那一塊要分得出「連線沒開」與「這不是推估那一盤的價」，所以日期要帶著走
+    var raw = (typeof _ovLiveOf === 'function') ? _ovLiveOf(r.code) : null;
+    r.liveSame = !!(raw && (!raw.d || !t.d || raw.d === t.d));
+    r.liveWhy = (raw && raw.d && t.d && raw.d !== t.d)
+      ? (raw.d < t.d ? '這是 ' + raw.d + ' 的收盤，推估的 ' + t.d + ' 那一盤還沒開始'
+                     : '這是 ' + raw.d + ' 的價，推估的是 ' + t.d + ' 那一盤，已經過去了')
+      : '';
   });
 
   var sk = _ovcSort();
