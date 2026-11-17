@@ -2519,6 +2519,14 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-lab.ovc-pinl { left: 0 !important; transform: none; text-align: left; }
 .ovc-lab.ovc-pinr { left: auto !important; right: 0; transform: none; text-align: right; }
 .ovc-t { display: block; font-size: 12.5px; white-space: nowrap; }
+/* 今天碰到哪裡。實心＝已走到，空心＝還沒。
+   用淺青不用紅綠：紅綠在這一頁是漲跌，而「走到了沒」不是漲跌。
+   與夜推債券那排圓點同一個色、同一個意思。 */
+.ovc-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  border: 1px solid var(--text3); margin-right: 3px; vertical-align: 1px; }
+.ovc-dot-on { background: var(--sum); border-color: var(--sum); }
+.ovc-e7 { width: 8px; height: 8px; border-radius: 50%; background: var(--sum); }
+.ovc-e8 { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--text3); }
 .ovc-k { color: var(--th); font-weight: 600; }
 .ovc-p { margin-left: 4px; font-variant-numeric: tabular-nums; }
 .ovc-v { display: block; font-size: 16.5px; font-variant-numeric: tabular-nums; }
