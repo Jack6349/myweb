@@ -435,23 +435,29 @@ async function rbDayBars(code) {
 }
 // 把畫面上的佔位徽章補滿。佔位是固定寬度的空框，所以填完不會造成版面跳動。
 // 併發限制 6：都走 localhost，但一次全開會讓本機伺服器排隊，反而更慢。
-async function rbStreakFill(root) {
+async function _rbStreakPass(root) {
   var els = [].slice.call((root || document).querySelectorAll('.rb-bsub[data-sc]'));
   if (!els.length) return;
   var i = 0;
   async function worker() {
     while (i < els.length) {
       var el = els[i++], code = el.getAttribute('data-sc');
-      if (!el.isConnected) continue;
-      var bars = null;
-      try { bars = await rbDayBars(code); } catch (e) { hush('rebound', e); }
-      if (!el.isConnected) continue;
       var sm = el.getAttribute('data-sm') === '1';
       var key = String(code) + (sm ? '|s' : '');
-      var k = bars ? _rbStreak(bars) : null;
-      if (!k) { _rbStreakDone[key] = ''; el.remove(); continue; }
-      var h = _rbStreakSub(bars, sm);
-      _rbStreakDone[key] = h;
+      // 先前就查過的直接用，不要再送一次請求
+      if (_rbStreakDone[key] === undefined) {
+        var bars = null;
+        try { bars = await rbDayBars(code); } catch (e) { hush('rebound', e); }
+        // 結果一定要先存起來，再去管那個格子還在不在。
+        //
+        // 舊版是「格子不在就 continue」，而且那一行在存快取之前：等於請求送出去、
+        // 資料也回來了，只因為表格在等待的那段時間重畫過，整份結果就被丟掉，
+        // 下一輪還要再查一次。更糟的是舊版連重試都沒有，那一列的趨勢就永遠停在佔位框。
+        _rbStreakDone[key] = bars ? (_rbStreak(bars) ? _rbStreakSub(bars, sm) : '') : '';
+      }
+      if (!el.isConnected) continue;
+      var h = _rbStreakDone[key];
+      if (!h) { el.remove(); continue; }
       var tmp = document.createElement('div'); tmp.innerHTML = h;
       var fresh = tmp.firstChild;
       el.className = fresh.className;
@@ -461,6 +467,15 @@ async function rbStreakFill(root) {
     }
   }
   await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+}
+// 填完再掃一次。表格在填的途中重畫過的話，舊格子已經不在畫面上、新格子是空的，
+// 單跑一輪會留下填不到的列。2026-11-17 實測成分股曝險 20 檔裡有 1 檔停在佔位框。
+// 第二輪開始結果都在快取裡，不會再送請求，所以多跑幾輪幾乎沒有成本。
+async function rbStreakFill(root) {
+  for (var pass = 0; pass < 3; pass++) {
+    await _rbStreakPass(root);
+    if (!(root || document).querySelectorAll('.rb-bsub[data-sc]').length) break;
+  }
 }
 // 算好的徽章 HTML。即時持股逐筆行情每一筆就整表重建，
 // 若每次都從空框重新填，徽章會跳一下（填的那一段是非同步的）。
@@ -472,7 +487,7 @@ function rbStreakSlot(code, compact) {
   var key = String(code) + (compact ? '|s' : '');
   if (_rbStreakDone[key] !== undefined) return _rbStreakDone[key];
   return '<span class="rb-bsub rb-bs-wait' + (compact ? ' rb-bs-sm' : '')
-    + '" data-sc="' + code + '"' + (compact ? ' data-sm="1"' : '') + '></span>';
+    + '" title="查詢中" data-sc="' + code + '"' + (compact ? ' data-sm="1"' : '') + '></span>';
 }
 
 function _rbStreakSub(bars, compact) {
