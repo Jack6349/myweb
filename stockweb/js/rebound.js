@@ -861,12 +861,24 @@ async function startRebound(force) {
   if (typeof ovLiveStart === 'function') ovLiveStart();
 }
 
+// 頁籤列。只有債券資料時其餘頁籤沒有東西可畫，整列只留債券。
+function _rbTabsHtml(cur, bondOnly) {
+  var tabs = bondOnly ? [['bond', '債券']]
+    : [['dec', '決策'], ['ana', '分析'], ['bond', '債券'], ['ovs', '夜推股票']];
+  return '<div class="pv-tabs rb-tabs">' + tabs.map(function (t) {
+    return '<button class="pv-tab' + (cur === t[0] ? ' on' : '')
+      + '" onclick="rbView(\'' + t[0] + '\')">' + t[1] + '</button>';
+  }).join('') + '</div>';
+}
 function rbView(v) {
   try { localStorage.setItem(RB_VIEW_LS, v); } catch (e) {}
   rbRender();
 }
 function _rbViewSel() {
-  try { var v = localStorage.getItem(RB_VIEW_LS); if (v === 'ana' || v === 'bond') return v; } catch (e) {}
+  try {
+    var v = localStorage.getItem(RB_VIEW_LS);
+    if (v === 'ana' || v === 'bond' || v === 'ovs') return v;
+  } catch (e) {}
   return 'dec';
 }
 
@@ -893,14 +905,17 @@ function rbRender() {
   // 債券頁籤不用大盤日線，要在讀 idx 之前分流；
   // 只有債券時 idx 是空的，跳不過去會損在這一行。
   var vsel = _rbViewSel();
+  // 夜推股票：同一組推估換成方框版，自己一頁。
+  // 不重畫跌深判定卡與費半表，那兩塊在決策頁已經有了，再印一次是同一件事講兩遍。
+  if (vsel === 'ovs' && !_rbData.bondOnly) {
+    wrap.innerHTML = _rbTabsHtml('ovs')
+      + ((typeof ovcStockHtml === 'function') ? ovcStockHtml() : '');
+    return;
+  }
   if (vsel === 'bond' || _rbData.bondOnly) {
     var bonly = !!_rbData.bondOnly;
-    wrap.innerHTML = '<div class="pv-tabs rb-tabs">' +
-      (bonly ? '' :
-        '<button class="pv-tab" onclick="rbView(\'dec\')">決策</button>' +
-        '<button class="pv-tab" onclick="rbView(\'ana\')">分析</button>') +
-      '<button class="pv-tab on" onclick="rbView(\'bond\')">債券</button></div>' +
-      ((typeof bsHtml === 'function') ? bsHtml() : '');
+    wrap.innerHTML = _rbTabsHtml('bond', bonly)
+      + ((typeof bsHtml === 'function') ? bsHtml() : '');
     return;
   }
   var last = idx[idx.length - 1], lastCum = t.cum[last.d];
@@ -910,11 +925,7 @@ function rbRender() {
   var liveSys = live && !!marks[lastEp.start];
 
   var view = _rbViewSel();
-  var html = '<div class="pv-tabs rb-tabs">' +
-    '<button class="pv-tab' + (view === 'dec' ? ' on' : '') + '" onclick="rbView(\'dec\')">決策</button>' +
-    '<button class="pv-tab' + (view === 'ana' ? ' on' : '') + '" onclick="rbView(\'ana\')">分析</button>' +
-    '<button class="pv-tab' + (view === 'bond' ? ' on' : '') + '" onclick="rbView(\'bond\')">債券</button>' +
-    '</div>';
+  var html = _rbTabsHtml(view);
 
 
   // ── 判定卡（兩個視圖都在最上面）──
