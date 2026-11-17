@@ -2441,6 +2441,14 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-head { position: absolute; top: -12px; left: 14px; background: var(--bg2);
   padding: 0 10px; white-space: nowrap; line-height: 22px; }
 .ovc-calc .ovc-head { background: #19222f; }   /* 校準後底色變了，框頭要跟著遮住框線 */
+/* 兩個區間的文字，壓在上框線的右端。圖讀相對關係，這裡讀精確值 */
+.ovc-head2 { position: absolute; top: -12px; right: 14px; background: var(--bg2);
+  padding: 0 10px; white-space: nowrap; line-height: 22px; font-size: 12px; color: var(--text2); }
+.ovc-head2 .ovc-h2k { color: var(--th); font-weight: 600; font-size: 11px; margin-right: 5px; }
+.ovc-head2 .ovc-h2k + b { color: var(--text); font-weight: 600; margin-right: 16px;
+  font-variant-numeric: tabular-nums; }
+.ovc-head2 b:last-child { margin-right: 0; }
+.ovc-calc .ovc-head2 { background: #19222f; }
 
 .ovc-bar { position: relative; height: 26px; margin: 0 8px; }
 .ovc-gl { position: absolute; top: 2px; bottom: 2px; width: 1px;
@@ -2492,6 +2500,68 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-lab.ovc-edge .ovc-v { font-size: 13px; opacity: .85; }
 .ovc-lab.ovc-base .ovc-k { color: var(--text3); }
 
+
+/* ══════ 夜推債券（掛價的成交機率）══════
+   柱高是成交率，固定 0 到 100%，所有框共用，所以框跟框之間可以比高度。
+   買賣兩側用 accent2 與 accent3 分，不用紅綠：那兩個色在這一站是漲跌，
+   而成交率不是漲跌，借用會讓整站的色彩語彙鬆掉。 */
+.ovb-legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+  margin: 10px 0 20px; font-size: 11.5px; color: var(--text2); }
+.ovb-legend em { display: inline-block; vertical-align: middle; margin-right: 5px; }
+.ovb-e1 { width: 14px; height: 12px; border-radius: 3px; background: var(--accent2); }
+.ovb-e2 { width: 14px; height: 12px; border-radius: 3px; background: var(--accent3); }
+.ovb-e3 { width: 14px; height: 12px; border-radius: 3px; border: 1px solid var(--text3); }
+.ovb-e4 { width: 16px; height: 2px; background: var(--sum); }
+.ovb-legend .ovb-note { color: var(--text3); }
+
+.ovb-grid { display: grid; gap: 26px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(760px, 1fr)); }
+.ovb-card { position: relative; border: 1px solid var(--border-strong); border-radius: 10px;
+  background: var(--bg2); padding: 22px 16px 10px; }
+.ovb-head { position: absolute; top: -12px; left: 14px; background: var(--bg2);
+  padding: 0 10px; white-space: nowrap; line-height: 22px; }
+.ovb-head2 { position: absolute; top: -12px; right: 14px; background: var(--bg2);
+  padding: 0 10px; white-space: nowrap; line-height: 22px; font-size: 12px; color: var(--text2); }
+.ovb-head2 .ovb-h2k { color: var(--th); font-weight: 600; font-size: 11px; margin: 0 5px 0 0; }
+.ovb-head2 .ovb-h2k + b { color: var(--text); font-weight: 600; margin-right: 16px;
+  font-variant-numeric: tabular-nums; }
+.ovb-head2 b:last-child { margin-right: 0; }
+.ovb-thin { color: var(--text3); font-size: 12.5px; padding: 10px 4px; }
+
+.ovb-chart { display: flex; align-items: flex-end; gap: 6px; margin: 6px 4px 0; }
+.ovb-col { flex: 1 1 0; min-width: 0; text-align: center; }
+/* 前收那一欄放買賣兩根半寬的柱，底色標出它是分界 */
+.ovb-mid { background: color-mix(in srgb, var(--bg3) 70%, transparent); border-radius: 6px; }
+.ovb-plot { position: relative; height: 104px; display: flex; align-items: flex-end;
+  justify-content: center; gap: 3px;
+  border-bottom: 1px solid var(--border); }
+.ovb-slot { position: relative; width: 60%; height: 100%; display: flex; align-items: flex-end; }
+.ovb-mid .ovb-slot { width: 42%; }
+.ovb-fill { width: 100%; border-radius: 3px 3px 0 0; }
+.ovb-fill.ovb-buy { background: var(--accent2); }
+.ovb-fill.ovb-sell { background: var(--accent3); }
+/* 反方向那一組疊在同一個位置畫成空框，高度直接比，不必在腦中換算 */
+.ovb-ghost { position: absolute; left: 0; right: 0; bottom: 0;
+  border: 1px solid var(--text3); border-bottom: 0; border-radius: 3px 3px 0 0; }
+.ovb-r30 { position: absolute; left: -2px; right: -2px; height: 2px; background: var(--sum); }
+.ovb-mlb { position: absolute; left: 0; right: 0; bottom: -1px; font-size: 9.5px;
+  color: var(--text3); text-align: center; }
+.ovb-rate { font-size: 13px; font-weight: 700; margin-top: 5px;
+  font-variant-numeric: tabular-nums; }
+.ovb-mid .ovb-rate { font-size: 11.5px; }
+.ovb-rate .ovb-sl { color: var(--text3); font-weight: 400; margin: 0 1px; }
+.ovb-rate .ovb-s3 { color: var(--text); }
+.ovb-rate .ovb-s2 { color: var(--text2); }
+.ovb-rate .ovb-s1, .ovb-rate .ovb-na { color: var(--text3); }
+.ovb-rate.ovb-s3 { color: var(--text); }
+.ovb-rate.ovb-s2 { color: var(--text2); }
+.ovb-rate.ovb-s1 { color: var(--text3); }
+.ovb-rate.ovb-na { color: var(--text3); font-weight: 400; }
+.ovb-px { font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+.ovb-off { font-size: 10.5px; color: var(--th); font-weight: 600; }
+.ovb-foot { display: flex; gap: 14px; flex-wrap: wrap; border-top: 1px solid var(--border);
+  padding-top: 7px; margin-top: 10px; font-size: 11.5px; color: var(--text2); }
+.ovb-foot b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* 超出共用刻度的框。用框線不用顏色：紅綠在這一頁是漲跌，
    拿顏色標狀態會跟數值的方向搶同一個維度。 */
 .ovc-ovb { display: inline-block; margin-left: 8px; padding: 0 6px; font-size: 11px;

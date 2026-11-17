@@ -863,8 +863,9 @@ async function startRebound(force) {
 
 // 頁籤列。只有債券資料時其餘頁籤沒有東西可畫，整列只留債券。
 function _rbTabsHtml(cur, bondOnly) {
-  var tabs = bondOnly ? [['bond', '債券']]
-    : [['dec', '決策'], ['ana', '分析'], ['bond', '債券'], ['ovs', '夜推股票']];
+  var tabs = bondOnly ? [['bond', '債券'], ['ovb', '夜推債券']]
+    : [['dec', '決策'], ['ana', '分析'], ['bond', '債券'],
+       ['ovs', '夜推股票'], ['ovb', '夜推債券']];
   return '<div class="pv-tabs rb-tabs">' + tabs.map(function (t) {
     return '<button class="pv-tab' + (cur === t[0] ? ' on' : '')
       + '" onclick="rbView(\'' + t[0] + '\')">' + t[1] + '</button>';
@@ -877,7 +878,7 @@ function rbView(v) {
 function _rbViewSel() {
   try {
     var v = localStorage.getItem(RB_VIEW_LS);
-    if (v === 'ana' || v === 'bond' || v === 'ovs') return v;
+    if (v === 'ana' || v === 'bond' || v === 'ovs' || v === 'ovb') return v;
   } catch (e) {}
   return 'dec';
 }
@@ -910,6 +911,13 @@ function rbRender() {
   if (vsel === 'ovs' && !_rbData.bondOnly) {
     wrap.innerHTML = _rbTabsHtml('ovs')
       + ((typeof ovcStockHtml === 'function') ? ovcStockHtml() : '');
+    return;
+  }
+  // 夜推債券：問的不是「會走到哪」，是「掛在這個價買得到的機率」，
+  // 所以它跟夜推股票是兩個頁籤，不是同一頁的兩半。
+  if (vsel === 'ovb') {
+    wrap.innerHTML = _rbTabsHtml('ovb', !!_rbData.bondOnly)
+      + ((typeof ovcBondHtml === 'function') ? ovcBondHtml() : '');
     return;
   }
   if (vsel === 'bond' || _rbData.bondOnly) {
