@@ -1822,20 +1822,37 @@ function _nightFutCellHtml() {
     spark + '</div>';
 }
 
-// 頂欄抽屜的盤勢：大盤（加權指數當日分時）起頭，
-// 中間是美股與債券那一組，最後是日圓即期與台指夜盤，共 9 格、排 3×3。
-// S&P 500 原本跟著跳過，理由是「抽屜只有四欄」；
-// 欄數改成三之後這個理由不存在了，美股大盤補回來。
-// 美元指數與美元兌台幣仍不列：它們不是「這一盤怎麼走」的訊號，
+// 頂欄抽屜的盤勢：共 9 格、排 3×3。
+// 美元指數與美元兌台幣不列：它們不是「這一盤怎麼走」的訊號，
 // 新聞情勢頁那排有，要看去那裡。
 var MACRO_DRAWER_SKIP = ['DX-Y.NYB', 'TWD=X'];
+
+// 排法照「先看哪一格」決定，不照資料來源分組：
+//   第一列　加權指數、台指期夜盤、費城半導體 —— 明天這一盤直接相關的三件事：
+//           今天台股收在哪、夜盤現在走到哪、帶動權值股的那條線昨晚怎麼走。
+//   第二列　HYG、美10年債殖利率、日圓 —— 債券部位看這一列。
+//   第三列　S&P 500、Nasdaq、VIX —— 美股大盤與情緒，當背景看。
+// 三個非 Yahoo 來源的格子用自訂代號：加權指數、台指期夜盤、玉山日圓。
+var MACRO_DRAWER_ORDER = ['TWIDX', 'NIGHTFUT', '^SOX',
+                          'HYG', '^TNX', 'ESUNJPY',
+                          '^GSPC', '^IXIC', '^VIX'];
 function macroDrawerHtml() {
   if (!_macroSnap.length) return '<div class="macro-cell"><span class="macro-name">載入中…</span></div>';
-  // 大盤排第一格：這是台股投資組合的工具，本地市場應該在美股前面
-  return _twIdxCellHtml() +
-    _macroSnap.filter(function (m) { return MACRO_DRAWER_SKIP.indexOf(m.sym) < 0; })
-    .map(function (m) { return _macroCellHtml(m, true); }).join('') +
-    _esunJpyCellHtml() + _nightFutCellHtml();
+  var cell = {
+    TWIDX: _twIdxCellHtml(), NIGHTFUT: _nightFutCellHtml(), ESUNJPY: _esunJpyCellHtml()
+  };
+  _macroSnap.forEach(function (m) {
+    if (MACRO_DRAWER_SKIP.indexOf(m.sym) < 0) cell[m.sym] = _macroCellHtml(m, true);
+  });
+  var h = MACRO_DRAWER_ORDER.map(function (k) { return cell[k] || ''; }).join('');
+  // 順序名單沒寫到的新標的補在最後：日後加一格卻忘了排順序時，那一格還是看得到，
+  // 不會無聲消失。
+  _macroSnap.forEach(function (m) {
+    if (MACRO_DRAWER_SKIP.indexOf(m.sym) < 0 && MACRO_DRAWER_ORDER.indexOf(m.sym) < 0) {
+      h += _macroCellHtml(m, true);
+    }
+  });
+  return h;
 }
 
 // 抓取時刻 ＋ 手動重抓。跟格子裡的資料時間分開標：
