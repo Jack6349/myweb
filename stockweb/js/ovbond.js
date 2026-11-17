@@ -30,6 +30,42 @@ var OVB_H = 104;          // 柱子區的高度（px），對應 0 到 100%
 
 function _ovbIsBond(code) { return /^00\d+[BD]$/.test(String(code)); }
 
+// ── 這一頁收哪些標的 ──
+//
+// 持股裡的債券，加上關注清單裡的債券。只看持股的話，還在觀察、還沒買的那幾檔
+// 就看不到成交率，而那正是最需要知道「掛在這個價買不買得到」的時候。
+//
+// 債券那一頁維持只看持股，不動它：那一頁還有匯率曝險，而曝險講的是
+// 「你現在同時持有多大的美元部位」，沒持有的標的放進去沒有意義。
+function _ovbCodes() {
+  var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  var out = Object.keys(m).filter(function (c) { return m[c] > 0 && _ovbIsBond(c); });
+  var seen = {};
+  out.forEach(function (c) { seen[c] = 1; });
+  var w = (typeof _wtLoad === 'function') ? (_wtLoad() || []) : [];
+  w.forEach(function (c) {
+    c = String(c);
+    if (!seen[c] && _ovbIsBond(c)) { seen[c] = 1; out.push(c); }
+  });
+  return out.sort();
+}
+function _ovbHeld(code) {
+  var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  return !!(m[code] > 0);
+}
+
+// 成交率的算法吃的是債券那一頁的日線快取，而那份快取只裝持股。
+// 關注清單那幾檔的日線進場訊號板本來就抓過了（而且補過缺口），接過來放進同一個快取，
+// 算法就不必改。那份快取是以代號為鍵的純快取，其他地方都只走持股清單，多幾個鍵不影響。
+function _ovbFillBars() {
+  if (typeof _bsBars === 'undefined' || !_bsBars) return;
+  var src = (typeof _rbData !== 'undefined' && _rbData && _rbData.series) ? _rbData.series : null;
+  if (!src) return;
+  _ovbCodes().forEach(function (c) {
+    if (!_bsBars[c] && src[c] && src[c].length) _bsBars[c] = src[c];
+  });
+}
+
 // 今天 HYG 偏哪一邊。平盤或取不到時不歸到任一邊，改用全部日子，
 // 門檻用「剛好為零」，不自己訂一個平盤區間。與債券那一頁同一個判定。
 function _ovbDir() {
@@ -62,7 +98,10 @@ function _ovbCard(code) {
   var base = main || full || dn || up;
 
   var head = '<div class="ovb-card"><div class="ovb-head">'
-    + '<span class="tx-ocode">' + code + '</span><span class="tx-oname">' + _rbName(code) + '</span></div>';
+    + '<span class="tx-ocode">' + code + '</span><span class="tx-oname">' + _rbName(code) + '</span>'
+    + (_ovbHeld(code) ? ''
+        : '<span class="ovb-wt" title="這一檔在關注清單裡，目前沒有持股。成交率的算法與持股的那幾檔完全相同。">關注</span>')
+    + '</div>';
 
   if (!base) {
     return head + '<div class="ovb-thin">樣本不足 25 個交易日，算不出成交率。'
@@ -145,10 +184,11 @@ function _ovbCard(code) {
 }
 
 function ovcBondHtml() {
-  if (typeof bsCodes !== 'function') return '';
-  var codes = bsCodes();
+  if (typeof bsFill !== 'function') return '';
+  _ovbFillBars();
+  var codes = _ovbCodes();
   if (!codes.length) {
-    return '<div class="modal-loading">持股中沒有債券型 ETF（代號結尾 B 或 D），這個頁籤沒有標的。</div>';
+    return '<div class="modal-loading">持股與關注清單裡都沒有債券型 ETF（代號結尾 B 或 D），這個頁籤沒有標的。</div>';
   }
   if (typeof _bsHyg === 'undefined' || !_bsHyg) {
     return '<div class="modal-loading">HYG 日線取不到（代理服務無回應）。'
@@ -180,7 +220,10 @@ function ovcBondHtml() {
     + '<dt>這一頁要回答什麼</dt><dd>「我掛在這個價，今天買得到的機率有多少。」'
     + '不預測漲跌，只數歷史上日內最低有沒有跌到掛價。'
     + '柱子上方的價格已經對齊升降單位，可以直接抄進委託單。'
-    + '匯率曝險與完整的數字表格在債券那一頁，這裡不重複。</dd>'
+    + '匯率曝險與完整的數字表格在債券那一頁，這裡不重複。'
+    + '<br>這一頁收的是<b>持股加上關注清單</b>裡的債券型，標「關注」的那幾框目前沒有持股，'
+    + '成交率的算法與持股的完全相同。債券那一頁維持只看持股，因為那一頁還有匯率曝險，'
+    + '而曝險講的是你現在同時持有多大的美元部位，沒持有的標的放進去沒有意義。</dd>'
 
     + '<dt>各檔位的成交機率</dt><dd>'
     + '<b>定義</b>：把掛價設在前收上下 N 個升降單位，數歷史上有多少比例的日子碰得到。'

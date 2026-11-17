@@ -2530,6 +2530,10 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-head2 .ovb-h2k + b { color: var(--text); font-weight: 600; margin-right: 18px;
   font-variant-numeric: tabular-nums; }
 .ovb-head2 b:last-child { margin-right: 0; }
+/* 關注但沒持股的那幾檔。中性框，不用紅綠也不用警示色：
+   它不是狀態好壞，只是說明這一檔的來源。 */
+.ovb-wt { display: inline-block; margin-left: 8px; padding: 0 6px; font-size: 12px;
+  color: var(--text3); border: 1px solid var(--border); border-radius: 4px; cursor: help; }
 .ovb-thin { color: var(--text3); font-size: 14px; padding: 10px 4px; }
 
 .ovb-chart { display: flex; align-items: flex-end; gap: 6px; margin: 6px 4px 0; }
