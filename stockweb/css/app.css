@@ -2481,6 +2481,19 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-stem { position: absolute; width: 1px; background: var(--border); }
 .ovc-lab { position: absolute; transform: translateX(-50%); width: 84px;
   text-align: center; line-height: 1.3; }
+/* 估收：貼著橫條底下的單行小字。它不參與錯開，所以不佔一整行的高度。
+   引線只有 4px，因為它就緊貼在橫條下面，不需要拉長去找自己的位置。 */
+.ovc-estrow { position: relative; height: 26px; margin: 0 8px; }
+.ovc-eststem { top: 0; height: 4px; }
+.ovc-estlab { position: absolute; top: 4px; transform: translateX(-50%);
+  white-space: nowrap; line-height: 1.4; }
+.ovc-estlab.ovc-pinl { left: 0 !important; transform: none; }
+.ovc-estlab.ovc-pinr { left: auto !important; right: 0; transform: none; }
+.ovc-estlab .ovc-k { font-size: 12.5px; color: var(--th); font-weight: 600; }
+.ovc-estlab .ovc-v { display: inline; font-size: 13.5px; margin-left: 5px;
+  font-variant-numeric: tabular-nums; }
+.ovc-estlab .ovc-p { font-size: 12px; margin-left: 5px; font-variant-numeric: tabular-nums; }
+
 .ovc-dn .ovc-stem { top: 0; }
 .ovc-dn .ovc-stem.ovc-r0 { height: 5px; }
 .ovc-dn .ovc-stem.ovc-r1 { height: 46px; }
