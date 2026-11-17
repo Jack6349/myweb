@@ -960,6 +960,7 @@ async function _tickWatchOnce(force) {
       if (typeof renderLiveRow === 'function') renderLiveRow(code);
       if (typeof renderTopConstRow === 'function') renderTopConstRow(code);
       if (typeof renderWatchRow === 'function') renderWatchRow(code);
+      if (typeof ovPxRow === 'function') ovPxRow(code);
     });
     renderSummaries();
   } catch (e) { console.warn('[tick watchdog]', e); }
@@ -988,6 +989,7 @@ function openSSE() {
       if (typeof renderLiveRow === 'function') renderLiveRow(code);
       if (typeof renderTopConstRow === 'function') renderTopConstRow(code);
       if (typeof renderWatchRow === 'function') renderWatchRow(code);
+      if (typeof ovPxRow === 'function') ovPxRow(code);
       if (prev != null && close !== prev) flashCard(code, close > prev ? 1 : -1);
     } catch (e) { hush('stream', e, 2); }
   });
