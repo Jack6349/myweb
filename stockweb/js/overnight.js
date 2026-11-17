@@ -486,16 +486,35 @@ function _ovEx(code) {
   var f = ((typeof _wtIdx !== 'undefined' && _wtIdx) || []).filter(function (x) { return x.c === code; })[0];
   return f ? f.e : 'TSE';
 }
+// 要抓現價的名單：這一頁的標的，加上債券那兩個頁籤的標的。
+// 債券不在 _rbData.codes 裡（那份只收結尾 A 的持股與關注清單），
+// 所以持有但沒放進關注清單的債券原本抓不到價。
+function _ovLiveCodes() {
+  var out = [], seen = {};
+  ((_rbData && _rbData.codes) || []).forEach(function (c) {
+    c = String(c); if (!seen[c]) { seen[c] = 1; out.push(c); }
+  });
+  if (typeof _ovbCodes === 'function') {
+    try {
+      _ovbCodes().forEach(function (c) {
+        c = String(c); if (!seen[c]) { seen[c] = 1; out.push(c); }
+      });
+    } catch (e) { hush('overnight-live', e); }
+  }
+  return out;
+}
 async function _ovLiveTick(always) {
   var view = document.getElementById('rebound-view');
   if (!view || view.style.display === 'none' || document.hidden) return;
-  if (!_rbData || !_rbData.codes || !_rbData.codes.length) return;
+  if (!_rbData) return;
+  var want = _ovLiveCodes();
+  if (!want.length) return;
   if (typeof fetchSnapshots !== 'function') return;
   var open = (typeof _twOpen === 'function') ? _twOpen() : false;
   // 收盤後只在進頁那一次抓（always），之後每一輪都在這裡掉頭
   if (!always && !open) return;
   try {
-    var sn = await fetchSnapshots(_rbData.codes.map(function (c) { return { exchange: _ovEx(c), code: c }; }));
+    var sn = await fetchSnapshots(want.map(function (c) { return { exchange: _ovEx(c), code: c }; }));
     (sn || []).forEach(function (x) {
       if (x && x.code && x.close > 0) {
         // 開盤價與當日最低也存下來：盤中校準要用開盤當基準，日內最低要用它封頂
@@ -550,6 +569,40 @@ function _ovLiveCell(r, t) {
     + '<span class="ov-sub" style="color:' + _rbCol(ch) + '">'
     + (ch == null ? '—' : (ch > 0 ? '+' : (ch < 0 ? '\u2212' : '')) + Math.abs(ch).toFixed(2) + '%')
     + '</span></td>';
+}
+
+// ── 框頭右端那一小塊：現價、漲跌、漲跌幅 ──
+//
+// 不帶欄位名：框頭右端的寬度不夠，量過帶名要 308px 而中間只剩 281px。
+// 三個數字靠格式認：第一個沒有三角的是現價，後面兩個帶三角的是漲跌與漲跌幅。
+//
+// 漲跌用上下三角不用正負號。負號在這一行會跟「8.23 ～ 8.55」那種區間的連接號
+// 混在一起，而且三角不必靠顏色就讀得出方向，色盲或螢幕偏色時仍然成立。
+//
+// base 要是「現價那一天的前一個收盤」。拿當天自己的收盤當基準會算出必定接近 0 的漲跌。
+function _ovPxTagHtml(code, base, dayOk, whyStale) {
+  var lv = (typeof _ovLiveOf === 'function') ? _ovLiveOf(code) : null;
+  if (!lv || !(lv.px > 0)) {
+    return '<span class="ovx" title="券商快照取不到（本機連線未開）"><span class="ovx-na">—</span></span>';
+  }
+  if (!dayOk) {
+    // 不是這一盤的價就不給漲跌：跟前收相減沒有意義，給了反而像真的
+    return '<span class="ovx" title="' + String(whyStale || '').replace(/"/g, '&quot;') + '">'
+      + '<span class="ovx-stale">' + _ovPx(lv.px) + '</span>'
+      + (lv.d ? '<span class="ovx-d">' + lv.d.slice(5).replace('-', '/') + '</span>' : '')
+      + '</span>';
+  }
+  var d = (base > 0) ? (lv.px - base) : null;
+  var p = (base > 0) ? (lv.px / base - 1) * 100 : null;
+  var tri = function (v) { return v > 0 ? '\u25b2' : (v < 0 ? '\u25bc' : '\u2014'); };
+  var col = _rbCol(d);
+  var tip = '現價 ' + _ovPx(lv.px) + (lv.at ? '（' + lv.at + '）' : '')
+    + '，對前收 ' + _ovPx(base) + ' 的漲跌。盤中每 30 秒更新一次，13:35 之後停在收盤價。';
+  return '<span class="ovx" title="' + tip + '">'
+    + '<span class="ovx-px" style="color:' + col + '">' + _ovPx(lv.px) + '</span>'
+    + '<span class="ovx-v" style="color:' + col + '">' + tri(d) + (d == null ? '' : Math.abs(d).toFixed(2)) + '</span>'
+    + '<span class="ovx-v" style="color:' + col + '">' + tri(p) + (p == null ? '' : Math.abs(p).toFixed(2) + '%') + '</span>'
+    + '</span>';
 }
 
 function _ovCost(code) {
