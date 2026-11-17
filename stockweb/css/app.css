@@ -2465,6 +2465,13 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   transform: translateX(-1.5px); }
 .ovc-mk.ovc-now { top: 2px; width: 9px; height: 22px; border-radius: 5px;
   background: var(--accent3); border: 2px solid var(--bg2); transform: translateX(-4.5px); }
+/* 今天到現在的最低。用淺青不用紅綠：紅綠在這一頁是漲跌，
+   而「今天走到哪」不是漲跌。與夜推債券的「今天已觸及」同一個色。 */
+.ovc-mk.ovc-low { top: 1px; width: 2px; height: 24px; background: var(--sum);
+  transform: translateX(-1px); }
+.ovc-lab.ovc-today .ovc-k { color: var(--sum); }
+.ovc-lab.ovc-today .ovc-v { font-weight: 600; }
+.ovc-e6 { width: 2px; height: 16px; background: var(--sum); }
 .ovc-mk.ovc-est { top: 4px; width: 2px; height: 14px; background: var(--text3);
   transform: translateX(-1px); }
 
@@ -2481,6 +2488,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-dn .ovc-lab.ovc-r1 { top: 46px; }
 .ovc-dn .ovc-stem.ovc-r2 { height: 87px; }
 .ovc-dn .ovc-lab.ovc-r2 { top: 87px; }
+.ovc-dn .ovc-stem.ovc-r3 { height: 128px; }
+.ovc-dn .ovc-lab.ovc-r3 { top: 128px; }
 .ovc-up .ovc-stem { bottom: 0; }
 .ovc-up .ovc-stem.ovc-r0 { height: 5px; }
 .ovc-up .ovc-stem.ovc-r1 { height: 46px; }
@@ -2488,6 +2497,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-up .ovc-lab.ovc-r1 { bottom: 46px; }
 .ovc-up .ovc-stem.ovc-r2 { height: 87px; }
 .ovc-up .ovc-lab.ovc-r2 { bottom: 87px; }
+.ovc-up .ovc-stem.ovc-r3 { height: 128px; }
+.ovc-up .ovc-lab.ovc-r3 { bottom: 128px; }
 /* 貼邊的方塊推回框內；引線留在原位，所以還看得出它指的是誰 */
 .ovc-lab.ovc-pinl { left: 0 !important; transform: none; text-align: left; }
 .ovc-lab.ovc-pinr { left: auto !important; right: 0; transform: none; text-align: right; }
