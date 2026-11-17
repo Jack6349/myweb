@@ -2376,8 +2376,19 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 /* 精簡版：不帶天數，給欄位已經挤到極限的表格用。
    寬度從 34px 降到 22px，代價是看不出連續幾天（提示裡還有）。 */
 .rb-bsub.rb-bs-sm { min-width: 22px; padding: 0 3px; }
-/* 佔位：空框先占住寬度，資料回來再填，填完不會讓版面跳動 */
-.rb-bs-wait { border-color: color-mix(in srgb, var(--border) 60%, transparent); }
+/* 佔位：空框先占住寬度，資料回來再填，填完不會讓版面跳動。
+   高度要自己給：框裡沒有字，只靠 line-height 會塌成 2px，看起來就是一條灰色橫線，
+   跟平盤那個「—」幾乎分不出來。2026-11-17 使用者把整欄的佔位框讀成「沒有趨勢資料」。
+   所以撐到跟有字的徽章一樣高，再用呼吸的淡入淡出說明它還在跑。 */
+.rb-bs-wait { border-color: color-mix(in srgb, var(--border) 60%, transparent);
+  height: calc(1.6em + 2px);   /* 有字的徽章是 1.6em 的行高再加兩道邊框，對齊才不會填完跳一下。
+                                  不能改 box-sizing：那會連 min-width 一起變，框就比徽章寬 10px */
+  animation: rb-bs-pulse 1.2s ease-in-out infinite; }
+@keyframes rb-bs-pulse { 0%, 100% { opacity: .3; } 50% { opacity: .75; } }
+/* 關掉動態效果的人只看到固定的淡框，它跟平盤的實線「—」仍然分得出來 */
+@media (prefers-reduced-motion: reduce) {
+  .rb-bs-wait { animation: none; opacity: .4; }
+}
 /* 成本均價：固定的事實，不是漲跌，用標頭的橘黃而不是紅綠 */
 .ov-cost { color: var(--accent2); }
 /* 費半門檻亮起時的標記。紅綠在這一頁是漲跌，拿來標狀態會被讀成下跌，改用標頭的橘黃 */
