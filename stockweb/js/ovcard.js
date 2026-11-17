@@ -84,6 +84,9 @@ function _ovcSpan(r) {
 // 它們的共同特徵就是樣本不足、殘差大，本來就不該拿長度去跟別人比。
 // 超出的框會在框頭標出來，不是悄悄裁掉。
 var OVC_AXIS_P = 0.80;
+// 掛得到過半的門檻。50% 的意思是「跌到的日子比沒跌到的多」，
+// 不是分位數算出來的，是「多數」這個概念本身的分界。與夜推債券同一條線。
+var OVC_FILL_HI = 50;
 function _ovcAxis(rows) {
   var v = rows.map(_ovcSpan).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
   if (!v.length) return 2;
@@ -169,6 +172,10 @@ function _ovcCard(r, HI, ticks) {
   var X = function (p) { return Math.max(0, Math.min(100, (p - LO) / (HI - LO) * 100)); };
   var P = function (v) { return (v > 0 && r.base > 0) ? (v / r.base - 1) * 100 : null; };
   var tierCol = _ovcTier(r.r2);
+  // 掛買的亮度接「掛得到的比例」，不接說明力：這一格是要抄進委託單的價，
+  // 要先知道的是掛不掛得到，說明力在框底自己有一格。與夜推債券同一條線、同一個門檻。
+  var fillHi = (r.lFill != null && r.lFill > OVC_FILL_HI);
+  var fillCol = fillHi ? 'var(--text)' : 'var(--text2)';
 
   // ── 上方：今天不會再變的框架 ──
   var UP = [];
@@ -181,8 +188,11 @@ function _ovcCard(r, HI, ticks) {
 
   // ── 下方：今天走到哪 ──
   var DN = [], est = null;
-  if (r.lPx > 0) DN.push({ pri: 0, k: '掛買', v: r.lPx, p: P(r.lPx), cl: 'key', col: tierCol,
+  if (r.lPx > 0) DN.push({ pri: 0, k: '掛買', v: r.lPx, p: P(r.lPx),
+    cl: 'key' + (fillHi ? ' ovc-fillhi' : ''), col: fillCol,
     tip: '日內最低價的推估。掛限價買進看這一個，不是看收盤。'
+       + (r.lFill != null ? '實測 ' + Math.round(r.lFill) + '% 的日子裡，當天的實際最低有跌到當天推的這個價。'
+          : '')
        + (r.lCover != null && r.lCoverN ? '這一檔的最低區間實測罩住了 ' + Math.round(r.lCover)
           + '% 的日子（' + r.lCoverN + ' 天），目標 68%。' : '') });
   if (r.act) {
@@ -284,6 +294,8 @@ function _ovcCard(r, HI, ticks) {
       + _ovcPctTxt(r.prem) + '</b></span>'
     + '<span>量能 <b' + (volHot ? ' class="ovc-hot"' : '') + '>'
       + (r.volX == null ? '—' : r.volX.toFixed(2) + ' 倍') + '</b></span>'
+    + '<span>掛得到 <b style="color:' + fillCol + '">'
+      + (r.lFill == null ? '—' : Math.round(r.lFill) + '%') + '</b></span>'
     + '<span>說明力 <b style="color:' + tierCol + '">' + (r.r2 == null ? '—' : r.r2.toFixed(2)) + '</b></span>'
     + '<span>樣本 <b>' + r.n + ' 天</b></span>'
     + (r.act ? '<span>估收 <b>' + (r.cPx > 0 ? _ovPx(r.cPx) : '—') + '</b></span>' : '')
@@ -297,6 +309,7 @@ var OVC_SORTS = [
   { k: 'pos', t: '現價位置' },
   { k: 'prem', t: '折溢價' },
   { k: 'volX', t: '量能' },
+  { k: 'lFill', t: '掛得到' },
   { k: 'r2', t: '說明力' },
   { k: 'code', t: '代號' }
 ];
@@ -426,6 +439,23 @@ function ovcStockHtml() {
     + '也可能是「今天強勢、要突破區間」，區間本身只罩得住約 68% 的日子，'
     + '剩下三成會走到區間外。要分辨這兩種，得配量能那一欄：'
     + '貼上限而且量能 1.5 倍以上，突破的成分比較大。</dd>'
+
+    + '<dt>掛買的亮度</dt><dd><b>定義</b>：用同一條迴歸、同一段樣本回測，'
+    + '數有多少比例的日子裡，當天的實際最低真的跌到當天推的掛買參考。'
+    + '過半就把掛買那個數字打亮，沒過半壓暗，框底的「掛得到」是同一個數字。<br>'
+    + '<b>比較基準</b>：50%，也就是「跌到的日子比沒跌到的多」。這條線不是分位數算出來的，'
+    + '是多數這個概念本身的分界，與夜推債券同一條線。<br>'
+    + '<b>白話意義</b>：掛買是模型推今天會跌到哪，這個比例是「過去照這個推法掛，掛得到的頻率」。<br>'
+    + '<b>機制</b>：掛買參考是迴歸的中心估計，而最小平方的殘差平均必定是 0，'
+    + '所以這個比例天生就在五成附近。真正讓它偏離五成的是殘差的偏態：'
+    + '日內最低偶爾會跌得很深，少數幾天把平均拉下去，多數日子的最低反而落在推估之上，'
+    + '比例因此低於五成。偏態越重，掛得到的頻率越低。<br>'
+    + '<b>行動含義</b>：低於五成代表照掛買參考掛，多數日子買不到，'
+    + '要買得到得往下用掛買區間的下緣，代價是成本更高的那幾天會錯過。<br>'
+    + '<b>不能告訴你什麼</b>：這個回測沒有把校準那一層算進去。'
+    + '畫面上的掛買參考在校準成功時會再往下壓一點，實際掛得到的頻率會比這個數字低。'
+    + '它也不含成交順序：同一價位的委託照時間排隊，最低只掃到一次的日子不一定輪得到你。'
+    + '而且係數是用整段樣本配適的，不是當天只用當天以前的資料，這是樂觀的那一邊。</dd>'
 
     + '<dt>今低</dt><dd>今天到現在走出來的最低價，橫條上那條淺青色的線。'
     + '它跟<b>掛買參考</b>是同一件事的兩面：掛買是模型推今天會跌到哪，今低是今天實際已經跌到哪。'
