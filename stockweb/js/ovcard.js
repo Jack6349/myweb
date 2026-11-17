@@ -126,6 +126,21 @@ function _ovcStagger(arr) {
 // 這三個數字要一起改，只改其中一個會讓標籤壓到橫條或框底的那條線。
 function _ovcLabsH(rows) { return [46, 88, 129, 170][Math.min(rows, 4) - 1]; }
 
+// 貼著橫條底下的那一條。單行、不參與錯開，所以不會讓框變高。
+function _ovcEstHtml(m, X) {
+  if (!m) return '';
+  var x = X(m.p);
+  var pin = x < 10 ? ' ovc-pinl' : (x > 90 ? ' ovc-pinr' : '');
+  return '<div class="ovc-estrow">'
+    + '<div class="ovc-stem ovc-eststem" style="left:' + x.toFixed(2) + '%"></div>'
+    + '<div class="ovc-estlab' + pin + '" style="left:' + x.toFixed(2) + '%"'
+    + ' title="' + String(m.tip).replace(/"/g, '&quot;') + '">'
+    + '<span class="ovc-k">' + m.k + '</span>'
+    + '<span class="ovc-v" style="color:' + m.col + '">' + _ovPx(m.v) + '</span>'
+    + '<span class="ovc-p" style="color:' + _rbCol(m.p) + '">' + _ovcPctTxt(m.p) + '</span>'
+    + '</div></div>';
+}
+
 function _ovcLabels(arr, side, rows, X) {
   var h = '<div class="ovc-labs ovc-' + side + '" style="height:' + _ovcLabsH(rows) + 'px">';
   arr.forEach(function (m) {
@@ -165,7 +180,7 @@ function _ovcCard(r, HI, ticks) {
     tip: '收盤區間的上緣。上下不對稱是量出來的，不是對半分。' });
 
   // ── 下方：今天走到哪 ──
-  var DN = [];
+  var DN = [], est = null;
   if (r.lPx > 0) DN.push({ pri: 0, k: '掛買', v: r.lPx, p: P(r.lPx), cl: 'key', col: tierCol,
     tip: '日內最低價的推估。掛限價買進看這一個，不是看收盤。'
        + (r.lCover != null && r.lCoverN ? '這一檔的最低區間實測罩住了 ' + Math.round(r.lCover)
@@ -176,8 +191,13 @@ function _ovcCard(r, HI, ticks) {
     if (r.act.c > 0) DN.push({ pri: 1, k: '實收', v: r.act.c, p: r.act.cPct, cl: 'now', col: _rbCol(r.act.cPct),
       tip: '那一天實際的收盤。這一列已經可以對答案了。' });
   } else {
-    if (r.cPx > 0) DN.push({ pri: 3, k: '估收', v: r.cPx, p: P(r.cPx), cl: 'edge', col: _rbCol(P(r.cPx)),
-      tip: '收盤區間的中心。別把它當成一個會到的價。' });
+    // 估收刻意不進錯開的名單。它是收盤區間的中心，不是要抄進委託單的價，
+    // 卻常常跟掛買、現價、今低擠在一個百分點之內，結果多吃掉一整行、框跟著變高。
+    // 改成貼著橫條底下的一條單行小字，獨自一條不跟別人搶位置。
+    if (r.cPx > 0) {
+      est = { k: '估收', v: r.cPx, p: P(r.cPx), col: _rbCol(P(r.cPx)),
+        tip: '收盤區間的中心。別把它當成一個會到的價。' };
+    }
     if (r.live > 0) DN.push({ pri: 1, k: '現價', v: r.live, p: P(r.live), cl: 'now', col: 'var(--accent3)',
       tip: '券商即時快照' + (r.liveAt ? '，' + r.liveAt : '') + '。持股逐筆更新，關注清單每 30 秒一次。' });
     // 今天實際走到的最低。它跟掛買參考是同一件事的兩面：
@@ -253,6 +273,7 @@ function _ovcCard(r, HI, ticks) {
   if (r.act && r.act.l > 0) h += '<div class="ovc-mk ovc-now" style="left:' + X(r.act.lPct).toFixed(2) + '%"></div>';
   h += '</div>';
 
+  h += _ovcEstHtml(est, X);
   h += _ovcLabels(DN, 'dn', rowsDn, X);
 
   // ── 次要資訊。不收合：收起來的話每看一檔要多點一下，而這幾個每次都要看 ──
