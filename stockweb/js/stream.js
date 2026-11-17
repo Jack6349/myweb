@@ -435,6 +435,59 @@ function limitState(code, price) {
   return '';
 }
 function colorClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'flat'); }
+
+// ── 漲跌幅超過門檻就在數字底下加一條線 ──
+//
+// 為什麼不是換顏色：顏色在這一站已經代表方向（紅漲綠跌），再拿顏色講幅度等於
+// 把兩個意思疊在同一個維度上，掃整欄的時候分不出哪個是方向、哪個是超標。
+// 底線是另一個維度，而且不佔高度，數字欄的右對齊不會因此跑掉。
+//
+// 線的顏色不指定，直接吃數字自己的顏色，所以漲是紅線、跌是綠線。
+// 寫死紅綠的話，哪天字色改了線會跟字對不起來。
+//
+// 門檻存本機，與借券門檻、日圓門檻同一種作法。沒設定過＝預設 2%，清空＝關掉那一邊。
+// 一律取絕對值再補方向：跌幅那格填 2 或 −2 都是 −2%，少打一個負號不會讓整欄亮起來。
+var CHG_MK_HI_LS = 'chg_mark_hi', CHG_MK_LO_LS = 'chg_mark_lo';
+function _chgThr1(k) {
+  var raw = null;
+  try { raw = localStorage.getItem(k); } catch (e) {}
+  if (raw === null) return 2;                 // 沒設定過
+  if (raw === '') return null;                // 清空＝這一邊不標
+  var v = parseFloat(raw);
+  return isNaN(v) ? null : Math.abs(v);
+}
+function chgMarkThr() { return { hi: _chgThr1(CHG_MK_HI_LS), lo: _chgThr1(CHG_MK_LO_LS) }; }
+// 回傳要接在 class 後面的字串（前面帶一個空格），沒超過就是空字串
+function chgMark(pct) {
+  if (pct == null || !isFinite(pct)) return '';
+  var t = chgMarkThr();
+  if (t.hi != null && pct >= t.hi) return ' chg-mk';
+  if (t.lo != null && pct <= -t.lo) return ' chg-mk';
+  return '';
+}
+// 一格裡放了兩個數字（金額與幅度）時用這個。整格畫線會把中間那個全形空白也畫進去，
+// 變成一條橫跨兩個數字的長線，看起來像底線畫錯位置。分開包才是兩段各自的線。
+function chgMarkSpan(txt, pct) {
+  var m = chgMark(pct);
+  return m ? '<span class="' + m.slice(1) + '">' + txt + '</span>' : txt;
+}
+function chgMarkChanged() {
+  var g = function (id) { var e = document.getElementById(id); return e ? String(e.value).trim() : null; };
+  var set = function (k, v) {
+    if (v == null) return;
+    try {
+      if (v === '') { localStorage.setItem(k, ''); return; }
+      var n = parseFloat(v);
+      if (!isNaN(n)) localStorage.setItem(k, String(Math.abs(n)));
+    } catch (e) {}
+  };
+  set(CHG_MK_HI_LS, g('chg-mk-hi'));
+  set(CHG_MK_LO_LS, g('chg-mk-lo'));
+  // 四張表各自重畫。沒進過那一頁的會丟錯，各自包起來，不要讓一張表拖垮其他三張
+  ['renderInvTable', 'renderLiveTables', 'renderWatch', 'renderTopConstTable'].forEach(function (f) {
+    if (typeof window[f] === 'function') { try { window[f](); } catch (e) { hush('chgmark', e); } }
+  });
+}
 // 成本均價色：成本高於現價＝套牢（綠）、低於現價＝獲利（紅）、打平＝黃、無報價＝不上色
 // 台股慣例紅漲綠跌；此處以「現價相對成本」的方向著色，與損益欄同向
 //

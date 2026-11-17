@@ -2398,6 +2398,9 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ov-bt { margin-top: 6px; }
 .ov-bt > summary { cursor: pointer; color: var(--text3); }
 /* 交割列的來源標記。這一欄全是金額，紅綠是收付方向，來源不能也用顏色，改用細框小字 */
+/* 漲跌幅超過門檻的標記。顏色吃 currentColor，所以漲是紅線、跌是綠線，
+   字色改了線也會跟著改。底線不佔高度，數字欄的右對齊不受影響。 */
+.chg-mk { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .tx-src { display: inline-block; margin-left: 6px; padding: 0 5px; font-size: 11px;
   color: var(--text3); border: 1px solid var(--line); border-radius: 3px; cursor: help; }
 /* 盤中校準亮起時的標記。與費半門檻同一種樣式：紅綠在這一頁是漲跌，不能拿來標狀態 */

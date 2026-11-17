@@ -124,8 +124,8 @@ function liveRowHtml(p) {
       + (v.price != null ? '<span class="rb-bpx">' + v.price.toFixed(2) + '</span>' : '—')
       + '</td>' +
     _liveDiffCell(v.code, v.price) +
-    '<td class="num ' + ccls + '">' + (v.chgAmt == null ? '—' : fmtChg(v.chgAmt)) + '</td>' +
-    '<td class="num ' + ccls + '">' + (v.chg == null ? '—' : fmtPct(v.chg)) + '</td>' +
+    '<td class="num ' + ccls + chgMark(v.chg) + '">' + (v.chgAmt == null ? '—' : fmtChg(v.chgAmt)) + '</td>' +
+    '<td class="num ' + ccls + chgMark(v.chg) + '">' + (v.chg == null ? '—' : fmtPct(v.chg)) + '</td>' +
     '<td class="num">' + (v.val != null ? Math.round(v.val).toLocaleString('zh-TW') : '—') + '</td>' +
     '<td class="num ' + pcls + '">' + (v.profit == null ? '—' : (v.profit >= 0 ? '+' : '') + Math.round(v.profit).toLocaleString('zh-TW')) + '</td>' +
     '<td class="num ' + pcls + '">' + (v.prate == null ? '—' : (v.prate > 0 ? '+' : '') + v.prate.toFixed(2) + '%') + '</td>';
@@ -165,8 +165,8 @@ function liveHead() {
     '<th class="num lb-cell" title="建倉明細裡日期最新的那一批：(買進日) 每股買價">最後買入</th>' +
     '<th class="num">現價</th>' +
     _liveSortTh('差價', 'diff', true, '現價 － 最後買入價。紅＝那一批買得比現價便宜，綠＝買得比現價貴') +
-    '<th class="num">漲跌</th>' +
-    _liveSortTh('漲跌幅', 'chg', true) +
+    '<th class="num" title="超過門檻的數字底下會多一條線，漲紅跌綠。門檻在參數設定的「顯示標記」">漲跌</th>' +
+    _liveSortTh('漲跌幅', 'chg', true, '超過門檻的數字底下會多一條線，漲紅跌綠。門檻在參數設定的「顯示標記」') +
     '<th class="num">現值</th>' +
     _liveSortTh('含息損益', 'pnl', true) +
     _liveSortTh('含息獲利', 'prate', true) +
