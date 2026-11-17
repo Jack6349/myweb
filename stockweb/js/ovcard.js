@@ -190,6 +190,14 @@ function _ovcCard(r, HI, ticks) {
     + (r.ixOn ? '<span class="ov-fx" title="這一檔的成份股有 '
         + (r.fgnW == null ? '' : r.fgnW.toFixed(0)) + '% 在海外，實測 Nasdaq 在夜盤與費半之上還能多解釋一截，'
         + '所以這一框的推估多掛了 Nasdaq。">＋N</span>' : '')
+    + '</div>'
+    // 兩個區間用文字再講一次，放在上框線的右端。
+    // 圖上讀得出相對關係，讀不出精確值；要抄進委託單的是這兩組數字。
+    + '<div class="ovc-head2">'
+    + '<span class="ovc-h2k">掛買</span><b>'
+    + (r.lLoPx > 0 ? _ovPx(r.lLoPx) + ' ～ ' + _ovPx(r.lHiPx) : '—') + '</b>'
+    + '<span class="ovc-h2k">收盤</span><b>'
+    + (r.loPx > 0 ? _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) : '—') + '</b>'
     + '</div>';
 
   h += _ovcLabels(UP, 'up', rowsUp, X);
@@ -225,7 +233,6 @@ function _ovcCard(r, HI, ticks) {
   var volHot = (r.volX != null && r.volX >= 1.5);
   h += '<div class="ovc-foot">'
     + '<span>成本 <b>' + (r.cost > 0 ? _ovPx(r.cost) : '—') + '</b></span>'
-    + '<span>掛買區間 <b>' + (r.lLoPx > 0 ? _ovPx(r.lLoPx) + ' ～ ' + _ovPx(r.lHiPx) : '—') + '</b></span>'
     + '<span>折溢價 <b style="color:' + (r.prem == null ? 'var(--text3)' : _rbCol(r.prem)) + '">'
       + _ovcPctTxt(r.prem) + '</b></span>'
     + '<span>量能 <b' + (volHot ? ' class="ovc-hot"' : '') + '>'
