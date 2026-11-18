@@ -1530,7 +1530,9 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .es-dhead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 .es-dcode { font-size: 18px; font-weight: 700; color: var(--accent2); }
 .es-dname { font-size: 14px; font-weight: 600; color: var(--text); }
-.es-fpct { display: inline-block; min-width: 3.3em; text-align: right; }   /* 填息率 % 固定寬度，各列對齊 */
+/* 填息率只留次數比，百分比刪掉。次數比本來是被壓暗的配角，
+   現在它是那一欄唯一的數字，要跟其他欄一樣亮。 */
+.es-fratio { color: var(--text); font-variant-numeric: tabular-nums; }
 .es-new-title { margin-top: 18px; }
 
 /* ══════════ 下單（order.js）══════════ */
