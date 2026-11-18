@@ -584,6 +584,22 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
    它要亮，不然亮暗之分就沒有基準可比。 */
 .tx-settle-table .tx-cf-start td.tx-bal { color: var(--accent2); font-weight: 700; }
 .tx-settle-table .tx-cf-none { color: var(--text3); text-align: center; padding: 10px 2px; }
+/* 確認鈕。它是這張表唯一會改資料的東西，但不該搶走數字的注意力，
+   所以用邊框不用填色；確認過的轉成重點色，一眼看得出哪幾天對過帳。 */
+.ad-btn { background: none; border: 1px solid var(--border); color: var(--text3);
+  font: 11.5px/1 inherit; padding: 5px 8px; border-radius: 5px; cursor: pointer;
+  white-space: nowrap; }
+.ad-btn:hover { border-color: var(--text3); color: var(--text2); }
+.ad-btn.ad-btn-ok { border-color: var(--accent2); color: var(--accent2); }
+.ad-inp { width: 96px; text-align: right; }
+/* 金額是 0 的交割日收成一句話。它是資料不是解釋，所以標 nb-keep 不收合 */
+.tx-zero { color: var(--text3); font-size: 12px; margin: 6px 0 0; }
+.tx-zero .tx-zero-x { color: var(--text3); opacity: .75; }
+.ad-hist > summary { margin-top: 10px; }
+.ad-htable { margin-top: 6px; }
+.ad-htable .tx-cf-act { width: 1%; white-space: nowrap; padding-left: 10px; }
+.ad-htable td { color: var(--text2); }
+.ad-hmore { color: var(--text3); font-size: 12px; margin-top: 6px; }
 .tx-kind { font-size: 10px; border-radius: 3px; padding: 1px 4px; margin-right: 6px; vertical-align: 1px; }
 .tx-kind.k-stl { background: rgba(255,255,255,.08); color: var(--text2); }
 .tx-kind.k-div { background: rgba(38,217,98,.16); color: var(--down); }
