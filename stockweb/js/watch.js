@@ -848,7 +848,8 @@ function renderWatchBond() {
     var open = _wtBondOpen === r.code;
     h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="wtBondRowClick(event,\'' + r.code + '\')">' +
       '<td class="es-wcell">' + wtWatchBtn(r.code) + '</td>' +
-      '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
+      '<td class="inv-code">' + _wtHeldTag(r.code)
+        + '<span class="code-link" title="看線圖" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-st-cell">'
         + (typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code) : '') + '</td>' +
       '<td class="inv-name">' + r.name + '</td>' +
@@ -954,9 +955,10 @@ function renderWatchAct() {
     var open = _wtActOpen === r.code;
     h += '<tr class="es-row' + (open ? ' es-row-open' : '') + '" onclick="wtActRowClick(event,\'' + r.code + '\')">' +
       '<td class="es-wcell">' + wtWatchBtn(r.code) + '</td>' +
-      '<td class="inv-code"><span class="code-link" title="' + (r.name ? r.name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖')
+      '<td class="inv-code">' + _wtHeldTag(r.code)
+        + '<span class="code-link" title="' + (r.name ? r.name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖')
         + '" onclick="openChartPop(\'' + r.code + '\')">' + r.code + '</span>'
-        + '<button class="swap-mini wt-cst" title="看成份股" onclick="openConstituents(\'' + r.code + '\')">成</button></td>' +
+        + '<button class="btn-detail btn-1w wt-cst" title="成份股" onclick="openConstituents(\'' + r.code + '\')">成</button></td>' +
       '<td class="inv-st-cell">'
         + (typeof rbStreakSlot === 'function' ? rbStreakSlot(r.code) : '') + '</td>' +
       (function () { var pc = wtPxCell(r.code, r.px);
@@ -981,7 +983,9 @@ function renderWatchAct() {
     '<dt>現價</dt><dd>券商即時快照，與關注清單、債券 ETF、ETF 評比同一個來源，盤中回到本頁籤會自動刷新。' +
     'Yahoo 當天那根日 K 的收盤常常是空值，只靠它會慢一個交易日。</dd>' +
     '<dt>名稱與成份股</dt><dd>名稱欄拿掉了，它是這張表唯一長短差很多的文字欄，留著就會出現橫向捲軸。' +
-    '滑過代號看得到名稱，展開明細也有。代號後面的〔份〕是成份股。</dd>' +
+    '滑過代號看得到名稱，展開明細也有。代號後面的〔成〕是成份股。</dd>' +
+    '<dt>代號前面的「持」</dt><dd>這一檔現在手上有部位，出借中的也算。'
+    + '四個子頁籤用的是同一個標記。</dd>' +
     '<dt>單次配／預估年配</dt><dd>最近一次配息 ÷ 現價，以及再乘上年配息次數。欄位定義與 ETF 評比、新上市 ETF 相同。' +
     '滑過數字可看除息日與每股金額。顯示「—」代表查無配息紀錄（未配息或資料未揭露）。</dd>' +
     '<dt>報酬</dt><dd>起點用 Yahoo 日收盤價，終點用現價。主動式 ETF 多未配息或配息少，<code>價格報酬 ≈ 總報酬</code>。</dd>' +

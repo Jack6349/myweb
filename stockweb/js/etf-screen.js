@@ -870,8 +870,14 @@ function renderEtfScreen() {
     var v = r[c[0]];
     switch (c[2]) {
       case 'int': return v == null ? dim('—') : v;   // 新上市沒有名次，不能讓它印出 undefined
-      case 'code': return '<span class="code-link" title="' + (r.name || '').replace(/"/g, '&quot;') + '（點代號看線圖，點列展開配息明細）" onclick="openChartPop(\'' + v + '\')">' + v + '</span>' + _esFreqTag(v) +
-        (held[v] > 0 ? '<span class="es-tag es-held" title="目前持有">持</span>' : '') + (watched[v] ? '<span class="es-tag es-watch" title="已在關注清單">關</span>' : '')
+      // 「持」挪到代號前面，與關注股票那幾個子頁籤一致，而且不再用紅色：
+      // 紅綠在這一頁是漲跌，拿來標「有沒有持有」會跟現價那幾欄互相干擾。
+      // 「關」「新」留在代號後面：那兩個講的是這檔 ETF 本身的屬性，
+      // 「持」講的是我跟它的關係，位置分開才看得出是兩回事。
+      case 'code': return ((typeof _wtHeldTag === 'function') ? _wtHeldTag(v)
+            : (held[v] > 0 ? '<span class="es-tag es-held" title="目前持有">持</span>' : ''))
+        + '<span class="code-link" title="' + (r.name || '').replace(/"/g, '&quot;') + '（點代號看線圖，點列展開配息明細）" onclick="openChartPop(\'' + v + '\')">' + v + '</span>' + _esFreqTag(v) +
+        (watched[v] ? '<span class="es-tag es-watch" title="已在關注清單">關</span>' : '')
         // 不標的話，一排「—」會被讀成「這檔資料抓不到」，而不是「它還沒有一年歷史」
         + (r.young ? '<span class="es-tag es-new-tag" title="上市未滿一年，無一年期報酬與填息紀錄，不列入排名">新</span>' : '');
       case 'txt': return v || '';

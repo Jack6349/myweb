@@ -2704,7 +2704,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .wt-act-t td, .wt-act-t th { padding-left: 2px; padding-right: 2px; }
 .wt-bond-t .inv-name { overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
 /* 成份股按鈕併進代號格：它不值得自己佔一欄 */
-.wt-act-t .wt-cst { margin-left: 4px; padding: 1px 4px; }
+/* 成份股那顆鈕跟關注股票那一頁用同一種，這裡只給間距 */
+.wt-cst { margin-left: 5px; }
 /* 代號格左緣的成本方向條：與「成本均價」欄左緣那條同一個語彙，但不帶落差大小
    （量級在成本均價與報酬率兩欄已經有了）。3px 塞在原本的 8px 左 padding 裡，欄寬不變。 */
 td.inv-code.code-cost { position: relative; }
