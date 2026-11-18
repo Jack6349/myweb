@@ -600,6 +600,12 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ad-htable .tx-cf-act { width: 1%; white-space: nowrap; padding-left: 10px; }
 .ad-htable td { color: var(--text2); }
 .ad-hmore { color: var(--text3); font-size: 12px; margin-top: 6px; }
+/* 買賣紀錄：查不到買進的那幾檔要具名講出來。
+   用警示色不用紅綠：那兩個色在這張表是買與賣。 */
+.bsg-warn { color: var(--warn); font-size: 12.5px; line-height: 1.6;
+  border: 1px solid var(--warn); border-radius: 6px; padding: 8px 10px; margin: 10px 0; }
+.bsg-sum { margin-top: 4px; }
+.bsg-det > summary { margin-top: 12px; }
 .tx-kind { font-size: 10px; border-radius: 3px; padding: 1px 4px; margin-right: 6px; vertical-align: 1px; }
 .tx-kind.k-stl { background: rgba(255,255,255,.08); color: var(--text2); }
 .tx-kind.k-div { background: rgba(38,217,98,.16); color: var(--down); }
