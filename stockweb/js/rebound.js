@@ -377,24 +377,53 @@ function _rbStreak(bars) {
 // 為了一個徽章去燒配額不划算（chart.js 的檔頭有同一件事的實測紀錄）。
 //
 // 只需要數得出連續幾天，所以 12 個日曆天就夠（最多顯示 5＋）。
+// ── 靜態日 K 要多新才算數 ──
+//
+// 舊規則是「六天內就算數」，那在收盤後會漏掉今天那一根。
+// 排程每天 18:52 才重產靜態檔，台股 13:30 收盤，中間有五個多小時的空窗：
+// 檔案停在昨天，六天的門檻照樣放行，於是徽章用的是昨天為止的序列。
+//
+// 2026-11-18 16:30 實測：靜態檔最後一根是 11/17，00405A 當天漲 2.63%，
+// 徽章卻寫「連跌 2」（11/13 7.40 → 11/16 6.80 → 11/17 6.46）。
+// 四檔全部上漲、四個徽章全部寫連跌。
+//
+// 改成問「現在應該要有哪一天的收盤」：今天是交易日而且已經收盤，就必須有今天；
+// 否則要有最近一個已收盤的交易日。不足就改走券商分 K，它永遠是當下的。
+var RB_CLOSE_H = 14;            // 台股 13:30 收盤，留半小時給資料落地
+function _rbPrevTradeDay(ms) {
+  var d = new Date(ms);
+  for (var i = 0; i < 20; i++) {
+    d = new Date(d.getTime() - 86400000);
+    var s = d.toISOString().slice(0, 10), w = d.getUTCDay();
+    var o = (typeof _divIsOff === 'function') ? _divIsOff(s) : null;
+    if ((o == null) ? (w !== 0 && w !== 6) : !o) return s;
+  }
+  return new Date(ms).toISOString().slice(0, 10);
+}
+function _rbNeedDay() {
+  var t = new Date(Date.now() + 8 * 3600000);
+  var iso = t.toISOString().slice(0, 10), w = t.getUTCDay();
+  var off = (typeof _divIsOff === 'function') ? _divIsOff(iso) : null;
+  var isOff = (off == null) ? (w === 0 || w === 6) : off;
+  if (!isOff && t.getUTCHours() >= RB_CLOSE_H) return iso;
+  return _rbPrevTradeDay(t.getTime());
+}
+
+// 快取的鍵帶上「要有哪一天」：頁面從早上開到收盤後也會自己重抓，
+// 不然那一輪的結果會一路停在盤前算出來的樣子。
 var _rbDayBars = {};
 async function rbDayBars(code) {
   code = String(code);
-  if (_rbDayBars[code] !== undefined) return _rbDayBars[code];
+  var need = _rbNeedDay(), ck = code + '|' + need;
+  if (_rbDayBars[ck] !== undefined) return _rbDayBars[ck];
   var p2 = (async function () {
     // 1) 靜態日 K
     try {
       var r = await fetch('data/dayk/' + encodeURIComponent(code) + '.json', { cache: 'no-cache' });
       if (r.ok && typeof _chartDkUnpack === 'function') {
         var b = _chartDkUnpack(await r.json());
-        // 太舊就不用：連續幾天是「目前的狀態」，拿三週前的序列算出來的數字會錯得無聲無息。
-        // 這不是理論風險：進度寫在主目錄，而開發時從 worktree 上傳會把它蓋回舊版，
-        // 2026-11-14 實際發生過一次（静態檔停在 10/22）。過期就改走券商，它永遠是當下的。
-        if (b && b.length > 1) {
-          var fresh = new Date(Date.now() + 8 * 3600000 - 6 * 86400000).toISOString().slice(0, 10);
-          if (b[b.length - 1].d >= fresh) {
-            return b.slice(-12).map(function (x) { return { d: x.d, c: x.c, a: (x.ac > 0 ? x.ac : x.c) }; });
-          }
+        if (b && b.length > 1 && b[b.length - 1].d >= need) {
+          return b.slice(-12).map(function (x) { return { d: x.d, c: x.c, a: (x.ac > 0 ? x.ac : x.c) }; });
         }
       }
     } catch (e) { /* 靜態檔沒有不是錯誤，往下走 */ }
@@ -430,7 +459,7 @@ async function rbDayBars(code) {
     } catch (e2) { hush('rebound', e2); }
     return null;
   })();
-  _rbDayBars[code] = p2;
+  _rbDayBars[ck] = p2;
   return p2;
 }
 // 把畫面上的佔位徽章補滿。佔位是固定寬度的空框，所以填完不會造成版面跳動。
@@ -443,7 +472,8 @@ async function _rbStreakPass(root) {
     while (i < els.length) {
       var el = els[i++], code = el.getAttribute('data-sc');
       var sm = el.getAttribute('data-sm') === '1';
-      var key = String(code) + (sm ? '|s' : '');
+      // 鍵要帶上「要有哪一天」：收盤那一刻之後，同一頁算出來的徽章必須作廢重算
+      var key = String(code) + (sm ? '|s' : '') + '|' + _rbNeedDay();
       // 先前就查過的直接用，不要再送一次請求
       if (_rbStreakDone[key] === undefined) {
         var bars = null;
@@ -512,8 +542,12 @@ function _rbStreakSub(bars, compact) {
   }
   // 補一句「數的是收盤序列」：停損停利與成份股曝險那兩張接的是現價，
   // 盤中那個徽章會落後一天（不含今天還沒收的那一根）。
+  // 數到哪一天要講出來。盤中最後一根是昨天，收盤後是今天，
+  // 兩者差一天而畫面上的現價是即時的，不寫清楚會以為徽章跟現價矛盾。
+  var upto = bars[bars.length - 1].d;
   return '<span class="rb-bsub ' + cls + (compact ? ' rb-bs-sm' : '') + '" title="' + tip
-    + '（數的是收盤序列，盤中不含今天；還原後，除息不算下跌）">' + icon + '</span>';
+    + '（數到 ' + upto + ' 的收盤為止，盤中不含今天那一根；還原後，除息不算下跌）">'
+    + icon + '</span>';
 }
 // 前收儲存格：數字照舊，字色是它自己的漲跌，底下一行是目前的狀態
 function _rbBaseTd(pc, bars) {
