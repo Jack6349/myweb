@@ -2557,8 +2557,10 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 
 .ovb-grid { display: grid; gap: 26px 20px;
   grid-template-columns: repeat(auto-fill, minmax(760px, 1fr)); }
+/* 上內距 48：框頭右端是兩行，第一行壓在框線上（-14 到 +12），
+   第二行再往下 26px，內容要從它底下開始。與夜推股票同一組數字。 */
 .ovb-card { position: relative; border: 1px solid var(--border-strong); border-radius: 10px;
-  background: var(--bg2); padding: 22px 16px 10px; }
+  background: var(--bg2); padding: 48px 16px 10px; }
 .ovb-head { position: absolute; top: -13px; left: 14px; background: var(--bg2);
   padding: 0 10px; white-space: nowrap; line-height: 24px; }
 .ovb-head .tx-ocode { font-size: 17px; }
@@ -2566,9 +2568,11 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-head2 { position: absolute; top: -14px; right: 14px; background: var(--bg2);
   padding: 0 10px; white-space: nowrap; line-height: 26px; font-size: 17px; color: var(--text2); }
 .ovb-head2 .ovb-h2k { color: var(--th); font-weight: 600; font-size: 13px; margin: 0 6px 0 0; }
+/* 兩行靠右對齊。每一行自己是一個 block，所以行尾的間距各自歸零。 */
+.ovb-head2 .ovb-h2r { display: block; text-align: right; }
 .ovb-head2 .ovb-h2k + b { color: var(--text); font-weight: 600; margin-right: 18px;
   font-variant-numeric: tabular-nums; }
-.ovb-head2 b:last-child { margin-right: 0; }
+.ovb-head2 .ovb-h2r > b:last-child { margin-right: 0; }
 /* 關注但沒持股的那幾檔。中性框，不用紅綠也不用警示色：
    它不是狀態好壞，只是說明這一檔的來源。 */
 .ovb-wt { display: inline-block; margin-left: 8px; padding: 0 6px; font-size: 12px;
