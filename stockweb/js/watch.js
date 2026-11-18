@@ -292,6 +292,26 @@ function wtRowClick(ev, code) {
   wtToggleDetail(code);
 }
 
+// ── 券商庫存載完之後補畫「持」 ──
+//
+// 進頁時兩件事同時開始：關注清單只要有合約就畫得出來，券商庫存要再等十幾支
+// 明細請求才齊。所以清單那一輪畫出來的時候 _sharesMap 還是空的，每一列都沒有
+// 持股標記，而且之後沒有任何東西會再畫一次，整欄的「持」就永遠不出現。
+// 2026-11-18 實測：十五列全部沒有標記，其中十列是持股。
+//
+// 只重畫目前顯示的那個子頁籤。沒在這一頁就不動，使用者切過去時本來就會重畫。
+function wtOnShares() {
+  var v = document.getElementById('watch-view');
+  if (!v || v.style.display === 'none') return;
+  try {
+    if (_wtTab === 'bond') { if (typeof renderWatchBond === 'function') renderWatchBond(); }
+    else if (_wtTab === 'act') { if (typeof renderWatchAct === 'function') renderWatchAct(); }
+    else if (_wtTab === 'screen') { if (typeof renderEtfScreen === 'function') renderEtfScreen(); }
+    else if (_wtTab === 'new') { if (typeof renderEtfNew === 'function') renderEtfNew(); }
+    else renderWatch();
+  } catch (e) { hush('watch', e); }
+}
+
 // 關注股票各頁籤共用的「現價」儲存格：依當日漲跌上紅綠。
 //
 // 漲跌用券商合約的參考價（reference，即前一日收盤）算，與關注清單那一頁
