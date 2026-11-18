@@ -198,11 +198,18 @@ function _ovbCard(code) {
   // 兩邊都畫是為了看得到「萬一明天反過來，這個掛價變成多少」。
   var other = dir === 0 ? null : (dir < 0 ? up : dn);
 
+  // 框頭右端排兩行，與夜推股票一致。分行照「講的是同一件事」分：
+  // 前收與現價同一行（現價的漲跌就是對前收算的，拆開就看不出兩個數字的關係），
+  // 升降單位與樣本同一行（這兩個是算成交率的前提，不是今天的價）。
   head += '<div class="ovb-head2">'
+    + '<span class="ovb-h2r">'
     + '<span class="ovb-h2k">前收</span><b>' + _bsPx(last) + '</b>'
+    + _ovbPxTag(code, ref)
+    + '</span>'
+    + '<span class="ovb-h2r">'
     + '<span class="ovb-h2k">升降單位</span><b>' + tick.toFixed(2) + '</b>'
     + '<span class="ovb-h2k">樣本</span><b>' + base.n + ' 日</b>'
-    + _ovbPxTag(code, ref)
+    + '</span>'
     + '</div>';
 
   // ── 柱子。由便宜到貴，正中央是前收 ──
