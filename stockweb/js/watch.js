@@ -338,10 +338,13 @@ function wtPxCell(code, px, extraCls) {
 // 回想一次手上到底有沒有它。
 //
 // 不用紅綠：那兩個色在這張表是漲跌。出借中的部位也算持有，股數本來就含在裡面。
+// 沒持股的要留一個同寬的「—」，不是空字串。
+// 空起來的話有標記與沒標記的列代號起點差 22px，整欄掃下來是鋸齒狀，
+// 而這一欄的用處就是要一眼掃完。寬度固定在樣式裡，兩種狀態同寬。
 function _wtHeldTag(code) {
   var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
   var q = m[String(code)];
-  if (!(q > 0)) return '';
+  if (!(q > 0)) return '<span class="wt-held wt-held-no">—</span>';
   return '<span class="wt-held" title="現有持股 ' + q.toLocaleString('zh-TW') + ' 股（含出借中）">持</span>';
 }
 
