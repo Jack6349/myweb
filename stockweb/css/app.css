@@ -2434,8 +2434,10 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 
 .ovc-grid { display: grid; gap: 26px 20px;
   grid-template-columns: repeat(auto-fill, minmax(760px, 1fr)); }
+/* 上內距 48：框頭右端是兩行，第一行壓在框線上（-14 到 +12），
+   第二行再往下 26px，內容要從它底下開始。 */
 .ovc-card { position: relative; border: 1px solid var(--border-strong); border-radius: 10px;
-  background: var(--bg2); padding: 22px 16px 10px; }
+  background: var(--bg2); padding: 48px 16px 10px; }
 .ovc-calc { background: rgba(240, 204, 122, 0.05); }
 /* 框頭壓在上框線上，靠左。一排多框往下掃代號時靠左比置中快 */
 .ovc-head { position: absolute; top: -13px; left: 14px; background: var(--bg2);
@@ -2447,9 +2449,11 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-head2 { position: absolute; top: -14px; right: 14px; background: var(--bg2);
   padding: 0 10px; white-space: nowrap; line-height: 26px; font-size: 17px; color: var(--text2); }
 .ovc-head2 .ovc-h2k { color: var(--th); font-weight: 600; font-size: 13px; margin-right: 6px; }
+/* 兩行靠右對齊。每一行自己是一個 block，所以行尾的間距各自歸零。 */
+.ovc-head2 .ovc-h2r { display: block; text-align: right; }
 .ovc-head2 .ovc-h2k + b { color: var(--text); font-weight: 600; margin-right: 18px;
   font-variant-numeric: tabular-nums; }
-.ovc-head2 b:last-child { margin-right: 0; }
+.ovc-head2 .ovc-h2r > b:last-child { margin-right: 0; }
 .ovc-calc .ovc-head2 { background: #19222f; }
 
 .ovc-bar { position: relative; height: 26px; margin: 0 8px; }
