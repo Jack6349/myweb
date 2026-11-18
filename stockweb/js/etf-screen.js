@@ -510,10 +510,36 @@ function _esRank() {
   short.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
   short.forEach(function (r, i) { r.rank = i + 1; });
   var top = short.slice(0, ES_TOP);
+  // ── 自己持有或關注的，不管排第幾都要列出來 ──
+  //
+  // 這張表只列前 20 名，而一個分類有上百檔（2026-11-18 實測市值型 117 檔）。
+  // 排到 21 名之後就整檔消失，畫面上也沒有任何跡象，於是「找不到 00922」
+  // 看起來像資料漏抓，實際上是被截掉。
+  //
+  // 而且這正好是最需要看到的那幾檔：這張表的用途是比較買進與換股，
+  // 手上那幾檔是比較的基準，基準不在表上就比不了。
+  //
+  // 補進來的那幾列照樣算所有指標，只有名次那一欄要標出「不在前 20」，
+  // 不然會讓人以為它排在補進來的位置。
+  var mineSet = {};
+  (function () {
+    var sm = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+    Object.keys(sm).forEach(function (c) { if (sm[c] > 0) mineSet[String(c)] = 'held'; });
+    if (typeof _wtLoad === 'function' && typeof _wtList !== 'undefined' && !_wtList) _wtLoad();
+    ((typeof _wtList !== 'undefined' && _wtList) || []).forEach(function (c) {
+      if (!mineSet[String(c)]) mineSet[String(c)] = 'watch';
+    });
+  })();
+  var inTop = {};
+  top.forEach(function (r) { inTop[r.code] = 1; });
+  var extra = rank.filter(function (r) { return mineSet[r.code] && !inTop[r.code]; });
+  extra.forEach(function (r) { r.mine = mineSet[r.code]; r.outRank = true; });
+  top = top.concat(extra);
   var fresh = all.filter(function (r) { return r.young; });          // 上市未滿一年：另列「新上市 ETF」表，不排名
   top.concat(fresh).forEach(function (r) { if (_esLive[r.code] > 0) _esDerive(r, _esLive[r.code]); });
   _esShown = top.concat(fresh).map(function (r) { return { code: r.code, mkt: r.mkt }; });
-  return { top: top, short: short, fresh: fresh, total: all.length, young: fresh.length };
+  return { top: top, short: short, fresh: fresh, total: all.length, young: fresh.length,
+           extra: extra.length };
 }
 
 var _esLive = {}, _esChg = {}, _esShown = [], _esLiveTimer = null, _esLiveAt = null;
@@ -843,6 +869,17 @@ function renderEtfScreen() {
     (_esStale ? '<span class="es-info swap-warn">今日資料讀取失敗（代理服務忙碌），暫用 ' + _esStale.slice(5).replace('-', '/') + ' 的資料，2 分鐘後自動重試</span>' : '') +
     '<span class="es-info">' + (_esMsg || (_esBase ? '資料日 ' + (_esBase.d0 || '—') + '（半年前 ' + (_esBase.d6 || '—') + '、一年前 ' + (_esBase.d12 || '—') + '）' +
       (_esLiveAt ? '｜現價更新 ' + _esLiveAt : '') + '｜點列展開配息與走勢' : '')) + '</span></div>';
+  // 只列前 20 名這件事要寫出來。不寫的話，一個分類有上百檔卻只看到 20 列，
+  // 找不到某一檔會被當成資料漏抓。
+  var _rkInfo = _esBase ? _esRank() : null;
+  if (_rkInfo) {
+    h += '<div class="es-cut nb-keep">這一類共 <b>' + _rkInfo.total + '</b> 檔，'
+      + '其中 <b>' + (_rkInfo.total - _rkInfo.young) + '</b> 檔列入排名。'
+      + '上面列的是<b>前 ' + ES_TOP + ' 名</b>'
+      + (_rkInfo.extra ? '，加上你持有或關注、但不在前 ' + ES_TOP + ' 名的 <b>' + _rkInfo.extra + '</b> 檔（名次標「外」）' : '')
+      + (_rkInfo.young ? '，以及上市未滿一年、不列入排名的 <b>' + _rkInfo.young + '</b> 檔' : '')
+      + '。其餘沒有列出來。</div>';
+  }
   if (!_esBase) { wrap.innerHTML = h + '<div class="modal-loading">' + (_esMsg || '讀取中…') + '</div>'; return; }
 
   var rk = _esRank();
@@ -875,7 +912,11 @@ function renderEtfScreen() {
   var fmt = function (r, c) {
     var v = r[c[0]];
     switch (c[2]) {
-      case 'int': return v == null ? dim('—') : v;   // 新上市沒有名次，不能讓它印出 undefined
+      // 補進來的那幾列沒有前 20 的名次，標出來，不然會被當成排在這個位置
+      case 'int': return r.outRank
+        ? '<span class="es-tag es-out" title="不在前 20 名。這一列是因為你'
+          + (r.mine === 'held' ? '持有' : '關注') + '它才列出來，指標照樣算，只是沒有名次">外</span>'
+        : (v == null ? dim('—') : v);   // 新上市沒有名次，不能讓它印出 undefined
       // 「持」挪到代號前面，與關注股票那幾個子頁籤一致，而且不再用紅色：
       // 紅綠在這一頁是漲跌，拿來標「有沒有持有」會跟現價那幾欄互相干擾。
       // 「關」「新」留在代號後面：那兩個講的是這檔 ETF 本身的屬性，
