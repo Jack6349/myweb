@@ -2651,17 +2651,17 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 /* 另一種情境的數字，貼在它自己那根柱子的頭上，靠左。
    不印百分號：前收那一組只有 48px 寬，兩個帶百分號的標籤加起來塞不下。 */
 .ovb-top { position: absolute; left: 0; bottom: 100%; margin-bottom: 3px;
-  font-size: 11px; line-height: 1.25; color: var(--text2); white-space: nowrap;
+  font-size: 10.5px; line-height: 1.25; color: var(--text2); white-space: nowrap;
   font-variant-numeric: tabular-nums; z-index: 3;
-  background: var(--bg2); padding: 0 2px; border-radius: 3px; }
+  background: var(--bg2); padding: 0 1px; border-radius: 3px; }
 .ovb-mid .ovb-top { background: #1a2430; }
 /* 近 30 日的外框。左右各比柱子寬 7px，柱子跟框一樣高時才分得出來。
    暗色：它是參考值，柱子的金藍才是主角。 */
 .ovb-r30b { position: absolute; left: -7px; right: -7px; bottom: 0;
   border: 1px solid var(--text3); border-top-width: 2px;
   border-radius: 3px 3px 0 0; z-index: 2; pointer-events: none; }
-.ovb-r30lab { position: absolute; right: 2px; top: 1px; font-size: 11px; line-height: 1.25;
-  color: var(--text3); background: var(--bg2); padding: 0 2px; border-radius: 3px;
+.ovb-r30lab { position: absolute; right: 1px; top: 1px; font-size: 10.5px; line-height: 1.25;
+  color: var(--text3); background: var(--bg2); padding: 0 1px; border-radius: 3px;
   white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ovb-mid .ovb-r30lab { background: #1a2430; }
 /* 框太矮塞不下數字時改放框的正上方 */

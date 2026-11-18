@@ -266,7 +266,7 @@ function _ovbCard(code) {
       + '" style="height:' + hv.toFixed(1) + 'px"'
       + ' title="' + lab + (side === 'sell' ? '賣出' : '買進') + '成交率 '
       + (v == null ? '樣本不足' : v.toFixed(0) + '%') + '"></div>'
-      + (isToday || v == null ? '' : '<span class="ovb-top">' + v.toFixed(0) + '</span>');
+      + (isToday || v == null ? '' : '<span class="ovb-top">' + v.toFixed(0) + '%</span>');
   };
   // 近 30 日：從底線框到它自己的高度，橫跨一組柱子。
   // 它不分跌漲，一組只有一個數字，所以不能畫在任何一根柱子上。
@@ -279,7 +279,7 @@ function _ovbCard(code) {
       + (vToday == null ? '' : '，與今天這一邊差 ' + (v30 - vToday > 0 ? '＋' : (v30 - vToday < 0 ? '−' : '±'))
          + Math.abs(v30 - vToday).toFixed(0) + ' 個百分點')
       + '。30 天的標準誤約 ±9 個百分點，不要拿它取代主數字。">'
-      + '<span class="ovb-r30lab' + (hp < 22 ? ' ovb-up' : '') + '">' + v30.toFixed(0) + '</span></div>';
+      + '<span class="ovb-r30lab' + (hp < 22 ? ' ovb-up' : '') + '">' + v30.toFixed(0) + '%</span></div>';
   };
 
   var h = head + '<div class="ovb-chart">';
@@ -384,7 +384,7 @@ function ovcBondHtml() {
     + '　近 30 日 <b>' + _r30N + ' 天</b></span>'
     + '<span class="ovb-note">柱高是 0 到 100%，所有框共用，框跟框之間可以直接比高度。'
     + '橫軸是掛價距前收幾個升降單位，左邊便宜、右邊貴。'
-    + '柱頭與外框裡的小數字不印百分號，這張圖的數字全部是百分比。</span></div>';
+    + '</span></div>';
 
   h += '<div class="ovb-grid">' + codes.map(_ovbCard).join('') + '</div>';
 
