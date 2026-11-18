@@ -245,18 +245,23 @@ function renderWatch() {
     return;
   }
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
-    '<th></th><th></th>' + _wtTh('code', '代號') +
+    '<th></th>' + _wtTh('code', '代號') +
     '<th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th>' +
     _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num', '超過門檻的數字底下會多一條線，漲紅跌綠。門檻在參數設定的「顯示標記」') +
     (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
-  var ncol = 7 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);   // 7：原本 6 欄加上趨勢
+  // 6：〔細／成〕｜代號｜趨勢｜現價｜漲跌｜移除（成份股與明細併成一格之後少一欄）
+  var ncol = 6 + ((typeof ES_WCOLS !== 'undefined') ? ES_WCOLS.length : 0);
   _wtSorted(list).forEach(function (code) {
     h += '<tr id="wt-tr-' + code + '" class="es-row' + (_wtOpen === code ? ' es-row-open' : '') + '" onclick="wtRowClick(event,\'' + code + '\')">' + _wtRowHtml(code) + '</tr>';
     if (_wtOpen === code) h += '<tr class="es-drow"><td colspan="' + ncol + '" class="es-dslot" data-code="' + code + '"></td></tr>';
   });
   h += '</tbody></table></div>' +
     '<div class="detail-note"><dl>' +
-    '<dt>展開</dt><dd>點列或〔明細〕看歷年配息、近 12 個月填息與一年走勢，一次一列。</dd>' +
+    '<dt>展開</dt><dd>點列或〔細〕看歷年配息、近 12 個月填息與一年走勢，一次一列。'
+    + '〔成〕是成份股，只有 ETF 有。</dd>' +
+    '<dt>代號前面的「持」</dt><dd>這一檔現在手上有部位，出借中的也算。'
+    + '關注清單裡混著還在看的與已經買了還在追蹤的，兩者要問的事情不一樣：'
+    + '前者問值不值得進場，後者問要不要加碼或減碼。</dd>' +
     '<dt>即時性</dt><dd>現價與漲跌盤中即時（進頁訂閱、離開退訂）。</dd>' +
     (typeof esStaticNote === 'function' ? esStaticNote() : '') +
     '<dt>名稱怎麼看</dt><dd>名稱欄拿掉了（它是最寬的文字欄，而〔明細〕裡已經有）。' +
@@ -306,6 +311,20 @@ function wtPxCell(code, px, extraCls) {
   return { cls: cls + (v == null ? '' : ' ' + colorClass(v)), txt: px.toFixed(2), chg: v };
 }
 
+// 代號前面的「持」：這一檔現在手上有部位。
+//
+// 關注清單裡混著「還在看的」與「已經買了還在追蹤的」，兩者要看的東西不一樣：
+// 前者問值不值得進場，後者問要不要加碼或減碼。清單上分不出來的話，每一列都要
+// 回想一次手上到底有沒有它。
+//
+// 不用紅綠：那兩個色在這張表是漲跌。出借中的部位也算持有，股數本來就含在裡面。
+function _wtHeldTag(code) {
+  var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
+  var q = m[String(code)];
+  if (!(q > 0)) return '';
+  return '<span class="wt-held" title="現有持股 ' + q.toLocaleString('zh-TW') + ' 股（含出借中）">持</span>';
+}
+
 function _wtRowHtml(code) {
   var c = _contracts[code], r = _rows[code];
   var price = (r && r.close != null) ? r.close : null;
@@ -318,9 +337,19 @@ function _wtRowHtml(code) {
   var name = (c && c.name) || (function () {
     var f = (_wtIdx || []).filter(function (x) { return x.c === code; })[0]; return f ? f.n : '';
   })();
-  return '<td>' + (isEtf ? '<button class="btn-detail" onclick="openConstituents(\'' + code + '\')">成份股</button>' : '') + '</td>' +
-    '<td><button class="btn-detail' + (_wtOpen === code ? ' active' : '') + '" onclick="wtToggleDetail(\'' + code + '\')">明細 ' + (_wtOpen === code ? '▼' : '▶') + '</button></td>' +
-    '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '"><span class="code-link" title="' + (name ? name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖') + '" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
+  // 兩顆按鈕併成一格、各一個字，與持股庫存的〔細〕〔成〕同一個樣子。
+  // 原本「成份股」「明細 ▶」兩格佔掉 150px 上下，而這張表當初就是為了不橫向捲動
+  // 才把名稱欄拿掉的，兩顆文字鈕等於把省下來的寬度又吃回去。
+  // 展開狀態改用按鈕的選取樣式表示，不再靠 ▼／▶ 兩個字元。
+  return '<td class="inv-detail">'
+      + '<button class="btn-detail btn-1w' + (_wtOpen === code ? ' active' : '')
+      + '" title="' + (_wtOpen === code ? '收合明細' : '展開明細：歷年配息、近 12 個月填息、一年走勢')
+      + '" onclick="wtToggleDetail(\'' + code + '\')">細</button>'
+      + (isEtf ? '<button class="btn-detail btn-1w" style="margin-left:4px" title="成份股"'
+          + ' onclick="openConstituents(\'' + code + '\')">成</button>' : '')
+      + '</td>' +
+    '<td class="inv-code' + (lim ? ' lim-' + lim : '') + '">' + _wtHeldTag(code)
+      + '<span class="code-link" title="' + (name ? name.replace(/"/g, '&quot;') + '（點代號看線圖）' : '看線圖') + '" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
     // 徽章用精簡版（不帶天數，22px）：這幾張表當初是砲了不橫向捲動才挤出來的，
     // 完整版 34px 會超出容器。天數收到提示裡。
     '<td class="inv-st-cell">'
