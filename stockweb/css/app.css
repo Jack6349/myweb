@@ -2589,13 +2589,17 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
    柱高是成交率，固定 0 到 100%，所有框共用，所以框跟框之間可以比高度。
    買賣兩側用 accent2 與 accent3 分，不用紅綠：那兩個色在這一站是漲跌，
    而成交率不是漲跌，借用會讓整站的色彩語彙鬆掉。 */
+.ovb-leg2 { margin-top: -6px; }
 .ovb-legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
   margin: 10px 0 20px; font-size: 13.5px; color: var(--text2); }
 .ovb-legend em { display: inline-block; vertical-align: middle; margin-right: 5px; }
 .ovb-e1 { width: 14px; height: 12px; border-radius: 3px; background: var(--accent2); }
 .ovb-e2 { width: 14px; height: 12px; border-radius: 3px; background: var(--accent3); }
-.ovb-e3 { width: 14px; height: 12px; border-radius: 3px; border: 1px solid var(--text3); }
-.ovb-e4 { width: 16px; height: 2px; background: var(--sum); }
+.ovb-e3 { width: 12px; height: 14px; border-radius: 2px;
+  background: color-mix(in srgb, var(--accent2) 50%, #0b1119); }
+/* 近 30 日的圖例跟著畫成外框，形狀要跟圖上一致 */
+.ovb-e4 { width: 16px; height: 11px; border: 1px solid var(--text3);
+  border-top-width: 2px; border-radius: 2px 2px 0 0; }
 .ovb-legend .ovb-note { color: var(--text3); }
 
 .ovb-grid { display: grid; gap: 26px 20px;
@@ -2625,23 +2629,45 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-chart { display: flex; align-items: flex-end; gap: 6px; margin: 6px 4px 0; }
 .ovb-col { flex: 1 1 0; min-width: 0; text-align: center; }
 /* 前收那一欄印的是「買 ／ 賣」兩個數字，字放大之後跟其他欄一樣寬會擠爆 */
-.ovb-col.ovb-mid { flex: 1.35 1 0; }
+.ovb-col.ovb-mid { flex: 2.3 1 0; }
 /* 前收那一欄放買賣兩根半寬的柱，底色標出它是分界 */
 .ovb-mid { background: color-mix(in srgb, var(--bg3) 70%, transparent); border-radius: 6px; }
-.ovb-plot { position: relative; height: 104px; display: flex; align-items: flex-end;
-  justify-content: center; gap: 3px;
+/* 柱子區。上面多留 18px 給壓在柱頭的小數字。 */
+.ovb-plot { position: relative; height: 122px; display: flex; align-items: flex-end;
+  justify-content: center; gap: 14%; padding: 0 10px;
   border-bottom: 1px solid var(--border); }
-.ovb-slot { position: relative; width: 60%; height: 100%; display: flex; align-items: flex-end; }
-.ovb-mid .ovb-slot { width: 42%; }
-.ovb-fill { width: 100%; border-radius: 3px 3px 0 0; }
+.ovb-mid .ovb-plot { gap: 6%; }
+/* 一組＝跌、漲兩根並排。前收那一欄有買、賣兩組。 */
+.ovb-grp { position: relative; flex: 1 1 0; height: 100%; display: flex;
+  align-items: flex-end; justify-content: center; gap: 10%; }
+.ovb-mid .ovb-grp + .ovb-grp { margin-left: 16%; }
+.ovb-fill { position: relative; flex: 1 1 0; border-radius: 3px 3px 0 0; z-index: 1; }
 .ovb-fill.ovb-buy { background: var(--accent2); }
 .ovb-fill.ovb-sell { background: var(--accent3); }
-/* 反方向那一組疊在同一個位置畫成空框，高度直接比，不必在腦中換算 */
-.ovb-ghost { position: absolute; left: 0; right: 0; bottom: 0;
-  border: 1px solid var(--text3); border-bottom: 0; border-radius: 3px 3px 0 0; }
-.ovb-r30 { position: absolute; left: -2px; right: -2px; height: 2px; background: var(--sum); }
-.ovb-mlb { position: absolute; left: 0; right: 0; bottom: -1px; font-size: 11px;
-  color: var(--text3); text-align: center; }
+/* 不是今天那一邊：同一個色的深色版，不用透明度 —— 透明度壓在深底上會變成
+   另一個色相（實測金色變橄欖綠），看起來像第三種顏色。 */
+.ovb-fill.ovb-dim.ovb-buy { background: color-mix(in srgb, var(--accent2) 50%, #0b1119); }
+.ovb-fill.ovb-dim.ovb-sell { background: color-mix(in srgb, var(--accent3) 50%, #0b1119); }
+/* 另一種情境的數字，貼在它自己那根柱子的頭上，靠左。
+   不印百分號：前收那一組只有 48px 寬，兩個帶百分號的標籤加起來塞不下。 */
+.ovb-top { position: absolute; left: 0; bottom: 100%; margin-bottom: 3px;
+  font-size: 11px; line-height: 1.25; color: var(--text2); white-space: nowrap;
+  font-variant-numeric: tabular-nums; z-index: 3;
+  background: var(--bg2); padding: 0 2px; border-radius: 3px; }
+.ovb-mid .ovb-top { background: #1a2430; }
+/* 近 30 日的外框。左右各比柱子寬 7px，柱子跟框一樣高時才分得出來。
+   暗色：它是參考值，柱子的金藍才是主角。 */
+.ovb-r30b { position: absolute; left: -7px; right: -7px; bottom: 0;
+  border: 1px solid var(--text3); border-top-width: 2px;
+  border-radius: 3px 3px 0 0; z-index: 2; pointer-events: none; }
+.ovb-r30lab { position: absolute; right: 2px; top: 1px; font-size: 11px; line-height: 1.25;
+  color: var(--text3); background: var(--bg2); padding: 0 2px; border-radius: 3px;
+  white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ovb-mid .ovb-r30lab { background: #1a2430; }
+/* 框太矮塞不下數字時改放框的正上方 */
+.ovb-r30lab.ovb-up { top: auto; bottom: 100%; margin-bottom: 2px; right: 0; }
+.ovb-mlb { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center;
+  font-size: 11px; color: var(--text3); z-index: 3; }
 .ovb-rate { font-size: 15.5px; font-weight: 700; margin-top: 6px;
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ovb-mid .ovb-rate { font-size: 13.5px; }

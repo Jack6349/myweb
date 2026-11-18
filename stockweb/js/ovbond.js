@@ -224,6 +224,37 @@ function _ovbCard(code) {
     return (arr && arr[k] != null) ? arr[k] : null;
   };
 
+  // ── 一組柱子：跌在左、漲在右，位置固定 ──
+  //
+  // 舊版把另一種情境畫成空框疊在同一個位置，兩個高度疊在一起看不出誰高誰低，
+  // 而「兩種情境差多少」正是 HYG 這個訊號的全部內容（增量 F 23.6 到 42.7）。
+  // 改成並排之後，買側跌的那根比漲的高、賣側反過來，這個反轉一眼就看得到。
+  //
+  // 今天那一邊實心滿色、數字印在下方那一行；另一邊同色系的深色、數字壓在它自己柱頭上。
+  // 不用紅綠分跌漲：紅綠在這一頁是價格漲跌，拿來標 HYG 方向會打架。
+  // HYG 平盤或取不到時兩根都不加亮，下方那一行是用全部日子算的。
+  var bar1 = function (side, v, isToday, lab) {
+    var hv = (v == null) ? 0 : Math.max(1, v / 100 * OVB_H);
+    return '<div class="ovb-fill ovb-' + side + (isToday ? '' : ' ovb-dim')
+      + '" style="height:' + hv.toFixed(1) + 'px"'
+      + ' title="' + lab + (side === 'sell' ? '賣出' : '買進') + '成交率 '
+      + (v == null ? '樣本不足' : v.toFixed(0) + '%') + '"></div>'
+      + (isToday || v == null ? '' : '<span class="ovb-top">' + v.toFixed(0) + '</span>');
+  };
+  // 近 30 日：從底線框到它自己的高度，橫跨一組柱子。
+  // 它不分跌漲，一組只有一個數字，所以不能畫在任何一根柱子上。
+  // 暗色，因為它是參考值不是主角；淺青留給「今天已觸及」那幾個標記。
+  var frame1 = function (v30, vToday) {
+    if (v30 == null) return '';
+    var hp = v30 / 100 * OVB_H;
+    return '<div class="ovb-r30b" style="height:' + hp.toFixed(1) + 'px" title="'
+      + '近 30 個交易日同一個掛價的實際成交率 ' + v30.toFixed(0) + '%'
+      + (vToday == null ? '' : '，與今天這一邊差 ' + (v30 - vToday > 0 ? '＋' : (v30 - vToday < 0 ? '−' : '±'))
+         + Math.abs(v30 - vToday).toFixed(0) + ' 個百分點')
+      + '。30 天的標準誤約 ±9 個百分點，不要拿它取代主數字。">'
+      + '<span class="ovb-r30lab' + (hp < 22 ? ' ovb-up' : '') + '">' + v30.toFixed(0) + '</span></div>';
+  };
+
   var h = head + '<div class="ovb-chart">';
   cells.forEach(function (c) {
     var px = _bsAlign(last + (c.side === 'sell' ? 1 : (c.side === 'buy' ? -1 : 0)) * c.k * tick);
@@ -232,23 +263,12 @@ function _ovbCard(code) {
     var bars = (c.side === 'mid') ? [{ s: 'buy', lb: '買' }, { s: 'sell', lb: '賣' }]
                                   : [{ s: c.side, lb: '' }];
     bars.forEach(function (b) {
-      var v = pick(main, b.s, c.k), o = pick(other, b.s, c.k), v30 = pick(r30, b.s, c.k);
-      var hv = (v == null) ? 0 : Math.max(1, v / 100 * OVB_H);
-      h += '<div class="ovb-slot">'
-        // 對照那一組畫成空框，疊在同一個位置：高度直接比，不必在腦中換算
-        + (o == null ? '' : '<div class="ovb-ghost" style="height:' + Math.max(1, o / 100 * OVB_H).toFixed(1)
-            + 'px" title="' + (dir < 0 ? 'HYG 上漲' : 'HYG 下跌') + '的日子是 ' + o.toFixed(0) + '%"></div>')
-        + '<div class="ovb-fill ovb-' + b.s + '" style="height:' + hv.toFixed(1) + 'px"'
-        + ' title="' + _bsPx(px) + '：' + (b.s === 'sell' ? '賣出' : '買進') + '成交率 '
-        + (v == null ? '樣本不足' : v.toFixed(0) + '%')
-        + (dir === 0 ? '（今天 HYG 平盤或取不到，用全部日子）'
-            : '（' + (dir < 0 ? 'HYG 下跌' : 'HYG 上漲') + '的 ' + base.n + ' 個日子）') + '"></div>'
-        // 近 30 日畫成一條橫線：它回答「現在跟平常比是鬆是緊」，不是更準的那個數字
-        + (v30 == null ? '' : '<div class="ovb-r30" style="bottom:' + (v30 / 100 * OVB_H).toFixed(1)
-            + 'px" title="近 30 個交易日同一個掛價的實際成交率 ' + v30.toFixed(0) + '%'
-            + (v == null ? '' : '，與左邊那根差 ' + (v30 - v > 0 ? '＋' : (v30 - v < 0 ? '−' : '±'))
-               + Math.abs(v30 - v).toFixed(0) + ' 個百分點')
-            + '。30 天的標準誤約 ±9 個百分點，不要拿它取代主數字。"></div>')
+      var vDn = pick(dn, b.s, c.k), vUp = pick(up, b.s, c.k), v30 = pick(r30, b.s, c.k);
+      var sfx = '（' + base.n + ' 個日子）';
+      h += '<div class="ovb-grp">'
+        + bar1(b.s, vDn, dir < 0, _bsPx(px) + '　HYG 下跌的日子：')
+        + bar1(b.s, vUp, dir > 0, _bsPx(px) + '　HYG 上漲的日子：')
+        + frame1(v30, pick(main, b.s, c.k))
         + (b.lb ? '<span class="ovb-mlb">' + b.lb + '</span>' : '')
         + '</div>';
     });
@@ -279,8 +299,11 @@ function _ovbCard(code) {
         + (tdy.hi > 0 ? '最高 ' + _bsPx(tdy.hi) : '')
         + '</b>' + (tdy.at ? '<span class="ovb-at">' + tdy.at + '</span>' : '') + '</span>' : '')
     + '<span>資料到 <b>' + (base.lastD || '—') + '</b></span>'
-    + '<span>HYG 跌／漲 <b>' + (dn ? dn.n : 0) + ' ／ ' + (up ? up.n : 0) + ' 日</b></span>'
-    + '<span>近 30 日 <b>' + (r30 ? r30.n + ' 日' : '樣本不足') + '</b></span>'
+    // 三個樣本天數是整頁共用的，搬到圖例寫一次就好。
+    // 每一框印一次是重複，而且「近 30 日 30 日」那種標籤跟值重複的寫法本來就讀不通。
+    // 每框真正要知道的只有「今天走哪一邊」。
+    + '<span>今天 HYG <b>' + (dir === 0 ? '平盤或取不到' : (dir < 0 ? '下跌' : '上漲')) + '</b></span>'
+    + (r30 ? '' : '<span>近 30 日<b>樣本不足</b></span>')
     + '</div></div>';
   return h;
 }
@@ -303,20 +326,38 @@ function ovcBondHtml() {
   h += '<div class="rb-sox-hd on">隔夜 HYG <b style="color:' + _rbCol(L ? L.r : null) + '">'
     + (L ? ((L.r > 0 ? '+' : '−') + Math.abs(L.r).toFixed(2) + '%') : '—') + '</b>'
     + '（' + (L ? L.d : '—') + '）　'
-    + (dir === 0 ? '今天 HYG 平盤或取不到，柱子用全部日子算。'
-        : '實心柱是' + (dir < 0 ? 'HYG 下跌' : 'HYG 上漲') + '的日子，也就是今天的方向；'
-          + '空框是反方向的日子。') + '</div>';
+    + (dir === 0 ? '今天 HYG 平盤或取不到，兩根柱都不加亮，下方那一行是用全部日子算的。'
+        : '每一欄兩根柱：左邊是 HYG 下跌的日子、右邊是上漲的。'
+          + '今天是' + (dir < 0 ? '下跌' : '上漲') + '，所以'
+          + (dir < 0 ? '左' : '右') + '那根滿色、數字印在下方；'
+          + '另一根深色、數字壓在它自己柱頭上。') + '</div>';
 
   // ── 共用刻度。柱高固定 0 到 100%，所以框跟框之間可以直接比高度 ──
+  var _dnN = 0, _upN = 0, _r30N = 0;
+  (function () {
+    var any = _ovbCodes()[0];
+    if (!any) return;
+    try {
+      var a = bsFill(any, function (v) { return v != null && v < 0; });
+      var b = bsFill(any, function (v) { return v != null && v > 0; });
+      var c3 = bsFill(any, function () { return true; }, 30);
+      _dnN = a ? a.n : 0; _upN = b ? b.n : 0; _r30N = c3 ? c3.n : 0;
+    } catch (e) { hush('ovbond', e); }
+  })();
   h += '<div class="ovb-legend">'
     + '<span><em class="ovb-e1"></em>買進成交率（日內最低有沒有跌到掛價）</span>'
     + '<span><em class="ovb-e2"></em>賣出成交率（日內最高有沒有漲到）</span>'
-    + '<span><em class="ovb-e3"></em>反方向的日子</span>'
-    + '<span><em class="ovb-e4"></em>近 30 日</span>'
+    + '<span><em class="ovb-e3"></em>反方向情境（深色那根，數字壓在它自己柱頭上）</span>'
+    + '<span><em class="ovb-e4"></em>近 30 個交易日實際成交率</span>'
     + '<span><em class="ovb-e5"></em>今天已觸及</span>'
     + '<span><em class="ovb-e6"></em>今天還沒碰到</span>'
+    + '</div>'
+    + '<div class="ovb-legend ovb-leg2">'
+    + '<span>樣本　HYG 上漲 <b>' + _upN + ' 天</b>　HYG 下跌 <b>' + _dnN + ' 天</b>'
+    + '　近 30 日 <b>' + _r30N + ' 天</b></span>'
     + '<span class="ovb-note">柱高是 0 到 100%，所有框共用，框跟框之間可以直接比高度。'
-    + '橫軸是掛價距前收幾個升降單位，左邊便宜、右邊貴。</span></div>';
+    + '橫軸是掛價距前收幾個升降單位，左邊便宜、右邊貴。'
+    + '柱頭與外框裡的小數字不印百分號，這張圖的數字全部是百分比。</span></div>';
 
   h += '<div class="ovb-grid">' + codes.map(_ovbCard).join('') + '</div>';
 
@@ -334,7 +375,7 @@ function ovcBondHtml() {
     + '買進看日內最低有沒有跌到掛價，賣出看日內最高有沒有漲到。'
     + '價格比大小一律換成「分」的整數再比，不留浮點數的容忍值。<br>'
     + '<b>比較基準</b>：兩個維度。一是同一檔的不同檔位（往左掛便宜，成交率一路降），'
-    + '二是同一檔位的兩種隔夜情境（實心柱對空框）。'
+    + '二是同一檔位的兩種隔夜情境（並排的兩根柱）。'
     + '柱高的刻度所有框共用，所以也可以跨檔比。<br>'
     + '<b>白話意義</b>：柱子越高，這個價位今天碰得到的機會越大。'
     + '往左每多掛一檔，每張成本少 0.01 元，但買不到的機會跟著上升。<br>'
@@ -365,8 +406,11 @@ function ovcBondHtml() {
     + '代表今天比平常強，再等一下或者往上挪一檔。'
     + '<br>不能告訴你的是「還會不會再碰一次」。已經觸及過不代表你掛得到：'
     + '同一價位的委託照時間排隊，日內最低只掃到一次的那種日子不一定輪得到你。</dd>'
-    + '<dt>近 30 日那一條橫線</dt><dd>同一個掛價在最近 30 個交易日的實際成交率，'
-    + '回答的是「現在跟平常比是鬆還是緊」，不拆 HYG 方向。'
+    + '<dt>近 30 日那個暗色外框</dt><dd>同一個掛價在最近 30 個交易日的實際成交率，'
+    + '從底線框到它自己的高度，柱子從框裡穿出來，誰高誰低不用對高度就看得出來。'
+    + '框橫跨「一組」柱子而不是單一一根：它不拆 HYG 方向，一組只有一個數字。'
+    + '前收那一欄有買、賣兩組，所以有兩個框。'
+    + '框與字都是暗色：它是參考值，柱子的金藍才是主角。'
     + '<b>它不是更準的那個數字</b>：30 天的標準誤約 ±9 個百分點，'
     + '全期是 ±2 到 ±4。實測拿近 30 日去預測接下來 20 天，四檔裡有三檔比用全期還差。'
     + '兩個並列是讓你看差距，不是讓你換掉主數字。</dd>'
