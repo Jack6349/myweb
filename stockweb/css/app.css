@@ -348,6 +348,10 @@ html, body { overflow-x: clip; }
 .btn-detail:hover { background: rgba(240,204,122,.2); }
 /* 單字按鈕：9px 的左右 padding 是為兩三個字設的，只剩一個字時顯得寬。 */
 .btn-detail.btn-1w { padding: 3px 6px; }
+/* 關注清單代號前面的「持」。中性框，不用紅綠：那兩個色在這張表是漲跌。 */
+.wt-held { display: inline-block; font-size: 10.5px; line-height: 1; padding: 3px 4px;
+  margin-right: 5px; border: 1px solid var(--accent2); border-radius: 4px;
+  color: var(--accent2); vertical-align: 1px; cursor: help; }
 /* 表格寬度的真正上限是 main-area 的 max-width 1800 減左右 padding 28，等於 1744px。
    視窗再寬、瀏覽器再縮小都不會超過這個數字，所以判斷「塞不塞得下」要拿 1744 比，
    不是拿量到的視窗寬。目前最寬的是配息資料那張 1691px。 */
