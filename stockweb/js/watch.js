@@ -262,16 +262,16 @@ function renderWatch() {
     '<dt>代號前面的「持」</dt><dd>這一檔現在手上有部位，出借中的也算。'
     + '關注清單裡混著還在看的與已經買了還在追蹤的，兩者要問的事情不一樣：'
     + '前者問值不值得進場，後者問要不要加碼或減碼。</dd>' +
-    '<dt>預估年配標金色的那幾列</dt><dd>持股的分母改用<b>成本均價</b>，未持股用<b>現價</b>。'
-    + '兩種是同一個問題：<b>這筆錢放在這一檔，一年領多少</b>。'
-    + '持股的錢已經以成本投進去了，未持股的錢要以現價才投得進去，各自用自己的投入價算。'
-    + '<br>所以這一欄<b>可以直接比大小、也可以排序</b>：'
-    + '手上這幾檔目前領多少，跟現在買進別檔能領多少，排在一起就是換股與加碼的判斷依據。'
+    '<dt>預估年配與成本年配</dt><dd>兩欄問的是不同的事。'
+    + '<b>預估年配</b>一律用現價，回答「現在買進能領多少」，是買進與換股的比較基準，'
+    + '所以每一列都同一個分母。'
+    + '<b>成本年配</b>用成本均價，回答「我手上這些一年實際領多少」，未持股留「—」：'
+    + '那一格本來就沒有答案，填現價殖利率會變成旁邊那一欄的複製品。'
+    + '<br>兩欄並排才看得出差距：成本年配高於預估年配代表買在低點，反過來就是買貴了。'
     + '<br>成本是還原過的（券商記的已經扣掉領過的配息），與庫存頁同一個數字。'
-    + '滑過那個數字看得到用現價算是多少。'
-    + '<br>不能告訴你什麼：換股真正拿得回來的錢是<b>現價</b>乘張數，不是成本乘張數。'
-    + '這一欄比得出「哪一檔的配息率高」，比不出「換過去之後每月領的錢是多是少」，'
-    + '後者要再算一次賣出金額能買幾張。配息率也不等於總報酬，價格那一邊這一欄不管。</dd>' +
+    + '<br>不能告訴你什麼：換股真正拿得回來的錢是<b>現價</b>乘張數，不是成本乘張數，'
+    + '所以兩欄都比不出「換過去之後每月領的錢是多是少」，那要再算一次賣出金額能買幾張。'
+    + '配息率也不等於總報酬，價格那一邊兩欄都不管。</dd>' +
     '<dt>即時性</dt><dd>現價與漲跌盤中即時（進頁訂閱、離開退訂）。</dd>' +
     (typeof esStaticNote === 'function' ? esStaticNote() : '') +
     '<dt>名稱怎麼看</dt><dd>名稱欄拿掉了（它是最寬的文字欄，而〔明細〕裡已經有）。' +
@@ -786,16 +786,15 @@ function _wtLoadSort(ls, def, re) {
 // 指標欄的值不在列物件裡（它來自評比那份當日資料），排序時要另外去問
 var WT_MKEY = /^(rank|score|yCons|trend|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)$/;
 var _wtBondSort = _wtLoadSort(WT_BSORT_LS, 'yYDesc',
-  /^(code|px|amount|mY|yY|exDate|payDate|rank|score|yCons|trend|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/);
+  /^(code|px|amount|mY|yY|yCost|exDate|payDate|rank|score|yCons|trend|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/);
 function _wtNextSort(cur, k) { return cur === k + 'Desc' ? k + 'Asc' : k + 'Desc'; }
 function _wtSortRows(rows, state) {
   var k = state.replace(/(Asc|Desc)$/, ''), asc = /Asc$/.test(state);
   var get = WT_MKEY.test(k) && typeof esWatchSortVal === 'function'
     ? function (r) { return esWatchSortVal(r.code, k); }
-    // 預估年配（債券是 yY、主動式是 yEst）要用畫面上那個值排：
-    // 持股是成本殖利率。兩邊不一致的話順序跟數字對不起來。
-    : ((k === 'yY' || k === 'yEst') && typeof esYieldEff === 'function'
-        ? function (r) { return esYieldEff(r.code, r[k], r.px); }
+    // 成本年配這一欄沒有存在列上，要現算；未持股回 null，缺值墊底
+    : (k === 'yCost' && typeof esCostYieldVal === 'function'
+        ? function (r) { return esCostYieldVal(r.code, r.yY != null ? r.yY : r.yEst, r.px); }
         : function (r) { return r[k]; });
   return rows.slice().sort(function (a, b) {
     var x = get(a), y = get(b);
@@ -869,7 +868,8 @@ function renderWatchBond() {
     wrap.innerHTML = h; return;
   }
   var mh = (typeof esWatchHeads === 'function') ? esWatchHeads(ES_WCOLS2, _wtBondSort, 'wtBondSort') : '';
-  var ncol = 10 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);  // 10：原本 9 欄加上趨勢
+  // 11：原本 9 欄加上趨勢與成本年配
+  var ncol = 11 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);
   var sh = function (k, label, cls, tip) { return _wtSortTh(_wtBondSort, 'wtBondSort', k, label, cls, tip); };
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table wt-bond-t"><thead><tr>' +
     '<th>關注</th>' + sh('code', '代號') +
@@ -877,7 +877,8 @@ function renderWatchBond() {
     '<th>名稱</th>' +
     sh('px', '現價', 'num') + sh('amount', '每股金額', 'num') +
     sh('mY', '月配', 'num', '月殖利率：每股金額 ÷ 現價') +
-    sh('yY', '預估年配', 'num', '預估年殖利率：最近一次配息 × 配息期數 ÷ 現價。&#10;持股改用成本均價當分母（字標金色），回答「我手上這些一年實際領多少」；未持有的用現價') +
+    sh('yY', '預估年配', 'num', '預估年殖利率：最近一次配息 × 配息期數 ÷ 現價。這一欄一律用現價') +
+    sh('yCost', '成本年配', 'num', '每股年配 ÷ 成本均價：我手上這些一年實際領多少。&#10;未持股留「—」，那一格本來就沒有答案。&#10;跟左邊的預估年配是兩個問題：那一欄問現在買進能領多少') +
     sh('exDate', '除息') + sh('payDate', '發放') + mh +
     '</tr></thead><tbody>';
   var md = function (iso) { return iso ? '<span title="' + iso + '">' + iso.slice(5).replace('-', '/') + '</span>' : '—'; };
@@ -897,10 +898,9 @@ function renderWatchBond() {
       '<td class="num">' + r.amount.toFixed(4) + '</td>' +
       '<td class="num swap-yield">' + r.mY.toFixed(2) + '%</td>' +
       '<td class="num swap-yield" title="' + (r.guessed ? '僅 1 筆配息紀錄，頻率推定為月配（新上市債券 ETF 慣例），待累積紀錄後自動修正'
-        : '依 ' + r.n + ' 筆除息間隔推得年 ' + r.freq + ' 次') + '">'
-        + '<b>' + ((typeof esYldCell === 'function') ? esYldCell(r.code, r.yY, r.px)
-            : r.yY.toFixed(2) + '%') + '</b>' +
+        : '依 ' + r.n + ' 筆除息間隔推得年 ' + r.freq + ' 次') + '"><b>' + r.yY.toFixed(2) + '%</b>' +
         (r.guessed ? '<span class="wt-guess"> *推定</span>' : '') + '</td>' +
+      '<td class="num">' + ((typeof esCostCell === 'function') ? esCostCell(r.code, r.yY, r.px) : '—') + '</td>' +
       '<td>' + md(r.exDate) + '</td>' +
       '<td>' + md(r.payDate) + '</td>' +
       ((typeof esWatchCells === 'function') ? esWatchCells(r.code, ES_WCOLS2) : '') +
@@ -912,13 +912,9 @@ function renderWatchBond() {
     (typeof esStaticNote === 'function' ? esStaticNote(ES_WCOLS2) : '') +
     '<dt>預估年殖利率</dt><dd><code>最近一次配息 × 配息期數 ÷ 現價</code>，期數由歷次除息間隔推得。' +
     '預設依此由高至低排序，點欄位可改，排序會記住。' +
-    '<br><b>標金色的那幾列是持股</b>，分母改用成本均價；未持股用現價。' +
-    '兩種是同一個問題：這筆錢放在這一檔，一年領多少。' +
-    '所以<b>可以直接比大小，預設依此排序也成立</b>——手上這幾檔目前領多少，' +
-    '跟現在買進別檔能領多少，排在一起就是換股的判斷依據。' +
-    '滑過數字看得到用現價算是多少。' +
-    '<br>換股真正拿得回來的錢是現價乘張數，不是成本乘張數，' +
-    '所以這一欄比得出配息率高低，比不出換過去之後每月領的錢是多是少。</dd>' +
+    '這一欄一律用現價，每一列同一個分母，所以比得動、也排得動。' +
+    '<br>旁邊的<b>成本年配</b>用成本均價，回答「我手上這些一年實際領多少」，' +
+    '未持股留「—」。兩欄並排才看得出差距：成本年配高於預估年配代表買在低點。</dd>' +
     '<dt>後面 14 欄</dt><dd>與「ETF 評比」「關注股票」同一份當日資料、同一套算法，欄位定義見評比頁說明。' +
     '這裡不重複放評比頁的「單次配、預估年配」：左邊的「月配、預估年配」是本頁自己掃出來的，' +
     '含「僅 1 筆紀錄推定為月配」那條規則，兩套並列會在剛公告配息時各說各話。</dd>' +
@@ -944,7 +940,7 @@ function wtBondRowClick(ev, code) {
 
 // ── 渲染：主動式 ETF ──
 var _wtActSort = _wtLoadSort(WT_ASORT_LS, 'rAllDesc',
-  /^(code|px|y1|yEst|r1|r3|rAll|days|rank|score|yCons|trend|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/);
+  /^(code|px|y1|yEst|yCost|r1|r3|rAll|days|rank|score|yCons|trend|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/);
 function wtActSort(k) {
   _wtActSort = _wtNextSort(_wtActSort, k);
   try { localStorage.setItem(WT_ASORT_LS, _wtActSort); } catch (e) {}
@@ -988,13 +984,15 @@ function renderWatchAct() {
     return ' title="最近一次 ' + r.exDate + ' 每股 ' + r.amount + ' 元，年 ' + r.freq + ' 次"';
   };
   var mh = (typeof esWatchHeads === 'function') ? esWatchHeads(ES_WCOLS2, _wtActSort, 'wtActSort') : '';
-  var ncol = 10 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);  // 10：原本 9 欄加上趨勢
+  // 11：原本 9 欄加上趨勢與成本年配
+  var ncol = 11 + ((typeof ES_WCOLS2 !== 'undefined') ? ES_WCOLS2.length : 0);
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table wt-act-t"><thead><tr>' +
     '<th>關注</th>' + sh('code', '代號', '') +
     '<th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th>' +
     sh('px', '現價') +
     sh('y1', '單次配', 'num', '單次殖利率：最近一次配息 ÷ 現價。滑過數字看除息日與每股金額') +
-    sh('yEst', '預估年配', 'num', '預估年殖利率：最近一次配息 × 年配息次數 ÷ 現價。&#10;持股改用成本均價當分母（字標金色），回答「我手上這些一年實際領多少」；未持有的用現價') +
+    sh('yEst', '預估年配', 'num', '預估年殖利率：最近一次配息 × 年配息次數 ÷ 現價。這一欄一律用現價') +
+    sh('yCost', '成本年配', 'num', '每股年配 ÷ 成本均價：我手上這些一年實際領多少。&#10;未持股留「—」，那一格本來就沒有答案。&#10;跟左邊的預估年配是兩個問題：那一欄問現在買進能領多少') +
     sh('r1', '近1月') + sh('r3', '近3月') + sh('rAll', '成立以來') +
     sh('days', '天數', 'num', 'Yahoo 可取得的交易日數，越短代表上市越新') + mh + '</tr></thead><tbody>';
   _wtSortRows(d.rows, _wtActSort).forEach(function (r) {
@@ -1013,8 +1011,8 @@ function renderWatchAct() {
                     : gapX('券商快照與 Yahoo 都取不到價'))
           + '</td>'; })() +
       '<td class="num"' + dtip(r) + '>' + yld(r.y1) + '</td>' +
-      '<td class="num"' + dtip(r) + '>'
-        + ((typeof esYldCell === 'function') ? esYldCell(r.code, r.yEst, r.px) : yld(r.yEst)) + '</td>' +
+      '<td class="num"' + dtip(r) + '>' + yld(r.yEst) + '</td>' +
+      '<td class="num">' + ((typeof esCostCell === 'function') ? esCostCell(r.code, r.yEst, r.px) : '—') + '</td>' +
       '<td class="num">' + pctR(r.r1, r, '上市不足 20 個交易日，沒有一個月前的錨點') + '</td>' +
       '<td class="num">' + pctR(r.r3, r, '上市不足 60 個交易日，沒有三個月前的錨點') + '</td>' +
       '<td class="num"><b>' + pctR(r.rAll, r, '沒有可用的起點收盤') + '</b></td>' +
@@ -1033,16 +1031,16 @@ function renderWatchAct() {
     '滑過代號看得到名稱，展開明細也有。代號後面的〔成〕是成份股。</dd>' +
     '<dt>代號前面的「持」</dt><dd>這一檔現在手上有部位，出借中的也算。'
     + '四個子頁籤用的是同一個標記。</dd>' +
-    '<dt>預估年配標金色的那幾列</dt><dd>持股的分母改用<b>成本均價</b>，未持股用<b>現價</b>。'
-    + '兩種是同一個問題：<b>這筆錢放在這一檔，一年領多少</b>。'
-    + '持股的錢已經以成本投進去了，未持股的錢要以現價才投得進去，各自用自己的投入價算。'
-    + '<br>所以這一欄<b>可以直接比大小、也可以排序</b>：'
-    + '手上這幾檔目前領多少，跟現在買進別檔能領多少，排在一起就是換股與加碼的判斷依據。'
+    '<dt>預估年配與成本年配</dt><dd>兩欄問的是不同的事。'
+    + '<b>預估年配</b>一律用現價，回答「現在買進能領多少」，是買進與換股的比較基準，'
+    + '所以每一列都同一個分母。'
+    + '<b>成本年配</b>用成本均價，回答「我手上這些一年實際領多少」，未持股留「—」：'
+    + '那一格本來就沒有答案，填現價殖利率會變成旁邊那一欄的複製品。'
+    + '<br>兩欄並排才看得出差距：成本年配高於預估年配代表買在低點，反過來就是買貴了。'
     + '<br>成本是還原過的（券商記的已經扣掉領過的配息），與庫存頁同一個數字。'
-    + '滑過那個數字看得到用現價算是多少。'
-    + '<br>不能告訴你什麼：換股真正拿得回來的錢是<b>現價</b>乘張數，不是成本乘張數。'
-    + '這一欄比得出「哪一檔的配息率高」，比不出「換過去之後每月領的錢是多是少」，'
-    + '後者要再算一次賣出金額能買幾張。配息率也不等於總報酬，價格那一邊這一欄不管。</dd>' +
+    + '<br>不能告訴你什麼：換股真正拿得回來的錢是<b>現價</b>乘張數，不是成本乘張數，'
+    + '所以兩欄都比不出「換過去之後每月領的錢是多是少」，那要再算一次賣出金額能買幾張。'
+    + '配息率也不等於總報酬，價格那一邊兩欄都不管。</dd>' +
     '<dt>單次配／預估年配</dt><dd>最近一次配息 ÷ 現價，以及再乘上年配息次數。欄位定義與 ETF 評比、新上市 ETF 相同。' +
     '滑過數字可看除息日與每股金額。顯示「—」代表查無配息紀錄（未配息或資料未揭露）。</dd>' +
     '<dt>報酬</dt><dd>起點用 Yahoo 日收盤價，終點用現價。主動式 ETF 多未配息或配息少，<code>價格報酬 ≈ 總報酬</code>。</dd>' +

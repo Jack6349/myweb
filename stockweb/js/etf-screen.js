@@ -28,7 +28,7 @@ var ES_GROUP_LS = 'etf_screen_group_v1';   // 分類頁籤（高股息／市值�
 var _esBase = null, _esFill = {}, _esBusy = false, _esMsg = '', _esFillBusy = {};
 var _esGroup = (function () { try { var g = localStorage.getItem(ES_GROUP_LS); return /^(hy|mkt|bond)$/.test(g || '') ? g : 'hy'; } catch (e) { return 'hy'; } })();
 var _esSort = (function () {
-  try { var v = localStorage.getItem(ES_SORT_LS); if (/^(score|code|px|y1|yEst|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
+  try { var v = localStorage.getItem(ES_SORT_LS); if (/^(score|code|px|y1|yEst|yCost|y12|fill|fillDays|g6|g12|tr6|tr12|size|fee|prem)(Asc|Desc)$/.test(v || '')) return v; } catch (e) {}
   return 'scoreDesc';
 })();
 
@@ -729,8 +729,10 @@ function esSeqNA(r, needTwo) {
   return esDash('沒有可用的配息紀錄可算');
 }
 
+// 只留次數比，百分比刪掉：5/6 跟 83% 是同一件事，而且分子分母本身就說明了樣本大小
+// （1/1 的 100% 跟 6/6 的 100% 不是同一回事，百分比看不出來）。省下來的寬度給成本年配。
 function _esFillTxt(r) {
-  return '<span class="dm-dim">(' + r.fillN + ')</span><span class="es-fpct">' + r.fill.toFixed(0) + '%</span>';
+  return '<span class="es-fratio">' + r.fillN + '</span>';
 }
 var ES_COLS = [
   // key, 標題, 格式, 說明
@@ -740,7 +742,8 @@ var ES_COLS = [
   ['score', '綜合', 'f1', '各指標同類百分位加權：一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5'],
   ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）；殖利率、成長率、折溢價跟著現價重算，排名維持開頁時的計算'],
   ['y1', '單次配', 'amtpct', '最近一期每股配息金額（含已公告未除息）與它的單次殖利率。&#10;兩個數字是同一筆錢，與「預估年配」同一個基準。&#10;金額標黃色＝已公告、還沒除息'],
-  ['yEst', '預估年配', 'pct', '趨勢：最近一期（含已公告未除息）× 一年期數 ÷ 現價。配息調高調低都會立刻反映。&#10;持股改用成本均價（字標金色）：持股的錢已經以成本投進去，未持股的錢要以現價才投得進去，各自用自己的投入價算，兩者可以直接比。&#10;這一欄沒有進綜合分，換基準不影響排名'],
+  ['yEst', '預估年配', 'pct', '趨勢：最近一期（含已公告未除息）× 一年期數 ÷ 現價。配息調高調低都會立刻反映。&#10;這一欄一律用現價，回答的是「現在買進能領多少」。手上這些實際領多少看右邊的「成本年配」'],
+  ['yCost', '成本年配', 'ycost', '最近一期 × 一年期數 ÷ 成本均價：我手上這些一年實際領多少。&#10;未持股留「—」，那一格本來就沒有答案。&#10;與左邊的「預估年配」是不同的問題：那一欄問現在買進能領多少，這一欄問已經買的現在領多少。&#10;成本是還原過的（券商記的已經扣掉領過的配息），與庫存頁同一個數字'],
   ['yCons', '保守年配', 'cons', '風險：取樣區間內最低一期 × 一年期數 ÷ 現價。&#10;回答「每一期都像最差那一期時，用現在的價格買進是多少」。&#10;區間：年配 2 年、半年配與季配 1 年、雙月配與月配 6 個月'],
   ['trend', '配息走向', 'trend',
     '看最近一次實際調整的方向，持平的期數不打斷走勢：&#10;'
@@ -749,12 +752,12 @@ var ES_COLS = [
     + '固定＝每一期同一個數字、降後平、轉降、連降同理。&#10;'
     + '小字＝現在這個金額已配幾期／取樣區間共幾期。&#10;'
     + '後面的符號是波動度：· 從未調整、～ 小、※ 大（前四分之一）、— 期數不足'],
-  ['y12', '近12月配', 'pct', '近 12 個月殖利率：近 12 個月實際配息合計 ÷ 現價'],
+  ['y12', '近12月', 'pct', '近 12 個月殖利率：近 12 個月實際配息合計 ÷ 現價'],
   ['n12', '已配次數', 'cnt', '近 12 個月內已除息次數。新上市的次數不足，「近 12 月配」會因此偏低'],
-  ['fill', '填息率', 'fill', '近 12 個月：已填息次數 ÷ 除息次數（除息後收盤回到除息前收盤即算填息）'],
+  ['fill', '填息率', 'fill', '近 12 個月：已填息次數 ／ 除息次數（除息後收盤回到除息前收盤即算填息）。&#10;不印百分比：分子分母本身就說明了樣本大小，1/1 的 100% 與 6/6 的 100% 不是同一回事'],
   ['fillDays', '平均填息', 'days', '已填息者平均花幾個交易日'],
-  ['g6', '半年價格', 'sgn', '不含配息的價格變化：負值代表本金被侵蝕'],
-  ['g12', '一年價格', 'sgn', '不含配息的價格變化：負值代表本金被侵蝕'],
+  ['g6', '半年價', 'sgn', '不含配息的價格變化：負值代表本金被侵蝕'],
+  ['g12', '一年價', 'sgn', '不含配息的價格變化：負值代表本金被侵蝕'],
   ['tr6', '半年含息', 'sgn', '（現價＋期間配息）÷ 半年前收盤 − 1'],
   ['tr12', '一年含息', 'sgn', '（現價＋期間配息）÷ 一年前收盤 − 1：最公平的總成績'],
   ['size', '規模', 'size', '基金規模（億元）：受益權單位數 × 淨值'],
@@ -851,8 +854,8 @@ function renderEtfScreen() {
   // 新上市沒有名次，同值時用它做次序會拿到 undefined；給一個排在所有名次之後的值
   var rnk = function (r) { return r.rank == null ? 9999 : r.rank; };
   if (key !== 'score') {
-    var gv = (key === 'yEst')
-      ? function (r) { return esYieldEff(r.code, r.yEst, r.px); }
+    var gv = (key === 'yCost')
+      ? function (r) { return esCostYieldVal(r.code, r.yEst, r.px); }
       : function (r) { return r[key]; };
     rows.sort(function (a, b) {
       var va = gv(a), vb = gv(b);
@@ -893,11 +896,8 @@ function renderEtfScreen() {
         return cv == null ? v.toFixed(2)
           : '<span class="' + colorClass(cv) + '">' + v.toFixed(2) + '</span>';
       }
-      // 預估年配：持股改用成本均價。這一欄沒有進綜合分（分數只用
-      // tr12／y12／g12／size／fill／fee），所以換基準不會動到排名。
-      case 'pct': return (c[0] === 'yEst' && typeof esYldCell === 'function')
-        ? esYldCell(r.code, v, r.px)
-        : (v == null ? dim('—') : v.toFixed(2) + '%');
+      case 'pct': return v == null ? dim('—') : v.toFixed(2) + '%';
+      case 'ycost': return esCostCell(r.code, r.yEst, r.px);
       case 'cons': return v == null ? esSeqNA(r, false) : v.toFixed(2) + '%';
       // 金額固定寬度右對齊，整欄才排得齊；每一列都有，所以不拆行
       case 'amtpct': return v == null ? dim('—')
@@ -1116,7 +1116,7 @@ function _esStaticTip(k, tip) {
   if (!ES_STATIC[k]) return tip;
   return (tip ? tip + '&#10;&#10;' : '') + '這一欄不隨現價重算（欄名標冷灰色）。';
 }
-var ES_WCOLS = ['rank', 'score', 'y1', 'yEst', 'yCons', 'trend', 'y12', 'fill', 'fillDays',
+var ES_WCOLS = ['rank', 'score', 'y1', 'yEst', 'yCost', 'yCons', 'trend', 'y12', 'fill', 'fillDays',
                 'g6', 'g12', 'tr6', 'tr12', 'size', 'fee', 'prem'];
 // 債券 ETF 與主動式 ETF 兩張表用的子集：少了「單次配、預估年配」。
 // 那兩個頁籤本來就各自算過這兩個數字（債券還有「僅 1 筆紀錄推定為月配」那條規則），
@@ -1157,9 +1157,8 @@ function esWatchSortVal(code, key) {
                 '降後平': 3, '轉降': 2, '連降': 1 };
     return r.trend ? ord[r.trend] : null;
   }
-  // 預估年配的排序要用畫面上那個值：持股是成本殖利率。
-  // 不改的話會變成「顯示成本、排序現價」，順序跟數字對不起來。
-  if (key === 'yEst') return esYieldEff(code, r.yEst, r.px);
+  // 成本年配：未持股沒有這個數字，排序時墊底（_wtSorted 自己處理 null）
+  if (key === 'yCost') return esCostYieldVal(code, r.yEst, r.px);
   return r[key] == null ? null : r[key];
 }
 // ── 持股的預估年配改用成本均價 ──
@@ -1174,11 +1173,11 @@ function esWatchSortVal(code, key) {
 //
 // 換算不必重新取配息金額：原本的值是「每股年配 ÷ 現價」，
 // 乘回現價再除成本就是「每股年配 ÷ 成本」。
-// 顯示與排序共用同一個值。兩邊各算一次的話，
-// 畫面上是成本殖利率、排序卻是現價殖利率，排出來的順序跟看到的數字對不起來。
-function esYieldEff(code, yPx, px) {
+// 成本年配的數值。未持股回 null —— 那一格要留「—」，不是回現價殖利率。
+// 顯示與排序共用這一個函式，不然會變成「顯示一個數、照另一個數排」。
+function esCostYieldVal(code, yPx, px) {
   var c = esCostYield(code, yPx, px);
-  return c ? c.y : (yPx == null ? null : yPx);
+  return c ? c.y : null;
 }
 function esCostYield(code, yPx, px) {
   if (!(yPx > 0) || !(px > 0)) return null;
@@ -1191,15 +1190,16 @@ function esCostYield(code, yPx, px) {
 // 成本基準的那幾格要看得出來，但不能在數字後面加字 —— 那會把整欄的右對齊打掉。
 // 改成換字色（與代號前面的「持」同一個金色，兩者是同一件事的兩面），
 // 詳情寫在提示裡。
-function esYldCell(code, yPx, px, fmt) {
-  var f = fmt || function (v) { return v.toFixed(2) + '%'; };
+// 成本年配那一格。未持股留「—」：那一格本來就沒有答案，
+// 填現價殖利率會讓它變成旁邊那一欄的複製品。
+function esCostCell(code, yPx, px) {
   var c = esCostYield(code, yPx, px);
-  if (!c) return (yPx == null) ? '<span class="dm-dim">—</span>' : f(yPx);
-  return '<span class="es-yoc" title="成本殖利率：每股年配 ÷ 成本均價 ' + c.cost.toFixed(2)
-    + '。這是你手上這些一年實際領多少。&#10;用現價 ' + px.toFixed(2) + ' 算是 '
-    + f(yPx) + '，那回答的是「現在買進的話領多少」，跟已經持有的你無關。&#10;'
-    + '成本是還原過的：券商記的 price 已經扣掉領過的配息，這裡加回去，與庫存頁同一個數字。">'
-    + f(c.y) + '</span>';
+  if (!c) return '<span class="dm-dim">—</span>';
+  return '<span class="es-yoc" title="每股年配 ÷ 成本均價 ' + c.cost.toFixed(2)
+    + '：我手上這些一年實際領多少。&#10;旁邊的預估年配是用現價 ' + px.toFixed(2)
+    + ' 算的，回答的是現在買進能領多少，兩欄問的是不同的事。&#10;'
+    + '成本是還原過的：券商記的已經扣掉領過的配息，這裡加回去，與庫存頁同一個數字。">'
+    + c.y.toFixed(2) + '%</span>';
 }
 
 function esWatchCells(code, cols) {
@@ -1235,7 +1235,8 @@ function esWatchCells(code, cols) {
     y1: (r.y1 == null ? dim('—')
       : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '">'
         + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + r.y1.toFixed(2) + '%'),
-    yEst: esYldCell(code, r.yEst, r.px),
+    yEst: pct(r.yEst),
+    yCost: esCostCell(code, r.yEst, r.px),
     yCons: r.yCons == null ? esSeqNA(r, false) : r.yCons.toFixed(2) + '%',
     trend: r.trend == null ? esSeqNA(r, true) : esTrendHtml(r),
     y12: pct(r.y12),
