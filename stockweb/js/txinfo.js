@@ -1,5 +1,9 @@
-// 股利總管 Web — 交易資訊（三框：台幣交割 / 今日委託與成交彙整 / 交易紀錄(已實現損益)）
-// 上左：settlements（T/T+1/T+2 應收付）；上右：order/trades（委託+成交併一列）；下半：沿用 trades.js
+// 股利總管 Web — 交易資訊（交易帳務：台幣交割 / 今日委託與成交彙整）
+// 上左：settlements（T/T+1/T+2 應收付）；上右：order/trades（委託+成交併一列）
+//
+// 原本下半框還有一個「交易紀錄（已實現損益）」，2026-11-18 拿掉：
+// 它的資料跟「買賣紀錄」子頁籤的賣出那一半是同一份，同一份資料兩個入口，
+// 過一陣子就會想不起來該看哪一個。買賣紀錄那邊還多了買進與交割日彙總。
 
 async function startTxinfo() {
   var errEl = document.getElementById('tx-error');
@@ -8,8 +12,6 @@ async function startTxinfo() {
   loadSettleBox();
   txEnsureDiv();          // 背景算配息，算完重畫交割框；不擋下面三個查詢
   loadOrderBox();
-  initTradeDates();
-  loadTrades(); // 下半框沿用交易紀錄（元素 id 不變）
 }
 function refreshTxinfo() { loadSettleBox(); loadOrderBox(); txEnsureDiv(); }
 
