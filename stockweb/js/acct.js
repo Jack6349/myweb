@@ -205,6 +205,72 @@ async function adEnsure() {
   return adAnchor();
 }
 
+// ── 確認某一天 ──
+//
+// 「確認」的意思是使用者去看過銀行，所以只能由他本人按，不能自動。
+// 按下去之後，那一天之後的自動筆會作廢重算（見 adPut），所以確認一次
+// 等於把推算的鏈條剪斷一次。
+//
+// 預設填入的是現在算出來的數字，不是空白：多數時候兩者相同，
+// 要使用者重打一次只會製造打錯的機會。
+function adConfirmDay() { return _adDayOf(_abNow()); }
+function adBtnHtml(d, ok, cur) {
+  return '<button class="ad-btn' + (ok ? ' ad-btn-ok' : '') + '" title="'
+    + (ok ? '這一天已經對過銀行。再按一次可以改。'
+          : '去看過銀行之後，把 ' + d + ' 收盤後的實際餘額填進來。'
+            + '確認之後推算就從這一天開始，不再往更早的日子推。')
+    + '" onclick="adAsk(this,&quot;' + d + '&quot;,' + (cur == null ? 'null' : Math.round(cur)) + ')">'
+    + (ok ? '改' : '確認') + '</button>';
+}
+// 把金額那一格換成輸入框。不用瀏覽器的 prompt：它擋不住貼上千分位，
+// 而且在這一頁的深色底上會跳出一個完全不同風格的白框。
+function adAsk(btn, d, cur) {
+  var tr = btn.closest('tr');
+  var td = tr ? tr.querySelector('.ad-amt') : null;
+  if (!td || td.querySelector('input')) return;
+  td.innerHTML = '<input class="ab-inp ad-inp" type="text" inputmode="numeric"'
+    + ' value="' + (cur == null ? '' : Number(cur).toLocaleString('zh-TW')) + '"'
+    + ' onkeydown="if(event.key===&quot;Enter&quot;)this.blur();'
+    + 'if(event.key===&quot;Escape&quot;){this.value=&quot;&quot;;this.blur();}"'
+    + ' onblur="adAskDone(this,&quot;' + d + '&quot;)">';
+  var i = td.querySelector('input');
+  if (i) { i.focus(); i.select(); }
+}
+function adAskDone(el, d) {
+  var raw = String(el.value || '').replace(/[,\s元]/g, '');
+  var v = raw === '' ? null : Number(raw);
+  if (v == null || !isFinite(v)) { abRefreshViews(); return; }   // 空白或打錯＝放棄，不改資料
+  adPut(d, v, true)
+    .then(function () { return adEnsure(); })
+    .then(abRefreshViews)
+    .catch(function (e) { hush('acct', e); });
+}
+
+// ── 歷史區 ──
+// 預設收起來。平常要看的是「現在還剩多少」，不是走過的每一天；
+// 但要對帳的時候一天都不能少，所以收起來不是刪掉。
+var AD_HIST_MAX = 90;
+function adHistHtml() {
+  var l = adList();
+  if (l.length < 2) return '';
+  var rows = l.slice().reverse(), more = 0;
+  if (rows.length > AD_HIST_MAX) { more = rows.length - AD_HIST_MAX; rows = rows.slice(0, AD_HIST_MAX); }
+  var h = '<details class="nbox ad-hist"><summary>每日剩餘總額　' + l.length + ' 筆</summary>'
+    + '<table class="tx-settle-table ad-htable"><thead><tr><th>日期</th><th>狀態</th>'
+    + '<th class="num">收盤後總額</th><th></th></tr></thead><tbody>';
+  rows.forEach(function (x) {
+    h += '<tr><td>' + x.d.slice(5).replace('-', '/') + '</td>'
+      + '<td>' + (x.ok ? '<span class="tx-st tx-st-ok">已確認</span>'
+                       : '<span class="tx-st">系統算的</span>') + '</td>'
+      + '<td class="num tx-bal ad-amt"><span class="' + (x.amt < 0 ? 'tx-bal-neg' : '') + '">'
+      + abMoney(x.amt) + '</span></td>'
+      + '<td class="tx-cf-act">' + adBtnHtml(x.d, x.ok, x.amt) + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  if (more) h += '<div class="ad-hmore">更早的 ' + more + ' 筆沒有列出來。資料保留兩年。</div>';
+  return h + '</details>';
+}
+
 // 同步查詢：錨點優先，沒有錨點才退回手填的那個數字
 function abGet() {
   var a = adAnchor();

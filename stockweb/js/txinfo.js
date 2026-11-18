@@ -96,13 +96,27 @@ async function loadSettleBox() {
           : '<span class="tx-st" title="前一天的總額加上當天的交割推出來的，只含交割，'
             + '不含配息也不含帳戶調整。想讓它變成確認過的，去總覽「部位與配置」把銀行的實際餘額填進去。">系統算的</span>')
       : '<span class="tx-st">起點</span>';
+    // 確認鈕寫的是「今天」（十點前算前一天），不是錨點那一天：
+    // 使用者按它的時候看的是現在的銀行餘額，而錨點可能是好幾天前。
+    var cfD = (typeof adConfirmDay === 'function') ? adConfirmDay() : '';
+    var cfOk = !!(cfD && adList().some(function (x) { return x.d === cfD && x.ok; }));
     html += '<tr class="tx-cf-start"><td>' + (ancD ? ancD.slice(5).replace('-', '/') : '—') + '</td>'
       + '<td>' + (anc ? '剩餘帳戶總額' : '帳戶餘額') + ancTag + '</td><td class="num"></td>'
-      + '<td class="num tx-bal">' + (bal == null ? '<span class="dm-dim">未填</span>' : abMoney(bal)) + '</td>'
-      + '<td></td></tr>';
+      + '<td class="num tx-bal ad-amt">' + (bal == null ? '<span class="dm-dim">未填</span>' : abMoney(bal)) + '</td>'
+      + '<td class="tx-cf-act">' + (anc ? adBtnHtml(cfD, cfOk, bal) : '') + '</td></tr>';
 
-    // 交割那一邊自己從起點重算一次，不沿用合併後的餘額
+    // 交割那一邊自己從錨點重算一次，不沿用合併後的餘額。
+    //
+    // 金額是 0 的交割日不佔一列：那一列沒有任何資訊，而它每天都有兩筆（T+1、T+2），
+    // 等於永遠有兩列在洗版。改成收在表格下面一句話，日期仍然寫出來，
+    // 不然看起來會像那兩天沒查到資料。
     var runS = bal;
+    var zeroDays = [];
+    stl = stl.filter(function (x) {
+      if (x.kind !== 'settle' || x.amt !== 0) return true;
+      zeroDays.push((x.d || '').slice(5).replace('-', '/'));
+      return false;
+    });
     if (!stl.length) {
       html += '<tr><td colspan="5" class="tx-cf-none">沒有待交割，也沒有排定的進出</td></tr>';
     }
@@ -145,6 +159,11 @@ async function loadSettleBox() {
       + '<td class="num ' + (tot > 0 ? 'up' : (tot < 0 ? 'down' : '')) + '">'
       + (tot === 0 ? '0' : tot.toLocaleString('zh-TW')) + '</td>'
       + balCell(runS, true, '全部交割與排定的進出走完之後') + '<td></td></tr></tbody></table>';
+    if (zeroDays.length) {
+      html += '<div class="tx-zero nb-keep">' + zeroDays.join('、')
+        + ' 沒有待交割<span class="tx-zero-x">（查過了，金額是 0，不是沒查到）</span></div>';
+    }
+    if (typeof adHistHtml === 'function') html += adHistHtml();
 
     // ── 表二：配息入帳（預估，不併進上面那條線）──
     var runD = 0;
