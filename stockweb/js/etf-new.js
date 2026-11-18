@@ -330,7 +330,9 @@ function renderEtfNew() {
       '<td class="num" onclick="event.stopPropagation()">' +
         '<input type="checkbox" class="en-chk"' + (on ? ' checked' : '') +
         ' onchange="enWatch(\'' + r.code + '\',this)" title="加入／移除關注股票"></td>' +
-      '<td class="inv-code"><span class="code-link" title="看線圖"' +
+      '<td class="inv-code">'
+        + ((typeof _wtHeldTag === 'function') ? _wtHeldTag(r.code) : '')
+        + '<span class="code-link" title="看線圖"' +
         ' onclick="event.stopPropagation();openChartPop(\'' + r.code + '\')">' + r.code + '</span></td>' +
       '<td class="inv-name">' + r.name +
         '<span class="en-caret">' + (_enOpen[r.code] ? '▼' : '▶') + '</span></td>' +
