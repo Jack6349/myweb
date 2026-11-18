@@ -740,7 +740,7 @@ var ES_COLS = [
   ['score', '綜合', 'f1', '各指標同類百分位加權：一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5'],
   ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）；殖利率、成長率、折溢價跟著現價重算，排名維持開頁時的計算'],
   ['y1', '單次配', 'amtpct', '最近一期每股配息金額（含已公告未除息）與它的單次殖利率。&#10;兩個數字是同一筆錢，與「預估年配」同一個基準。&#10;金額標黃色＝已公告、還沒除息'],
-  ['yEst', '預估年配', 'pct', '趨勢：最近一期（含已公告未除息）× 一年期數 ÷ 現價。配息調高調低都會立刻反映。&#10;關注股票那幾個頁籤的持股改用成本均價，這一頁不改：全市場排名要每一列同一個基準'],
+  ['yEst', '預估年配', 'pct', '趨勢：最近一期（含已公告未除息）× 一年期數 ÷ 現價。配息調高調低都會立刻反映。&#10;持股改用成本均價（字標金色）：持股的錢已經以成本投進去，未持股的錢要以現價才投得進去，各自用自己的投入價算，兩者可以直接比。&#10;這一欄沒有進綜合分，換基準不影響排名'],
   ['yCons', '保守年配', 'cons', '風險：取樣區間內最低一期 × 一年期數 ÷ 現價。&#10;回答「每一期都像最差那一期時，用現在的價格買進是多少」。&#10;區間：年配 2 年、半年配與季配 1 年、雙月配與月配 6 個月'],
   ['trend', '配息走向', 'trend',
     '看最近一次實際調整的方向，持平的期數不打斷走勢：&#10;'
@@ -851,8 +851,11 @@ function renderEtfScreen() {
   // 新上市沒有名次，同值時用它做次序會拿到 undefined；給一個排在所有名次之後的值
   var rnk = function (r) { return r.rank == null ? 9999 : r.rank; };
   if (key !== 'score') {
+    var gv = (key === 'yEst')
+      ? function (r) { return esYieldEff(r.code, r.yEst, r.px); }
+      : function (r) { return r[key]; };
     rows.sort(function (a, b) {
-      var va = a[key], vb = b[key];
+      var va = gv(a), vb = gv(b);
       if (va == null && vb == null) return rnk(a) - rnk(b);
       if (va == null) return 1;
       if (vb == null) return -1;
@@ -890,7 +893,11 @@ function renderEtfScreen() {
         return cv == null ? v.toFixed(2)
           : '<span class="' + colorClass(cv) + '">' + v.toFixed(2) + '</span>';
       }
-      case 'pct': return v == null ? dim('—') : v.toFixed(2) + '%';
+      // 預估年配：持股改用成本均價。這一欄沒有進綜合分（分數只用
+      // tr12／y12／g12／size／fill／fee），所以換基準不會動到排名。
+      case 'pct': return (c[0] === 'yEst' && typeof esYldCell === 'function')
+        ? esYldCell(r.code, v, r.px)
+        : (v == null ? dim('—') : v.toFixed(2) + '%');
       case 'cons': return v == null ? esSeqNA(r, false) : v.toFixed(2) + '%';
       // 金額固定寬度右對齊，整欄才排得齊；每一列都有，所以不拆行
       case 'amtpct': return v == null ? dim('—')
@@ -1150,6 +1157,9 @@ function esWatchSortVal(code, key) {
                 '降後平': 3, '轉降': 2, '連降': 1 };
     return r.trend ? ord[r.trend] : null;
   }
+  // 預估年配的排序要用畫面上那個值：持股是成本殖利率。
+  // 不改的話會變成「顯示成本、排序現價」，順序跟數字對不起來。
+  if (key === 'yEst') return esYieldEff(code, r.yEst, r.px);
   return r[key] == null ? null : r[key];
 }
 // ── 持股的預估年配改用成本均價 ──
@@ -1164,6 +1174,12 @@ function esWatchSortVal(code, key) {
 //
 // 換算不必重新取配息金額：原本的值是「每股年配 ÷ 現價」，
 // 乘回現價再除成本就是「每股年配 ÷ 成本」。
+// 顯示與排序共用同一個值。兩邊各算一次的話，
+// 畫面上是成本殖利率、排序卻是現價殖利率，排出來的順序跟看到的數字對不起來。
+function esYieldEff(code, yPx, px) {
+  var c = esCostYield(code, yPx, px);
+  return c ? c.y : (yPx == null ? null : yPx);
+}
 function esCostYield(code, yPx, px) {
   if (!(yPx > 0) || !(px > 0)) return null;
   if (typeof _ovCost !== 'function') return null;
