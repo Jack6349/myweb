@@ -275,13 +275,23 @@ function _ovcCard(r, HI, ticks) {
     + '</div>'
     // 兩個區間用文字再講一次，放在上框線的右端。
     // 圖上讀得出相對關係，讀不出精確值；要抄進委託單的是這兩組數字。
+    // 框頭右端排兩行。四組並排量過要 580px，加上代號、名稱與徽章超過框寬 798px，
+    // 「掛得到」會疊到代號上面。拆成兩行之後最寬的那一行只有 320px 上下。
+    // 分行照「講的是同一件事」分：掛買那個價與它掛得到的頻率同一行，
+    // 收盤區間與現價同一行。
     + '<div class="ovc-head2">'
+    + '<span class="ovc-h2r">'
     + '<span class="ovc-h2k">掛買</span><b>'
     + (r.lLoPx > 0 ? _ovPx(r.lLoPx) + ' ～ ' + _ovPx(r.lHiPx) : '—') + '</b>'
+    + '<span class="ovc-h2k">掛得到</span><b style="color:' + fillCol + '">'
+    + (r.lFill == null ? '—' : Math.round(r.lFill) + '%') + '</b>'
+    + '</span>'
+    + '<span class="ovc-h2r">'
     + '<span class="ovc-h2k">收盤</span><b>'
     + (r.loPx > 0 ? _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) : '—') + '</b>'
     + ((typeof _ovPxTagHtml === 'function')
         ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '')
+    + '</span>'
     + '</div>';
 
   h += _ovcLabels(UP, 'up', rowsUp, X);
@@ -325,8 +335,6 @@ function _ovcCard(r, HI, ticks) {
       + _ovcPctTxt(r.prem) + '</b></span>'
     + '<span>量能 <b' + (volHot ? ' class="ovc-hot"' : '') + '>'
       + (r.volX == null ? '—' : r.volX.toFixed(2) + ' 倍') + '</b></span>'
-    + '<span>掛得到 <b style="color:' + fillCol + '">'
-      + (r.lFill == null ? '—' : Math.round(r.lFill) + '%') + '</b></span>'
     + '<span>說明力 <b style="color:' + tierCol + '">' + (r.r2 == null ? '—' : r.r2.toFixed(2)) + '</b></span>'
     + '<span>樣本 <b>' + r.n + ' 天</b></span>'
     + (r.act ? '<span>估收 <b>' + (r.cPx > 0 ? _ovPx(r.cPx) : '—') + '</b></span>' : '')
@@ -480,7 +488,7 @@ function ovcStockHtml() {
 
     + '<dt>掛買的亮度</dt><dd><b>定義</b>：用同一條迴歸、同一段樣本回測，'
     + '數有多少比例的日子裡，當天的實際最低真的跌到當天推的掛買參考。'
-    + '過半就把掛買那個數字打亮，沒過半壓暗，框底的「掛得到」是同一個數字。<br>'
+    + '過半就把掛買那個數字打亮，沒過半壓暗，框頭的「掛得到」是同一個數字。<br>'
     + '<b>比較基準</b>：50%，也就是「跌到的日子比沒跌到的多」。這條線不是分位數算出來的，'
     + '是多數這個概念本身的分界，與夜推債券同一條線。<br>'
     + '<b>白話意義</b>：掛買是模型推今天會跌到哪，這個比例是「過去照這個推法掛，掛得到的頻率」。<br>'
