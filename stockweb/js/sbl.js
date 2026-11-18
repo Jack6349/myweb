@@ -9,7 +9,7 @@ var _sblCache = null; // { date, fee:{code:{w,max,vol}}, bal:{code:{today,prev}}
 // ── 子頁籤切換（交易帳務 / 出借行情）──
 // 子頁籤記在本機：重新整理或從別頁回來時停在上次的頁籤
 var TX_TAB_LS = 'txinfo_tab_v1';
-var TX_TABS = ['account', 'sbl', 'year'];
+var TX_TABS = ['account', 'sbl', 'bslog', 'year'];
 function txRestoreTab() {
   var t = null;
   try { t = localStorage.getItem(TX_TAB_LS); } catch (e) {}
@@ -25,6 +25,7 @@ function txShowTab(tab) {
   });
   // 進去才載：兩者都要打外部（TWSE／券商），不在進頁時一次全抓
   if (tab === 'sbl' && !_sblLoaded) startSbl();
+  if (tab === 'bslog' && typeof startBsLog === 'function') startBsLog();
   if (tab === 'year' && typeof startYearPnl === 'function') startYearPnl();
 }
 
