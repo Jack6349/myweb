@@ -4,31 +4,43 @@
 // 那兩件事在不同機構，沒有任何介面把它們接起來。
 //
 // ══════════ 日期規則（全站共用，只在這裡定義一次）══════════
-// 帳戶餘額是「使用者按下 Enter 那一刻」的銀行餘額。要往前推，只能加減
-// 那一刻「之後」才會動的錢。判斷基準一律是輸入時間（abAt），不是今天：
 //
-//   交割：扣款發生在輸入之前 → 已經在餘額裡，不再扣。之後 → 要扣。
-//         門檻是交割日當天 10:00（銀行營業時間，見 broker.js 的 SETTLE_PAID_HOUR）。
-//         注意這跟「現在是否已扣款」不是同一件事：11/13 填的餘額，到 11/17 來看，
-//         11/16 那筆現在已扣款，但它不在 11/13 的餘額裡，照樣要扣。
-//   配息：發放日 ≤ 輸入日 → 已經入帳，不再加。之後 → 要加（發放日已含假日順延）。
+// 錨點是「每日剩餘總額」裡最新的那一筆，不再是使用者按下 Enter 的那一刻。
+// 推算只做錨點那一天「之後」的事。錨點愈新，推的鏈條愈短。
+//
+//   交割：日期 ≤ 錨點日 → 已經折進錨點，不再扣。之後 → 要扣。
+//         一天的交割在當天 10:00 離開帳戶（見 broker.js 的 SETTLE_PAID_HOUR），
+//         所以當天要過了 10:00 才定得了案。
+//   配息：發放日已經過去的不列（那是歷史，不是預估）；未來的加在另一張表，
+//         不併進交割這條線。
 //   預計進出：使用者自己維護的提領、入金。過了日期就停止計入，等使用者確認。
+//
+// 為什麼要有錨點：券商的交割介面只回今天、明天、後天，中間的日子要自己補，
+// 補法之一是從建倉明細反推，而反推有一個補不起來的洞 —— 那天買的標的如果
+// 到今天已經整批出清，持倉清單裡沒有它，建倉明細就查不到。
+// 2026-11-18 實測：過去一年有賣出紀錄的 9 檔裡，6 檔已經不在持倉清單上。
+// 錨點把這個洞擋在當天，不讓它跨日累積。
 //
 // 儲存：與認購成本補正同一份 Firestore 文件（stock_prefs/{uid} 的 acctBalance、
 //       acctPlans 欄位，merge 寫入，不動同文件其他偏好）；未登入時退回 localStorage。
 
-var AB_LS = 'acct_balance_v1', AP_LS = 'acct_plans_v1';
+var AB_LS = 'acct_balance_v1', AP_LS = 'acct_plans_v1', AD_LS = 'acct_daily_v1';
 var _abVal = null;        // 餘額（元）；null＝沒填
 var _abAt = '';           // 使用者輸入當下的時間（'YYYY-MM-DDTHH:MM:SS'，台北）
 var _abPlans = null;      // [{id, date, amt, memo}]；amt 帶號：負＝提領、正＝入金
 var _abLoaded = false, _abStore = 'local', _abErr = '';
 var _abSettle = null;     // 最近一次抓到的交割列（供下單視窗、提醒共用，不各自再抓一次）
+var _adList = null;       // 每日剩餘總額 [{d, amt, ok}]，由舊到新；ok＝使用者對過銀行
 
 function _abLocal() {
   try { return JSON.parse(localStorage.getItem(AB_LS) || 'null'); } catch (e) { return null; }
 }
 function _apLocal() {
   try { var a = JSON.parse(localStorage.getItem(AP_LS) || 'null'); return Array.isArray(a) ? a : null; } catch (e) { return null; }
+}
+function _adLocal() {
+  try { var a = JSON.parse(localStorage.getItem(AD_LS) || 'null'); return Array.isArray(a) ? a : null; }
+  catch (e) { return null; }
 }
 function _abRef() { return window.FB.doc(window.FB.db, 'stock_prefs', window.OWNER_UID); }
 function _abCloud() { return !!(window.FB && window.OWNER_UID); }
@@ -39,9 +51,9 @@ function _abApply(o) {
 
 async function abLoad(force) {
   if (_abLoaded && !force) return _abVal;
-  var local = _abLocal(), lp = _apLocal(), ls = _asLocalRead();
+  var local = _abLocal(), lp = _apLocal(), ls = _asLocalRead(), ld = _adLocal();
   _asSeen = ls || {};
-  _abApply(local); _abPlans = lp || []; _abStore = 'local';
+  _abApply(local); _abPlans = lp || []; _adList = ld || []; _abStore = 'local';
   if (_abCloud()) {
     try {
       var snap = await Promise.race([
@@ -50,9 +62,11 @@ async function abLoad(force) {
       ]);
       var d = snap.exists() ? snap.data() : {};
       var remote = d.acctBalance || null, rp = Array.isArray(d.acctPlans) ? d.acctPlans : null;
+      var rd = Array.isArray(d.acctDaily) ? d.acctDaily : null;
+      if (rd) { _adList = rd; try { localStorage.removeItem(AD_LS); } catch (e) {} }
       var rs = (d.acctSettleSeen && typeof d.acctSettleSeen === 'object') ? d.acctSettleSeen : null;
       if (rs) { _asSeen = rs; _asReady = ''; try { localStorage.removeItem(AS_LS); } catch (e) {} }
-      if (remote || rp) {
+      if (remote || rp || rd) {
         if (remote) _abApply(remote);
         if (rp) _abPlans = rp;
         _abStore = 'firestore'; _abErr = '';
@@ -61,6 +75,7 @@ async function abLoad(force) {
         var up = {};
         if (local) up.acctBalance = local;
         if (lp && lp.length) up.acctPlans = lp;
+        if (ld && ld.length) up.acctDaily = ld;
         if (ls && Object.keys(ls).length) up.acctSettleSeen = ls;
         await window.FB.setDoc(_abRef(), up, { merge: true });
         _abStore = 'firestore'; _abErr = '';
@@ -69,6 +84,7 @@ async function abLoad(force) {
     } catch (e) { _abErr = (e && (e.code || e.message)) || String(e); }
   } else { _abErr = '未登入 Google'; }
   _abLoaded = true;
+  _adSeed();                                   // 手填的那一筆要先變成錨點，後面才推得動
   return _abVal;
 }
 window.addEventListener('owner-ready', function () {
@@ -76,8 +92,123 @@ window.addEventListener('owner-ready', function () {
   abLoad(true).then(abRefreshViews).catch(function (e) { hush('acct', e); });
 });
 
-// 同步查詢：尚未載入時先用本機值，載入後自然一致
+// ══════════ 每日剩餘總額 ══════════
+//
+// 一天一筆：日期、當天結束時的帳戶總額、這筆是系統算的還是使用者對過銀行的。
+//
+// 兩種的意思不一樣，這是整個設計的核心：
+//   系統算的 ＝ 前一天的總額 ＋ 當天的交割。只含交割，不含配息也不含帳戶調整。
+//              交割是券商給的確定數字，另外兩個是預估與計畫，都可能不發生。
+//              把不確定的東西加進一個叫「總額」的數字裡，就再也分不出哪一部分能當真。
+//   使用者確認的 ＝ 對過銀行的真實數字。這個什麼都含，因為銀行餘額本來就什麼都含。
+//
+// 往回推遇到任何一筆就停（確認過的更可靠，但系統算的也已經把交割折進去了），
+// 所以鏈條長度等於「最後一筆到今天」，而不是「最初手填那天到今天」。
+//
+// 只有真的有交割金額的日子才自動寫一筆。沒動的日子寫了只是複製前一天。
+function adList() { return _adList || _adLocal() || []; }
+function adAnchor() { var l = adList(); return l.length ? l[l.length - 1] : null; }
+function adAnchorDay() { var a = adAnchor(); return a ? a.d : ''; }
+function adLastOk() {
+  var l = adList();
+  for (var i = l.length - 1; i >= 0; i--) if (l[i].ok) return l[i];
+  return null;
+}
+async function _adWriteList() {
+  // 只留兩年，與交割存檔同一個規則
+  var lim = new Date(Date.now() + 8 * 3600000 - 730 * 86400000).toISOString().slice(0, 10);
+  _adList = adList().filter(function (x) { return x && x.d >= lim; })
+    .sort(function (a, b) { return a.d < b.d ? -1 : (a.d > b.d ? 1 : 0); });
+  await _abWrite('acctDaily', _adList, AD_LS);
+}
+// 寫一筆（同一天已經有就覆蓋）。
+//
+// 改了某一天之後，它後面那些「系統算的」全部作廢：
+// 那幾筆是用舊數字一路加上來的，前面換了它們就不成立。
+// 下一次折算會重新補回來。後面那些「已確認」的不動，
+// 它們是各自對過銀行的數字，不依賴前一天。
+async function adPut(d, amt, ok) {
+  if (!d || amt == null) return;
+  var out = adList().filter(function (x) {
+    if (x.d === d) return false;
+    if (x.d > d && !x.ok) return false;
+    return true;
+  });
+  out.push({ d: d, amt: Math.round(amt), ok: !!ok });
+  _adList = out;
+  await _adWriteList();
+}
+// 錨點加減一筆錢，狀態不變。
+// 按「已扣」代表那筆錢真的動了，不代表使用者去對過銀行，所以不能把它變成已確認。
+async function adAdjust(delta) {
+  var a = adAnchor();
+  if (!a || !delta) return;
+  await adPut(a.d, a.amt + delta, a.ok);
+}
+
+// 手填的餘額對應到哪一天的「收盤後」。
+// 十點前填的那個數字裡還沒有當天的交割，所以它是前一天收盤的總額。
+function _adDayOf(at) {
+  if (!at) return '';
+  var d = at.slice(0, 10), hh = +(at.slice(11, 13) || 0);
+  var H = (typeof SETTLE_PAID_HOUR === 'number') ? SETTLE_PAID_HOUR : 10;
+  if (hh >= H) return d;
+  return new Date(new Date(d + 'T00:00:00Z').getTime() - 86400000).toISOString().slice(0, 10);
+}
+// 舊資料接進來：手填的那一筆變成最舊的一筆已確認，不必重新輸入
+function _adSeed() {
+  if (adList().length) return;
+  var raw = _abLocal(), v = (_abVal != null) ? _abVal : (raw && typeof raw.amt === 'number' ? raw.amt : null);
+  var d = _adDayOf(abAt());
+  if (v == null || !d) return;
+  _adList = [{ d: d, amt: Math.round(v), ok: true }];
+  _adWriteList().catch(function (e) { hush('acct', e); });
+}
+
+// 可以定案到哪一天。一天的交割十點才離開帳戶，所以十點前最多只能定到昨天。
+function _adLimitDay() {
+  var t = new Date(Date.now() + 8 * 3600000);
+  var today = t.toISOString().slice(0, 10);
+  var H = (typeof SETTLE_PAID_HOUR === 'number') ? SETTLE_PAID_HOUR : 10;
+  if (t.getUTCHours() >= H) return today;
+  return new Date(t.getTime() - 86400000).toISOString().slice(0, 10);
+}
+// 某一天的交割金額。券商親口給過的最準，其次是反推出來的，都沒有就是沒動。
+function _adSettleOn(d) {
+  var seen = asSeen();
+  if (seen[d] != null) return { amt: Math.round(seen[d]), src: 'broker' };
+  var p = (_asPast || []).filter(function (x) { return x.d === d; })[0];
+  if (p) return { amt: p.amt, src: p.src };
+  var rows = _abSettle || [];
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i] && rows[i].date === d) return { amt: Math.round(rows[i].amount || 0), src: 'broker' };
+  }
+  return null;
+}
+// 把錨點之後、已經可以定案的日子逐日折進來。要在備好過去那段交割之後呼叫。
+async function adEnsure() {
+  _adSeed();
+  var a = adAnchor(), lim = _adLimitDay();
+  if (!a || !lim || a.d >= lim) return a;
+  var days = _asTradeDaysBetween(a.d, lim);
+  if (_asTrade(lim)) days.push(lim);
+  var run = a.amt, add = [];
+  days.forEach(function (D) {
+    var s = _adSettleOn(D);
+    if (!s || !s.amt) return;                  // 沒動就不寫，寫了只是複製前一天
+    run += s.amt;
+    add.push({ d: D, amt: Math.round(run), ok: false });
+  });
+  if (!add.length) return a;
+  _adList = adList().concat(add);
+  await _adWriteList();
+  return adAnchor();
+}
+
+// 同步查詢：錨點優先，沒有錨點才退回手填的那個數字
 function abGet() {
+  var a = adAnchor();
+  if (a) return a.amt;
   if (_abVal != null) return _abVal;
   var l = _abLocal();
   return (l && typeof l.amt === 'number') ? l.amt : null;
@@ -108,10 +239,15 @@ async function _abWrite(field, val, lsKey) {
 function _abNow() { return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 19); }
 function _abToday() { return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10); }
 
+// 使用者自己打進來的數字＝他剛去看過銀行，所以那一天就是已確認。
+// 十點前打的算前一天收盤（當天的交割還沒扣）。
 async function abSave(v) {
   var o = (v == null) ? null : { amt: v, at: _abNow() };
   _abApply(o);
   await _abWrite('acctBalance', o, AB_LS);
+  if (v == null) return;
+  var d = _adDayOf(o.at);
+  if (d) await adPut(d, v, true);
 }
 
 // ── 預計進出 ──
@@ -136,8 +272,10 @@ async function apDel(id) {
 async function apApply(id) {
   var p = abPlans().filter(function (x) { return x.id === id; })[0];
   if (!p) return;
-  var bal = abGet();
-  if (bal != null) await abSave(bal + (p.amt || 0));
+  // 錨點直接加減，狀態不動：按「已扣」是說這筆錢真的動了，
+  // 不是說使用者去對過銀行。把它變成已確認等於替他剪斷鏈條。
+  if (adAnchor()) await adAdjust(p.amt || 0);
+  else { var bal = abGet(); if (bal != null) await abSave(bal + (p.amt || 0)); }
   await apDel(id);
 }
 function apOverdue() {
@@ -278,7 +416,8 @@ async function _asSellMap(from, to) {
 
 // 備好「餘額起點之後、今天之前」那一段的交割列。券商回的三天不在這裡，那邊照原本走
 async function abSettlePrepare(force) {
-  var from = abAtDay(), today = _abToday();
+  // 從錨點那天往後補，不是從手填那天。錨點愈新，要補的洞愈少。
+  var from = adAnchorDay() || abAtDay(), today = _abToday();
   if (!from || from >= today) { _asPast = []; _asZero = []; _asReady = from + '|' + today; return _asPast; }
   var key = from + '|' + today;
   if (_asReady === key && !force) return _asPast;
@@ -306,11 +445,14 @@ async function abSettlePrepare(force) {
 }
 
 // ══════════ 推算 ══════════
-// 交割那一筆在「輸入餘額的那一刻」是否已經扣掉了。
-// 用輸入時間比，不是用現在比——差別見檔頭的日期規則。
+// 交割那一筆是不是已經折進錨點了。錨點那天（含）以前的都算。
+// 沒有錨點時退回舊規則：用手填的那一刻比。
 function _abSettleInBalance(r) {
+  if (!r || !r.date) return false;
+  var ad = adAnchorDay();
+  if (ad) return r.date <= ad;
   var at = abAt();
-  if (!at || !r || !r.date) return false;
+  if (!at) return false;
   var d = at.slice(0, 10);
   if (r.date < d) return true;
   if (r.date > d) return false;
@@ -370,13 +512,17 @@ function abDivIn() {
 function abFlow(settleRows, opts) {
   opts = opts || {};
   var start = abGet(), today = _abToday(), items = [];
-  // 過去那一段（券商已經不回的日子）要先進來，不然餘額從起點到今天之間是斷的。
+  var anchor = adAnchorDay();
+  // 錨點那天（含）以前的都已經折進去了，再列一次就是算兩遍
+  var after = function (d) { return !anchor || d > anchor; };
+  // 補出來的那幾天（券商已經不回）要進來，不然餘額是斷的。
   // 這些列一定在今天之前，與券商回的三天不會重疊。
   (_asPast || []).forEach(function (x) {
+    if (!after(x.d)) return;
     items.push({ d: x.d, kind: 'settle', label: (x.from || '').slice(5).replace('-', '/') + ' 成交',
                  amt: x.amt, src: x.src, ref: { date: x.d, amount: x.amt } });
   });
-  if (_asZero && _asZero.length) {
+  if (_asZero && _asZero.length && after(_asZero[_asZero.length - 1])) {
     // 查無任何進出的日子當作 0，但要排一列。帳上少一筆該看得見，不是靜靜跳過
     items.push({ d: _asZero[_asZero.length - 1], kind: 'settle', label: '查無進出',
                  amt: 0, src: 'zero', days: _asZero.slice(),
@@ -431,12 +577,14 @@ function abSettleDay(n) {
   return d.toISOString().slice(0, 10);
 }
 
-// 交割列快取：下單視窗與提醒都要用，不各自再抓一次
+// 交割列快取：下單視窗與提醒都要用，不各自再抓一次。
+// 順序不能換：先備好過去那段，才折得出每日總額，折完錨點才是新的。
 async function abSettleRows(force) {
   if (_abSettle && !force) return _abSettle;
   if (typeof fetchSettlements !== 'function') return [];
   try { _abSettle = await fetchSettlements(); } catch (e) { hush('acct', e); _abSettle = []; }
   try { await abSettlePrepare(force); } catch (e) { hush('acct', e); }
+  try { await adEnsure(); } catch (e) { hush('acct', e); }
   return _abSettle;
 }
 
@@ -461,9 +609,14 @@ function abSigned(v) { return (v == null) ? '—' : (v > 0 ? '+' : '') + Math.ro
 
 // ── 抽屜裡的輸入格 ──
 function abInputHtml() {
-  var v = abGet(), day = abAtDay();
-  return '<span class="sum-pair ab-pair" title="'
-    + (day ? '於 ' + day + ' 輸入。券商給不出銀行帳戶餘額，這個數字要自己維護' : '券商給不出銀行帳戶餘額，這個數字要自己維護')
+  var v = abGet(), a = adAnchor(), day = a ? a.d : abAtDay();
+  var tip = a
+    ? (a.d + ' 收盤後的帳戶總額，'
+        + (a.ok ? '你對過銀行確認過的。' : '系統用前一天加當天交割推的，只含交割，不含配息與帳戶調整。')
+        + '在這裡填進銀行的實際餘額，就等於確認今天（十點前算前一天），'
+        + '推算不再往更早的日子推。')
+    : '券商給不出銀行帳戶餘額，這個數字要自己維護';
+  return '<span class="sum-pair ab-pair" title="' + tip.replace(/"/g, '&quot;')
     + '"><span class="sum-plabel">帳戶餘額</span>'
     + '<input id="ab-inp" class="ab-inp" type="text" inputmode="numeric" placeholder="未填"'
     + ' value="' + (v == null ? '' : v.toLocaleString('zh-TW')) + '"'
