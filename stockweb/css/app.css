@@ -356,6 +356,9 @@ html, body { overflow-x: clip; }
   margin-right: 5px; border: 1px solid var(--accent2); border-radius: 4px;
   color: var(--accent2); vertical-align: 1px; cursor: help; }
 .wt-held.wt-held-no { border-color: transparent; color: var(--text3); cursor: default; }
+/* 成本殖利率（持股那幾列的預估年配）。跟代號前面的「持」同一個金色，
+   兩者是同一件事的兩面。不在數字後面加字：那會把整欄的右對齊打掉。 */
+.es-yoc { color: var(--accent2); cursor: help; }
 /* 表格寬度的真正上限是 main-area 的 max-width 1800 減左右 padding 28，等於 1744px。
    視窗再寬、瀏覽器再縮小都不會超過這個數字，所以判斷「塞不塞得下」要拿 1744 比，
    不是拿量到的視窗寬。目前最寬的是配息資料那張 1691px。 */

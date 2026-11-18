@@ -740,7 +740,7 @@ var ES_COLS = [
   ['score', '綜合', 'f1', '各指標同類百分位加權：一年含息 25、近12月殖利率 25、填息率 20、一年價格 15、規模 10、內扣費用 5'],
   ['px', '現價', 'f2', '盤中每 30 秒更新（券商快照）；殖利率、成長率、折溢價跟著現價重算，排名維持開頁時的計算'],
   ['y1', '單次配', 'amtpct', '最近一期每股配息金額（含已公告未除息）與它的單次殖利率。&#10;兩個數字是同一筆錢，與「預估年配」同一個基準。&#10;金額標黃色＝已公告、還沒除息'],
-  ['yEst', '預估年配', 'pct', '趨勢：最近一期（含已公告未除息）× 一年期數 ÷ 現價。配息調高調低都會立刻反映'],
+  ['yEst', '預估年配', 'pct', '趨勢：最近一期（含已公告未除息）× 一年期數 ÷ 現價。配息調高調低都會立刻反映。&#10;關注股票那幾個頁籤的持股改用成本均價，這一頁不改：全市場排名要每一列同一個基準'],
   ['yCons', '保守年配', 'cons', '風險：取樣區間內最低一期 × 一年期數 ÷ 現價。&#10;回答「每一期都像最差那一期時，用現在的價格買進是多少」。&#10;區間：年配 2 年、半年配與季配 1 年、雙月配與月配 6 個月'],
   ['trend', '配息走向', 'trend',
     '看最近一次實際調整的方向，持平的期數不打斷走勢：&#10;'
@@ -1152,6 +1152,40 @@ function esWatchSortVal(code, key) {
   }
   return r[key] == null ? null : r[key];
 }
+// ── 持股的預估年配改用成本均價 ──
+//
+// 現價殖利率回答的是「現在買進的話，一年領多少」；成本殖利率回答的是
+// 「我手上這些，一年實際領多少」。持有中的標的要問的是後者，前者跟我無關：
+// 我不會為了那個數字再買一次，而價格跌了讓現價殖利率變好看，
+// 不代表我的配息收入變多，我領到的錢跟當初付的成本綁在一起。
+//
+// 成本取庫存頁那一套還原過的均價（券商的原始 price 扣掉已領配息，
+// 配息領愈多成本看起來愈低，同一檔在兩頁會變成兩個數字）。
+//
+// 換算不必重新取配息金額：原本的值是「每股年配 ÷ 現價」，
+// 乘回現價再除成本就是「每股年配 ÷ 成本」。
+function esCostYield(code, yPx, px) {
+  if (!(yPx > 0) || !(px > 0)) return null;
+  if (typeof _ovCost !== 'function') return null;
+  var cost = null;
+  try { cost = _ovCost(code); } catch (e) { cost = null; }
+  if (!(cost > 0)) return null;
+  return { y: yPx * px / cost, cost: cost };
+}
+// 成本基準的那幾格要看得出來，但不能在數字後面加字 —— 那會把整欄的右對齊打掉。
+// 改成換字色（與代號前面的「持」同一個金色，兩者是同一件事的兩面），
+// 詳情寫在提示裡。
+function esYldCell(code, yPx, px, fmt) {
+  var f = fmt || function (v) { return v.toFixed(2) + '%'; };
+  var c = esCostYield(code, yPx, px);
+  if (!c) return (yPx == null) ? '<span class="dm-dim">—</span>' : f(yPx);
+  return '<span class="es-yoc" title="成本殖利率：每股年配 ÷ 成本均價 ' + c.cost.toFixed(2)
+    + '。這是你手上這些一年實際領多少。&#10;用現價 ' + px.toFixed(2) + ' 算是 '
+    + f(yPx) + '，那回答的是「現在買進的話領多少」，跟已經持有的你無關。&#10;'
+    + '成本是還原過的：券商記的 price 已經扣掉領過的配息，這裡加回去，與庫存頁同一個數字。">'
+    + f(c.y) + '</span>';
+}
+
 function esWatchCells(code, cols) {
   cols = cols || ES_WCOLS;
   var r = esMetricsFor(code);
@@ -1185,7 +1219,7 @@ function esWatchCells(code, cols) {
     y1: (r.y1 == null ? dim('—')
       : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '">'
         + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + r.y1.toFixed(2) + '%'),
-    yEst: pct(r.yEst),
+    yEst: esYldCell(code, r.yEst, r.px),
     yCons: r.yCons == null ? esSeqNA(r, false) : r.yCons.toFixed(2) + '%',
     trend: r.trend == null ? esSeqNA(r, true) : esTrendHtml(r),
     y12: pct(r.y12),
