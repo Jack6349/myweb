@@ -101,6 +101,70 @@ function _ovbTop(main, pick, c) {
   return Math.max(a, b);
 }
 
+// ── HYG 敏感度 ──
+//
+// 這一檔對 HYG 方向有多敏感：把五個檔位的「HYG 下跌那天的成交率 − 上漲那天的」
+// 平均起來，單位是百分點。買賣各算一條，因為兩側的敏感度不一樣。
+//
+// 為什麼用差距不用比值：你要判斷的是「今天 HYG 的方向會不會改變我掛幾檔」，
+// 那是差距的問題。比值會騙人 —— 55% 對 45% 切出來是 55:45 看起來只是微偏，
+// 實際差 10 個百分點；5% 對 3% 切出來是 62:38 看起來偏很多，實際只差 2 個百分點。
+// 2026-11-19 實測同一組資料：比值版 00981B 是 58:42、00982D 是 68:32，看起來差不多；
+// 差距版是 11.8 對 27.9，一眼分得出 2.4 倍。
+//
+// 實測五檔債券的買側平均差：00982D 27.9、00990B 21.3、00984D 20.7、00989B 12.4、00981B 11.8。
+// 賣側全是負的（−16.1 到 −23.3），代表 HYG 上漲的日子比較賣得掉。
+// 沒有一檔是不敏感的，最低也有 11.8 個百分點，所以這條線讀的是相對強弱，不是有沒有。
+var _ovbSensMemo = {}, _ovbSensKey = '', OVB_SENS_MIN = 30;
+function _ovbSens(code) {
+  if (_ovbSensMemo[code] !== undefined) return _ovbSensMemo[code];
+  var r = null;
+  try {
+    var dn = bsFill(code, function (v) { return v != null && v < 0; });
+    var up = bsFill(code, function (v) { return v != null && v > 0; });
+    if (dn && up) {
+      var gb = [], gs = [];
+      for (var k = 1; k <= OVB_N; k++) {
+        if (dn.buy[k] != null && up.buy[k] != null) gb.push(dn.buy[k] - up.buy[k]);
+        if (dn.sell[k] != null && up.sell[k] != null) gs.push(dn.sell[k] - up.sell[k]);
+      }
+      var avg = function (a) {
+        return a.length ? a.reduce(function (s, x) { return s + x; }, 0) / a.length : null;
+      };
+      r = { buy: avg(gb), sell: avg(gs), n: Math.min(dn.n, up.n) };
+    }
+  } catch (e) { hush('ovbond', e); }
+  _ovbSensMemo[code] = r;
+  return r;
+}
+// 滿刻度取自資料，不自己訂：所有標的裡最大的那個絕對值往上取到 5 的倍數，
+// 下限 30（2026-11-19 實測最大是 27.9）。有標的超過就自己撐大，不截掉。
+function _ovbSensScale(codes) {
+  var m = 0;
+  codes.forEach(function (c) {
+    var s = _ovbSens(c);
+    if (!s) return;
+    if (s.buy != null) m = Math.max(m, Math.abs(s.buy));
+    if (s.sell != null) m = Math.max(m, Math.abs(s.sell));
+  });
+  return Math.max(OVB_SENS_MIN, Math.ceil(m / 5) * 5);
+}
+var _ovbScale = OVB_SENS_MIN;
+// 一條：長度是敏感度佔滿刻度的比例，顏色沿用圖上的買金賣藍。
+// 數字帶正負號，因為方向本身有意義（正＝HYG 跌的日子比較買得到）。
+function _ovbSensBar(side, v, scale) {
+  var lb = (side === 'buy') ? '買' : '賣';
+  if (v == null) {
+    return '<span class="ovb-sg"><span class="ovb-sk">' + lb + '</span>'
+      + '<span class="ovb-strack"></span><b class="ovb-sna">—</b></span>';
+  }
+  var w = Math.min(100, Math.abs(v) / scale * 100);
+  return '<span class="ovb-sg"><span class="ovb-sk">' + lb + '</span>'
+    + '<span class="ovb-strack"><em class="ovb-sfill ovb-' + side + '" style="width:'
+    + w.toFixed(1) + '%"></em></span>'
+    + '<b>' + (v > 0 ? '＋' : (v < 0 ? '−' : '±')) + Math.abs(v).toFixed(0) + '</b></span>';
+}
+
 // 外框數字擺哪裡。
 //
 // 一組柱子只有 36px 寬、兩個標籤各 23px，並排一定疊，所以不能兩個都靠同一邊。
@@ -237,6 +301,22 @@ function _ovbCard(code) {
   // 另一邊的方向：今天是跌就拿漲的那組當對照，反之亦然。
   // 兩邊都畫是為了看得到「萬一明天反過來，這個掛價變成多少」。
   var other = dir === 0 ? null : (dir < 0 ? up : dn);
+
+  // 代號下面那一條：這一檔對 HYG 有多敏感。
+  //
+  // 放在這裡而不是每張框換框線顏色：HYG 今天漲或跌是整頁共用的一個數字，
+  // 每張框都標等於同一件事印十幾次，而且框跟框之間比不出任何東西。
+  // 敏感度才是每一檔各自不同、而且會改變「今天要不要細看這一檔」的東西。
+  var sens = _ovbSens(code);
+  head += '<div class="ovb-sens"><span class="ovb-sk ovb-sk1" title="'
+    + '五個檔位的「HYG 下跌那天的成交率 − 上漲那天的」平均，單位是百分點。'
+    + '數字越大代表今天 HYG 往哪邊走越會改變你該掛幾檔。'
+    + '滿刻度 ' + _ovbScale + ' 個百分點，取自所有標的裡最大的那一個。'
+    + (sens && sens.n ? '&#10;樣本 ' + sens.n + ' 天（取跌漲兩邊較少的那一邊）。' : '')
+    + '">HYG 敏感度</span>'
+    + _ovbSensBar('buy', sens ? sens.buy : null, _ovbScale)
+    + _ovbSensBar('sell', sens ? sens.sell : null, _ovbScale)
+    + '</div>';
 
   // 框頭右端排兩行，與夜推股票一致。分行照「講的是同一件事」分：
   // 前收與現價同一行（現價的漲跌就是對前收算的，拆開就看不出兩個數字的關係），
@@ -409,6 +489,12 @@ function ovcBondHtml() {
     + '橫軸是掛價距前收幾個升降單位，左邊便宜、右邊貴。'
     + '</span></div>';
 
+  // 滿刻度全頁共用，框跟框之間才比得動長度。算完才畫卡片。
+  // 快取跟著 HYG 與日線一起失效（重新篩選時 _bsBars 會被清掉）。
+  var sk = codes.join(',') + '|' + Object.keys(_bsBars || {}).length;
+  if (_ovbSensKey !== sk) { _ovbSensMemo = {}; _ovbSensKey = sk; }
+  _ovbScale = _ovbSensScale(codes);
+
   h += '<div class="ovb-grid">' + codes.map(_ovbCard).join('') + '</div>';
 
   h += '<div class="detail-note"><dl>'
@@ -456,6 +542,26 @@ function ovcBondHtml() {
     + '代表今天比平常強，再等一下或者往上挪一檔。'
     + '<br>不能告訴你的是「還會不會再碰一次」。已經觸及過不代表你掛得到：'
     + '同一價位的委託照時間排隊，日內最低只掃到一次的那種日子不一定輪得到你。</dd>'
+    + '<dt>HYG 敏感度</dt><dd><b>定義</b>：代號下面那兩條。把五個檔位的「HYG 下跌那天的成交率 − 上漲那天的」'
+    + '平均起來，單位是百分點。買賣各算一條，兩側不一樣。'
+    + '條子長度是它佔滿刻度的比例，滿刻度 ' + _ovbScale + ' 個百分點。<br>'
+    + '<b>比較基準</b>：跟其他標的比。滿刻度取自所有標的裡最大的那一個，'
+    + '不是我訂的數字；有標的超過滿刻度會自己撐大。'
+    + '2026-11-19 實測五檔債券的買側平均差：00982D 27.9、00990B 21.3、00984D 20.7、'
+    + '00989B 12.4、00981B 11.8。<br>'
+    + '<b>白話意義</b>：條子越長，今天 HYG 往哪邊走越會改變你該掘幾檔。'
+    + '條子短的那幾檔，今天 HYG 怎麼走都差不多，照平常掘就行。<br>'
+    + '<b>機制</b>：HYG 是美國非投等債 ETF，跟這幾檔持有的是同一類信用資產。'
+    + '隔夜 HYG 下跌代表信用價差走闊，隔天開盤賣壓較大，日內最低更容易往下觸及掛價，'
+    + '所以買進成交率上升；賣出那一側反過來。'
+    + '敏感度大小取決於該檔的持股跟美國非投等債重疊得多深，以及它自己的流動性。<br>'
+    + '<b>行動含意</b>：今天該先細看哪幾檔。條子長的，今天 HYG 的方向值得拿來調掛價；'
+    + '條子短的不必為了 HYG 改計畫。<br>'
+    + '<b>不能告訴你什麼</b>：實測下來沒有一檔是不敏感的，最低也有 11.8 個百分點，'
+    + '所以這條線讀的是<b>相對強弱</b>，不是有沒有。'
+    + '它也不說今天該不該買：那要配上殖利率與成本，這一頁不回答。'
+    + '方向目前五檔一致（跌有利買、漲有利賣），哪天出現反向的條子會自己翻過來，'
+    + '但圖上只有長度，方向要看數字的正負號。</dd>'
     + '<dt>近 30 日那個暗色外框</dt><dd>同一個掛價在最近 30 個交易日的實際成交率，'
     + '從底線框到它自己的高度，柱子從框裡穿出來，誰高誰低不用對高度就看得出來。'
     + '框橫跨「一組」柱子而不是單一一根：它不拆 HYG 方向，一組只有一個數字。'
