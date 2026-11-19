@@ -2633,8 +2633,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 /* 前收那一欄放買賣兩根半寬的柱，底色標出它是分界 */
 .ovb-mid { background: color-mix(in srgb, var(--bg3) 70%, transparent); border-radius: 6px; }
 /* 柱子區。上面多留 18px 給壓在柱頭的小數字。 */
-.ovb-plot { position: relative; height: 122px; display: flex; align-items: flex-end;
-  justify-content: center; gap: 14%; padding: 0 10px;
+.ovb-plot { position: relative; height: 126px; display: flex; align-items: flex-end;
+  justify-content: center; gap: 14%; padding: 0 12px;
   border-bottom: 1px solid var(--border); }
 .ovb-mid .ovb-plot { gap: 6%; }
 /* 一組＝跌、漲兩根並排。前收那一欄有買、賣兩組。 */
@@ -2650,22 +2650,31 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-fill.ovb-dim.ovb-sell { background: color-mix(in srgb, var(--accent3) 50%, #0b1119); }
 /* 另一種情境的數字，貼在它自己那根柱子的頭上，靠左。
    不印百分號：前收那一組只有 48px 寬，兩個帶百分號的標籤加起來塞不下。 */
-.ovb-top { position: absolute; left: 0; bottom: 100%; margin-bottom: 3px;
+/* 貼外緘：一組只有 36px，兩個 23px 的標籤要各站一邊才讓得開。
+   外框左右各比柱子寬 9px，兩個標籤一起用滿那 54px，留 8px 空隙。 */
+.ovb-top { position: absolute; bottom: 100%; margin-bottom: 3px;
   font-size: 10.5px; line-height: 1.25; color: var(--text2); white-space: nowrap;
   font-variant-numeric: tabular-nums; z-index: 3;
   background: var(--bg2); padding: 0 1px; border-radius: 3px; }
+.ovb-top-l { left: -6px; }
+.ovb-top-r { right: -6px; }
 .ovb-mid .ovb-top { background: #1a2430; }
 /* 近 30 日的外框。左右各比柱子寬 7px，柱子跟框一樣高時才分得出來。
    暗色：它是參考值，柱子的金藍才是主角。 */
-.ovb-r30b { position: absolute; left: -7px; right: -7px; bottom: 0;
+.ovb-r30b { position: absolute; left: -9px; right: -9px; bottom: 0;
   border: 1px solid var(--text3); border-top-width: 2px;
   border-radius: 3px 3px 0 0; z-index: 2; pointer-events: none; }
-.ovb-r30lab { position: absolute; right: 1px; top: 1px; font-size: 10.5px; line-height: 1.25;
+.ovb-r30lab { position: absolute; top: 1px; font-size: 10.5px; line-height: 1.25;
   color: var(--text3); background: var(--bg2); padding: 0 1px; border-radius: 3px;
   white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* 柱頭數字站哪一邊，外框數字就站另一邊 */
+.ovb-r30lab.ovb-right { right: 1px; }
+.ovb-r30lab.ovb-left { left: 1px; }
 .ovb-mid .ovb-r30lab { background: #1a2430; }
 /* 框太矮塞不下數字時改放框的正上方 */
-.ovb-r30lab.ovb-up { top: auto; bottom: 100%; margin-bottom: 2px; right: 0; }
+.ovb-r30lab.ovb-up { top: auto; bottom: 100%; margin-bottom: 2px; }
+/* HYG 平盤那天兩根都有柱頭數字，沒有空邊可站，往上讓一行 */
+.ovb-r30lab.ovb-lift { top: auto; bottom: 100%; margin-bottom: 17px; right: 1px; }
 .ovb-mlb { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center;
   font-size: 11px; color: var(--text3); z-index: 3; }
 .ovb-rate { font-size: 15.5px; font-weight: 700; margin-top: 6px;

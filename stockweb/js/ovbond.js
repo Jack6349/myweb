@@ -101,6 +101,22 @@ function _ovbTop(main, pick, c) {
   return Math.max(a, b);
 }
 
+// 外框數字擺哪裡。
+//
+// 一組柱子只有 36px 寬、兩個標籤各 23px，並排一定疊，所以不能兩個都靠同一邊。
+// 規則很簡單：柱頭那個數字站哪一邊，外框數字就站另一邊。
+// 柱頭數字永遠貼著「不是今天那一根」的左緣：今天是漲就標左邊的跌、今天是跌就標右邊的漲。
+// 外框比柱子左右各寬 7px，所以兩邊各 23px 的標籤剛好讓得開。
+//
+// HYG 平盤那天兩根都有柱頭數字，沒有空邊可站，只好往上讓一行。
+// 框太矮（不到 22px）塞不下數字，一律改放框的正上方。
+function _ovbLabPos(hp, dir) {
+  var up = (hp < 22) ? ' ovb-up' : '';
+  if (dir === 0) return up + ' ovb-right';   // 平盤那天沒有柱頭數字，不用讓
+  // 今天是漲 → 柱頭數字在左邊那根 → 外框數字靠右；今天是跌則相反
+  return up + (dir > 0 ? ' ovb-right' : ' ovb-left');
+}
+
 // ── 前收，以及現價漲跌的基準 ──
 //
 // 兩者不是同一個數字，這是 2026-11-19 實測出來的。
@@ -260,13 +276,19 @@ function _ovbCard(code) {
   // 今天那一邊實心滿色、數字印在下方那一行；另一邊同色系的深色、數字壓在它自己柱頭上。
   // 不用紅綠分跌漲：紅綠在這一頁是價格漲跌，拿來標 HYG 方向會打架。
   // HYG 平盤或取不到時兩根都不加亮，下方那一行是用全部日子算的。
-  var bar1 = function (side, v, isToday, lab) {
+  // flat＝HYG 平盤或取不到。兩根都不是「今天」，所以都壓暗、都不加柱頭數字
+  // （一組只有 36px 寬，兩個數字一定疊），數值看提示，下方那一行是用全部日子算的。
+  var bar1 = function (side, v, isToday, flat, isLeft, lab) {
     var hv = (v == null) ? 0 : Math.max(1, v / 100 * OVB_H);
+    // 數字要包在柱子裡面。放在外面的話它會定位到整個柱子區的頂端，
+    // 變成一排高度一致的數字，跟它要標的那根柱完全脫鉤。
     return '<div class="ovb-fill ovb-' + side + (isToday ? '' : ' ovb-dim')
       + '" style="height:' + hv.toFixed(1) + 'px"'
       + ' title="' + lab + (side === 'sell' ? '賣出' : '買進') + '成交率 '
-      + (v == null ? '樣本不足' : v.toFixed(0) + '%') + '"></div>'
-      + (isToday || v == null ? '' : '<span class="ovb-top">' + v.toFixed(0) + '%</span>');
+      + (v == null ? '樣本不足' : v.toFixed(0) + '%') + '">'
+      + (isToday || flat || v == null ? ''
+          : '<span class="ovb-top ovb-top-' + (isLeft ? 'l' : 'r') + '">' + v.toFixed(0) + '%</span>')
+      + '</div>';
   };
   // 近 30 日：從底線框到它自己的高度，橫跨一組柱子。
   // 它不分跌漲，一組只有一個數字，所以不能畫在任何一根柱子上。
@@ -279,7 +301,7 @@ function _ovbCard(code) {
       + (vToday == null ? '' : '，與今天這一邊差 ' + (v30 - vToday > 0 ? '＋' : (v30 - vToday < 0 ? '−' : '±'))
          + Math.abs(v30 - vToday).toFixed(0) + ' 個百分點')
       + '。30 天的標準誤約 ±9 個百分點，不要拿它取代主數字。">'
-      + '<span class="ovb-r30lab' + (hp < 22 ? ' ovb-up' : '') + '">' + v30.toFixed(0) + '%</span></div>';
+      + '<span class="ovb-r30lab' + _ovbLabPos(hp, dir) + '">' + v30.toFixed(0) + '%</span></div>';
   };
 
   var h = head + '<div class="ovb-chart">';
@@ -292,9 +314,9 @@ function _ovbCard(code) {
     bars.forEach(function (b) {
       var vDn = pick(dn, b.s, c.k), vUp = pick(up, b.s, c.k), v30 = pick(r30, b.s, c.k);
       var sfx = '（' + base.n + ' 個日子）';
-      h += '<div class="ovb-grp">'
-        + bar1(b.s, vDn, dir < 0, _bsPx(px) + '　HYG 下跌的日子：')
-        + bar1(b.s, vUp, dir > 0, _bsPx(px) + '　HYG 上漲的日子：')
+        h += '<div class="ovb-grp">'
+        + bar1(b.s, vDn, dir < 0, dir === 0, true, _bsPx(px) + '　HYG 下跌的日子：')
+        + bar1(b.s, vUp, dir > 0, dir === 0, false, _bsPx(px) + '　HYG 上漲的日子：')
         + frame1(v30, pick(main, b.s, c.k))
         + (b.lb ? '<span class="ovb-mlb">' + b.lb + '</span>' : '')
         + '</div>';
@@ -353,7 +375,8 @@ function ovcBondHtml() {
   h += '<div class="rb-sox-hd on">隔夜 HYG <b style="color:' + _rbCol(L ? L.r : null) + '">'
     + (L ? ((L.r > 0 ? '+' : '−') + Math.abs(L.r).toFixed(2) + '%') : '—') + '</b>'
     + '（' + (L ? L.d : '—') + '）　'
-    + (dir === 0 ? '今天 HYG 平盤或取不到，兩根柱都不加亮，下方那一行是用全部日子算的。'
+    + (dir === 0 ? '今天 HYG 平盤或取不到，沒有「今天那一邊」，兩根柱都壓暗且不標數字（滑過可看），'
+        + '下方那一行是用全部日子算的。左邊仍然是跌、右邊是漲。'
         : '每一欄兩根柱：左邊是 HYG 下跌的日子、右邊是上漲的。'
           + '今天是' + (dir < 0 ? '下跌' : '上漲') + '，所以'
           + (dir < 0 ? '左' : '右') + '那根滿色、數字印在下方；'
