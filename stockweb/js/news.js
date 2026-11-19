@@ -1270,6 +1270,49 @@ function _macroAtHtml(ms, lab) {
 // 「今天相對昨天」，兩者問的不是同一件事，所以同一格的線色與百分比可能相反。
 // 畫法與即時持股的分時小圖同一套：基準線以上紅、以下綠，跨線處在交點切開。
 var MSPK_W = 100, MSPK_H = 26;
+
+// ── 縱軸的刻度階梯 ──
+//
+// 原本縱軸是「取這一檔自己的最高最低再加 8% 留白」，所以不管實際幅度多大，
+// 線一律畫滿整個框。2026-11-20 實測同一張抽屜的 25 日幅度：
+// VIX 62.74%、費半 23.62%、那斯達克 9.03%、美 10 年 6.17%、標普 5.88%、
+// 美元指數 2.30%、台幣 2.30%、HYG 1.26%。八格畫出來一樣高，
+// 等於 HYG 被放大了 50 倍，0.N% 的起伏看起來像崩盤。
+//
+// 改成把縱軸的全高對齊到下面這組階梯，取裝得下實際幅度的最小一級。
+// 套進那天的資料：HYG 落在 2%、台幣與美元指數 5%、標普與美 10 年 10%、
+// 那斯達克 10%、費半 50%、VIX 100%，線高與真實幅度的比例從 50 倍收到 2.5 倍以內。
+//
+// 階梯本身是 1-2-5 的座標軸通用慣例，不是挑出來的門檻；
+// 取自資料的是每一檔落在哪一級。往下到 0.1% 是為了當盤分時，
+// 盤中幅度本來就比日線小一個量級。
+var MSPK_STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+function _mspkStep(rangePct) {
+  for (var i = 0; i < MSPK_STEPS.length; i++) {
+    if (rangePct <= MSPK_STEPS[i]) return MSPK_STEPS[i];
+  }
+  return MSPK_STEPS[MSPK_STEPS.length - 1];
+}
+// 把資料的最高最低換成「這一級刻度」的上下緣。
+// 中心取資料自己的中點，不取基準線：階梯一定裝得下實際幅度，
+// 所以資料與基準線都必定落在框內；取基準線當中心的話，走勢偏一邊的那幾檔會出框。
+function _mspkRange(hi, lo, ref) {
+  if (!(Math.abs(ref) > 0)) {
+    var pd = (hi - lo) * 0.08 || 1;
+    return { hi: hi + pd, lo: lo - pd, step: null };
+  }
+  var rp = (hi - lo) / Math.abs(ref) * 100;
+  var st = _mspkStep(rp);
+  var span = Math.abs(ref) * st / 100;
+  if (span < hi - lo) span = (hi - lo) * 1.16;       // 階梯爆表時的退路
+  var mid = (hi + lo) / 2;
+  return { hi: mid + span / 2, lo: mid - span / 2, step: st };
+}
+// 刻度標在圖上。抽屜裡的小圖有 76px 高放得下，抽屜外只有 26px，用 CSS 收起來。
+function _mspkScaleHtml(st) {
+  if (st == null) return '';
+  return '<span class="mspk-sc">刻度 ' + (st < 1 ? st.toFixed(1) : st) + '%</span>';
+}
 function _macroSparkHtml(m) {
   var b = m.bars;
   if (!b || b.length < 3) return '';
@@ -1285,8 +1328,8 @@ function _macroSparkHtml(m) {
   }
   var n = cs.length, ref = cs[0];
   var hi = Math.max.apply(null, cs), lo = Math.min.apply(null, cs);
-  var pad = (hi - lo) * 0.08 || Math.abs(ref) * 0.01 || 1;
-  hi += pad; lo -= pad;
+  var rg = _mspkRange(hi, lo, ref);
+  hi = rg.hi; lo = rg.lo;
   var x = function (k) { return k / (n - 1) * MSPK_W; };
   var y = function (p) { return (hi - p) * MSPK_H / (hi - lo); };
   var yRef = y(ref), upLn = '', dnLn = '', upFl = '', dnFl = '';
@@ -1305,6 +1348,10 @@ function _macroSparkHtml(m) {
   var last = cs[n - 1];
   var pct = ref ? (last - ref) / ref * 100 : null;
   var tip = '近 ' + n + ' 個交易日收盤走勢　基準線＝區間起點 ' + _fmtNum(ref, m.fmt) +
+    (rg.step == null ? '' : '　縱軸整個高度＝' + (rg.step < 1 ? rg.step.toFixed(1) : rg.step)
+      + '%（這一段實際走了 ' + ((Math.max.apply(null, cs) - Math.min.apply(null, cs))
+      / Math.abs(ref) * 100).toFixed(2) + '%）'
+      + '　刻度對齊到 1-2-5 階梯，所以各格的線高可以互相比') +
     (pct == null ? '' : '　至今 ' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%') +
     '　（這一格比的是一個月前，與右邊的當日漲跌不同基準；旁邊其他格是當盤分時）' + (m.note || '');
   // hover 用的點位。寫在 data 屬性上，滑鼠移上來直接讀，不必每次重繪都重算。
@@ -1319,7 +1366,7 @@ function _macroSparkHtml(m) {
       (dp == null ? '' : (dp > 0 ? '+' : '') + dp.toFixed(2)));
   }
   return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '"' +
-    ' data-pts="' + pts.join(';') + '">' +
+    ' data-pts="' + pts.join(';') + '">' + _mspkScaleHtml(rg.step) +
     '<svg viewBox="0 0 ' + MSPK_W + ' ' + MSPK_H + '" preserveAspectRatio="none">' +
     (dnFl ? '<path class="ck-fill dn" d="' + dnFl + '"/>' : '') +
     (upFl ? '<path class="ck-fill up" d="' + upFl + '"/>' : '') +
@@ -1507,8 +1554,8 @@ function _intraSparkHtml(o) {
   // 基準線一定要在圖內，否則「在昨收之上或之下」看不出來
   if (ref > hi) hi = ref;
   if (ref < lo) lo = ref;
-  var pad = (hi - lo) * 0.08 || Math.abs(ref) * 0.001 || 1;
-  hi += pad; lo -= pad;
+  var rg = _mspkRange(hi, lo, ref);
+  hi = rg.hi; lo = rg.lo;
   // 橫軸用「整盤有多長」當分母，不是「拿到幾個點」。
   //
   // 舊寫法 x = k/(n-1)，最後一點永遠貼右緣——盤中看起來跟收盤後一模一樣，
@@ -1558,10 +1605,12 @@ function _intraSparkHtml(o) {
   }
   var tip = o.note + '　基準線＝參考價 ' + _fmtNum(ref, fmt) +
     '　（基準線＝這一盤的參考價，與右邊那個百分比同一個基準）' +
+    (rg.step == null ? '' : '　縱軸整個高度＝' + (rg.step < 1 ? rg.step.toFixed(1) : rg.step)
+      + '%，刻度對齊到 1-2-5 階梯，所以各格的線高可以互相比') +
     (o.span && o.span.from ? '　橫軸＝' + o.span.from + '～' + o.span.to
       + '，右側留白是還沒走完的那一段' : '');
   return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '"' +
-    ' data-pts="' + pts.join(';') + '">' +
+    ' data-pts="' + pts.join(';') + '">' + _mspkScaleHtml(rg.step) +
     '<svg viewBox="0 0 ' + MSPK_W + ' ' + MSPK_H + '" preserveAspectRatio="none">' +
     (dnFl ? '<path class="ck-fill dn" d="' + dnFl + '"/>' : '') +
     (upFl ? '<path class="ck-fill up" d="' + upFl + '"/>' : '') +
