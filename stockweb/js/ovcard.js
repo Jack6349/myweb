@@ -61,146 +61,64 @@ function _ovcLive(code, t) {
   return lv;
 }
 
-// 軸寬由當天的資料決定
-// 這一框自己用到的最大偏離（百分點）
-function _ovcSpan(r) {
-  var m = 0;
-  [r.loPx, r.hiPx, r.lLoPx, r.lHiPx, r.lPx, r.cPx, r.oPx, r.live, r.liveLo].forEach(function (v) {
-    if (v > 0 && r.base > 0) m = Math.max(m, Math.abs((v / r.base - 1) * 100));
-  });
-  if (r.act) {
-    [r.act.cPct, r.act.lPct].forEach(function (v) { if (v != null) m = Math.max(m, Math.abs(v)); });
-  }
-  return m;
+// ── 橫軸：寬度共用，中心各自算 ──
+//
+// 舊版是固定的 ±HI%，前收永遠釘在正中央。問題是前收離當天的價很遠的時候，
+// 右半邊整片空白，真正要看的那一段被擠到剩一成寬。
+// 2026-11-19 實測 00927：掛買區間只佔整條軸的 6.8%、收盤區間 6.1%，
+// 前收右邊 10 個百分點全空。
+//
+// 改成「寬度全頁共用、中心各框自己算」：寬度一樣所以長度仍然可以跨框比，
+// 中心跟著這一框自己那群價跑，空白就沒了。前收不再進圖，改放框頭。
+//
+// 要罩住的東西：兩條區間各往外推半條區間寬（曲線的尾巴在那裡），
+// 加上現價、今低、估收、掛買參考。
+function _ovcWin(r) {
+  var p = function (v) { return (v > 0 && r.base > 0) ? (v / r.base - 1) * 100 : null; };
+  var wL = (r.lHiPx > 0 && r.lLoPx > 0) ? r.lHiPx - r.lLoPx : 0;
+  var wC = (r.hiPx > 0 && r.loPx > 0) ? r.hiPx - r.loPx : 0;
+  var pad = Math.max(wL, wC) * 0.55;
+  var a = [];
+  var add = function (v) { var q = p(v); if (q != null) a.push(q); };
+  if (r.lLoPx > 0) { add(r.lLoPx - pad); add(r.lHiPx + pad); }
+  if (r.loPx > 0) { add(r.loPx - pad); add(r.hiPx + pad); }
+  add(r.lPx); add(r.cPx); add(r.live); add(r.liveLo);
+  if (r.act) { if (r.act.cPct != null) a.push(r.act.cPct); if (r.act.lPct != null) a.push(r.act.lPct); }
+  if (!a.length) return { mn: -1, mx: 1 };
+  return { mn: Math.min.apply(null, a), mx: Math.max.apply(null, a) };
 }
+function _ovcSpan(r) { var w = _ovcWin(r); return w.mx - w.mn; }
 
 // ── 軸寬取第 80 百分位，不取最大值 ──
 //
 // 取最大值的話，只要清單裡有一檔樣本少、區間特別寬的，整頁每一框都被它壓扁。
-// 2026-11-18 實測：軸跑到 ±11.5%，而當天前四檔最寬的也只到 −5.53%，
-// 於是 00964 那條 3.0 個百分點的收盤區間只佔整條軸的 13%。
-//
 // 代價講清楚：超出刻度的那幾框，長度不再能跟其他框直接比，要看數字。
 // 它們的共同特徵就是樣本不足、殘差大，本來就不該拿長度去跟別人比。
 // 超出的框會在框頭標出來，不是悄悄裁掉。
 var OVC_AXIS_P = 0.80;
-// 掛得到過半的門檻。50% 的意思是「跌到的日子比沒跌到的多」，
+// 成交機率過半的門檻。50% 的意思是「跌到的日子比沒跌到的多」，
 // 不是分位數算出來的，是「多數」這個概念本身的分界。與夜推債券同一條線。
 var OVC_FILL_HI = 50;
+// 圖高。128px 是量出來的：再矮的話節點標籤與標記標籤會貼在一起。
+var OVC_PH = 128;
 function _ovcAxis(rows) {
   var v = rows.map(_ovcSpan).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
-  if (!v.length) return 2;
-  // 最近位次法。只有一兩框時 p80 本來就等於最大值，不另外處理
+  if (!v.length) return 3;
   var i = Math.min(v.length - 1, Math.max(0, Math.ceil(OVC_AXIS_P * v.length) - 1));
-  return Math.max(2, Math.ceil(v[i] * 1.1 * 2) / 2);
+  return Math.max(3, Math.ceil(v[i] * 1.06 * 2) / 2);
+}
+
+// 價格 → 機率。分布是回測殘差標準化之後的樣子，由 overnight.js 帶過來。
+function _ovcCdf(zq, base, mid, sd) {
+  if (!zq || !(base > 0) || mid == null || !(sd > 0)) return null;
+  return function (px) {
+    return ovCdf(zq, ((px / base - 1) * 100 - mid) / sd);
+  };
 }
 
 function _ovcPctTxt(v, dec) {
   if (v == null) return '—';
   return (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(dec == null ? 2 : dec) + '%';
-}
-
-// 排位。arr 必須已經按重要性由高到低排好，重要的先挑靠橫條的那一行。
-//
-// 不能改用「由左到右」排：估收與現價盤中常常只差零點幾分，由左到右會讓估收先佔住
-// 第二行，把現價擠回第一行去撞掛買。2026-11-17 實測六框有三框這樣疊，最多疊 19.5px。
-// 按重要性排就不會：掛買與現價先各拿一行，擠不下的是估收。
-//
-// 行數上限等於這一側的標籤數（下方最多四個：掛買、現價、今低、估收），
-// 所以保證排得下、不會疊。只有真的擠在一起的那幾框會變高，其餘不受影響。
-// 2026-11-18 實測：今低加進來之後，四個落在 0.8 個百分點內時三行會不夠，
-// 第四個掉回第一行疊住掛買。
-function _ovcStagger(arr) {
-  var put = [[], [], [], []], rows = 1;
-  var free = function (r, x) {
-    return put[r].every(function (q) { return Math.abs(x - q) >= OVC_GAP; });
-  };
-  arr.forEach(function (m) {
-    // 按重要性挑，所以 x 不是由小到大進來的，要跟那一行已經放的每一個都比距離，
-    // 只跟最後一個比會漏掉「這一個在已放的那個左邊」的情形
-    for (var r = 0; r < 4; r++) {
-      if (free(r, m.x)) { m.row = r; put[r].push(m.x); rows = Math.max(rows, r + 1); return; }
-    }
-    m.row = 0; put[0].push(m.x);
-  });
-  return rows;
-}
-// 容器高度＝最後一行的底部。行的位移是 5／46／87，標籤本身高 40。
-// 這三個數字要一起改，只改其中一個會讓標籤壓到橫條或框底的那條線。
-function _ovcLabsH(rows) { return [46, 88, 129, 170][Math.min(rows, 4) - 1]; }
-
-// ── 掛買區間自己一排 ──
-//
-// 原本它是橫條裡的一條帶子，疊在收盤區間下面，而且兩端沒有數字。
-// 2026-11-19 實例：框頭寫著掛買 27.46～27.85，圖上只看得到一條金色的條，
-// 下緣 27.46 從頭到尾沒出現過。收盤區間有「下限」「上限」兩個標籤，它一個都沒有。
-//
-// 拉出來自己一排之後，它跟收盤區間不再搶同一條橫條，兩端的價也印得下。
-// 一排 18px，比塞進錯開的標籤區便宜（那要多一整行 41px）。
-//
-// 兩個數字各自貼著帶子的一端。帶子太窄擠不下兩個的時候，
-// 併成一個「下緣～上緣」置中，不讓它們疊在一起。
-function _ovcBandRow(r, X, P, fillHi) {
-  if (!(r.lLoPx > 0) || !(r.lHiPx > 0)) return '';
-  var a = X(P(r.lLoPx)), b = X(P(r.lHiPx)), w = b - a;
-  var cl = (P(r.lLoPx) < 0 && a <= 0 ? ' ovc-clipl' : '') + (b >= 100 ? ' ovc-clipr' : '');
-  var tip = '掛買區間 ' + _ovPx(r.lLoPx) + ' 到 ' + _ovPx(r.lHiPx)
-    + '。掛限價買進看的是這一段，不是上面那條收盤區間。'
-    + '濃淡跟「掛得到」同一條線：過半轉實、沒過半壓暗。';
-  // 兩個價各約 44px，兩個加起來要 12% 的軸寬。帶子比這窄就併成一個。
-  var wide = w >= 13;
-  // 貼邊的要夾回來，不然會跑出那一排。掛買區間永遠在前收下方，
-  // 所以危險的那一邊幾乎都是左端。
-  var pin = function (x, kind) {
-    if (kind === 'c') return (x < 8) ? ' ovc-bpl" style="left:0%' : ((x > 92) ? ' ovc-bpr" style="left:100%' : ' ovc-bc" style="left:' + x.toFixed(2) + '%');
-    if (kind === 'l') return (x > 88) ? ' ovc-bpr" style="left:100%' : ' ovc-bl" style="left:' + x.toFixed(2) + '%';
-    return (x < 12) ? ' ovc-bpl" style="left:0%' : ' ovc-br" style="left:' + x.toFixed(2) + '%';
-  };
-  var lab = wide
-    ? '<span class="ovc-bnum' + pin(a, 'l') + '">' + _ovPx(r.lLoPx) + '</span>'
-      + '<span class="ovc-bnum' + pin(b, 'r') + '">' + _ovPx(r.lHiPx) + '</span>'
-    : '<span class="ovc-bnum' + pin((a + b) / 2, 'c') + '">'
-      + _ovPx(r.lLoPx) + '～' + _ovPx(r.lHiPx) + '</span>';
-  // 不印「掛買區間」四個字：帶子貼左邊的時候數字會踩到它，
-  // 而圖例、提示、與上方「掛買」標記同一個金色已經說得清楚。
-  return '<div class="ovc-brow" title="' + tip.replace(/"/g, '&quot;') + '">'
-    + '<div class="ovc-bband' + (fillHi ? ' ovc-bhi' : '') + cl
-    + '" style="left:' + a.toFixed(2) + '%;width:' + w.toFixed(2) + '%"></div>'
-    + lab + '</div>';
-}
-
-// 貼著橫條底下的那一條。單行、不參與錯開，所以不會讓框變高。
-function _ovcEstHtml(m, X) {
-  if (!m) return '';
-  var x = X(m.p);
-  var pin = x < 10 ? ' ovc-pinl' : (x > 90 ? ' ovc-pinr' : '');
-  return '<div class="ovc-estrow">'
-    + '<div class="ovc-stem ovc-eststem" style="left:' + x.toFixed(2) + '%"></div>'
-    + '<div class="ovc-estlab' + pin + '" style="left:' + x.toFixed(2) + '%"'
-    + ' title="' + String(m.tip).replace(/"/g, '&quot;') + '">'
-    + (m.dot || '')
-    + '<span class="ovc-k">' + m.k + '</span>'
-    + '<span class="ovc-v" style="color:' + m.col + '">' + _ovPx(m.v) + '</span>'
-    + '<span class="ovc-p" style="color:' + _rbCol(m.p) + '">' + _ovcPctTxt(m.p) + '</span>'
-    + '</div></div>';
-}
-
-function _ovcLabels(arr, side, rows, X) {
-  var h = '<div class="ovc-labs ovc-' + side + '" style="height:' + _ovcLabsH(rows) + 'px">';
-  arr.forEach(function (m) {
-    // 引線永遠對準標記本身；方塊太靠邊會被推回框內，所以兩者分開畫
-    var pin = m.x < 8 ? ' ovc-pinl' : (m.x > 92 ? ' ovc-pinr' : '');
-    var tip = m.tip ? ' title="' + String(m.tip).replace(/"/g, '&quot;') + '"' : '';
-    h += '<div class="ovc-stem ovc-r' + m.row + '" style="left:' + m.x.toFixed(2) + '%"></div>'
-      + '<div class="ovc-lab ovc-r' + m.row + ' ovc-' + m.cl + pin + '" style="left:' + m.x.toFixed(2) + '%"' + tip + '>'
-      + '<span class="ovc-t"><span class="ovc-k">' + m.k + '</span>'
-      + '<span class="ovc-p" style="color:' + (m.base ? 'var(--text3)' : _rbCol(m.p)) + '">'
-      + (m.base ? '基準' : _ovcPctTxt(m.p)) + '</span></span>'
-      + '<span class="ovc-v" style="color:' + m.col + '">'
-      + (m.dot || '') + _ovPx(m.v) + '</span>'
-      + '</div>';
-  });
-  return h + '</div>';
 }
 
 // 字的亮度就是可信度，與表格那一頁同一組門檻
@@ -209,164 +127,233 @@ function _ovcTier(r2) {
   return r2 >= 0.5 ? 'var(--text)' : (r2 >= 0.25 ? 'var(--text2)' : 'var(--text3)');
 }
 
-// ── 今天碰到哪裡 ──
+// ══════════════════════════════════════════════════════════════
+// 一張卡片：機率 × 價格
+// ══════════════════════════════════════════════════════════════
 //
-// 推估價講的是「今天可能走到哪」，圓點講的是「今天實際已經走到哪」。
-// 兩個合起來才知道現在站在哪一段：推估的下限已經碰到，代表今天走得比推的深；
-// 掛買還沒碰到，代表掛在那裡的單今天還沒有機會成交。
+// 縱軸是機率、橫軸是價位。兩條曲線：
+//   金線 掛買成交機率 ＝ 限價委買掛在某一價位，當日最低價觸及該價位的機率。
+//   青虛線 收盤跌破機率 ＝ 當日收盤價低於該價位的機率。
 //
-// 判定就是「今天的價格區間有沒有涵蓋這個價」：日內最低 <= 它 <= 日內最高。
-// 這一條對前收上下兩側都成立，不必分買賣兩套規則。
-// 開完盤的那一列（r.act）不畫：那一天的高低已成定論，表上另有實低、實收兩個標籤。
-function _ovcHit(r, v) {
-  if (r.act) return null;
-  if (!(v > 0) || !(r.liveLo > 0) || !(r.liveHi > 0)) return null;
-  var c = function (x) { return Math.round(x * 100); };
-  return c(r.liveLo) <= c(v) && c(v) <= c(r.liveHi);
-}
-function _ovcDot(hit, k, r) {
-  if (hit == null) return '';
-  var rng = (r.liveLo > 0 && r.liveHi > 0)
-    ? '（今天 ' + _ovPx(r.liveLo) + ' 到 ' + _ovPx(r.liveHi) + '）' : '';
-  return '<span class="ovc-dot' + (hit ? ' ovc-dot-on' : '') + '" title="'
-    + k + '：今天' + (hit ? '已經走到過這個價' : '還沒走到這個價') + rng + '"></span>';
-}
-
-function _ovcCard(r, HI, ticks) {
-  var LO = -HI;
-  var X = function (p) { return Math.max(0, Math.min(100, (p - LO) / (HI - LO) * 100)); };
-  var P = function (v) { return (v > 0 && r.base > 0) ? (v / r.base - 1) * 100 : null; };
+// 為什麼要二維。舊版只有一條價格軸，每加一樣東西就得再疊一排標籤，
+// 距離越拉越遠；而「掛得到幾成」只能寫成框頭的一個字，圖上沒有對應的長度。
+// 換成二維之後，機率有自己的軸可以讀，今天走到哪的那幾個點也回到圖裡，
+// 不必再另闢一排，卡片反而變矮。
+//
+// 區間不必另外畫：掛買區間的上下緣就是金線上的 16% 與 84% 兩點，
+// 收盤區間同理在青線上。節點直接從曲線取高度，所以點永遠落在線上，
+// 不會出現「區間說在裡面、曲線說機率很低」這種自相矛盾。
+function _ovcCard(r, SPAN) {
+  var Pc = function (v) { return (v > 0 && r.base > 0) ? (v / r.base - 1) * 100 : null; };
+  var win = _ovcWin(r);
+  var need = win.mx - win.mn;
+  var over = need > SPAN + 1e-9;
+  var LO = (win.mn + win.mx) / 2 - SPAN / 2;
+  var X = function (p) { return Math.max(0, Math.min(100, (p - LO) / SPAN * 100)); };
+  var XV = function (v) { var p = Pc(v); return p == null ? null : X(p); };
   var tierCol = _ovcTier(r.r2);
-  // 掛買的亮度接「掛得到的比例」，不接說明力：這一格是要抄進委託單的價，
-  // 要先知道的是掛不掛得到，說明力在框底自己有一格。與夜推債券同一條線、同一個門檻。
   var fillHi = (r.lFill != null && r.lFill > OVC_FILL_HI);
   var fillCol = fillHi ? 'var(--text)' : 'var(--text2)';
+  var fLow = _ovcCdf(r.zl, r.base, r.lMidPct, r.sdl);
+  var fCls = _ovcCdf(r.zc, r.base, r.cMidPct, r.sdc);
+  var tag = (typeof _ovPxTagHtml === 'function')
+    ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '';
+  // 推的那一盤還沒開始時圖上一個標記都沒有，圖例就不要列它
+  var hasMk = r.act ? (r.act.c > 0 || r.act.l > 0) : (r.live > 0 || r.liveLo > 0);
 
-  // ── 上方：今天不會再變的框架 ──
-  var UP = [];
-  if (r.loPx > 0) UP.push({ pri: 0, k: '下限', v: r.loPx, p: P(r.loPx), cl: 'edge', col: _rbCol(P(r.loPx)),
-    tip: '收盤區間的下緣。半衰加權殘差乘上實測倍率算出來的，不是猜的。' });
-  UP.push({ pri: 2, k: '前收', v: r.base, p: 0, cl: 'base', base: true, col: 'var(--text2)',
-    tip: r.basePrev + ' 的收盤。這一頁所有百分比都是對它算的。' });
-  if (r.hiPx > 0) UP.push({ pri: 1, k: '上限', v: r.hiPx, p: P(r.hiPx), cl: 'edge', col: _rbCol(P(r.hiPx)),
-    tip: '收盤區間的上緣。上下不對稱是量出來的，不是對半分。' });
-
-  // ── 下方：今天走到哪 ──
-  var DN = [], est = null;
-  if (r.lPx > 0) DN.push({ pri: 0, k: '掛買', v: r.lPx, p: P(r.lPx),
-    cl: 'key' + (fillHi ? ' ovc-fillhi' : ''), col: fillCol,
-    tip: '日內最低價的推估。掛限價買進看這一個，不是看收盤。'
-       + (r.lFill != null ? '實測 ' + Math.round(r.lFill) + '% 的日子裡，當天的實際最低有跌到當天推的這個價。'
-          : '')
-       + (r.lCover != null && r.lCoverN ? '這一檔的最低區間實測罩住了 ' + Math.round(r.lCover)
-          + '% 的日子（' + r.lCoverN + ' 天），目標 68%。' : '') });
-  if (r.act) {
-    if (r.act.l > 0) DN.push({ pri: 2, k: '實低', v: r.act.l, p: r.act.lPct, cl: 'edge', col: _rbCol(r.act.lPct),
-      tip: '那一天實際走出來的日內最低。' });
-    if (r.act.c > 0) DN.push({ pri: 1, k: '實收', v: r.act.c, p: r.act.cPct, cl: 'now', col: _rbCol(r.act.cPct),
-      tip: '那一天實際的收盤。這一列已經可以對答案了。' });
-  } else {
-    // 估收刻意不進錯開的名單。它是收盤區間的中心，不是要抄進委託單的價，
-    // 卻常常跟掛買、現價、今低擠在一個百分點之內，結果多吃掉一整行、框跟著變高。
-    // 改成貼著橫條底下的一條單行小字，獨自一條不跟別人搶位置。
-    if (r.cPx > 0) {
-      est = { k: '估收', v: r.cPx, p: P(r.cPx), col: _rbCol(P(r.cPx)),
-        tip: '收盤區間的中心。別把它當成一個會到的價。' };
-    }
-    if (r.live > 0) DN.push({ pri: 1, k: '現價', v: r.live, p: P(r.live), cl: 'now', col: 'var(--accent3)',
-      tip: '券商即時快照' + (r.liveAt ? '，' + r.liveAt : '') + '。持股逐筆更新，關注清單每 30 秒一次。' });
-    // 今天實際走到的最低。它跟掛買參考是同一件事的兩面：
-    // 掛買是「模型推今天會跌到哪」，這一個是「今天實際已經跌到哪」。
-    // 已經走過的最低是確定的事實，推估的最低不可能比它高。
-    if (r.liveLo > 0) DN.push({ pri: 2, k: '今低', v: r.liveLo, p: P(r.liveLo), cl: 'today', col: 'var(--sum)',
-      tip: '今天到現在走出來的最低價' + (r.liveLoAt ? '（' + r.liveLoAt + '）' : '')
-         + '。掛在它以上的買進價，今天都已經觸及過了。'
-         + '推估的最低不可能高於它，所以掛買參考那個數字也被它壓住。' });
-  }
-
-  // 圓點只給推估出來的價。現價與今低本身就是今天走出來的，畫了必定實心，是噪音。
-  UP.concat(DN).forEach(function (m) {
-    if (m.k === '現價' || m.k === '今低') return;
-    m.dot = _ovcDot(_ovcHit(r, m.v), m.k, r);
-  });
-  if (est) est.dot = _ovcDot(_ovcHit(r, est.v), est.k, r);
-  UP.forEach(function (m) { m.x = X(m.p); });
-  DN.forEach(function (m) { m.x = X(m.p); });
-  // 排位按重要性，畫的順序仍照價格由左到右，否則引線交錯看不出誰是誰
-  var rowsUp = _ovcStagger(UP.slice().sort(function (a2, b2) { return a2.pri - b2.pri; }));
-  var rowsDn = _ovcStagger(DN.slice().sort(function (a2, b2) { return a2.pri - b2.pri; }));
-  UP.sort(function (a2, b2) { return a2.x - b2.x; });
-  DN.sort(function (a2, b2) { return a2.x - b2.x; });
-
-  // 這一框有沒有畫到軸外。有的話長度不可信，要講出來
-  var over = _ovcSpan(r) > HI + 1e-9;
   var h = '<div class="ovc-card' + (r.cal ? ' ovc-calc' : '') + (over ? ' ovc-over' : '')
     + '"><div class="ovc-head">'
     + '<span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span>'
     + (_ovcHeld(r.code) ? ''
         : '<span class="ovc-wt" title="這一檔在關注清單裡，目前沒有持股。推估的算法與持股的那幾檔完全相同。">關注</span>')
-    + (over ? '<span class="ovc-ovb" title="這一框用到的價格超出了共用刻度的範圍（±' + HI
-        + '%），超出的那一端被切在框邊。數字本身沒有被改，但這一框的長度不能再拿去跟其他框比。'
+    + (over ? '<span class="ovc-ovb" title="這一框要用到 ' + need.toFixed(1)
+        + ' 個百分點才畫得完，超過共用的 ' + SPAN + ' 個百分點，兩端被切在框邊。'
+        + '數字本身沒有被改，但這一框的長度不能再拿去跟其他框比。'
         + '刻度取的是所有框的第 80 百分位，不取最大值：取最大值的話一檔特別寬的會把其餘每一框都壓扁。'
         + '區間特別寬通常代表這一檔樣本少、殘差大。">超出刻度</span>' : '')
     + (r.ixOn ? '<span class="ov-fx" title="這一檔的成份股有 '
         + (r.fgnW == null ? '' : r.fgnW.toFixed(0)) + '% 在海外，實測 Nasdaq 在夜盤與費半之上還能多解釋一截，'
         + '所以這一框的推估多掛了 Nasdaq。">＋N</span>' : '')
     + '</div>'
-    // 兩個區間用文字再講一次，放在上框線的右端。
-    // 圖上讀得出相對關係，讀不出精確值；要抄進委託單的是這兩組數字。
-    // 框頭右端排兩行。四組並排量過要 580px，加上代號、名稱與徽章超過框寬 798px，
-    // 「掛得到」會疊到代號上面。拆成兩行之後最寬的那一行只有 320px 上下。
-    // 分行照「講的是同一件事」分：掛買那個價與它掛得到的頻率同一行，
-    // 收盤區間與現價同一行。
+    // 要抄進委託單的數字。圖上讀得出相對關係，讀不出精確值。
+    // 兩組排同一行、各自框起來：掛買那一組是你要掛的價與它的成交機率，
+    // 另一組是這一盤的基準與你的成本。
     + '<div class="ovc-head2">'
     + '<span class="ovc-h2r">'
-    + '<span class="ovc-h2k">掛買</span><b>'
-    + (r.lLoPx > 0 ? _ovPx(r.lLoPx) + ' ～ ' + _ovPx(r.lHiPx) : '—') + '</b>'
-    + '<span class="ovc-h2k">掛得到</span><b style="color:' + fillCol + '">'
+    + '<span class="ovc-h2k" title="模型推今天的日內最低會落在哪。要抄進委託單的就是這個價。'
+    + '區間的上下緣在圖上：曲線的兩個空心點、以及下方那條金色 Bar 的兩端。">掛買參考</span><b>'
+    + (r.lPx > 0 ? _ovPx(r.lPx) : '—') + '</b>'
+    + '<span class="ovc-h2k" title="掛在掛買參考這個價的成交機率。實測 '
+    + (r.lFill == null ? '—' : Math.round(r.lFill))
+    + '% 的日子裡，當日最低確實觸及它。">成交機率</span><b style="color:' + fillCol + '">'
     + (r.lFill == null ? '—' : Math.round(r.lFill) + '%') + '</b>'
     + '</span>'
-    + '<span class="ovc-h2r">'
-    + '<span class="ovc-h2k">收盤</span><b>'
-    + (r.loPx > 0 ? _ovPx(r.loPx) + ' ～ ' + _ovPx(r.hiPx) : '—') + '</b>'
-    + ((typeof _ovPxTagHtml === 'function')
-        ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '')
-    + '</span>'
+    + (tag ? '<span class="ovc-h2r">' + tag + '</span>' : '')
     + '</div>';
 
-  h += _ovcLabels(UP, 'up', rowsUp, X);
+  if (!fLow && !fCls) {
+    return h + '<div class="ovc-nodata">樣本不足，算不出機率分布（回測至少要 20 天）。</div>'
+      + _ovcFoot(r, tierCol) + '</div>';
+  }
 
-  // ── 橫條 ──
-  h += '<div class="ovc-bar">';
-  ticks.forEach(function (t) {
-    if (Math.abs(t) > HI - 1e-9) return;        // 兩端的刻度就是框線，不重畫
-    h += '<div class="ovc-gl' + (t === 0 ? ' ovc-zero' : '') + '" style="left:' + X(t).toFixed(2) + '%"></div>';
+  // ── 圖例。排在圖的上方，不壓在格線裡 ──
+  h += '<div class="ovc-lg">'
+    + '<i><u class="ovc-u1"></u><span style="color:var(--accent2)">掛買成交機率</span></i>'
+    + (fCls ? '<i><u class="ovc-u2"></u><span style="color:var(--sum)">收盤跌破機率</span></i>' : '')
+    + (hasMk ? '<i><u class="ovc-u3"></u><span style="color:var(--accent3)">'
+        + (r.act ? '實際收盤' : '現價') + '</span></i>' : '')
+    + '</div>';
+
+  h += '<div class="ovc-ch"><div class="ovc-pa" style="height:' + OVC_PH + 'px">';
+  [0, 25, 50, 75, 100].forEach(function (g) {
+    h += '<div class="ovc-hl' + (g === 50 ? ' ovc-h50' : (g === 0 ? ' ovc-h0' : ''))
+      + '" style="bottom:' + g + '%"></div>'
+      + '<div class="ovc-yl" style="bottom:' + g + '%">' + g + '%</div>';
   });
-  // 被切到的那一端改成方角，一眼看得出它沒有畫完
-  var clip = function (a, b) {
-    return (P(a) < -HI ? ' ovc-clipl' : '') + (P(b) > HI ? ' ovc-clipr' : '');
+
+  // ── 曲線 ──
+  //
+  // 區間內外分色：區間外壓暗、線細，16% 到 84% 之間用亮色加粗。
+  // 一眼就分得出哪一段是有效區間，哪一段只是分布的尾巴。
+  var path = function (fn, x0, x1) {
+    var d = '', N = 110;
+    for (var i = 0; i <= N; i++) {
+      var xs = x0 + (x1 - x0) * i / N, p = r.base * (1 + (LO + SPAN * xs) / 100);
+      var y = 100 - Math.max(0, Math.min(100, fn(p)));
+      d += (i ? 'L' : 'M') + (xs * 1000).toFixed(1) + ',' + y.toFixed(2);
+    }
+    return d;
   };
-  if (r.loPx > 0 && r.hiPx > 0) {
-    h += '<div class="ovc-band' + clip(r.loPx, r.hiPx) + '" style="left:' + X(P(r.loPx)).toFixed(2)
-       + '%;width:' + (X(P(r.hiPx)) - X(P(r.loPx))).toFixed(2) + '%"></div>';
+  var seg = function (fn, a, b, cls) {
+    if (!(a > 0) || !(b > 0)) return '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, 0, 1) + '"/>';
+    var xa = Math.max(0, Math.min(1, X(Pc(a)) / 100)), xb = Math.max(0, Math.min(1, X(Pc(b)) / 100));
+    return '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, 0, xa) + '"/>'
+      + '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, xb, 1) + '"/>'
+      + '<path class="ovc-cv ' + cls + '" d="' + path(fn, xa, xb) + '"/>';
+  };
+  h += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none">'
+    + (fLow ? '<path class="ovc-ar" d="' + path(fLow, 0, 1) + ' L1000,100 L0,100 Z"/>' : '')
+    + (fCls ? seg(fCls, r.loPx, r.hiPx, 'ovc-cvc') : '')
+    + (fLow ? seg(fLow, r.lLoPx, r.lHiPx, 'ovc-cvl') : '')
+    + '</svg>';
+
+  // ── 標記：今天走到哪 ──
+  var M = [];
+  if (r.act) {
+    if (r.act.c > 0) M.push({ k: '實收', v: r.act.c, c: 'var(--accent3)' });
+    if (r.act.l > 0) M.push({ k: '實低', v: r.act.l, c: 'var(--sum)' });
+  } else {
+    if (r.live > 0) M.push({ k: '現價', v: r.live, c: 'var(--accent3)' });
+    if (r.liveLo > 0) M.push({ k: '今低', v: r.liveLo, c: 'var(--sum)' });
   }
-  if (!r.act && r.cPx > 0) h += '<div class="ovc-mk ovc-est" style="left:' + X(P(r.cPx)).toFixed(2) + '%"></div>';
-  if (r.act && r.act.c > 0) h += '<div class="ovc-mk ovc-est" style="left:' + X(r.act.cPct).toFixed(2) + '%"></div>';
-  if (r.lPx > 0) h += '<div class="ovc-mk ovc-buy" style="left:' + X(P(r.lPx)).toFixed(2) + '%"></div>';
-  if (!r.act && r.liveLo > 0) {
-    h += '<div class="ovc-mk ovc-low" style="left:' + X(P(r.liveLo)).toFixed(2) + '%"></div>';
+  M.sort(function (a, b) { return XV(a.v) - XV(b.v); });
+  // 兩個標記靠太近就併成一個，不讓標籤疊在一起
+  var grp = [];
+  M.forEach(function (m) {
+    var g = grp[grp.length - 1];
+    if (g && Math.abs(XV(m.v) - XV(g[0].v)) < 7) g.push(m); else grp.push([m]);
+  });
+  grp.forEach(function (g) {
+    g.x = g.reduce(function (a, m) { return a + XV(m.v); }, 0) / g.length;
+    g.f = fLow ? fLow(g[0].v) : 50;
+    // 曲線貼近頂端時標籤改掛在交點下方，否則會長到框外、撞到框頭
+    g.down = g.f > 80;
+    g.y = g.f * OVC_PH / 100 + (g.down ? -(9 + 15 * g.length) - 7 * g.length : 9 + 7 * g.length);
+  });
+  var mkX = M.map(function (m) { return XV(m.v); });
+  // 某一側幾個百分點以內站著標記就算「忙」，節點標價要閃開
+  var busy = function (x, dir) {
+    return mkX.some(function (u) { return (u - x) * dir > -1.5 && Math.abs(u - x) < 9; });
+  };
+
+  // ── 節點：區間上下緣與掛買參考，價直接標在旁邊 ──
+  //
+  // 標上下會撞到從底部拉上來的那條標記線，所以一律標左右。
+  // 左右也會撞：同高度的兩個節點（掛買下限與收盤下限都在 16% 那條高度上）
+  // 靠太近時，左邊那個往左、右邊那個往右，往兩側分開。
+  var nodes = [];
+  if (fLow) {
+    if (r.lLoPx > 0) nodes.push({ p: r.lLoPx, f: fLow(r.lLoPx), c: 'var(--accent2)' });
+    if (r.lPx > 0) nodes.push({ p: r.lPx, f: fLow(r.lPx), c: 'var(--accent2)', key: 1 });
+    if (r.lHiPx > 0) nodes.push({ p: r.lHiPx, f: fLow(r.lHiPx), c: 'var(--accent2)' });
   }
-  if (!r.act && r.live > 0) h += '<div class="ovc-mk ovc-now" style="left:' + X(P(r.live)).toFixed(2) + '%"></div>';
-  if (r.act && r.act.l > 0) h += '<div class="ovc-mk ovc-now" style="left:' + X(r.act.lPct).toFixed(2) + '%"></div>';
+  if (fCls) {
+    if (r.loPx > 0) nodes.push({ p: r.loPx, f: fCls(r.loPx), c: 'var(--sum)' });
+    if (r.hiPx > 0) nodes.push({ p: r.hiPx, f: fCls(r.hiPx), c: 'var(--sum)' });
+  }
+  nodes.forEach(function (nd) {
+    nd.x = X(Pc(nd.p));
+    nd.side = (nd.f < 50) ? -1 : 1;
+    if (busy(nd.x, nd.side) && !busy(nd.x, -nd.side)) nd.side = -nd.side;
+    nd.lift = (busy(nd.x, 1) && busy(nd.x, -1)) ? 15 : 0;
+    // 標記的價就是這個節點的價時，標記自己已經寫了，不再印第二次
+    nd.dup = M.some(function (m) { return Math.abs(m.v - nd.p) < _ovcTick(nd.p) * 0.5; });
+    // 標記那一塊字是置中的兩行，左右閃都閃不掉。撞上就不印這個節點的價：
+    // 它在下方那條 Bar 的端點還看得到，點本身的提示也寫著。
+    var ny = nd.f * OVC_PH / 100;
+    if (grp.some(function (g) { return Math.abs(g.x - nd.x) < 11 && Math.abs(g.y - ny) < 24; })) {
+      nd.dup = true;
+    }
+  });
+  nodes.slice().sort(function (a, b) { return a.f - b.f; }).forEach(function (nd, i, arr) {
+    var pv = arr[i - 1];
+    if (pv && Math.abs(nd.f - pv.f) < 11 && Math.abs(nd.x - pv.x) < 9 && nd.side === pv.side) {
+      if (nd.x >= pv.x) { pv.side = -1; nd.side = 1; } else { pv.side = 1; nd.side = -1; }
+    }
+  });
+  nodes.forEach(function (nd) {
+    h += '<div class="ovc-pt' + (nd.key ? ' ovc-ptk' : '') + '" style="left:' + nd.x.toFixed(2)
+      + '%;bottom:' + nd.f.toFixed(1) + '%;background:' + nd.c + '" title="'
+      + (nd.key ? '掛買參考 ' : '') + _ovPx(nd.p) + '，成交機率 ' + Math.round(nd.f) + '%"></div>'
+      + (nd.dup ? '' : '<div class="ovc-ptl ' + (nd.side < 0 ? 'ovc-lft' : 'ovc-rgt')
+        + '" style="left:' + nd.x.toFixed(2) + '%;bottom:calc(' + nd.f.toFixed(1) + '% + '
+        + nd.lift + 'px);color:' + nd.c + '">' + _ovPx(nd.p) + '</div>');
+  });
+
+  grp.forEach(function (g) {
+    h += '<div class="ovc-vl" style="left:' + g.x.toFixed(2) + '%;height:' + g.f.toFixed(1)
+      + '%;border-left-color:' + g[0].c + '"></div>'
+      + '<div class="ovc-vd" style="left:' + g.x.toFixed(2) + '%;bottom:' + g.f.toFixed(1)
+      + '%;background:' + g[0].c + '"></div>'
+      + '<div class="ovc-vt" style="left:' + g.x.toFixed(2) + '%;bottom:calc(' + g.f.toFixed(1) + '% '
+      + (g.down ? '- ' + (9 + 15 * g.length) + 'px' : '+ 9px') + ')">'
+      + g.map(function (m) {
+          return '<span style="color:' + m.c + '">' + m.k + ' ' + _ovPx(m.v) + '</span>';
+        }).join('<br>') + '</div>';
+  });
+
   h += '</div>';
 
-  h += _ovcBandRow(r, X, P, fillHi);
-  h += _ovcEstHtml(est, X);
-  h += _ovcLabels(DN, 'dn', rowsDn, X);
+  // ── 座標下方：一組就是「這一條區間的兩個數字 ＋ 它自己的橫 Bar」 ──
+  // 數字跟它的 Bar 貼在一起，不把四個數字混在同一排、Bar 另外擺。
+  var grpBar = function (a, b, cls, lab, tip) {
+    if (!(a > 0) || !(b > 0)) return '';
+    var g = '<div class="ovc-gp" title="' + tip.replace(/"/g, '&quot;') + '"><div class="ovc-gn">';
+    [a, b].forEach(function (v) {
+      g += '<div class="ovc-tk" style="left:' + XV(v).toFixed(2) + '%"></div>'
+        + '<span class="' + cls + '" style="left:' + XV(v).toFixed(2) + '%">' + _ovPx(v) + '</span>';
+    });
+    return g + '</div><div class="ovc-gb"><b class="' + cls + '">' + lab + '</b>'
+      + '<em class="' + cls + '" style="left:' + XV(a).toFixed(2) + '%;width:'
+      + (XV(b) - XV(a)).toFixed(2) + '%"></em></div></div>';
+  };
+  h += grpBar(r.lLoPx, r.lHiPx, 'ovc-c1', '掛買區間',
+    '掛限價買進看的是這一段。兩端就是金線上的 16% 與 84%，'
+    + '掛在下緣約一成六會成交、掛在上緣約八成四會成交。');
+  h += grpBar(r.loPx, r.hiPx, 'ovc-c2', '收盤區間',
+    '收盤大約六成八的日子會落在這一段裡。中心就是估收 '
+    + (r.cPx > 0 ? _ovPx(r.cPx) : '—') + '。');
+  h += '</div>';
 
-  // ── 次要資訊。不收合：收起來的話每看一檔要多點一下，而這幾個每次都要看 ──
+  return h + _ovcFoot(r, tierCol) + '</div>';
+}
+
+// ── 次要資訊。不收合：收起來的話每看一檔要多點一下，而這幾個每次都要看 ──
+function _ovcFoot(r, tierCol) {
   var volHot = (r.volX != null && r.volX >= 1.5);
-  h += '<div class="ovc-foot">'
+  return '<div class="ovc-foot">'
+    + '<span title="' + (r.basePrev || '') + ' 的收盤。這一框所有價格都以它為基準。">前收 <b>'
+      + (r.base > 0 ? _ovPx(r.base) : '—') + '</b></span>'
     + '<span>成本 <b>' + (r.cost > 0 ? _ovPx(r.cost) : '—') + '</b></span>'
     + '<span>折溢價 <b style="color:' + (r.prem == null ? 'var(--text3)' : _rbCol(r.prem)) + '">'
       + _ovcPctTxt(r.prem) + '</b></span>'
@@ -374,10 +361,12 @@ function _ovcCard(r, HI, ticks) {
       + (r.volX == null ? '—' : r.volX.toFixed(2) + ' 倍') + '</b></span>'
     + '<span>說明力 <b style="color:' + tierCol + '">' + (r.r2 == null ? '—' : r.r2.toFixed(2)) + '</b></span>'
     + '<span>樣本 <b>' + r.n + ' 天</b></span>'
-    + (r.act ? '<span>估收 <b>' + (r.cPx > 0 ? _ovPx(r.cPx) : '—') + '</b></span>' : '')
-    + '</div></div>';
-  return h;
+    + '<span>估收 <b>' + (r.cPx > 0 ? _ovPx(r.cPx) : '—') + '</b></span>'
+    + '</div>';
 }
+
+// 升降單位。判斷標記的價與節點的價是不是同一個價時要用。
+function _ovcTick(p) { return p < 10 ? 0.01 : (p < 50 ? 0.05 : (p < 100 ? 0.1 : 0.5)); }
 
 var OVC_SORTS = [
   { k: 'lPx', t: '掛買參考' },
@@ -385,7 +374,7 @@ var OVC_SORTS = [
   { k: 'pos', t: '現價位置' },
   { k: 'prem', t: '折溢價' },
   { k: 'volX', t: '量能' },
-  { k: 'lFill', t: '掛得到' },
+  { k: 'lFill', t: '成交機率' },
   { k: 'r2', t: '說明力' },
   { k: 'code', t: '代號' }
 ];
@@ -447,14 +436,8 @@ function ovcStockHtml() {
     return y - x;                      // 數值一律由大到小
   });
 
-  var HI = _ovcAxis(rows);
-  var STEP = HI <= 2.5 ? 0.5 : (HI <= 5 ? 1 : 2);
-  // 刻度一定要從 0 往兩邊長，不能從 −HI 一路加上來。
-  // 軸寬是由資料湊到 0.5 的整數倍，不保證是刻度間距的整數倍：
-  // 實測 HI=3.5、間距 1 時，從 −3.5 加上來的刻度是 −3.5 −2.5 … +3.5，整排沒有 0，
-  // 而 0 那條是前收的基準線，少了它整張圖就沒有對照點。
-  var ticks = [0];
-  for (var v = STEP; v <= HI + 1e-9; v += STEP) { ticks.push(+v.toFixed(2)); ticks.unshift(+(-v).toFixed(2)); }
+  // 全頁共用的橫軸寬度。寬度一樣，所以框跟框之間可以直接比長度。
+  var SPAN = _ovcAxis(rows);
 
   var _tw = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
   var dLab = t.d ? t.d.slice(5).replace('-', '/') : '';
@@ -469,25 +452,12 @@ function ovcStockHtml() {
         + (calOn.at || '').slice(0, 5) + ' 的價校準</span>' : '')
     + '</div>';
 
-  // ── 共用刻度尺。整頁只有一把，所以框跟框之間的長度可以直接比 ──
-  h += '<div class="ovc-axiswrap"><div class="ovc-axis">';
-  ticks.forEach(function (tk) {
-    h += '<i style="left:' + ((tk + HI) / (2 * HI) * 100).toFixed(2) + '%">'
-      + (tk > 0 ? '+' : (tk < 0 ? '−' : '')) + (STEP < 1 ? Math.abs(tk).toFixed(1) : Math.abs(tk)) + '%</i>';
-  });
-  h += '</div><div class="ovc-legend">'
-    + '<span><em class="ovc-e1"></em>收盤區間（上下限）</span>'
-    + '<span><em class="ovc-e2"></em>掛買區間（橫條下方自己一排，掛得到過半時轉實）</span>'
-    + '<span><em class="ovc-e3"></em>掛買參考</span>'
-    + '<span><em class="ovc-e4"></em>' + (rows[0] && rows[0].act ? '實際日內最低' : '現價') + '</span>'
-    + '<span><em class="ovc-e5"></em>' + (rows[0] && rows[0].act ? '實際收盤' : '預估收盤') + '</span>'
-    + (rows.some(function (r) { return r.liveLo > 0; })
-        ? '<span><em class="ovc-e6"></em>今天到現在的最低</span>' : '')
-    + (rows.some(function (r) { return !r.act && r.liveLo > 0 && r.liveHi > 0; })
-        ? '<span><em class="ovc-e7"></em>今天已走到</span>'
-          + '<span><em class="ovc-e8"></em>今天還沒走到</span>' : '')
-    + '<span class="ovc-note">橫軸是對前收的漲跌幅，刻度 ±' + HI + '%，取所有框的第 80 百分位，不取最大值。'
-    + '所有框共用，所以框跟框之間可以直接比長度，但標了「超出刻度」的那幾框除外。</span></div></div>';
+  // ── 這一頁怎麼讀，講一次就好 ──
+  h += '<div class="ovc-axiswrap"><div class="ovc-legend">'
+    + '<span class="ovc-note">每一框的縱軸是機率 0 到 100，橫軸是價位，寬度全頁共用 '
+    + SPAN + ' 個百分點、中心各框自己算，所以框跟框之間可以直接比長度，'
+    + '標了「超出刻度」的那幾框除外。前收不進圖，在框頭。</span>'
+    + '</div></div>';
 
   // ── 排序 ──
   h += '<div class="ovc-sortbar"><span class="ovc-slb" title="持有的一律排在前面，這幾顆鈕是在持有與關注各自的組內排。">持有優先，再依</span>';
@@ -497,72 +467,60 @@ function ovcStockHtml() {
   });
   h += '</div>';
 
-  h += '<div class="ovc-grid">' + rows.map(function (r) { return _ovcCard(r, HI, ticks); }).join('') + '</div>';
+  h += '<div class="ovc-grid">' + rows.map(function (r) { return _ovcCard(r, SPAN); }).join('') + '</div>';
 
   h += '<div class="detail-note"><dl>'
-    + '<dt>這一頁要回答什麼</dt><dd>「我現在掛在哪個價買得到，而且那個價合不合理。」'
+    + '<dt>這一頁要回答什麼</dt><dd>「我掛在哪個價會成交，而那個價合不合理。」'
     + '推估本身與隔夜推估那一頁完全相同，是同一組迴歸、同一份資料，只是畫法不同。'
     + '要精確比對數字或看實測覆蓋率，回隔夜推估那一頁。'
     + '所有價格以 ' + (rows[0] ? rows[0].basePrev : '') + ' 的收盤為基準，已對齊升降單位。</dd>'
 
-    + '<dt>現價在區間中的位置</dt><dd>'
-    + '<b>定義</b>：橫條上那顆藍色膠囊，在收盤區間這段灰帶裡的相對位置。'
-    + '貼左邊代表現價接近區間下限，貼右邊代表接近上限。<br>'
-    + '<b>比較基準</b>：比的是這一檔自己今天的推估區間，不是歷史、也不是別檔。'
-    + '跨檔要比的話看長度，因為所有框共用同一條軸。<br>'
-    + '<b>白話意義</b>：膠囊貼右邊代表今天該漲的大概漲完了，往上的空間在模型眼裡所剩不多；'
-    + '貼左邊代表還在區間的低檔。<br>'
-    + '<b>機制</b>：區間是把夜盤與費半解釋不掉的那部分殘差，用近 10 日半衰加權算出寬度，'
-    + '再往中心兩側各推一個實測倍率。現價走到哪一段，等於今天的實際買賣壓已經把'
-    + '多少不確定性走掉了。開盤之後這個位置還會被盤中校準修正一次：'
-    + '現在偏離開盤推估多少，收盤大概就偏離多少。<br>'
-    + '<b>行動含義</b>：膠囊貼右邊時，掛在現價附近追買的勝算比開盤前差，'
-    + '掛買參考那個價仍然是模型認為今天還可能回到的位置。<br>'
-    + '<b>不能告訴你什麼</b>：位置不含方向。膠囊貼右邊可能是「漲完了」，'
-    + '也可能是「今天強勢、要突破區間」，區間本身只罩得住約 68% 的日子，'
-    + '剩下三成會走到區間外。要分辨這兩種，得配量能那一欄：'
-    + '貼上限而且量能 1.5 倍以上，突破的成分比較大。</dd>'
-
-    + '<dt>掛買區間那一排</dt><dd>橫條下面自己一排的金色帶子，<b>兩端都標了價</b>。'
-    + '要抄進委託單的是這一排，橫條上那條綠轉紅的收盤區間回答的是「今天會收在哪裡」。'
-    + '<br>原本它是橫條裡的一條帶子，疊在收盤區間下面、兩端沒有數字，'
-    + '收盤區間有「下限」「上限」兩個標籤，它一個都沒有 —— 框頭寫著區間是多少，圖上讀不出來。'
-    + '帶子太窄排不下兩個價時會併成「下緣～上緣」一個，貼到軸邊時夾回來，不會跑出去。'
-    + '<br>帶子的濃淡跟「掛得到」同一條線：過半轉實、沒過半壓暗，'
-    + '跟掛買那個數字的亮度是同一件事。</dd>'
-    + '<dt>掛買的亮度</dt><dd><b>定義</b>：用同一條迴歸、同一段樣本回測，'
-    + '數有多少比例的日子裡，當天的實際最低真的跌到當天推的掛買參考。'
-    + '過半就把掛買那個數字打亮，沒過半壓暗，框頭的「掛得到」是同一個數字。<br>'
-    + '<b>比較基準</b>：50%，也就是「跌到的日子比沒跌到的多」。這條線不是分位數算出來的，'
-    + '是多數這個概念本身的分界，與夜推債券同一條線。<br>'
-    + '<b>白話意義</b>：掛買是模型推今天會跌到哪，這個比例是「過去照這個推法掛，掛得到的頻率」。<br>'
-    + '<b>機制</b>：掛買參考是迴歸的中心估計，而最小平方的殘差平均必定是 0，'
-    + '所以這個比例天生就在五成附近。真正讓它偏離五成的是殘差的偏態：'
-    + '日內最低偶爾會跌得很深，少數幾天把平均拉下去，多數日子的最低反而落在推估之上，'
-    + '比例因此低於五成。偏態越重，掛得到的頻率越低。<br>'
-    + '<b>行動含義</b>：低於五成代表照掛買參考掛，多數日子買不到，'
-    + '要買得到得往下用掛買區間的下緣，代價是成本更高的那幾天會錯過。<br>'
-    + '<b>不能告訴你什麼</b>：這個回測沒有把校準那一層算進去。'
-    + '畫面上的掛買參考在校準成功時會再往下壓一點，實際掛得到的頻率會比這個數字低。'
+    + '<dt>掛買成交機率（金線）</dt><dd>'
+    + '<b>定義</b>：限價委買掛在某一價位時，當日最低價觸及該價位的機率。'
+    + '算法是把回測每一天的殘差除以當天自己的區間寬度，排序之後數有多少比例落在該價位以下。'
+    + '在橫軸挑一個價，往上碰到金線，往左看縱軸就是它。<br>'
+    + '<b>比較基準</b>：兩個都要看，少一個就會誤判。一是五成，也就是「成交的日子比沒成交的多」；'
+    + '二是這一檔自己的掛買區間，金線上那兩個空心點就是區間的上下緣。'
+    + '只看機率不看價位會掛在不合理的價，只看區間不看機率會以為區間裡每個價都差不多。<br>'
+    + '<b>白話意義</b>：這個價掛下去，過去十次大約有幾次會成交。<br>'
+    + '<b>機制</b>：價位越低，能觸及它的日子越少，所以金線由左下往右上遞增。'
+    + '掛買參考是迴歸的中心估計，而最小平方的殘差平均必定是 0，所以它的機率天生在五成附近。'
+    + '真正讓它偏離五成的是殘差的偏態：日內最低偶爾跌得很深，少數幾天把平均拉下去，'
+    + '多數日子的最低反而落在推估之上，機率因此低於五成。偏態越重，掛買參考的成交機率越低。<br>'
+    + '<b>行動含義</b>：掛買參考低於五成，代表照它掛多數日子買不到。'
+    + '要提高成交機率得往上靠區間上緣，代價是買貴；往下靠下緣買得便宜，但大多數日子空手。'
+    + '這條線把這個取捨畫成了斜率，陡的那一段代表多讓一檔價就多換到不少成交機率，'
+    + '平的那一段代表再讓也換不到多少。<br>'
+    + '<b>不能告訴你什麼</b>：這是歷史頻率，不是當下報價，與現在委賣簿上有多少人要賣無關。'
+    + '回測沒有把盤中校準那一層算進去，校準成功時掛買參考會再往下壓，實際成交機率比圖上低。'
     + '它也不含成交順序：同一價位的委託照時間排隊，最低只掃到一次的日子不一定輪得到你。'
     + '而且係數是用整段樣本配適的，不是當天只用當天以前的資料，這是樂觀的那一邊。</dd>'
 
-    + '<dt>今天碰到哪裡</dt><dd>每個推估價前面那顆圓點。實心代表今天的價格已經走到過這個價，'
-    + '空心代表還沒。判定就是「今天的日內最低到最高這一段有沒有涵蓋它」，'
-    + '前收上下兩側同一條規則。沒有今天的即時快照時整張框都不畫，不會拿昨天的高低充數。'
-    + '<br>現價與今低不畫：它們本身就是今天走出來的，畫了必定是實心。'
-    + '收盤之後那一列也不畫，當天的高低已成定論，表上另有實低與實收兩個標籤。'
-    + '<br>它跟推估價是同一件事的兩面：<b>推估講今天可能走到哪，圓點講今天實際已經走到哪。</b>'
-    + '下限已經實心代表今天走得比推的深；掛買還是空心代表掛在那裡的單今天還沒有機會成交。'
-    + '<br>不能告訴你什麼：走到過不代表掛得到。同一價位的委託照時間排隊，'
-    + '最低只掃到一次的那種日子不一定輪得到你。它也不說還會不會再走到一次。</dd>'
+    + '<dt>收盤跌破機率（青色虛線）</dt><dd>'
+    + '<b>定義</b>：當日收盤價低於某一價位的機率。算法與金線完全相同，只是把日內最低換成收盤。<br>'
+    + '<b>比較基準</b>：50% 所在的價位就是估收，兩個空心點就是收盤區間的上下緣。<br>'
+    + '<b>白話意義</b>：收在這個價以下的機會有多大。<br>'
+    + '<b>機制</b>：收盤的殘差比日內最低對稱得多，所以這條線中段陡、兩端收得快，'
+    + '不像金線那樣下緣拖出一條長尾。那條長尾就是偶爾殺很深又拉回來的那幾天。<br>'
+    + '<b>行動含義</b>：同一個價位上兩條線的高度差，就是「摸得到」與「收在那裡」的落差。'
+    + '金線高、青線低的那一段，代表當天摸得到但收不在那裡，適合掛買等回檔，不適合追價。<br>'
+    + '<b>不能告訴你什麼</b>：它不講路徑。收盤跌破機率三成，不代表盤中沒跌破過；'
+    + '跌破再拉回在這條線上完全看不出來，那要看金線。</dd>'
 
-    + '<dt>今低</dt><dd>今天到現在走出來的最低價，橫條上那條淺青色的線。'
-    + '它跟<b>掛買參考</b>是同一件事的兩面：掛買是模型推今天會跌到哪，今低是今天實際已經跌到哪。'
-    + '<br>掛在今低以上的買進價，今天都已經觸及過了。推估的最低也不可能高於它，'
-    + '所以掛買參考那個數字被它壓住，兩者重合時代表今天已經跌破模型推的位置。'
-    + '<br>不能告訴你的是「還會不會再跌一次」。觸及過不代表掛得到：同一價位的委託照時間排隊，'
-    + '最低只掃到一次的那種日子不一定輪得到你。收盤之後這條線換成「實低」，那是當天的定論。</dd>'
+    + '<dt>空心點與下方那兩組 Bar</dt><dd>空心點是區間的上下緣，高度直接從曲線上取，'
+    + '所以點永遠落在線上，不會出現「區間說在裡面、曲線說機率很低」這種自相矛盾。'
+    + '金線上還有一顆實心點，那是掛買參考，要抄進委託單的就是它。'
+    + '<br>下方兩組 Bar 是同一組價位換個方向畫：一組是掛買區間、一組是收盤區間，'
+    + '數字貼著自己那條 Bar，不把四個數字混在同一排。</dd>'
+
+    + '<dt>現價與今低</dt><dd>從底部拉上來、停在金線上的那條線，菱形是交點。'
+    + '它一次講兩件事：現在的價在哪，以及掛在那個價本來有多少機會成交。'
+    + '<br>今低是今天到現在走出來的最低。掛在今低以上的買進價今天都已經觸及過了，'
+    + '推估的最低也不可能高於它，所以掛買參考那個數字被它壓住，'
+    + '兩者重合代表今天已經跌破模型推的位置。'
+    + '<br>收盤之後這兩條換成實收與實低，那是當天的定論。'
+    + '不能告訴你的是「還會不會再跌一次」，而且觸及過不代表成交得到。</dd>'
+
     + '<dt>字的亮度</dt><dd>亮白代表這兩個訊號解釋掉一半以上的起伏，中灰是四分之一到一半，'
     + '暗灰是不到四分之一、區間跟隨便猜差不多寬。不用紅綠是因為那兩個色在這一頁是漲跌。</dd>'
     + '</dl></div>';
