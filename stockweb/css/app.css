@@ -2606,12 +2606,30 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   grid-template-columns: repeat(auto-fill, minmax(760px, 1fr)); }
 /* 上內距 48：框頭右端是兩行，第一行壓在框線上（-14 到 +12），
    第二行再往下 26px，內容要從它底下開始。與夜推股票同一組數字。 */
+/* 上內距 48 → 62：框頭右端兩行之外，左下還多了一條 HYG 敏感度 */
 .ovb-card { position: relative; border: 1px solid var(--border-strong); border-radius: 10px;
-  background: var(--bg2); padding: 48px 16px 10px; }
+  background: var(--bg2); padding: 62px 16px 10px; }
 .ovb-head { position: absolute; top: -13px; left: 14px; background: var(--bg2);
   padding: 0 10px; white-space: nowrap; line-height: 24px; }
 .ovb-head .tx-ocode { font-size: 17px; }
 .ovb-head .tx-oname { font-size: 14.5px; }
+/* 代號下面的 HYG 敏感度。放在框頭左下那塊本來就空著的區域，
+   不動到框高。顏色沿用圖上的買金賣藍，兩邊講的是同一件事。
+   不用紅綠：紅綠在這一頁是框頭右端的價格漲跌。 */
+.ovb-sens { position: absolute; top: 14px; left: 16px; display: flex;
+  align-items: center; gap: 12px; font-size: 11.5px; color: var(--text3); }
+.ovb-sens .ovb-sk1 { cursor: help; }
+.ovb-sg { display: inline-flex; align-items: center; gap: 5px; }
+.ovb-sg .ovb-sk { color: var(--th); }
+.ovb-strack { display: inline-block; width: 56px; height: 6px; border-radius: 3px;
+  background: var(--bg3); overflow: hidden; }
+.ovb-sfill { display: block; height: 100%; border-radius: 3px; }
+.ovb-sfill.ovb-buy { background: var(--accent2); }
+.ovb-sfill.ovb-sell { background: var(--accent3); }
+.ovb-sg b { color: var(--text2); font-weight: 600; font-variant-numeric: tabular-nums;
+  min-width: 26px; text-align: right; }
+.ovb-sg b.ovb-sna { color: var(--text3); font-weight: 400; }
+
 .ovb-head2 { position: absolute; top: -14px; right: 14px; background: var(--bg2);
   padding: 0 10px; white-space: nowrap; line-height: 26px; font-size: 17px; color: var(--text2); }
 .ovb-head2 .ovb-h2k { color: var(--th); font-weight: 600; font-size: 13px; margin: 0 6px 0 0; }
