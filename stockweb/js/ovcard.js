@@ -17,28 +17,35 @@
 // 而區間最寬的那一檔正好是最需要看清楚的。改成取當天所有框用到的最大偏離，
 // 外加一成餘裕再往上湊到 0.5 的整數倍。
 //
-// ── 標記為什麼分上下兩排 ──
-//
-// 六個標記全擠在橫條下方時，價位相近的兩個數字會疊在一起。先分成兩組：
-// 上限、下限、前收是今天不會再變的框架，放上方；掛買、估收、現價是今天
-// 走到哪，放下方。一側三個，重疊機率比六個擠在一起低得多。
-// 同一側兩個還是靠太近時，後面那個掉到第二行，引線拉長指回自己的標記。
-
 var OVC_SORT_LS = 'ovcard_sort_v1';
-// 同一行兩個標籤的最小水平間距，換算成軸長的百分比。標籤本身是固定的 66px，
-// 所以這個百分比要跟著橫條的像素寬走：框寬下限 800 時橫條約 752px，66px 等於 8.8%，
-// 取 10 留一點餘裕。設太大的代價不是排版壞掉，是標籤被無謂地推到第二、第三行，
-// 框白白變高。一行四框（橫條 292px）時這個值要 23，兩者差很多。
-var OVC_GAP = 12;   // 字放大之後標籤從 66px 變 84px，門檻跟著從 10 提到 12
-var OVC_LABW = 66;
-
 function _ovcSort() {
   try { var v = localStorage.getItem(OVC_SORT_LS); if (v) return v; } catch (e) {}
   return 'lPx';
 }
 function ovcSort(k) {
   try { localStorage.setItem(OVC_SORT_LS, k); } catch (e) {}
-  if (typeof rbRender === 'function') rbRender();
+  _ovcRepaint();
+}
+
+// ── 正在看哪一檔 ──
+//
+// 九檔並排的時候每一張圖只有 800px 寬、128px 高，而且低波動的那幾檔被共用刻度壓成一成版面。
+// 一次只看一檔，圖就有 1190px 寬、240px 高，軸也可以各自算，每張都鋪滿。
+// 代價是換檔之後長度不能直接互比，要看數字；在只看得到一張圖的情況下，那本來就不是在做的事。
+var OVC_SEL_LS = 'ovcard_sel_v1';
+function _ovcSelGet() {
+  try { return localStorage.getItem(OVC_SEL_LS) || ''; } catch (e) { return ''; }
+}
+function ovcPick(code) {
+  try { localStorage.setItem(OVC_SEL_LS, String(code)); } catch (e) {}
+  _ovcRepaint();
+}
+// 只換這一段，不整頁重畫：整頁重畫會把捲動位置與其他頁籤一起打掉，
+// 而這裡換的只有右邊那張圖與左邊哪一列亮著。
+function _ovcRepaint() {
+  var el = document.getElementById('ovc-sec');
+  if (!el) { if (typeof rbRender === 'function') rbRender(); return; }
+  el.outerHTML = ovcStockHtml();
 }
 
 // 這一頁只收股票型。債券另外一個頁籤，兩者的橫軸意義不同，混在一起不能比。
@@ -89,24 +96,12 @@ function _ovcWin(r) {
 }
 function _ovcSpan(r) { var w = _ovcWin(r); return w.mx - w.mn; }
 
-// ── 軸寬取第 80 百分位，不取最大值 ──
-//
-// 取最大值的話，只要清單裡有一檔樣本少、區間特別寬的，整頁每一框都被它壓扁。
-// 代價講清楚：超出刻度的那幾框，長度不再能跟其他框直接比，要看數字。
-// 它們的共同特徵就是樣本不足、殘差大，本來就不該拿長度去跟別人比。
-// 超出的框會在框頭標出來，不是悄悄裁掉。
-var OVC_AXIS_P = 0.80;
 // 成交機率過半的門檻。50% 的意思是「跌到的日子比沒跌到的多」，
 // 不是分位數算出來的，是「多數」這個概念本身的分界。與夜推債券同一條線。
 var OVC_FILL_HI = 50;
-// 圖高。128px 是量出來的：再矮的話節點標籤與標記標籤會貼在一起。
-var OVC_PH = 128;
-function _ovcAxis(rows) {
-  var v = rows.map(_ovcSpan).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
-  if (!v.length) return 3;
-  var i = Math.min(v.length - 1, Math.max(0, Math.ceil(OVC_AXIS_P * v.length) - 1));
-  return Math.max(3, Math.ceil(v[i] * 1.06 * 2) / 2);
-}
+// 圖高。九張並排時只放得下 128px，單檔瀏覽的版面放得下 240px，
+// 節點與標記的字就不必再互相閃避。
+var OVC_PH = 240;
 
 // 價格 → 機率。分布是回測殘差標準化之後的樣子，由 overnight.js 帶過來。
 function _ovcCdf(zq, base, mid, sd) {
@@ -143,101 +138,73 @@ function _ovcTier(r2) {
 // 區間不必另外畫：掛買區間的上下緣就是金線上的 16% 與 84% 兩點，
 // 收盤區間同理在青線上。節點直接從曲線取高度，所以點永遠落在線上，
 // 不會出現「區間說在裡面、曲線說機率很低」這種自相矛盾。
-function _ovcCard(r, SPAN) {
+// ── 左側清單的一列 ──
+//
+// 一列講完三件事：是哪一檔、要掛在哪個價、現在多少錢。
+// 掛買參考與成交機率放在同一行相鄰，因為它們是一組：價是要抄的，機率是這個價值不值得抄。
+function _ovcRow(r, on) {
+  var fillHi = (r.lFill != null && r.lFill > OVC_FILL_HI);
+  return '<button class="ovc-row' + (on ? ' on' : '') + '" onclick="ovcPick(\'' + r.code + '\')">'
+    + '<span class="ovc-r1">'
+    + '<span class="tx-ocode">' + r.code + '</span>'
+    + '<span class="tx-oname">' + _rbName(r.code) + '</span>'
+    + (r.ixOn ? '<span class="ov-fx" title="這一檔的成份股有 '
+        + (r.fgnW == null ? '' : r.fgnW.toFixed(0)) + '% 在海外，推估多掛了 Nasdaq。">＋N</span>' : '')
+    + (_ovcHeld(r.code) ? ''
+        : '<span class="ovc-wt" title="在關注清單裡，目前沒有持股。">關注</span>')
+    + '</span>'
+    + '<span class="ovc-r2">'
+    + '<span class="ovc-rk">掛買參考</span><b>' + (r.lPx > 0 ? _ovPx(r.lPx) : '—') + '</b>'
+    + '<span class="ovc-rk">成交機率</span><b style="color:'
+      + (fillHi ? 'var(--text)' : 'var(--text2)') + '">'
+      + (r.lFill == null ? '—' : Math.round(r.lFill) + '%') + '</b>'
+    + '<span class="ovc-rsep">｜</span>'
+    + ((typeof _ovPxTagHtml === 'function')
+        ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '')
+    + '</span></button>';
+}
+
+// 這一檔自己的軸寬。共用刻度是九張圖並排時才有的好處，單檔瀏覽下只會浪費版面：
+// 2026-11-19 實測 00402A 的殘差寬度 1.16%、00981A 是 3.30%，差快三倍。
+function _ovcAxis1(r) {
+  var w = _ovcWin(r);
+  return Math.max(1, Math.ceil((w.mx - w.mn) * 1.06 * 4) / 4);
+}
+
+// ══════════════════════════════════════════════════════════════
+// 右側：這一檔的機率 × 價格
+// ══════════════════════════════════════════════════════════════
+//
+// 縱軸是機率、橫軸是價位。兩條曲線：
+//   金線 掛買成交機率 ＝ 限價委買掛在某一價位，當日最低價觸及該價位的機率。
+//   青虛線 收盤跌破機率 ＝ 當日收盤價低於該價位的機率。
+//
+// 曲線直接數回測殘差的累積分布，不是補間出來的形狀，所以區間的上下緣必定落在
+// 曲線的 16% 與 84% 上，不會出現「區間說在裡面、曲線說機率很低」這種自相矛盾。
+function _ovcPanel(r) {
   var Pc = function (v) { return (v > 0 && r.base > 0) ? (v / r.base - 1) * 100 : null; };
+  var SPAN = _ovcAxis1(r);
   var win = _ovcWin(r);
-  var need = win.mx - win.mn;
-  var over = need > SPAN + 1e-9;
   var LO = (win.mn + win.mx) / 2 - SPAN / 2;
   var X = function (p) { return Math.max(0, Math.min(100, (p - LO) / SPAN * 100)); };
   var XV = function (v) { var p = Pc(v); return p == null ? null : X(p); };
   var tierCol = _ovcTier(r.r2);
-  var fillHi = (r.lFill != null && r.lFill > OVC_FILL_HI);
-  var fillCol = fillHi ? 'var(--text)' : 'var(--text2)';
   var fLow = _ovcCdf(r.zl, r.base, r.lMidPct, r.sdl);
   var fCls = _ovcCdf(r.zc, r.base, r.cMidPct, r.sdc);
-  var tag = (typeof _ovPxTagHtml === 'function')
-    ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '';
-  // 推的那一盤還沒開始時圖上一個標記都沒有，圖例就不要列它
-  var hasMk = r.act ? (r.act.c > 0 || r.act.l > 0) : (r.live > 0 || r.liveLo > 0);
 
-  var h = '<div class="ovc-card' + (r.cal ? ' ovc-calc' : '') + (over ? ' ovc-over' : '')
-    + '"><div class="ovc-head">'
-    + '<span class="tx-ocode">' + r.code + '</span><span class="tx-oname">' + _rbName(r.code) + '</span>'
-    + (_ovcHeld(r.code) ? ''
-        : '<span class="ovc-wt" title="這一檔在關注清單裡，目前沒有持股。推估的算法與持股的那幾檔完全相同。">關注</span>')
-    + (over ? '<span class="ovc-ovb" title="這一框要用到 ' + need.toFixed(1)
-        + ' 個百分點才畫得完，超過共用的 ' + SPAN + ' 個百分點，兩端被切在框邊。'
-        + '數字本身沒有被改，但這一框的長度不能再拿去跟其他框比。'
-        + '刻度取的是所有框的第 80 百分位，不取最大值：取最大值的話一檔特別寬的會把其餘每一框都壓扁。'
-        + '區間特別寬通常代表這一檔樣本少、殘差大。">超出刻度</span>' : '')
-    + (r.ixOn ? '<span class="ov-fx" title="這一檔的成份股有 '
-        + (r.fgnW == null ? '' : r.fgnW.toFixed(0)) + '% 在海外，實測 Nasdaq 在夜盤與費半之上還能多解釋一截，'
-        + '所以這一框的推估多掛了 Nasdaq。">＋N</span>' : '')
-    + '</div>'
-    // 要抄進委託單的數字。圖上讀得出相對關係，讀不出精確值。
-    // 兩組排同一行、各自框起來：掛買那一組是你要掛的價與它的成交機率，
-    // 另一組是這一盤的基準與你的成本。
-    + '<div class="ovc-head2">'
-    + '<span class="ovc-h2r">'
-    + '<span class="ovc-h2k" title="模型推今天的日內最低會落在哪。要抄進委託單的就是這個價。'
-    + '區間的上下緣在圖上：曲線的兩個空心點、以及下方那條金色 Bar 的兩端。">掛買參考</span><b>'
-    + (r.lPx > 0 ? _ovPx(r.lPx) : '—') + '</b>'
-    + '<span class="ovc-h2k" title="掛在掛買參考這個價的成交機率。實測 '
-    + (r.lFill == null ? '—' : Math.round(r.lFill))
-    + '% 的日子裡，當日最低確實觸及它。">成交機率</span><b style="color:' + fillCol + '">'
-    + (r.lFill == null ? '—' : Math.round(r.lFill) + '%') + '</b>'
-    + '</span>'
-    + (tag ? '<span class="ovc-h2r">' + tag + '</span>' : '')
-    + '</div>';
+  var h = '<div class="ovc-panel' + (r.cal ? ' ovc-calc' : '') + '">'
+    + '<div class="ovc-ptitle"><span class="tx-ocode">' + r.code + '</span>'
+    + '<span class="tx-oname">' + _rbName(r.code) + '</span>'
+    + '<span class="ovc-psp"><span class="ovc-rk">現價</span>'
+    + ((typeof _ovPxTagHtml === 'function')
+        ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '')
+    + '</span></div>';
 
   if (!fLow && !fCls) {
     return h + '<div class="ovc-nodata">樣本不足，算不出機率分布（回測至少要 20 天）。</div>'
       + _ovcFoot(r, tierCol) + '</div>';
   }
 
-  // ── 圖例。排在圖的上方，不壓在格線裡 ──
-  h += '<div class="ovc-lg">'
-    + '<i><u class="ovc-u1"></u><span style="color:var(--accent2)">掛買成交機率</span></i>'
-    + (fCls ? '<i><u class="ovc-u2"></u><span style="color:var(--sum)">收盤跌破機率</span></i>' : '')
-    + (hasMk ? '<i><u class="ovc-u3"></u><span style="color:var(--accent3)">'
-        + (r.act ? '實際收盤' : '現價') + '</span></i>' : '')
-    + '</div>';
-
-  h += '<div class="ovc-ch"><div class="ovc-pa" style="height:' + OVC_PH + 'px">';
-  [0, 25, 50, 75, 100].forEach(function (g) {
-    h += '<div class="ovc-hl' + (g === 50 ? ' ovc-h50' : (g === 0 ? ' ovc-h0' : ''))
-      + '" style="bottom:' + g + '%"></div>'
-      + '<div class="ovc-yl" style="bottom:' + g + '%">' + g + '%</div>';
-  });
-
-  // ── 曲線 ──
-  //
-  // 區間內外分色：區間外壓暗、線細，16% 到 84% 之間用亮色加粗。
-  // 一眼就分得出哪一段是有效區間，哪一段只是分布的尾巴。
-  var path = function (fn, x0, x1) {
-    var d = '', N = 110;
-    for (var i = 0; i <= N; i++) {
-      var xs = x0 + (x1 - x0) * i / N, p = r.base * (1 + (LO + SPAN * xs) / 100);
-      var y = 100 - Math.max(0, Math.min(100, fn(p)));
-      d += (i ? 'L' : 'M') + (xs * 1000).toFixed(1) + ',' + y.toFixed(2);
-    }
-    return d;
-  };
-  var seg = function (fn, a, b, cls) {
-    if (!(a > 0) || !(b > 0)) return '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, 0, 1) + '"/>';
-    var xa = Math.max(0, Math.min(1, X(Pc(a)) / 100)), xb = Math.max(0, Math.min(1, X(Pc(b)) / 100));
-    return '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, 0, xa) + '"/>'
-      + '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, xb, 1) + '"/>'
-      + '<path class="ovc-cv ' + cls + '" d="' + path(fn, xa, xb) + '"/>';
-  };
-  h += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none">'
-    + (fLow ? '<path class="ovc-ar" d="' + path(fLow, 0, 1) + ' L1000,100 L0,100 Z"/>' : '')
-    + (fCls ? seg(fCls, r.loPx, r.hiPx, 'ovc-cvc') : '')
-    + (fLow ? seg(fLow, r.lLoPx, r.lHiPx, 'ovc-cvl') : '')
-    + '</svg>';
-
-  // ── 標記：今天走到哪 ──
   var M = [];
   if (r.act) {
     if (r.act.c > 0) M.push({ k: '實收', v: r.act.c, c: 'var(--accent3)' });
@@ -256,21 +223,53 @@ function _ovcCard(r, SPAN) {
   grp.forEach(function (g) {
     g.x = g.reduce(function (a, m) { return a + XV(m.v); }, 0) / g.length;
     g.f = fLow ? fLow(g[0].v) : 50;
-    // 曲線貼近頂端時標籤改掛在交點下方，否則會長到框外、撞到框頭
-    g.down = g.f > 80;
-    g.y = g.f * OVC_PH / 100 + (g.down ? -(9 + 15 * g.length) - 7 * g.length : 9 + 7 * g.length);
+    g.down = g.f > 80;   // 貼近頂端時標籤改掛在交點下方，否則會長到框外
   });
   var mkX = M.map(function (m) { return XV(m.v); });
-  // 某一側幾個百分點以內站著標記就算「忙」，節點標價要閃開
   var busy = function (x, dir) {
     return mkX.some(function (u) { return (u - x) * dir > -1.5 && Math.abs(u - x) < 9; });
   };
 
-  // ── 節點：區間上下緣與掛買參考，價直接標在旁邊 ──
-  //
-  // 標上下會撞到從底部拉上來的那條標記線，所以一律標左右。
-  // 左右也會撞：同高度的兩個節點（掛買下限與收盤下限都在 16% 那條高度上）
-  // 靠太近時，左邊那個往左、右邊那個往右，往兩側分開。
+  // ── 圖例。排在圖的上方，不壓在格線裡 ──
+  h += '<div class="ovc-lg">'
+    + '<i><u class="ovc-u1"></u><span style="color:var(--accent2)">掛買成交機率</span></i>'
+    + (fCls ? '<i><u class="ovc-u2"></u><span style="color:var(--sum)">收盤跌破機率</span></i>' : '')
+    + (M.length ? '<i><u class="ovc-u3"></u><span style="color:var(--accent3)">'
+        + (r.act ? '實際收盤' : '現價') + '</span></i>' : '')
+    + '</div>';
+
+  h += '<div class="ovc-ch"><div class="ovc-pa" style="height:' + OVC_PH + 'px">';
+  [0, 25, 50, 75, 100].forEach(function (g) {
+    h += '<div class="ovc-hl' + (g === 50 ? ' ovc-h50' : (g === 0 ? ' ovc-h0' : ''))
+      + '" style="bottom:' + g + '%"></div>'
+      + '<div class="ovc-yl" style="bottom:' + g + '%">' + g + '%</div>';
+  });
+
+  // 區間內亮且粗、區間外壓暗且細，一眼分得出哪一段是有效區間
+  var path = function (fn, x0, x1) {
+    var d = '', N = 140;
+    for (var i = 0; i <= N; i++) {
+      var xs = x0 + (x1 - x0) * i / N, p = r.base * (1 + (LO + SPAN * xs) / 100);
+      d += (i ? 'L' : 'M') + (xs * 1000).toFixed(1) + ','
+        + (100 - Math.max(0, Math.min(100, fn(p)))).toFixed(2);
+    }
+    return d;
+  };
+  var seg = function (fn, a, b, cls) {
+    if (!(a > 0) || !(b > 0)) return '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, 0, 1) + '"/>';
+    var xa = Math.max(0, Math.min(1, XV(a) / 100)), xb = Math.max(0, Math.min(1, XV(b) / 100));
+    return '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, 0, xa) + '"/>'
+      + '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, xb, 1) + '"/>'
+      + '<path class="ovc-cv ' + cls + '" d="' + path(fn, xa, xb) + '"/>';
+  };
+  h += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none">'
+    + (fLow ? '<path class="ovc-ar" d="' + path(fLow, 0, 1) + ' L1000,100 L0,100 Z"/>' : '')
+    + (fCls ? seg(fCls, r.loPx, r.hiPx, 'ovc-cvc') : '')
+    + (fLow ? seg(fLow, r.lLoPx, r.lHiPx, 'ovc-cvl') : '')
+    + '</svg>';
+
+  // ── 節點：區間上下緣與掛買參考，價標在點的左右不標上下 ──
+  // 標上下會撞到從底部拉上來的標記線。左右也會撞，所以同高度又靠太近時往兩側分開。
   var nodes = [];
   if (fLow) {
     if (r.lLoPx > 0) nodes.push({ p: r.lLoPx, f: fLow(r.lLoPx), c: 'var(--accent2)' });
@@ -288,12 +287,6 @@ function _ovcCard(r, SPAN) {
     nd.lift = (busy(nd.x, 1) && busy(nd.x, -1)) ? 15 : 0;
     // 標記的價就是這個節點的價時，標記自己已經寫了，不再印第二次
     nd.dup = M.some(function (m) { return Math.abs(m.v - nd.p) < _ovcTick(nd.p) * 0.5; });
-    // 標記那一塊字是置中的兩行，左右閃都閃不掉。撞上就不印這個節點的價：
-    // 它在下方那條 Bar 的端點還看得到，點本身的提示也寫著。
-    var ny = nd.f * OVC_PH / 100;
-    if (grp.some(function (g) { return Math.abs(g.x - nd.x) < 11 && Math.abs(g.y - ny) < 24; })) {
-      nd.dup = true;
-    }
   });
   nodes.slice().sort(function (a, b) { return a.f - b.f; }).forEach(function (nd, i, arr) {
     var pv = arr[i - 1];
@@ -316,7 +309,7 @@ function _ovcCard(r, SPAN) {
       + '<div class="ovc-vd" style="left:' + g.x.toFixed(2) + '%;bottom:' + g.f.toFixed(1)
       + '%;background:' + g[0].c + '"></div>'
       + '<div class="ovc-vt" style="left:' + g.x.toFixed(2) + '%;bottom:calc(' + g.f.toFixed(1) + '% '
-      + (g.down ? '- ' + (9 + 15 * g.length) + 'px' : '+ 9px') + ')">'
+      + (g.down ? '- ' + (9 + 16 * g.length) + 'px' : '+ 9px') + ')">'
       + g.map(function (m) {
           return '<span style="color:' + m.c + '">' + m.k + ' ' + _ovPx(m.v) + '</span>';
         }).join('<br>') + '</div>';
@@ -325,7 +318,6 @@ function _ovcCard(r, SPAN) {
   h += '</div>';
 
   // ── 座標下方：一組就是「這一條區間的兩個數字 ＋ 它自己的橫 Bar」 ──
-  // 數字跟它的 Bar 貼在一起，不把四個數字混在同一排、Bar 另外擺。
   var grpBar = function (a, b, cls, lab, tip) {
     if (!(a > 0) || !(b > 0)) return '';
     var g = '<div class="ovc-gp" title="' + tip.replace(/"/g, '&quot;') + '"><div class="ovc-gn">';
@@ -348,11 +340,32 @@ function _ovcCard(r, SPAN) {
   return h + _ovcFoot(r, tierCol) + '</div>';
 }
 
+// ── 畫完之後量一次，真的疊到才拿掉 ──
+//
+// 字框的高度跟著字型與行高跑，用公式推永遠會差幾個像素，而差幾個像素就是疊到。
+// 一次只畫一張圖，量一次的成本可以忽略。
+// 拿掉的是節點的價不是標記：標記講的是「現在在哪」，比區間端點急；
+// 而端點的價在下方那條 Bar 上還看得到，拿掉不會讓資訊消失。
+function _ovcFixLabels() {
+  var root = document.getElementById('ovc-sec');
+  if (!root) return;
+  var mk = [].slice.call(root.querySelectorAll('.ovc-vt')).map(function (e) {
+    return e.getBoundingClientRect();
+  });
+  [].slice.call(root.querySelectorAll('.ovc-ptl')).forEach(function (e) {
+    var a = e.getBoundingClientRect();
+    if (mk.some(function (b) {
+      return a.left < b.right + 2 && b.left - 2 < a.right
+          && a.top < b.bottom + 2 && b.top - 2 < a.bottom;
+    })) { e.style.display = 'none'; }
+  });
+}
+
 // ── 次要資訊。不收合：收起來的話每看一檔要多點一下，而這幾個每次都要看 ──
 function _ovcFoot(r, tierCol) {
   var volHot = (r.volX != null && r.volX >= 1.5);
   return '<div class="ovc-foot">'
-    + '<span title="' + (r.basePrev || '') + ' 的收盤。這一框所有價格都以它為基準。">前收 <b>'
+    + '<span title="' + (r.basePrev || '') + ' 的收盤。這一檔所有價格都以它為基準。">前收 <b>'
       + (r.base > 0 ? _ovPx(r.base) : '—') + '</b></span>'
     + '<span>成本 <b>' + (r.cost > 0 ? _ovPx(r.cost) : '—') + '</b></span>'
     + '<span>折溢價 <b style="color:' + (r.prem == null ? 'var(--text3)' : _rbCol(r.prem)) + '">'
@@ -436,15 +449,18 @@ function ovcStockHtml() {
     return y - x;                      // 數值一律由大到小
   });
 
-  // 全頁共用的橫軸寬度。寬度一樣，所以框跟框之間可以直接比長度。
-  var SPAN = _ovcAxis(rows);
+  // 正在看哪一檔。存的那一檔不在清單裡（賣掉了、關注拿掉了）就退回第一列。
+  var selCode = _ovcSelGet();
+  var sel = null;
+  rows.forEach(function (x) { if (x.code === selCode) sel = x; });
+  if (!sel) sel = rows[0];
 
   var _tw = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
   var dLab = t.d ? t.d.slice(5).replace('-', '/') : '';
   var calOn = null;
   for (var i = 0; i < rows.length; i++) { if (rows[i].cal) { calOn = rows[i].cal; break; } }
 
-  var h = '<div class="rb-sox">';
+  var h = '<div class="rb-sox" id="ovc-sec">';
   h += '<div class="sec-title">夜推股票（'
     + (!t.d ? '明天的價格' : (t.d === _tw ? dLab + ' 這一盤' : dLab + ' 的價格')) + '）'
     + (calOn ? '<span class="ov-cal" title="開盤之後改用今天走到現在的價重新定心，'
@@ -452,22 +468,23 @@ function ovcStockHtml() {
         + (calOn.at || '').slice(0, 5) + ' 的價校準</span>' : '')
     + '</div>';
 
-  // ── 這一頁怎麼讀，講一次就好 ──
-  h += '<div class="ovc-axiswrap"><div class="ovc-legend">'
-    + '<span class="ovc-note">每一框的縱軸是機率 0 到 100，橫軸是價位，寬度全頁共用 '
-    + SPAN + ' 個百分點、中心各框自己算，所以框跟框之間可以直接比長度，'
-    + '標了「超出刻度」的那幾框除外。前收不進圖，在框頭。</span>'
-    + '</div></div>';
-
   // ── 排序 ──
   h += '<div class="ovc-sortbar"><span class="ovc-slb" title="持有的一律排在前面，這幾顆鈕是在持有與關注各自的組內排。">持有優先，再依</span>';
-  OVC_SORTS.forEach(function (s) {
-    h += '<button class="ovc-sb' + (sk === s.k ? ' on' : '') + '" onclick="ovcSort(\'' + s.k + '\')">'
-      + s.t + '</button>';
+  OVC_SORTS.forEach(function (so) {
+    h += '<button class="ovc-sb' + (sk === so.k ? ' on' : '') + '" onclick="ovcSort(\'' + so.k + '\')">'
+      + so.t + '</button>';
   });
+  h += '<span class="ovc-note">左側點任一檔，右側換圖。橫軸寬度每一檔各自算，'
+    + '所以每張圖都鋪滿版面；代價是換檔之後長度不能直接互比，要看數字。</span>';
   h += '</div>';
 
-  h += '<div class="ovc-grid">' + rows.map(function (r) { return _ovcCard(r, SPAN); }).join('') + '</div>';
+  // ── 左清單、右單檔 ──
+  h += '<div class="ovc-wrap"><div class="ovc-side">'
+    + rows.map(function (x) { return _ovcRow(x, x === sel); }).join('')
+    + '</div><div class="ovc-main">' + _ovcPanel(sel) + '</div></div>';
+
+  // 畫完才量得到字框。這一段是字串，插進 DOM 是呼叫端的下一步，所以排到下一個 tick。
+  setTimeout(_ovcFixLabels, 0);
 
   h += '<div class="detail-note"><dl>'
     + '<dt>這一頁要回答什麼</dt><dd>「我掛在哪個價會成交，而那個價合不合理。」'
