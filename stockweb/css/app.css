@@ -2556,11 +2556,11 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   font-size: 13px; font-weight: 700; white-space: nowrap;
   font-variant-numeric: tabular-nums; }
 .ovc-tk { position: absolute; top: 0; width: 1px; height: 4px; background: var(--border); }
-.ovc-gb { position: relative; height: 14px; }
+.ovc-gb { position: relative; height: 17px; }
 .ovc-gb em { position: absolute; top: 3px; height: 6px;
   border-left-width: 1px; border-right-width: 1px; border-top-width: 1.5px;
   border-left-style: solid; border-right-style: solid; border-top-style: solid; }
-.ovc-gb b { position: absolute; top: 0; left: 0; font-size: 11px; line-height: 12px;
+.ovc-gb b { position: absolute; top: 0; left: 0; font-size: 13px; line-height: 14px;
   font-weight: 700; white-space: nowrap; }
 .ovc-c1 { color: var(--accent2); border-color: var(--accent2); }
 .ovc-c2 { color: var(--sum); border-color: var(--sum); }
