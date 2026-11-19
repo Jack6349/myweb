@@ -42,6 +42,7 @@ function _wtSortVal(code, key) {
     if (key === 'px') return px;
     return (px != null && c && c.reference) ? (px - c.reference) / c.reference * 100 : null;
   }
+  if (key === 'streak') return (typeof rbStreakVal === 'function') ? rbStreakVal(code) : null;
   return (typeof esWatchSortVal === 'function') ? esWatchSortVal(code, key) : null;
 }
 function _wtSorted(list) {
@@ -246,7 +247,10 @@ function renderWatch() {
   }
   h += '<div class="inv-table-wrap wt-wrap"><table class="inv-table wt-table"><thead><tr>' +
     '<th></th>' + _wtTh('code', '代號') +
-    '<th class="inv-st-cell" title="連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;原本接在現價右邊，把那一欄的右對齊打掉了，所以搶出來自己一欄。">趨勢</th>' +
+    _wtTh('streak', '趨勢', 'inv-st-cell',
+      '連續漲跌的天數：▲N 連漲 N 天、▼N 連跌 N 天、⤴ 今天轉漲、⤵ 今天轉跌。&#10;'
+      + '排序帶方向：降冪是連漲最久的在上、升冪是連跌最久的在上。&#10;'
+      + '日線是進頁後才補的，還沒算完的那幾檔會暫時墊底，補完自動歸位。') +
     _wtTh('px', '現價', 'num') + _wtTh('chg', '漲跌', 'num', '超過門檻的數字底下會多一條線，漲紅跌綠。門檻在參數設定的「顯示標記」') +
     (typeof esWatchHeads === 'function' ? esWatchHeads() : '') + '<th></th></tr></thead><tbody>';
   // 6：〔細／成〕｜代號｜趨勢｜現價｜漲跌｜移除（成份股與明細併成一格之後少一欄）

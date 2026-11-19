@@ -416,6 +416,14 @@ async function rbDayBars(code) {
   code = String(code);
   var need = _rbNeedDay(), ck = code + '|' + need;
   if (_rbDayBars[ck] !== undefined) return _rbDayBars[ck];
+  // 比基準日更新的那幾根要濾掉。
+  //
+  // 兩條路徑都會吐出今天還沒收完的那一根：静態檔在排程重產之後會有，
+  // 券商分 K 聚出來的更是盤中每一筆都在變。把它當成一天數，連續天數會跟著盤中跳。
+  // 2026-11-19 12:16 實測：2330 用到了 11/19 當下的 2135，實際應該數到 11/18 為止。
+  var cut = function (a) {
+    return (a || []).filter(function (x) { return x && x.d && x.d <= need; });
+  };
   var p2 = (async function () {
     // 1) 靜態日 K
     try {
@@ -423,7 +431,7 @@ async function rbDayBars(code) {
       if (r.ok && typeof _chartDkUnpack === 'function') {
         var b = _chartDkUnpack(await r.json());
         if (b && b.length > 1 && b[b.length - 1].d >= need) {
-          return b.slice(-12).map(function (x) { return { d: x.d, c: x.c, a: (x.ac > 0 ? x.ac : x.c) }; });
+          return cut(b).slice(-12).map(function (x) { return { d: x.d, c: x.c, a: (x.ac > 0 ? x.ac : x.c) }; });
         }
       }
     } catch (e) { /* 靜態檔沒有不是錯誤，往下走 */ }
@@ -454,7 +462,7 @@ async function rbDayBars(code) {
         order.sort();
         // 分 K 沒有還原價，a 填收盤。除息當天會被當成下跌，
         // 這些頁面的代號多是個股、除息日稀少，而且靜態日 K 那條（持股）本來就有還原價。
-        return order.map(function (d2) { return { d: d2, c: byD[d2], a: byD[d2] }; });
+        return cut(order.map(function (d2) { return { d: d2, c: byD[d2], a: byD[d2] }; }));
       }
     } catch (e2) { hush('rebound', e2); }
     return null;
@@ -483,7 +491,10 @@ async function _rbStreakPass(root) {
         // 舊版是「格子不在就 continue」，而且那一行在存快取之前：等於請求送出去、
         // 資料也回來了，只因為表格在等待的那段時間重畫過，整份結果就被丟掉，
         // 下一輪還要再查一次。更糟的是舊版連重試都沒有，那一列的趨勢就永遠停在佔位框。
-        _rbStreakDone[key] = bars ? (_rbStreak(bars) ? _rbStreakSub(bars, sm) : '') : '';
+        var kk = _rbStreak(bars);
+        _rbStreakDone[key] = bars ? (kk ? _rbStreakSub(bars, sm) : '') : '';
+        // 排序用的數值跟著存。鍵不帶 sm：同一檔在精簡與完整版是同一個連續天數。
+        if (kk) _rbStreakNum[String(code) + '|' + _rbNeedDay()] = kk.dir * kk.n;
       }
       if (!el.isConnected) continue;
       var h = _rbStreakDone[key];
@@ -501,16 +512,41 @@ async function _rbStreakPass(root) {
 // 填完再掃一次。表格在填的途中重畫過的話，舊格子已經不在畫面上、新格子是空的，
 // 單跑一輪會留下填不到的列。2026-11-17 實測成分股曝險 20 檔裡有 1 檔停在佔位框。
 // 第二輪開始結果都在快取裡，不會再送請求，所以多跑幾輪幾乎沒有成本。
+// 依趨勢排序時，日線補完的那一刻順序才算數，所以補完要再畫一次。
+// 不補的話畫面會停在「全部墊底」的那一版，點了排序看起來像沒反應。
+function _rbStreakReorder() {
+  if (typeof _wtSort === 'undefined' || !_wtSort) return;
+  if (_wtSort.replace(/(Asc|Desc)$/, '') !== 'streak') return;
+  if (typeof _wtTab !== 'undefined' && _wtTab !== 'list') return;
+  var v = document.getElementById('watch-view');
+  if (!v || v.style.display === 'none') return;
+  if (typeof renderWatch === 'function') renderWatch();
+}
 async function rbStreakFill(root) {
   for (var pass = 0; pass < 3; pass++) {
     await _rbStreakPass(root);
     if (!(root || document).querySelectorAll('.rb-bsub[data-sc]').length) break;
   }
+  _rbStreakReorder();
 }
 // 算好的徽章 HTML。即時持股逐筆行情每一筆就整表重建，
 // 若每次都從空框重新填，徽章會跳一下（填的那一段是非同步的）。
 // 有快取就能同步畫出來，第二筆以後不再闪。
 // 值是空字串代表「這檔沒有日線」，也要快取，不要每次再放一個空框。
+// 排序要的是一個數字，不是那段 HTML。
+//
+// 連續天數帶方向：連漲 N 天記成 +N、連跌 N 天記成 −N、平盤 0、
+// 轉向那兩種記成 ±1（它就是只有一天）。降冪排是連漲最久的在上、升冪是連跌最久的在上。
+// 買進要找的是跌了一段的，所以升冪才是常用的那一邊。
+//
+// 日線是非同步補上去的，所以這份快取只有已經算完的那幾檔有值。
+// 還沒算完的回 null，排序會把它們墊底，等補完重畫就歸位。
+var _rbStreakNum = {};
+function rbStreakVal(code) {
+  var k = String(code) + '|' + _rbNeedDay();
+  return (_rbStreakNum[k] === undefined) ? null : _rbStreakNum[k];
+}
+
 var _rbStreakDone = {};
 // 佔位：先畫空框佔住寬度，資料回來再填
 function rbStreakSlot(code, compact) {
