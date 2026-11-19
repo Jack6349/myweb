@@ -384,6 +384,52 @@ function _ovbCard(code) {
       + '<span class="ovb-r30lab' + _ovbLabPos(hp, dir) + '">' + v30.toFixed(0) + '%</span></div>';
   };
 
+  // ── 過半的那一段：掛價上面一條細 Bar ──
+  //
+  // 掛價那一行已經把過半的打亮，但那要你注意到哪幾個是亮的。
+  // 這一條把「能掛到的範圍有多寬」變成一個長度，用餘光就讀得到。
+  //
+  // 買賣各一條，在前收分界：左半邊是「掛這個價買得到」、右半邊是「掛這個價賣得掉」，
+  // 兩個不同的動作。一條連續的 Bar 會被讀成一個區間，那是錯的。
+  //
+  // 不連續就不連起來。過半的欄位不保證相鄰，樣本少的時候可能出現 55、48、52，
+  // 畫成一整條等於憑空宣稱中間那一檔也過半。斷開本身就是資訊。
+  //
+  // 顏色沿用柱子的買金賣藍，不用橘：橘色在這個專案是警示色（夜推股票的「超出刻度」），
+  // 拿來標一件好事會把它的意思弄反。
+  var onOf = function (c, side) {
+    var v = pick(main, side, c.k);
+    return v != null && v > OVB_HI;
+  };
+  var segs = [];                       // 依畫面順序：買側每欄一格、前收兩格、賣側每欄一格
+  cells.forEach(function (c) {
+    if (c.side === 'mid') {
+      segs.push({ side: 'buy', on: onOf(c, 'buy'), half: 'l' });
+      segs.push({ side: 'sell', on: onOf(c, 'sell'), half: 'r' });
+    } else {
+      segs.push({ side: c.side, on: onOf(c, c.side) });
+    }
+  });
+  // 跟左右鄰居接不接得上。只有同一側、而且兩邊都過半才接，所以前收那裡不會跨側黏起來。
+  segs.forEach(function (s, i) {
+    var L = segs[i - 1], R = segs[i + 1];
+    s.jl = !!(s.on && L && L.on && L.side === s.side);
+    s.jr = !!(s.on && R && R.on && R.side === s.side);
+  });
+  var si = 0;
+  var rngCell = function (c) {
+    var inner = function (s) {
+      if (!s.on) return '<span class="ovb-rseg"></span>';
+      return '<span class="ovb-rseg ovb-ron ovb-' + s.side
+        + (s.jl ? ' ovb-jl' : '') + (s.jr ? ' ovb-jr' : '') + '"></span>';
+    };
+    if (c.side === 'mid') {
+      var a = segs[si++], b = segs[si++];
+      return '<div class="ovb-rng ovb-rng2">' + inner(a) + inner(b) + '</div>';
+    }
+    return '<div class="ovb-rng">' + inner(segs[si++]) + '</div>';
+  };
+
   var h = head + '<div class="ovb-chart">';
   cells.forEach(function (c) {
     var px = _bsAlign(last + (c.side === 'sell' ? 1 : (c.side === 'buy' ? -1 : 0)) * c.k * tick);
@@ -411,6 +457,7 @@ function _ovbCard(code) {
       + (c.side === 'mid'
           ? rate1(pick(main, 'buy', 0)) + '<span class="ovb-sl">／</span>' + rate1(pick(main, 'sell', 0))
           : rate1(pick(main, c.side, c.k))) + '</div>'
+      + rngCell(c)
       // 價格數字的亮度跟著成交率走：過半的亮、沒過半的淡。
       // 掃一整排的時候先看到的是「哪幾個價掛得到」，不必逐欄讀百分比。
       + '<div class="ovb-px' + (_ovbTop(main, pick, c) > OVB_HI ? ' ovb-pxhi' : '') + '">'
@@ -528,11 +575,18 @@ function ovcBondHtml() {
     + '照時間排隊，日內最低只碰到一次的那種日子不一定輪得到你。'
     + '要判斷划不划算得看別的東西，這一頁不回答。</dd>'
 
-    + '<dt>掛價的亮度</dt><dd>成交率過半（超過 50%）的掛價，價格數字是亮白的，'
-    + '其餘的壓暗。50% 不是統計算出來的門檻，就是「碰得到的日子比碰不到的多」這條線。'
+    + '<dt>過半的那一段</dt><dd>成交率過半（超過 50%）的掛價，價格數字是亮白的，'
+    + '其餘的壓暗，而且掛價上面會多一條細 Bar 把連續過半的那一段橫起來。'
+    + '數字要逐欄讀，Bar 把「能掛到的範圍有多寬」變成一個長度，用餘光就讀得到。'
+    + '<br><b>買賣各一條，在前收分界</b>：左半邊是「掛這個價買得到」、'
+    + '右半邊是「掛這個價賣得掉」，兩個不同的動作，一條連續的 Bar 會被讀成一個區間。'
+    + '不連續就不連起來：過半的欄位不保證相鄰，斷開本身就是資訊。'
+    + '<br>50% 不是統計算出來的門檻，就是「碰得到的日子比碰不到的多」這條線。'
     + '<br>百分比那一行跟價格同一條線：過半的亮白，三成到五成的中間色，不到三成的壓暗。'
     + '<br>前收那一欄有買賣兩根柱，只要其中一邊過半就算亮。'
-    + '<br>不能告訴你什麼：亮只代表掛得到，不代表該掛。往左每多掛一檔成本少 0.01 元，'
+    + '<br>不能告訴你什麼：過半不是保證，Bar 畫成一條實心的會看起來像一個穩固的區域，'
+    + '實際上它只說「碰得到的日子比較多」。同一價位的委託照時間排隊，碰過不代表輪得到你。'
+    + '亮也只代表掛得到，不代表該掛。往左每多掛一檔成本少 0.01 元，'
     + '最亮的那幾個通常是最靠近前收、也最貴的那幾個。</dd>'
 
     + '<dt>今天碰到哪裡</dt><dd>每一欄最底下那顆圓點。實心代表今天的日內最低（賣出那半邊是最高）'

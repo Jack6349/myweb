@@ -2708,6 +2708,19 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-rate.ovb-na { color: var(--text3); font-weight: 400; }
 /* 掛價的亮度跟著成交率：過半的亮白加粗，其餘壓暗。
    不用紅綠：紅綠在這一頁是漲跌，而「掛不掛得到」不是漲跌。 */
+/* 過半的那一段。每一欄一格，相鄰且同一側都過半才接起來；
+   圖表欄距 6px，所以接的那一邊向外長 4px 把縫越过去。
+   做得細（高 5px）且不加光暈：50% 是「碰得到的日子比碰不到的多」，
+   不是保證，畫得太實會看起來比實際確定。 */
+.ovb-rng { display: flex; height: 5px; margin: 5px 0 3px; }
+.ovb-rseg { flex: 1 1 0; height: 100%; border-radius: 3px; }
+.ovb-rseg.ovb-ron.ovb-buy { background: var(--accent2); }
+.ovb-rseg.ovb-ron.ovb-sell { background: var(--accent3); }
+.ovb-rseg.ovb-jl { margin-left: -4px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.ovb-rseg.ovb-jr { margin-right: -4px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* 前收那一欄左半是買、右半是賣，兩段之間留縫，不跟對方黏起來 */
+.ovb-rng2 { gap: 3px; }
+
 .ovb-px { font-size: 15.5px; color: var(--text3); font-variant-numeric: tabular-nums; }
 .ovb-px.ovb-pxhi { color: var(--text); font-weight: 700; }
 .ovb-off { font-size: 12.5px; color: var(--th); font-weight: 600; }
