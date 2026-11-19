@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>夜推股票 單檔瀏覽測試</title>
+<style>
+:root{
+  --bg:#0e1621; --bg2:#16202e; --bg3:#1b2736; --border:#3a4f68;
+  --text:#e8eef5; --text2:#9db0c4; --text3:#7b8ea4;
+  --accent:#e8b84b; --accent2:#f0cc7a; --up:#ff5252; --down:#26d962;
+  --th:#c9955a; --sub:#e07fae; --note:#7fc8db; --sum:#a5e9f7;
+  --accent3:#5aa9ff; --warn:#ff9f43; --caution:#f5d87a;
+  --border-strong:#435a78;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:18px 20px 40px;background:var(--bg);color:var(--text);
+  font:14px/1.55 "Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums}
+h1{font-size:18px;font-weight:700;color:var(--accent2);margin:0 0 4px;
+  padding-left:9px;border-left:4px solid var(--accent)}
+.lead{font-size:12px;color:var(--note);margin:0 0 12px;max-width:1100px;line-height:1.8}
+
+/* ── 排序列 ── */
+.sortbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.slb{font-size:13.5px;color:var(--th);font-weight:600}
+.sb{background:var(--bg3);border:1px solid var(--border);color:var(--text2);
+  border-radius:6px;padding:4px 12px;font:600 13px/1 inherit;cursor:pointer}
+.sb.on{border-color:var(--accent3);color:var(--text)}
+
+/* ── 兩欄 ── */
+.wrap{display:flex;gap:18px;align-items:flex-start}
+.side{width:430px;flex:none;display:flex;flex-direction:column;gap:6px}
+.main{flex:1;min-width:0}
+
+/* ── 左側清單 ── */
+.row{position:relative;background:var(--bg2);border:1px solid var(--border);
+  border-radius:8px;padding:7px 11px 8px 13px;cursor:pointer;text-align:left;
+  color:inherit;font:inherit;display:block;width:100%}
+.row::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;
+  border-radius:0 3px 3px 0;background:transparent}
+.row:hover{border-color:var(--border-strong)}
+.row.on{background:var(--bg3);border-color:var(--accent3)}
+.row.on::before{background:var(--accent3)}
+.r1{display:flex;align-items:baseline;gap:7px}
+.r1 .cd{font-size:15px;font-weight:700;color:var(--text)}
+.r1 .nm{font-size:12.5px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.tagh{margin-left:auto;font-size:10.5px;font-weight:700;color:var(--accent2);
+  border:1px solid var(--accent2);border-radius:4px;padding:0 5px;flex:none}
+.r2{display:flex;align-items:baseline;gap:6px;margin-top:3px;white-space:nowrap}
+.r2 .k{font-size:11px;color:var(--th);font-weight:600}
+.r2 b{font-weight:700;color:var(--text)}
+.r2 .sep{color:var(--border-strong);margin:0 3px}
+.r2 .flat{color:var(--text3)}
+.dn{color:var(--down)} .upc{color:var(--up)}
+
+/* ── 右側 ── */
+.panel{background:var(--bg2);border:1px solid var(--border-strong);border-radius:10px;
+  padding:14px 16px 10px}
+.ptitle{display:flex;align-items:baseline;gap:9px;margin-bottom:2px}
+.ptitle .cd{font-size:19px;font-weight:700}
+.ptitle .nm{font-size:14px;color:var(--text2)}
+.ptitle .sp{margin-left:auto;font-size:15px}
+.ptitle .sp .k{font-size:12px;color:var(--th);font-weight:600;margin-right:5px}
+.ptitle .sp b{font-weight:700;margin-right:12px}
+
+.lg{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:12px 0 0;padding-left:36px}
+.lg i{display:flex;align-items:center;gap:6px;font-style:normal;font-size:12px;
+  font-weight:700;white-space:nowrap}
+.lg u{display:inline-block;width:20px;height:0;text-decoration:none;border-top-width:2.4px}
+.u1{border-top-style:solid;border-top-color:var(--accent2)}
+.u2{border-top-style:dashed;border-top-color:var(--sum)}
+.u3{border-top-style:solid;border-top-color:var(--accent3)}
+
+.ch{position:relative;margin:4px 0 0;padding:0 60px 0 36px}
+.pa{position:relative}
+.pa svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.hl{position:absolute;left:0;right:0;border-top:1px solid var(--border);opacity:.4}
+.hl.h50{border-top-style:dashed;opacity:.85;border-color:var(--border-strong)}
+.hl.h0{opacity:.9}
+.yl{position:absolute;right:calc(100% + 7px);transform:translateY(50%);
+  font-size:11px;color:var(--text3);white-space:nowrap}
+
+.cv{fill:none;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.cvl{stroke:var(--accent2);stroke-width:3.4}
+.cvl-d{stroke:color-mix(in srgb,var(--accent2) 42%,#0b1119);stroke-width:1.8}
+.cvc{stroke:var(--sum);stroke-width:2.4;stroke-dasharray:5 3}
+.cvc-d{stroke:color-mix(in srgb,var(--sum) 38%,#0b1119);stroke-width:1.4;stroke-dasharray:5 3}
+.ar{fill:var(--accent2);opacity:.09;stroke:none}
+
+.pt{position:absolute;width:8px;height:8px;border-radius:50%;
+  transform:translate(-50%,50%);border:1.5px solid var(--bg2)}
+.pt.ptk{width:11px;height:11px;border-width:2px}
+.ptl{position:absolute;font-size:12.5px;font-weight:700;white-space:nowrap;line-height:13px;
+  text-shadow:0 0 4px var(--bg2),0 0 3px var(--bg2),0 0 2px var(--bg2),0 0 1px var(--bg2)}
+.ptl.lft{transform:translate(-100%,50%);padding-right:9px}
+.ptl.rgt{transform:translate(0,50%);padding-left:9px}
+
+.vl{position:absolute;bottom:0;width:0;border-left-width:2px;border-left-style:solid}
+.vd{position:absolute;width:11px;height:11px;transform:translate(-50%,50%) rotate(45deg);
+  border:1.5px solid var(--bg2)}
+.vt{position:absolute;transform:translate(-50%,0);font-size:12.5px;font-weight:700;
+  white-space:nowrap;text-align:center;line-height:1.3;
+  text-shadow:0 0 4px var(--bg2),0 0 3px var(--bg2),0 0 2px var(--bg2),0 0 1px var(--bg2)}
+
+.gp{margin-top:6px}
+.gn{position:relative;height:20px}
+.gn span{position:absolute;transform:translateX(-50%);top:4px;font-size:13px;
+  font-weight:700;white-space:nowrap}
+.tk{position:absolute;top:0;width:1px;height:4px;background:var(--border)}
+.gb{position:relative;height:14px}
+.gb em{position:absolute;top:3px;height:6px;border-left-width:1px;border-right-width:1px;
+  border-top-width:1.5px;border-left-style:solid;border-right-style:solid;border-top-style:solid}
+.gb b{position:absolute;top:0;left:0;font-size:11px;line-height:12px;font-weight:700;
+  white-space:nowrap}
+.c1{color:var(--accent2);border-color:var(--accent2)}
+.c2{color:var(--sum);border-color:var(--sum)}
+
+.foot{display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border);
+  margin-top:10px;padding-top:7px;font-size:13px;color:var(--text2)}
+.foot b{color:var(--text);font-weight:700;margin-left:4px}
+.note{font-size:11.5px;color:var(--note);line-height:1.85;margin:14px 0 0}
+.note b{color:var(--accent2)}
+</style>
+</head>
+<body>
+
+<h1>夜推股票　單檔瀏覽測試</h1>
+<p class="lead">全部是真實資料，2026-11-19 收盤後從 app 裡實際算出來的那一組，推的是 11/20 這一盤。
+左側點任一檔，右側換圖。11/20 還沒開盤，所以圖上沒有標記；想看標記長什麼樣，按「模擬盤中」。</p>
+
+<div class="sortbar">
+  <span class="slb">持有優先，再依</span>
+  <span id="sorts"></span>
+  <span style="flex:1"></span>
+  <button class="sb" id="mk">模擬盤中</button>
+</div>
+
+<div class="wrap">
+  <div class="side" id="side"></div>
+  <div class="main"><div class="panel" id="panel"></div>
+    <p class="note" id="note"></p></div>
+</div>
+
+<script>
+var PH = 240;          // 圖高
+var DATA = [{"c":"00402A","nm":"主動安聯美國科技","hd":1,"b":8.69,"bd":"2026-11-19","ll":8.61,"lh":8.79,"lp":8.72,"fi":45.3,"cl":8.66,"ch":8.84,"cp":8.75,"lm":0.29,"sl":1.161,"cm":0.683,"sc":1.1,"co":9.04,"vx":1.68,"r2":0.45,"n":115,"ix":0,"sp":8.69,"zl":[-3.71,-1.887,-1.358,-1.198,-1.138,-0.737,-0.573,-0.523,-0.476,-0.435,-0.227,-0.098,-0.054,-0.028,0.082,0.113,0.256,0.333,0.355,0.431,0.468,0.514,0.631,0.664,0.749,0.84,0.953,1.092,1.383,1.763,2.597],"zc":[-2.941,-1.967,-1.584,-0.958,-0.86,-0.779,-0.716,-0.578,-0.426,-0.373,-0.309,-0.242,-0.102,-0.063,-0.025,0.086,0.118,0.154,0.26,0.278,0.386,0.485,0.535,0.565,0.768,0.905,1.038,1.125,1.309,1.502,2.851]},
+{"c":"00404A","nm":"主動聯博動能50","hd":1,"b":7.48,"bd":"2026-11-19","ll":7.3,"lh":7.6,"lp":7.48,"fi":34.2,"cl":7.36,"ch":7.72,"cp":7.54,"lm":-0.027,"sl":2.133,"cm":0.803,"sc":2.533,"co":9.34,"vx":2.79,"r2":0.37,"n":116,"ix":0,"sp":7.48,"zl":[-3.333,-2.513,-2.019,-1.771,-1.609,-0.984,-0.589,-0.325,-0.259,-0.158,-0.017,0.074,0.118,0.182,0.24,0.344,0.409,0.489,0.522,0.561,0.614,0.658,0.679,0.75,0.893,0.962,1.033,1.102,1.267,1.436,2.015],"zc":[-2.905,-2.458,-2.38,-1.701,-1.47,-0.718,-0.614,-0.555,-0.43,-0.342,-0.129,-0.075,0.013,0.097,0.154,0.175,0.201,0.227,0.247,0.318,0.381,0.429,0.506,0.594,0.618,0.659,0.79,0.983,1.457,1.931,2.652]},
+{"c":"00405A","nm":"主動富邦台灣龍耀","hd":1,"b":6.09,"bd":"2026-11-19","ll":5.85,"lh":6.17,"lp":6.04,"fi":33.8,"cl":5.9,"ch":6.32,"cp":6.11,"lm":-0.851,"sl":2.836,"cm":0.313,"sc":3.624,"co":8.54,"vx":1.57,"r2":0.26,"n":120,"ix":0,"sp":6.09,"zl":[-2.526,-2.336,-2.079,-1.948,-1.383,-1.196,-0.844,-0.722,-0.656,-0.22,0.003,0.058,0.1,0.195,0.254,0.276,0.297,0.356,0.422,0.496,0.53,0.568,0.644,0.777,0.837,0.972,1.104,1.137,1.241,1.407,1.748],"zc":[-2.551,-2.216,-1.925,-1.425,-1.276,-1.064,-0.869,-0.782,-0.455,-0.327,-0.28,-0.228,-0.124,0.083,0.142,0.22,0.276,0.326,0.405,0.523,0.606,0.654,0.693,0.805,0.847,0.933,1.04,1.107,1.503,1.685,2.135]},
+{"c":"00406A","nm":"主動中信台灣收益","hd":1,"b":6.37,"bd":"2026-11-19","ll":6.14,"lh":6.47,"lp":6.33,"fi":31.4,"cl":6.19,"ch":6.6,"cp":6.4,"lm":-0.573,"sl":2.84,"cm":0.435,"sc":3.343,"co":7.46,"vx":1.56,"r2":0.25,"n":110,"ix":0,"sp":6.37,"zl":[-3.715,-2.404,-2.233,-1.485,-1.212,-0.848,-0.593,-0.428,-0.289,-0.146,0.057,0.133,0.189,0.296,0.4,0.438,0.483,0.54,0.58,0.601,0.623,0.665,0.701,0.759,0.797,0.975,1.025,1.088,1.149,1.304,1.399],"zc":[-3.482,-2.321,-1.705,-1.576,-1.095,-0.806,-0.691,-0.649,-0.536,-0.37,-0.165,-0.042,0.008,0.138,0.191,0.226,0.289,0.321,0.365,0.401,0.467,0.51,0.556,0.599,0.762,0.833,1,1.236,1.298,1.677,2.416]},
+{"c":"00407A","nm":"主動凱基台灣","hd":1,"b":6.86,"bd":"2026-11-19","ll":6.62,"lh":7,"lp":6.84,"fi":32.3,"cl":6.67,"ch":7.15,"cp":6.91,"lm":-0.293,"sl":2.935,"cm":0.776,"sc":3.618,"co":8.38,"vx":1.56,"r2":0.29,"n":105,"ix":0,"sp":6.86,"zl":[-2.739,-2.361,-2.182,-1.862,-1.528,-1.179,-0.85,-0.661,-0.479,-0.079,0.033,0.065,0.166,0.235,0.261,0.331,0.369,0.418,0.443,0.577,0.672,0.745,0.809,0.814,0.829,0.889,1.01,1.096,1.273,1.304,2.009],"zc":[-3.085,-2.273,-2.045,-1.519,-1.242,-1.089,-1.001,-0.707,-0.524,-0.435,-0.329,-0.166,-0.09,-0.024,0.102,0.127,0.165,0.197,0.273,0.314,0.421,0.54,0.594,0.71,0.843,0.925,1.115,1.279,1.42,1.497,2.47]},
+{"c":"00927","nm":"群益半導體收益","hd":1,"b":27.87,"bd":"2026-11-19","ll":27.26,"lh":28.52,"lp":27.99,"fi":37.8,"cl":27.5,"ch":28.97,"cp":28.23,"lm":0.443,"sl":2.425,"cm":1.308,"sc":2.763,"co":28.54,"vx":1,"r2":0.39,"n":442,"ix":0,"sp":27.87,"zl":[-7.703,-2.324,-1.76,-1.333,-1.023,-0.832,-0.638,-0.502,-0.389,-0.255,-0.182,-0.039,0.021,0.088,0.17,0.222,0.326,0.38,0.432,0.483,0.565,0.626,0.709,0.767,0.858,0.948,1.053,1.226,1.398,1.66,3.499],"zc":[-7.32,-2.364,-1.7,-1.323,-1.073,-0.861,-0.709,-0.619,-0.526,-0.439,-0.378,-0.314,-0.21,-0.111,-0.063,-0.005,0.074,0.16,0.216,0.286,0.374,0.491,0.637,0.746,0.824,0.981,1.109,1.318,1.474,1.927,2.962]},
+{"c":"00981A","nm":"主動統一台股增長","hd":1,"b":20.23,"bd":"2026-11-19","ll":19.55,"lh":20.79,"lp":20.27,"fi":40.2,"cl":19.73,"ch":21.24,"cp":20.49,"lm":0.215,"sl":3.297,"cm":1.283,"sc":3.901,"co":22.19,"vx":1.53,"r2":0.33,"n":363,"ix":0,"sp":20.23,"zl":[-3.353,-2.526,-2.015,-1.645,-1.26,-1.01,-0.756,-0.572,-0.437,-0.309,-0.191,-0.048,-0.003,0.071,0.138,0.199,0.26,0.345,0.432,0.544,0.63,0.68,0.743,0.811,0.884,1.006,1.121,1.282,1.379,1.589,2.861],"zc":[-3.519,-2.313,-1.881,-1.405,-1.19,-0.996,-0.834,-0.745,-0.546,-0.441,-0.37,-0.267,-0.141,-0.075,-0.018,0.075,0.162,0.303,0.388,0.458,0.522,0.594,0.696,0.774,0.899,0.997,1.204,1.44,1.581,1.868,2.959]},
+{"c":"00988A","nm":"主動統一全球創新","hd":1,"b":12.38,"bd":"2026-11-19","ll":12.2,"lh":12.64,"lp":12.45,"fi":47.7,"cl":12.3,"ch":12.84,"cp":12.57,"lm":0.605,"sl":1.91,"cm":1.548,"sc":2.311,"co":12.9,"vx":1.51,"r2":0.49,"n":258,"ix":1,"sp":12.38,"zl":[-3.038,-2.282,-1.79,-1.566,-1.275,-1,-0.714,-0.535,-0.474,-0.382,-0.32,-0.242,-0.151,-0.062,-0.026,0.032,0.112,0.169,0.254,0.325,0.446,0.553,0.63,0.728,0.808,0.898,1.054,1.274,1.518,1.928,3.528],"zc":[-3.079,-2.082,-1.63,-1.342,-1.177,-0.926,-0.783,-0.64,-0.563,-0.439,-0.356,-0.233,-0.151,-0.106,-0.024,0.047,0.106,0.165,0.245,0.297,0.415,0.477,0.595,0.689,0.82,0.97,1.161,1.314,1.655,2.005,4.785]},
+{"c":"00999A","nm":"主動野村臺灣高息","hd":1,"b":8.15,"bd":"2026-11-19","ll":7.92,"lh":8.28,"lp":8.13,"fi":38.2,"cl":7.98,"ch":8.4,"cp":8.19,"lm":-0.193,"sl":2.359,"cm":0.492,"sc":2.703,"co":9.82,"vx":1.69,"r2":0.31,"n":142,"ix":0,"sp":8.15,"zl":[-3.213,-2.374,-2.123,-1.85,-1.653,-1.321,-1.032,-0.688,-0.511,-0.307,-0.2,-0.079,0.092,0.142,0.213,0.332,0.39,0.425,0.459,0.58,0.637,0.674,0.713,0.772,0.84,0.867,1.082,1.158,1.295,1.478,1.859],"zc":[-2.812,-2.342,-2.052,-1.831,-1.496,-1.107,-0.991,-0.782,-0.569,-0.455,-0.276,-0.136,-0.075,0.031,0.048,0.084,0.163,0.228,0.345,0.394,0.434,0.526,0.625,0.668,0.741,0.885,1.062,1.206,1.615,1.997,2.379]}];
+
+var px = function (v) { return v == null ? '—' : v.toFixed(2); };
+var pc = function (v) { return (v > 0 ? '+' : (v < 0 ? '−' : '')) + Math.abs(v).toFixed(2) + '%'; };
+
+function cdf(zq, base, mid, sd) {
+  if (!zq || !(base > 0) || mid == null || !(sd > 0)) return null;
+  var n = zq.length - 1;
+  return function (p) {
+    var z = ((p / base - 1) * 100 - mid) / sd;
+    if (z <= zq[0]) return 0;
+    if (z >= zq[n]) return 100;
+    for (var i = 1; i <= n; i++) {
+      if (z <= zq[i]) {
+        var w = zq[i] - zq[i - 1];
+        return (i - 1 + (w > 0 ? (z - zq[i - 1]) / w : 0)) / n * 100;
+      }
+    }
+    return 100;
+  };
+}
+function tick(p) { return p < 10 ? 0.01 : (p < 50 ? 0.05 : (p < 100 ? 0.1 : 0.5)); }
+
+function win(r) {
+  var P = function (v) { return (v / r.b - 1) * 100; };
+  var pad = Math.max(r.lh - r.ll, r.ch - r.cl) * 0.55;
+  var a = [P(r.ll - pad), P(r.lh + pad), P(r.cl - pad), P(r.ch + pad), P(r.lp), P(r.cp)];
+  if (r.live) a.push(P(r.live));
+  if (r.liveLo) a.push(P(r.liveLo));
+  return { mn: Math.min.apply(null, a), mx: Math.max.apply(null, a) };
+}
+// 單檔瀏覽的軸寬各自算，不共用。
+// 共用是為了讓框跟框之間能比長度，那是九張圖並排時才成立的好處；
+// 一次只看一張的時候，共用只會讓低波動的那幾檔縮在一成版面裡。
+// 00402A 的殘差寬度 1.16%、00981A 是 3.30%，差三倍，共用必定犧牲其中一邊。
+function axis(r) {
+  var w = win(r);
+  return Math.max(1, Math.ceil((w.mx - w.mn) * 1.06 * 4) / 4);
+}
+
+// ── 左側一列 ──
+function rowHtml(r, on) {
+  var d = r.sp == null ? null : r.sp - r.b;
+  var cls = d == null ? 'flat' : (d > 0 ? 'upc' : (d < 0 ? 'dn' : 'flat'));
+  var ar = d == null ? '' : (d > 0 ? '▲' : '▼');
+  return '<button class="row' + (on ? ' on' : '') + '" data-c="' + r.c + '">'
+    + '<span class="r1"><span class="cd">' + r.c + '</span>'
+    + '<span class="nm">' + r.nm + '</span>'
+    + (r.hd ? '' : '<span class="tagh">關注</span>') + '</span>'
+    + '<span class="r2"><span class="k">掛買參考</span><b>' + px(r.lp) + '</b>'
+    + '<span class="k">成交機率</span><b style="color:'
+      + (r.fi > 50 ? 'var(--text)' : 'var(--text2)') + '">' + Math.round(r.fi) + '%</b>'
+    + '<span class="sep">｜</span>'
+    + '<b class="' + cls + '">' + px(r.sp) + '</b>'
+    + '<b class="' + cls + '">' + ar + Math.abs(d || 0).toFixed(2) + '</b>'
+    + '<b class="' + cls + '">' + ar + Math.abs(r.b ? (d || 0) / r.b * 100 : 0).toFixed(2) + '%</b>'
+    + '</span></button>';
+}
+
+// ── 右側一張圖 ──
+function panelHtml(r, SPAN) {
+  var P = function (v) { return (v / r.b - 1) * 100; };
+  var w = win(r), LO = (w.mn + w.mx) / 2 - SPAN / 2;
+  var X = function (p) { return Math.max(0, Math.min(100, (p - LO) / SPAN * 100)); };
+  var XV = function (v) { return X(P(v)); };
+  var fL = cdf(r.zl, r.b, r.lm, r.sl), fC = cdf(r.zc, r.b, r.cm, r.sc);
+  var d = r.sp == null ? null : r.sp - r.b;
+  var scls = d == null ? 'flat' : (d > 0 ? 'upc' : (d < 0 ? 'dn' : 'flat'));
+
+  var M = [];
+  if (r.live) M.push({ k: '現價', v: r.live, c: 'var(--accent3)' });
+  if (r.liveLo) M.push({ k: '今低', v: r.liveLo, c: 'var(--sum)' });
+  M.sort(function (a, b) { return XV(a.v) - XV(b.v); });
+  var grp = [];
+  M.forEach(function (m) {
+    var g = grp[grp.length - 1];
+    if (g && Math.abs(XV(m.v) - XV(g[0].v)) < 7) g.push(m); else grp.push([m]);
+  });
+  grp.forEach(function (g) {
+    g.x = g.reduce(function (a, m) { return a + XV(m.v); }, 0) / g.length;
+    g.f = fL ? fL(g[0].v) : 50;
+    g.down = g.f > 80;
+    // 標記那一塊字的上下緣（距離圖底的 px）。節點標價要拿它來判斷會不會撞上。
+    g.y0 = g.f * PH / 100 + (g.down ? -(9 + 16 * g.length) : 9);
+    g.y1 = g.y0 + 16 * g.length;
+  });
+  var mkX = M.map(function (m) { return XV(m.v); });
+  var busy = function (x, dir) {
+    return mkX.some(function (u) { return (u - x) * dir > -1.5 && Math.abs(u - x) < 9; });
+  };
+
+  var h = '<div class="ptitle"><span class="cd">' + r.c + '</span>'
+    + '<span class="nm">' + r.nm + '</span>'
+    + '<span class="sp"><span class="k">現價</span><b class="' + scls + '">'
+    + px(r.sp) + '</b></span></div>';
+
+  h += '<div class="lg"><i><u class="u1"></u><span style="color:var(--accent2)">掛買成交機率</span></i>'
+    + '<i><u class="u2"></u><span style="color:var(--sum)">收盤跌破機率</span></i>'
+    + (M.length ? '<i><u class="u3"></u><span style="color:var(--accent3)">現價</span></i>' : '')
+    + '</div>';
+
+  h += '<div class="ch"><div class="pa" style="height:' + PH + 'px">';
+  [0, 25, 50, 75, 100].forEach(function (g) {
+    h += '<div class="hl' + (g === 50 ? ' h50' : (g === 0 ? ' h0' : ''))
+      + '" style="bottom:' + g + '%"></div><div class="yl" style="bottom:' + g + '%">' + g + '%</div>';
+  });
+  var path = function (fn, x0, x1) {
+    var dd = '', N = 140;
+    for (var i = 0; i <= N; i++) {
+      var xs = x0 + (x1 - x0) * i / N, p = r.b * (1 + (LO + SPAN * xs) / 100);
+      dd += (i ? 'L' : 'M') + (xs * 1000).toFixed(1) + ','
+        + (100 - Math.max(0, Math.min(100, fn(p)))).toFixed(2);
+    }
+    return dd;
+  };
+  var seg = function (fn, a, b, cls) {
+    var xa = XV(a) / 100, xb = XV(b) / 100;
+    return '<path class="cv ' + cls + '-d" d="' + path(fn, 0, xa) + '"/>'
+      + '<path class="cv ' + cls + '-d" d="' + path(fn, xb, 1) + '"/>'
+      + '<path class="cv ' + cls + '" d="' + path(fn, xa, xb) + '"/>';
+  };
+  h += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none">'
+    + '<path class="ar" d="' + path(fL, 0, 1) + ' L1000,100 L0,100 Z"/>'
+    + seg(fC, r.cl, r.ch, 'cvc') + seg(fL, r.ll, r.lh, 'cvl') + '</svg>';
+
+  var nodes = [
+    { p: r.ll, f: fL(r.ll), c: 'var(--accent2)' },
+    { p: r.lp, f: fL(r.lp), c: 'var(--accent2)', key: 1 },
+    { p: r.lh, f: fL(r.lh), c: 'var(--accent2)' },
+    { p: r.cl, f: fC(r.cl), c: 'var(--sum)' },
+    { p: r.ch, f: fC(r.ch), c: 'var(--sum)' }];
+  nodes.forEach(function (nd) {
+    nd.x = X(P(nd.p));
+    nd.side = (nd.f < 50) ? -1 : 1;
+    if (busy(nd.x, nd.side) && !busy(nd.x, -nd.side)) nd.side = -nd.side;
+    nd.lift = (busy(nd.x, 1) && busy(nd.x, -1)) ? 15 : 0;
+    nd.dup = M.some(function (m) { return Math.abs(m.v - nd.p) < tick(nd.p) * 0.5; });
+
+  });
+  nodes.slice().sort(function (a, b) { return a.f - b.f; }).forEach(function (nd, i, arr) {
+    var pv = arr[i - 1];
+    if (pv && Math.abs(nd.f - pv.f) < 11 && Math.abs(nd.x - pv.x) < 9 && nd.side === pv.side) {
+      if (nd.x >= pv.x) { pv.side = -1; nd.side = 1; } else { pv.side = 1; nd.side = -1; }
+    }
+  });
+  nodes.forEach(function (nd) {
+    h += '<div class="pt' + (nd.key ? ' ptk' : '') + '" style="left:' + nd.x.toFixed(2)
+      + '%;bottom:' + nd.f.toFixed(1) + '%;background:' + nd.c + '"></div>'
+      + (nd.dup ? '' : '<div class="ptl ' + (nd.side < 0 ? 'lft' : 'rgt') + '" style="left:'
+        + nd.x.toFixed(2) + '%;bottom:calc(' + nd.f.toFixed(1) + '% + ' + nd.lift + 'px);color:'
+        + nd.c + '">' + px(nd.p) + '</div>');
+  });
+  grp.forEach(function (g) {
+    h += '<div class="vl" style="left:' + g.x.toFixed(2) + '%;height:' + g.f.toFixed(1)
+      + '%;border-left-color:' + g[0].c + '"></div>'
+      + '<div class="vd" style="left:' + g.x.toFixed(2) + '%;bottom:' + g.f.toFixed(1)
+      + '%;background:' + g[0].c + '"></div>'
+      + '<div class="vt" style="left:' + g.x.toFixed(2) + '%;bottom:calc(' + g.f.toFixed(1) + '% '
+      + (g.down ? '- ' + (9 + 16 * g.length) + 'px' : '+ 9px') + ')">'
+      + g.map(function (m) { return '<span style="color:' + m.c + '">' + m.k + ' ' + px(m.v) + '</span>'; })
+        .join('<br>') + '</div>';
+  });
+  h += '</div>';
+
+  var bar = function (a, b, cls, lab) {
+    var g = '<div class="gp"><div class="gn">';
+    [a, b].forEach(function (v) {
+      g += '<div class="tk" style="left:' + XV(v).toFixed(2) + '%"></div>'
+        + '<span class="' + cls + '" style="left:' + XV(v).toFixed(2) + '%">' + px(v) + '</span>';
+    });
+    return g + '</div><div class="gb"><b class="' + cls + '">' + lab + '</b>'
+      + '<em class="' + cls + '" style="left:' + XV(a).toFixed(2) + '%;width:'
+      + (XV(b) - XV(a)).toFixed(2) + '%"></em></div></div>';
+  };
+  h += bar(r.ll, r.lh, 'c1', '掛買區間') + bar(r.cl, r.ch, 'c2', '收盤區間') + '</div>';
+
+  h += '<div class="foot"><span>前收<b>' + px(r.b) + '</b></span>'
+    + '<span>成本<b>' + px(r.co) + '</b></span>'
+    + '<span>量能<b>' + r.vx.toFixed(2) + ' 倍</b></span>'
+    + '<span>說明力<b>' + r.r2.toFixed(2) + '</b></span>'
+    + '<span>樣本<b>' + r.n + ' 天</b></span>'
+    + '<span>估收<b>' + px(r.cp) + '</b></span></div>';
+  return h;
+}
+
+// ── 畫完之後量一次，真的疊到才拿掉 ──
+//
+// 字框的高度跟著字型與行高跑，用公式推永遠會差幾個像素，而差幾個像素就是疊到。
+// 一次只畫一張圖，量一次的成本可以忽略。
+// 拿掉的是節點的價，不是標記：標記講的是「現在在哪」，它比區間端點急；
+// 而端點的價在下方那條 Bar 上還看得到，拿掉不會讓資訊消失。
+function fixLabels(root) {
+  var mk = [].slice.call(root.querySelectorAll('.vt')).map(function (e) { return e.getBoundingClientRect(); });
+  [].slice.call(root.querySelectorAll('.ptl')).forEach(function (e) {
+    var a = e.getBoundingClientRect();
+    if (mk.some(function (b) {
+      return a.left < b.right + 2 && b.left - 2 < a.right && a.top < b.bottom + 2 && b.top - 2 < a.bottom;
+    })) { e.style.display = 'none'; }
+  });
+}
+
+var SORTS = [
+  { k: 'lp', t: '掛買參考' }, { k: 'width', t: '區間寬度' },
+  { k: 'vx', t: '量能' }, { k: 'fi', t: '成交機率' },
+  { k: 'r2', t: '說明力' }, { k: 'c', t: '代號' }];
+var sk = 'lp', sel = DATA[0].c, live = false;
+
+function sortVal(r, k) {
+  if (k === 'c') return r.c;
+  if (k === 'lp') return (r.lp / r.b - 1) * 100;
+  if (k === 'width') return (r.ch - r.cl) / r.b * 100;
+  return r[k];
+}
+function draw() {
+  DATA.forEach(function (r) {
+    r.live = live ? r.b * 0.996 : null;
+    r.liveLo = live ? r.ll * 1.004 : null;
+  });
+  var rows = DATA.slice().sort(function (a, b) {
+    if (a.hd !== b.hd) return b.hd - a.hd;
+    var x = sortVal(a, sk), y = sortVal(b, sk);
+    if (sk === 'c') return x < y ? -1 : (x > y ? 1 : 0);
+    return y - x;
+  });
+  document.getElementById('side').innerHTML =
+    rows.map(function (r) { return rowHtml(r, r.c === sel); }).join('');
+  var r = DATA.filter(function (x) { return x.c === sel; })[0];
+  var SPAN = axis(r);
+  document.getElementById('panel').innerHTML = panelHtml(r, SPAN);
+  fixLabels(document.getElementById('panel'));
+  document.getElementById('sorts').innerHTML = SORTS.map(function (s) {
+    return '<button class="sb' + (sk === s.k ? ' on' : '') + '" data-k="' + s.k + '">'
+      + s.t + '</button>';
+  }).join(' ');
+  document.getElementById('mk').className = 'sb' + (live ? ' on' : '');
+  document.getElementById('note').innerHTML =
+    '<b>怎麼看</b>：橫軸是價位，縱軸是機率。金線是掛買成交機率，'
+    + '定義為限價委買掛在某一價位時，當日最低價觸及該價位的機率。'
+    + '價位越低越不容易觸及，所以金線由左下往右上遞增。'
+    + '金線上兩個空心點是掛買區間的上下緣，實心那顆是掛買參考，與圖下金色 Bar 的兩端同一組價位。'
+    + '青色虛線是收盤跌破機率，50% 所在的價位就是估收。'
+    + '<br>橫軸寬度這一檔是 ' + SPAN + ' 個百分點，每一檔各自算，所以每張圖都鋪滿版面；'
+    + '代價是換檔之後長度不能直接互比，要看數字。';
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('button');
+  if (!b) return;
+  if (b.id === 'mk') { live = !live; draw(); return; }
+  if (b.dataset.k) { sk = b.dataset.k; draw(); return; }
+  if (b.dataset.c) { sel = b.dataset.c; draw(); }
+});
+draw();
+</script>
+</body>
+</html>

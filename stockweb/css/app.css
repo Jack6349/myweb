@@ -2505,6 +2505,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-head2 .ovc-h2r > b:last-child { margin-right: 0; }
 .ovc-head2 .ovc-dim { color: var(--text2); }
 .ovc-calc .ovc-head2 .ovc-h2r { background: #19222f; }
+/* 現價自己獨立一框之後，它原本用來跟收盤區間分隔的那條左邊框變成多餘的一條直線 */
+.ovc-head2 .ovx { margin-left: 0; padding-left: 0; border-left: 0; }
 .ovc-calc .ovc-head2 { background: #19222f; }
 
 
