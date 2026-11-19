@@ -129,6 +129,46 @@ function _ovcStagger(arr) {
 // 這三個數字要一起改，只改其中一個會讓標籤壓到橫條或框底的那條線。
 function _ovcLabsH(rows) { return [46, 88, 129, 170][Math.min(rows, 4) - 1]; }
 
+// ── 掛買區間自己一排 ──
+//
+// 原本它是橫條裡的一條帶子，疊在收盤區間下面，而且兩端沒有數字。
+// 2026-11-19 實例：框頭寫著掛買 27.46～27.85，圖上只看得到一條金色的條，
+// 下緣 27.46 從頭到尾沒出現過。收盤區間有「下限」「上限」兩個標籤，它一個都沒有。
+//
+// 拉出來自己一排之後，它跟收盤區間不再搶同一條橫條，兩端的價也印得下。
+// 一排 18px，比塞進錯開的標籤區便宜（那要多一整行 41px）。
+//
+// 兩個數字各自貼著帶子的一端。帶子太窄擠不下兩個的時候，
+// 併成一個「下緣～上緣」置中，不讓它們疊在一起。
+function _ovcBandRow(r, X, P, fillHi) {
+  if (!(r.lLoPx > 0) || !(r.lHiPx > 0)) return '';
+  var a = X(P(r.lLoPx)), b = X(P(r.lHiPx)), w = b - a;
+  var cl = (P(r.lLoPx) < 0 && a <= 0 ? ' ovc-clipl' : '') + (b >= 100 ? ' ovc-clipr' : '');
+  var tip = '掛買區間 ' + _ovPx(r.lLoPx) + ' 到 ' + _ovPx(r.lHiPx)
+    + '。掛限價買進看的是這一段，不是上面那條收盤區間。'
+    + '濃淡跟「掛得到」同一條線：過半轉實、沒過半壓暗。';
+  // 兩個價各約 44px，兩個加起來要 12% 的軸寬。帶子比這窄就併成一個。
+  var wide = w >= 13;
+  // 貼邊的要夾回來，不然會跑出那一排。掛買區間永遠在前收下方，
+  // 所以危險的那一邊幾乎都是左端。
+  var pin = function (x, kind) {
+    if (kind === 'c') return (x < 8) ? ' ovc-bpl" style="left:0%' : ((x > 92) ? ' ovc-bpr" style="left:100%' : ' ovc-bc" style="left:' + x.toFixed(2) + '%');
+    if (kind === 'l') return (x > 88) ? ' ovc-bpr" style="left:100%' : ' ovc-bl" style="left:' + x.toFixed(2) + '%';
+    return (x < 12) ? ' ovc-bpl" style="left:0%' : ' ovc-br" style="left:' + x.toFixed(2) + '%';
+  };
+  var lab = wide
+    ? '<span class="ovc-bnum' + pin(a, 'l') + '">' + _ovPx(r.lLoPx) + '</span>'
+      + '<span class="ovc-bnum' + pin(b, 'r') + '">' + _ovPx(r.lHiPx) + '</span>'
+    : '<span class="ovc-bnum' + pin((a + b) / 2, 'c') + '">'
+      + _ovPx(r.lLoPx) + '～' + _ovPx(r.lHiPx) + '</span>';
+  // 不印「掛買區間」四個字：帶子貼左邊的時候數字會踩到它，
+  // 而圖例、提示、與上方「掛買」標記同一個金色已經說得清楚。
+  return '<div class="ovc-brow" title="' + tip.replace(/"/g, '&quot;') + '">'
+    + '<div class="ovc-bband' + (fillHi ? ' ovc-bhi' : '') + cl
+    + '" style="left:' + a.toFixed(2) + '%;width:' + w.toFixed(2) + '%"></div>'
+    + lab + '</div>';
+}
+
 // 貼著橫條底下的那一條。單行、不參與錯開，所以不會讓框變高。
 function _ovcEstHtml(m, X) {
   if (!m) return '';
@@ -310,13 +350,6 @@ function _ovcCard(r, HI, ticks) {
     h += '<div class="ovc-band' + clip(r.loPx, r.hiPx) + '" style="left:' + X(P(r.loPx)).toFixed(2)
        + '%;width:' + (X(P(r.hiPx)) - X(P(r.loPx))).toFixed(2) + '%"></div>';
   }
-  if (r.lLoPx > 0 && r.lHiPx > 0) {
-    h += '<div class="ovc-bandb' + (fillHi ? ' ovc-bhi' : '') + clip(r.lLoPx, r.lHiPx)
-       + '" title="掛買區間 ' + _ovPx(r.lLoPx) + ' 到 ' + _ovPx(r.lHiPx)
-       + '。掛限價買進看的是這一段，不是上面那條收盤區間。"'
-       + ' style="left:' + X(P(r.lLoPx)).toFixed(2)
-       + '%;width:' + (X(P(r.lHiPx)) - X(P(r.lLoPx))).toFixed(2) + '%"></div>';
-  }
   if (!r.act && r.cPx > 0) h += '<div class="ovc-mk ovc-est" style="left:' + X(P(r.cPx)).toFixed(2) + '%"></div>';
   if (r.act && r.act.c > 0) h += '<div class="ovc-mk ovc-est" style="left:' + X(r.act.cPct).toFixed(2) + '%"></div>';
   if (r.lPx > 0) h += '<div class="ovc-mk ovc-buy" style="left:' + X(P(r.lPx)).toFixed(2) + '%"></div>';
@@ -327,6 +360,7 @@ function _ovcCard(r, HI, ticks) {
   if (r.act && r.act.l > 0) h += '<div class="ovc-mk ovc-now" style="left:' + X(r.act.lPct).toFixed(2) + '%"></div>';
   h += '</div>';
 
+  h += _ovcBandRow(r, X, P, fillHi);
   h += _ovcEstHtml(est, X);
   h += _ovcLabels(DN, 'dn', rowsDn, X);
 
@@ -443,7 +477,7 @@ function ovcStockHtml() {
   });
   h += '</div><div class="ovc-legend">'
     + '<span><em class="ovc-e1"></em>收盤區間（上下限）</span>'
-    + '<span><em class="ovc-e2"></em>掛買區間（掛得到過半時轉實）</span>'
+    + '<span><em class="ovc-e2"></em>掛買區間（橫條下方自己一排，掛得到過半時轉實）</span>'
     + '<span><em class="ovc-e3"></em>掛買參考</span>'
     + '<span><em class="ovc-e4"></em>' + (rows[0] && rows[0].act ? '實際日內最低' : '現價') + '</span>'
     + '<span><em class="ovc-e5"></em>' + (rows[0] && rows[0].act ? '實際收盤' : '預估收盤') + '</span>'
@@ -489,11 +523,12 @@ function ovcStockHtml() {
     + '剩下三成會走到區間外。要分辨這兩種，得配量能那一欄：'
     + '貼上限而且量能 1.5 倍以上，突破的成分比較大。</dd>'
 
-    + '<dt>兩條帶子</dt><dd>上面那條綠轉紅的是<b>收盤區間</b>，下面金色的是<b>掛買區間</b>。'
-    + '要抄進委託單的是下面那一條，上面那條回答的是「今天會收在哪裡」。'
-    + '<br>兩條現在同樣高。舊版掛買區間只有 5px、四成透明，擠在橫條最下面四分之一，'
-    + '框頭寫著掛買區間是多少、圖上卻找不到它。兩端另外加了端點，起訖在哪裡不用猜。'
-    + '<br>金色帶子的濃淡跟「掛得到」同一條線：過半轉實、沒過半壓暗，'
+    + '<dt>掛買區間那一排</dt><dd>橫條下面自己一排的金色帶子，<b>兩端都標了價</b>。'
+    + '要抄進委託單的是這一排，橫條上那條綠轉紅的收盤區間回答的是「今天會收在哪裡」。'
+    + '<br>原本它是橫條裡的一條帶子，疊在收盤區間下面、兩端沒有數字，'
+    + '收盤區間有「下限」「上限」兩個標籤，它一個都沒有 —— 框頭寫著區間是多少，圖上讀不出來。'
+    + '帶子太窄排不下兩個價時會併成「下緣～上緣」一個，貼到軸邊時夾回來，不會跑出去。'
+    + '<br>帶子的濃淡跟「掛得到」同一條線：過半轉實、沒過半壓暗，'
     + '跟掛買那個數字的亮度是同一件事。</dd>'
     + '<dt>掛買的亮度</dt><dd><b>定義</b>：用同一條迴歸、同一段樣本回測，'
     + '數有多少比例的日子裡，當天的實際最低真的跌到當天推的掛買參考。'

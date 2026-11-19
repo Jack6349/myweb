@@ -2546,6 +2546,31 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   text-align: center; line-height: 1.3; }
 /* 估收：貼著橫條底下的單行小字。它不參與錯開，所以不佔一整行的高度。
    引線只有 4px，因為它就緊貼在橫條下面，不需要拉長去找自己的位置。 */
+/* 掛買區間自己一排。原本它是橫條裡的一條帶子，疊在收盤區間下面、兩端沒有數字，
+   框頭寫著 27.46〜27.85而圖上讀不出來。一排 18px，比塞進錯開的標籤區便宜（那要 41px）。 */
+.ovc-brow { position: relative; height: 21px; margin: 3px 8px 0; }
+.ovc-bband { position: absolute; bottom: 0; height: 6px; border-radius: 3px;
+  background: rgba(240, 204, 122, .45); }
+.ovc-bband.ovc-bhi { background: rgba(240, 204, 122, .85); }
+/* 兩端的端點：起訖在哪裡不用猜。被軸截掉的那一端不畫 */
+.ovc-bband::before, .ovc-bband::after { content: ''; position: absolute; top: -3px;
+  width: 2px; height: 12px; background: var(--accent2); border-radius: 1px; }
+.ovc-bband::before { left: 0; }
+.ovc-bband::after { right: 0; }
+.ovc-bband.ovc-clipl { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.ovc-bband.ovc-clipl::before { display: none; }
+.ovc-bband.ovc-clipr { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.ovc-bband.ovc-clipr::after { display: none; }
+/* 兩端的價。各自貼著帶子的一端，帶子太窄就併成一個置中 */
+.ovc-bnum { position: absolute; top: 0; font-size: 12px; line-height: 1.25;
+  color: var(--accent2); font-variant-numeric: tabular-nums; white-space: nowrap; z-index: 2; }
+.ovc-bnum.ovc-bl { transform: translateX(0); }
+.ovc-bnum.ovc-br { transform: translateX(-100%); }
+.ovc-bnum.ovc-bc { transform: translateX(-50%); }
+/* 貼邊夾回來的兩種 */
+.ovc-bnum.ovc-bpl { transform: none; }
+.ovc-bnum.ovc-bpr { transform: translateX(-100%); }
+
 .ovc-estrow { position: relative; height: 26px; margin: 0 8px; }
 .ovc-eststem { top: 0; height: 4px; }
 .ovc-estlab { position: absolute; top: 4px; transform: translateX(-50%);
