@@ -311,7 +311,10 @@ function _ovcCard(r, HI, ticks) {
        + '%;width:' + (X(P(r.hiPx)) - X(P(r.loPx))).toFixed(2) + '%"></div>';
   }
   if (r.lLoPx > 0 && r.lHiPx > 0) {
-    h += '<div class="ovc-bandb' + clip(r.lLoPx, r.lHiPx) + '" style="left:' + X(P(r.lLoPx)).toFixed(2)
+    h += '<div class="ovc-bandb' + (fillHi ? ' ovc-bhi' : '') + clip(r.lLoPx, r.lHiPx)
+       + '" title="掛買區間 ' + _ovPx(r.lLoPx) + ' 到 ' + _ovPx(r.lHiPx)
+       + '。掛限價買進看的是這一段，不是上面那條收盤區間。"'
+       + ' style="left:' + X(P(r.lLoPx)).toFixed(2)
        + '%;width:' + (X(P(r.lHiPx)) - X(P(r.lLoPx))).toFixed(2) + '%"></div>';
   }
   if (!r.act && r.cPx > 0) h += '<div class="ovc-mk ovc-est" style="left:' + X(P(r.cPx)).toFixed(2) + '%"></div>';
@@ -440,7 +443,7 @@ function ovcStockHtml() {
   });
   h += '</div><div class="ovc-legend">'
     + '<span><em class="ovc-e1"></em>收盤區間（上下限）</span>'
-    + '<span><em class="ovc-e2"></em>掛買區間</span>'
+    + '<span><em class="ovc-e2"></em>掛買區間（掛得到過半時轉實）</span>'
     + '<span><em class="ovc-e3"></em>掛買參考</span>'
     + '<span><em class="ovc-e4"></em>' + (rows[0] && rows[0].act ? '實際日內最低' : '現價') + '</span>'
     + '<span><em class="ovc-e5"></em>' + (rows[0] && rows[0].act ? '實際收盤' : '預估收盤') + '</span>'
@@ -486,6 +489,12 @@ function ovcStockHtml() {
     + '剩下三成會走到區間外。要分辨這兩種，得配量能那一欄：'
     + '貼上限而且量能 1.5 倍以上，突破的成分比較大。</dd>'
 
+    + '<dt>兩條帶子</dt><dd>上面那條綠轉紅的是<b>收盤區間</b>，下面金色的是<b>掛買區間</b>。'
+    + '要抄進委託單的是下面那一條，上面那條回答的是「今天會收在哪裡」。'
+    + '<br>兩條現在同樣高。舊版掛買區間只有 5px、四成透明，擠在橫條最下面四分之一，'
+    + '框頭寫著掛買區間是多少、圖上卻找不到它。兩端另外加了端點，起訖在哪裡不用猜。'
+    + '<br>金色帶子的濃淡跟「掛得到」同一條線：過半轉實、沒過半壓暗，'
+    + '跟掛買那個數字的亮度是同一件事。</dd>'
     + '<dt>掛買的亮度</dt><dd><b>定義</b>：用同一條迴歸、同一段樣本回測，'
     + '數有多少比例的日子裡，當天的實際最低真的跌到當天推的掛買參考。'
     + '過半就把掛買那個數字打亮，沒過半壓暗，框頭的「掛得到」是同一個數字。<br>'
