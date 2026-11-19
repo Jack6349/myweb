@@ -352,7 +352,13 @@ function _ovFit(Xs, Y, tgt) {
   // 最小平方的殘差平均是 0，所以這個比例一定在五成附近打轉，
   // 真正會把它推離五成的是殘差的偏態：最低價的殘差右偏（偶爾跌很深），
   // 中位數就會落在 0 的另一邊。
-  var lam = Math.pow(0.5, 1 / OV_SD_HL), v = null, hit = 0, cvn = 0, fhit = 0;
+  // zs：標準化殘差，也就是殘差除以當天自己的區間寬度。
+  //
+  // 卡片上的機率曲線直接數這一份，所以它跟區間邊界必定對得起來：
+  // 邊界是這份分布的 16% 與 84% 分位，曲線在那兩點讀出來就是 16% 與 84%。
+  // 不標準化不行：殘差寬度每天不同，把寬鬆期與平靜期的殘差混在一起數，
+  // 數出來的機率會被寬鬆期那幾天拉開。
+  var lam = Math.pow(0.5, 1 / OV_SD_HL), v = null, hit = 0, cvn = 0, fhit = 0, zs = [];
   for (var i2 = 0; i2 < n; i2++) {
     var e = Y[i2] - pred(i2);
     ss += e * e; tot += (Y[i2] - my) * (Y[i2] - my);
@@ -365,6 +371,7 @@ function _ovFit(Xs, Y, tgt) {
       var sd0 = Math.sqrt(v), gx = X2[i2], tg = tgt || 'c';
       if (e >= -_ovK(tg + 'Lo', gx) * sd0 && e <= _ovK(tg + 'Hi', gx) * sd0) hit++;
       if (e <= 0) fhit++;
+      zs.push(e / sd0);
       cvn++;
     }
     v = (v == null) ? e * e : lam * v + (1 - lam) * e * e;
@@ -376,6 +383,7 @@ function _ovFit(Xs, Y, tgt) {
     sdEw: (v == null) ? Math.sqrt(ss / (n - K)) : Math.sqrt(v),
     cover: cvn ? hit / cvn * 100 : null, coverN: cvn,
     fill: cvn ? fhit / cvn * 100 : null,
+    zq: _ovQuant(zs, OV_ZQ),
     resU: resU, resD: resD
   };
 }
@@ -385,6 +393,36 @@ function _ovFit(Xs, Y, tgt) {
 // （那會隨持股變動而漂移）。實測兩個更自然的候選都分不出差別：
 // 區間校不校準（八檔全在 68% ± 2 標準誤內）、訊號顯不顯著（F 值 20 到 109，門檻 3.1）。
 // 會變的只有幅度，所以顏色接幅度。
+// ── 把一串殘差壓成分位點 ──
+//
+// 整串帶著走沒有必要：卡片只需要「某個值落在第幾成」，60 段的解析度
+// 換算成機率是 1.7 個百分點，比圖上一個像素還細（圖高 128px，一格 0.78 個百分點）。
+// 四百多個數字存成 61 個，記憶體與序列化都省下來，畫出來的線看不出差別。
+var OV_ZQ = 60;
+function _ovQuant(a, n) {
+  if (!a || a.length < 20) return null;
+  var b = a.slice().sort(function (x, y) { return x - y; }), o = [];
+  for (var i = 0; i <= n; i++) {
+    var t = i / n * (b.length - 1), k = Math.floor(t), f = t - k;
+    o.push(+(b[k] + (b[Math.min(k + 1, b.length - 1)] - b[k]) * f).toFixed(4));
+  }
+  return o;
+}
+// 已排序的分位點 → 累積機率（百分比）。兩點之間線性內插，因為樣本本來就是離散的。
+function ovCdf(zq, z) {
+  if (!zq || !zq.length) return null;
+  var n = zq.length - 1;
+  if (z <= zq[0]) return 0;
+  if (z >= zq[n]) return 100;
+  for (var i = 1; i <= n; i++) {
+    if (z <= zq[i]) {
+      var w = zq[i] - zq[i - 1];
+      return (i - 1 + (w > 0 ? (z - zq[i - 1]) / w : 0)) / n * 100;
+    }
+  }
+  return 100;
+}
+
 function _ovTier(r2) {
   if (r2 == null) return 'ov-t0';
   return (r2 > 0.5) ? 'ov-t3' : ((r2 >= 0.25) ? 'ov-t2' : 'ov-t1');
@@ -849,6 +887,10 @@ function ovEstimate(code) {
     // 掛得到的比例：同一條迴歸、同一段樣本，數有多少比例的日子實際最低
     // 真的跌到當天推的掛買參考。校準那一層沒有進這個回測（見卡片說明）。
     lFill: fl ? fl.fill : null,
+    // 機率曲線要的三樣：分布、中心、寬度。中心用校準後的那一個，
+    // 與畫出來的區間同一個基準，否則曲線會跟區間邊界錯開。
+    zl: fl ? fl.zq : null, zc: fc.zq,
+    sdl: sdl, sdc: sdc, lMidPct: lMid, cMidPct: cMid,
     sd: sdc, sdFull: fc.sd, cover: fc.cover, coverN: fc.coverN, r2: fc.r2, gate: _ovGate(gs),
     fgnW: fgn, ixOn: ixOn, ixF: addF, ixNow: ixNow,
     sdUp: _ovSd(fc.resU), sdDn: _ovSd(fc.resD),

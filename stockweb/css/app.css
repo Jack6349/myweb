@@ -2486,18 +2486,103 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-head { position: absolute; top: -13px; left: 14px; background: var(--bg2);
   padding: 0 10px; white-space: nowrap; line-height: 24px; }
 .ovc-head .tx-ocode { font-size: 17px; }
-.ovc-head .tx-oname { font-size: 14.5px; }
+/* 名字壓小一階：框頭右邊那兩個框塞滿之後，名字最長的那一檔（主動統一台股增長）
+   只剩 2px 空隙，字體差一點就會疊上去。這裡讓出 10px 當餘裕。 */
+.ovc-head .tx-oname { font-size: 13.5px; }
 .ovc-calc .ovc-head { background: #19222f; }   /* 校準後底色變了，框頭要跟著遮住框線 */
 /* 兩個區間的文字，壓在上框線的右端。圖讀相對關係，這裡讀精確值 */
-.ovc-head2 { position: absolute; top: -14px; right: 14px; background: var(--bg2);
-  padding: 0 10px; white-space: nowrap; line-height: 26px; font-size: 17px; color: var(--text2); }
-.ovc-head2 .ovc-h2k { color: var(--th); font-weight: 600; font-size: 13px; margin-right: 6px; }
-/* 兩行靠右對齊。每一行自己是一個 block，所以行尾的間距各自歸零。 */
-.ovc-head2 .ovc-h2r { display: block; text-align: right; }
-.ovc-head2 .ovc-h2k + b { color: var(--text); font-weight: 600; margin-right: 18px;
+/* 兩組排同一行，各自用框線圈起來。
+   排兩行是上一版的做法，原因是四組並排塞不下；現在刪掉了收盤區間那一組
+   （圖上的青線與下方那條 Bar 已經在講它），剩下的兩組排得進一行。 */
+.ovc-head2 { position: absolute; top: -16px; right: 14px; background: var(--bg2);
+  padding: 0 4px; white-space: nowrap; line-height: 26px; font-size: 14.5px; color: var(--text2);
+  display: flex; gap: 6px; align-items: center; }
+.ovc-head2 .ovc-h2k { color: var(--th); font-weight: 600; font-size: 12.5px; margin-right: 5px; }
+.ovc-head2 .ovc-h2r { display: flex; align-items: baseline;
+  border: 1px solid var(--border); border-radius: 7px; padding: 1px 8px; background: var(--bg2); }
+.ovc-head2 .ovc-h2k + b { color: var(--text); font-weight: 600; margin-right: 10px;
   font-variant-numeric: tabular-nums; }
 .ovc-head2 .ovc-h2r > b:last-child { margin-right: 0; }
+.ovc-head2 .ovc-dim { color: var(--text2); }
+.ovc-calc .ovc-head2 .ovc-h2r { background: #19222f; }
 .ovc-calc .ovc-head2 { background: #19222f; }
+
+
+/* ══════════ 夜推股票：機率 × 價格 ══════════ */
+/* 圖例排在圖的上方。放進圖裡會壓到格線，而左上角那塊空間是曲線的。 */
+.ovc-lg { display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+  margin: 16px 0 0; padding-left: 34px; }
+.ovc-lg i { display: flex; align-items: center; gap: 6px; font-style: normal;
+  font-size: 12px; font-weight: 700; white-space: nowrap; }
+.ovc-lg u { display: inline-block; width: 20px; height: 0; text-decoration: none;
+  border-top-width: 2.4px; }
+.ovc-u1 { border-top-style: solid; border-top-color: var(--accent2); }
+.ovc-u2 { border-top-style: dashed; border-top-color: var(--sum); }
+.ovc-u3 { border-top-style: solid; border-top-color: var(--accent3); }
+
+/* 左邊 34px 留給縱軸的 0～100%，右邊 56px 留給貼在右端的節點數字 */
+.ovc-ch { position: relative; margin: 3px 0 0; padding: 0 56px 0 34px; }
+.ovc-pa { position: relative; }
+.ovc-pa svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ovc-hl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); opacity: .4; }
+/* 五成那條加重：它是「成交的日子比沒成交的多」的分界，與夜推債券同一條線 */
+.ovc-hl.ovc-h50 { border-top-style: dashed; opacity: .85; border-color: var(--border-strong); }
+.ovc-hl.ovc-h0 { opacity: .9; }
+.ovc-yl { position: absolute; right: calc(100% + 6px); transform: translateY(50%);
+  font-size: 11px; color: var(--text3); white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+
+/* 曲線。區間內亮且粗、區間外壓暗且細，一眼分得出哪一段是有效區間。
+   vector-effect 讓線寬不被 viewBox 的非等比縮放拉變形。 */
+.ovc-cv { fill: none; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.ovc-cvl { stroke: var(--accent2); stroke-width: 3.2; }
+.ovc-cvl-d { stroke: color-mix(in srgb, var(--accent2) 42%, #0b1119); stroke-width: 1.8; }
+.ovc-cvc { stroke: var(--sum); stroke-width: 2.4; stroke-dasharray: 5 3; }
+.ovc-cvc-d { stroke: color-mix(in srgb, var(--sum) 38%, #0b1119); stroke-width: 1.4;
+  stroke-dasharray: 5 3; }
+.ovc-ar { fill: var(--accent2); opacity: .09; stroke: none; }
+
+/* 節點：區間上下緣是空心一圈，掛買參考是實心大一點 */
+.ovc-pt { position: absolute; width: 7px; height: 7px; border-radius: 50%;
+  transform: translate(-50%, 50%); border: 1.5px solid var(--bg2); }
+.ovc-pt.ovc-ptk { width: 10px; height: 10px; border-width: 2px; }
+.ovc-calc .ovc-pt { border-color: #19222f; }
+/* 價寫在點的左右，不寫上下：寫上下會撞到從底部拉上來的那條標記線。
+   字暈是為了壓住底下的曲線，兩邊都被占住時至少讀得到。 */
+.ovc-ptl { position: absolute; font-size: 12px; font-weight: 700; white-space: nowrap;
+  line-height: 13px; font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 4px var(--bg2), 0 0 3px var(--bg2), 0 0 2px var(--bg2), 0 0 1px var(--bg2); }
+.ovc-ptl.ovc-lft { transform: translate(-100%, 50%); padding-right: 8px; }
+.ovc-ptl.ovc-rgt { transform: translate(0, 50%); padding-left: 8px; }
+
+/* 標記：今天走到哪。實線加粗、菱形放大，才不會被曲線蓋住。 */
+.ovc-vl { position: absolute; bottom: 0; width: 0;
+  border-left-width: 2px; border-left-style: solid; }
+.ovc-vd { position: absolute; width: 10px; height: 10px;
+  transform: translate(-50%, 50%) rotate(45deg); border: 1.5px solid var(--bg2); }
+.ovc-calc .ovc-vd { border-color: #19222f; }
+.ovc-vt { position: absolute; transform: translate(-50%, 0); font-size: 12px; font-weight: 700;
+  white-space: nowrap; text-align: center; line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 4px var(--bg2), 0 0 3px var(--bg2), 0 0 2px var(--bg2), 0 0 1px var(--bg2); }
+
+/* 座標下方：一組 ＝ 兩個數字 ＋ 它自己的橫 Bar，兩者貼在一起不分開 */
+.ovc-gp { margin-top: 5px; }
+.ovc-gn { position: relative; height: 19px; }
+.ovc-gn span { position: absolute; transform: translateX(-50%); top: 4px;
+  font-size: 12.5px; font-weight: 700; white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.ovc-tk { position: absolute; top: 0; width: 1px; height: 4px; background: var(--border); }
+.ovc-gb { position: relative; height: 14px; }
+.ovc-gb em { position: absolute; top: 3px; height: 6px;
+  border-left-width: 1px; border-right-width: 1px; border-top-width: 1.5px;
+  border-left-style: solid; border-right-style: solid; border-top-style: solid; }
+.ovc-gb b { position: absolute; top: 0; left: 0; font-size: 11px; line-height: 12px;
+  font-weight: 700; white-space: nowrap; }
+.ovc-c1 { color: var(--accent2); border-color: var(--accent2); }
+.ovc-c2 { color: var(--sum); border-color: var(--sum); }
+
+.ovc-nodata { margin: 18px 0 6px; padding-left: 34px; font-size: 13px; color: var(--text3); }
 
 .ovc-bar { position: relative; height: 26px; margin: 0 8px; }
 .ovc-gl { position: absolute; top: 2px; bottom: 2px; width: 1px;
