@@ -338,18 +338,22 @@ function invValRow(p) {
     '<td class="num inv-cchg ' + estCls + (cm ? chgMark(cm.est) : '') + '" '
       + (cm ? 'title="報價覆蓋率 ' + cm.covW.toFixed(1) + '%"' : '') + '>' +
       (cm && cm.est != null ? fmtPct(cm.est) : (constWait ? '<i class="spin"></i>' : '—')) + '</td>' +
+    // 兩個損益緊接在成本均價後面：掃這一欄的時候問的是「這一檔現在賺賠多少」，
+    // 原始成本與現值是用來推導它的過程，排在後面。
+    // 代價是含息損益跟它的組成項「已配息」被原始成本與現值隔開了，
+    // 所以那一格的提示把「資本損益 ＋ 已配息」兩個數字都寫出來，不必回頭找。
     costCellHtml(avgPx, price) +
-    '<td class="num"' + notReady + '>' + Math.round(cost).toLocaleString('zh-TW') + '</td>' +
-    '<td class="num">' + (val != null ? Math.round(val).toLocaleString('zh-TW') : '—') + '</td>' +
     '<td class="num ' + pcls + '"' +
       (profit != null ? ' title="現值 ' + Math.round(netVal).toLocaleString('zh-TW') +
         ' － 原始成本 ' + Math.round(cost).toLocaleString('zh-TW') + '"' : '') + '>' +
       (profit == null ? '—' : (profit >= 0 ? '+' : '') + Math.round(profit).toLocaleString('zh-TW')) + '</td>' +
-    '<td class="num">' + (divSum == null ? '—' : Math.round(divSum).toLocaleString('zh-TW')) + '</td>' +
     '<td class="num ' + (withDiv == null ? 'flat' : colorClass(withDiv)) + '"' +
       (withDiv != null ? ' title="資本損益 ' + Math.round(profit).toLocaleString('zh-TW') +
         ' ＋ 已配息 ' + Math.round(divSum).toLocaleString('zh-TW') + '"' : '') + '>' +
       (withDiv == null ? '—' : (withDiv >= 0 ? '+' : '') + Math.round(withDiv).toLocaleString('zh-TW')) + '</td>' +
+    '<td class="num"' + notReady + '>' + Math.round(cost).toLocaleString('zh-TW') + '</td>' +
+    '<td class="num">' + (val != null ? Math.round(val).toLocaleString('zh-TW') : '—') + '</td>' +
+    '<td class="num">' + (divSum == null ? '—' : Math.round(divSum).toLocaleString('zh-TW')) + '</td>' +
     '<td class="num ' + pcls + '">' + (prate == null ? '—' : (prate > 0 ? '+' : '') + prate.toFixed(2) + '%') + '</td>' +
     '<td class="num ' + (wrate == null ? 'flat' : colorClass(wrate)) + '"' +
       (wrate != null ? ' title="含息損益 ' + Math.round(withDiv).toLocaleString('zh-TW') +
