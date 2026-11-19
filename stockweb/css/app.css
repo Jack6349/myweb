@@ -2503,10 +2503,23 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-gl { position: absolute; top: 2px; bottom: 2px; width: 1px;
   background: color-mix(in srgb, var(--border) 55%, transparent); }
 .ovc-gl.ovc-zero { top: 0; bottom: 0; background: var(--border-strong); }
-.ovc-band { position: absolute; top: 5px; height: 12px; border-radius: 6px;
+/* 兩條帶子同樣高。舊版掛買区間只有 5px、四成透明，擠在橫條最下面四分之一，
+   而收盤区間是 12px。兩個同樣是「区間」，一個的份量卻不到另一個的一半，
+   所以框頭寫著掛買 27.46〜27.85，圖上根本找不到它。
+   而掛買才是要抄進委託單的那一個。 */
+.ovc-band { position: absolute; top: 3px; height: 9px; border-radius: 5px;
   background: linear-gradient(90deg, rgba(38, 217, 98, .35), rgba(255, 82, 82, .35)); }
-.ovc-bandb { position: absolute; top: 19px; height: 5px; border-radius: 3px;
-  background: rgba(240, 204, 122, .40); }
+.ovc-bandb { position: absolute; top: 14px; height: 9px; border-radius: 5px;
+  background: rgba(240, 204, 122, .45); }
+/* 兩端的端點：沒有它的話帶子淡到看不出起訖在哪裡 */
+.ovc-bandb::before, .ovc-bandb::after { content: ''; position: absolute; top: -2px;
+  width: 2px; height: 13px; background: var(--accent2); border-radius: 1px; }
+.ovc-bandb::before { left: 0; }
+.ovc-bandb::after { right: 0; }
+/* 掛得到過半的那幾檔帶子轉實。跟掛買那個數字的亮度同一條線，
+   因為它們講的是同一件事：這個区間掛不掛得到。 */
+.ovc-bandb.ovc-bhi { background: rgba(240, 204, 122, .85); }
+.ovc-bandb.ovc-clipl::before, .ovc-bandb.ovc-clipr::after { display: none; }
 .ovc-mk { position: absolute; }
 .ovc-mk.ovc-buy { top: 3px; width: 3px; height: 22px; background: var(--accent2);
   transform: translateX(-1.5px); }
