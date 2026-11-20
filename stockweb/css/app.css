@@ -1211,6 +1211,12 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 /* 金額配色與月份總覽一致：綠＝已發放、黃＝預估 */
 .dstat td.dv-act { color: var(--down); }
 .dstat td.dv-est { color: var(--accent2); }
+/* 發放日已公告：顏色不變，數字加一條底線。
+   不換第三個顏色：換色會跟「已領／未領」那一組對立混在一起，
+   而公告與否是未領裡面的細分，不是另一類。
+   底線畫在數字的 span 上不是整格：整格的底線會被讀成表格的分隔線。
+   用 border-bottom 不用 text-decoration，才壓得住底線與數字的距離。 */
+.dv-fix { border-bottom: 1px solid currentColor; padding-bottom: 1px; }
 .dstat tfoot td { background: var(--bg3); font-weight: 700; border-bottom: none; border-top: 1px solid var(--border-strong); }
 .dstat tfoot .dstat-code { background: var(--bg3); }
 
