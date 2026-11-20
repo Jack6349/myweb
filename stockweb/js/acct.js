@@ -137,21 +137,9 @@ async function adPut(d, amt, ok) {
   out.push({ d: d, amt: Math.round(amt), ok: !!ok });
   _adList = out;
   await _adWriteList();
-  // 確認＝這是銀行的真實數字，那一天以前的帳戶調整本來就含在裡面。
-  // 標起來，不然它們會一直掛在「等你判斷」那一區，而那個判斷其實已經做完了。
-  if (ok) { try { _adSwept = await apSweep(d); } catch (e) { hush('acct', e); } }
+  // 確認＝這是銀行的真實數字，那一天（含）以前的預計進出本來就含在裡面。
+  // 不必再去標記它們：abFlow 用日期跟錨點比，比錨點早的本來就不會再算一次。
 }
-var _adSwept = [];              // 最近一次確認掃掉哪幾筆，畫面要講出來
-function adSwept() { return _adSwept; }
-function adSweptClear() { _adSwept = []; }
-// 錨點加減一筆錢，狀態不變。
-// 按「已扣」代表那筆錢真的動了，不代表使用者去對過銀行，所以不能把它變成已確認。
-async function adAdjust(delta) {
-  var a = adAnchor();
-  if (!a || !delta) return;
-  await adPut(a.d, a.amt + delta, a.ok);
-}
-
 // 手填的餘額對應到哪一天的「收盤後」。
 // 十點前填的那個數字裡還沒有當天的交割，所以它是前一天收盤的總額。
 function _adDayOf(at) {
@@ -339,61 +327,22 @@ async function apDel(id) {
   _abPlans = abPlans().filter(function (p) { return p.id !== id; });
   await apSave();
 }
-// ── 帳戶調整的三種狀態 ──
+// ── 預計進出：排了就算 ──
 //
-// 這些錢跟交割是兩件事。交割券商有存檔，查得回來；帳戶調整只有使用者自己記，
-// 刪掉就真的消失了。所以這一區不提供刪除，只換狀態。
+// 原本這裡有三種狀態（未反映／已反映／沒發生）：過了日期還沒表態的就停止計入餘額，
+// 列在畫面下方等使用者按鈕判斷。2026-11-21 使用者指出這是多餘的 ——
+// 錢是他自己排進去的，排了就是會發生；真的有變動，補一筆負的就好，
+// 不需要一組狀態機去管「到底發生了沒」。
 //
-//   未反映（空值）：排了但還不確定發生了沒。過了日期就停止計入餘額，等使用者判斷。
-//   已反映（done）：那筆錢真的動了，而且帳戶總額裡已經有它。
-//   沒發生（void）：排了但沒發生。永遠不計入，但紀錄留著。
+// 拿掉之後唯一要守的規則只剩一條：錨點那天（含）以前的不再計入，
+// 因為那個數字是使用者對過銀行填進來的，裡面本來就含那些錢。
+// 這一條在 abFlow 用日期比對就夠了，不必靠狀態。
 //
-// 標成已反映有兩條路，差別在要不要動錨點：
-//   使用者自己按 → 錨點是系統算的，只含交割，不含這筆，所以要加進去。
-//   確認某一天時一起掃掉 → 錨點是銀行的真實數字，本來就含這筆，再加一次就是算兩遍。
-function apState(p) { return (p && p.st) || ''; }
-async function apSetState(id, st) { await apSet(id, { st: st }); }
-
-// 使用者自己按「已反映」：錢真的動了，而錨點裡沒有它，所以要加進錨點。
-// 狀態保持原樣，不變成已確認：按這顆鈕不等於他去對過銀行。
-async function apApply(id) {
-  var p = abPlans().filter(function (x) { return x.id === id; })[0];
-  if (!p || apState(p)) return;
-  if (adAnchor()) await adAdjust(p.amt || 0);
-  else { var bal = abGet(); if (bal != null) await abSave(bal + (p.amt || 0)); }
-  await apSetState(id, 'done');
-}
-// 排了但沒發生。不刪除，紀錄留著。
-async function apVoid(id) { await apSetState(id, 'void'); }
-// 改回未反映。不動錨點：這顆鈕只是把狀態退回去讓使用者重新判斷，
-// 真的要改金額的話，去確認那一天的總額才是對的做法。
-async function apUnmark(id) { await apSetState(id, ''); }
-
-// 確認某一天時一起掃掉：那一天（含）以前還沒表態的，銀行那個數字裡本來就有它們。
-// 不動錨點，只換狀態。回傳掃到哪幾筆，讓畫面講得出剛剛發生了什麼。
-async function apSweep(d) {
-  if (!d) return [];
-  var hit = abPlans().filter(function (p) { return p.date && p.date <= d && !apState(p); });
-  if (!hit.length) return [];
-  var ids = {};
-  hit.forEach(function (p) { ids[p.id] = 1; });
-  _abPlans = abPlans().map(function (p) { return ids[p.id] ? Object.assign({}, p, { st: 'done' }) : p; });
-  await apSave();
-  return hit;
-}
-
-// 過了日期、還沒表態的。這幾筆要使用者判斷，所以直接列出來，不收合。
-function apOverdue() {
-  var t = _abToday();
-  return abPlans().filter(function (p) { return p.date && p.date < t && !apState(p); })
-    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-}
-// 已經表態過的，新的在前。收合起來，但不刪除。
+// 這一區仍然不提供刪除：這些錢只有使用者自己記，交割那邊券商有存檔，這邊沒有。
+// 記錯了補一筆相反的，帳才留得出軌跡。
 function apSettled() {
-  return abPlans().filter(function (p) { return apState(p); })
-    .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+  return abPlans().slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
 }
-
 
 // ══════════ 過去的交割：券商只回三天，缺的自己補 ══════════
 //
@@ -587,9 +536,6 @@ function _abDivPast(payDate) {
 var _abDivSkip = [];
 function _abDivClash(payDate, code) {
   var hit = abPlans().some(function (p) {
-    // 標成「沒發生」的不算撞期：那筆自訂進出沒有發生，
-    // 配息還是要列，不列等於把一筆真的會進來的錢摔掉。
-    if (apState(p) === 'void') return false;
     return p.date === payDate && String(p.memo || '').indexOf(String(code)) >= 0;
   });
   if (hit) _abDivSkip.push({ d: payDate, code: code });
@@ -647,8 +593,10 @@ function abFlow(settleRows, opts) {
                  amt: Math.round(r.amount || 0), ref: r });
   });
   abPlans().forEach(function (p) {
-    if (apState(p)) return;                          // 已反映或沒發生，兩種都不再計入
-    if (!p.date || p.date < today) return;           // 過期又還沒表態的停止計入，等使用者判斷
+    // 錨點那天（含）以前的不算：那個數字是對過銀行的，裡面已經有它們。
+    // 其餘一律算，過期也算 —— 過期就丟掉的話，11/20 匯進去準備付交割款的那筆
+    // 會在 11/21 憑空消失，帳面少一筆真實存在的錢。
+    if (!p.date || !after(p.date)) return;
     items.push({ d: p.date, kind: 'plan', label: p.memo || ((p.amt || 0) < 0 ? '提領' : '入金'),
                  amt: Math.round(p.amt || 0), id: p.id });
   });

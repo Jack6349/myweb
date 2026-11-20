@@ -639,13 +639,7 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .tx-both-n { display: block; font-size: 11px; color: var(--text3); }
 .tx-cf-plan td { background: rgba(240,204,122,.05); }
 /* 過期的預計進出：停止計入，等使用者說它到底扣了沒 */
-.tx-od { margin: 8px 0 0; border: 1px solid rgba(255,159,67,.45); border-radius: 6px; padding: 6px 8px; }
-.tx-od-t { font-size: 12px; color: var(--warn); margin-bottom: 4px; }
-.tx-od-r { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
-.tx-od-d { color: var(--text2); }
-.tx-od-m { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tx-od-a { font-variant-numeric: tabular-nums; }
-.tx-od .btn-query { padding: 1px 8px; font-size: 12px; }
+/* 「等你判斷」那一區拿掉了：預計進出排了就算，不再有過期待表態的狀態 */
 /* 新增一筆預計進出 */
 .tx-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 0; }
 .tx-add-t { font-size: 12px; color: var(--text2); }
