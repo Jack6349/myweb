@@ -207,6 +207,26 @@ function _rmCondEx() {
   });
   return out;
 }
+// ── 配息來源抓不到 ──
+//
+// 配息的除息日與發放日以 CMoney 為主（公告當天就有），e添富 慢一到兩週當後備。
+// CMoney 那一頁抓失敗時畫面不會壞，會安靜地退回後備，於是「發放日已公告」那條底線
+// 可能晚一到兩週才出現，而且沒有人會發現。所以失敗要講出來。
+//
+// 只在股利估算跑過之後才有東西可報：沒跑過時 _divSrcErr 是空的，這一條不說話。
+function _rmCondDivSrc() {
+  var m = (typeof _divSrcErr === 'object' && _divSrcErr) ? _divSrcErr : null;
+  if (!m) return [];
+  var codes = Object.keys(m);
+  if (!codes.length) return [];
+  var day = _rmIso();
+  return [{
+    id: 'divsrc|' + day + '|' + codes.sort().join(','), k: 'divsrc', lv: 1,
+    s: '配息主來源（CMoney）有 ' + codes.length + ' 檔抓不到：' + codes.join('、'),
+    w: '已自動退回 e添富，但它通常慢一到兩週，這幾檔的「發放日已公告」底線可能晚出現。'
+       + '原因：' + codes.map(function (c) { return c + ' ' + m[c]; }).join('；')
+  }];
+}
 function _rmNextTradingDay() {
   var d = _rmTw();
   for (var i = 1; i <= 5; i++) {
@@ -360,6 +380,7 @@ async function rmTick() {
     try { list = list.concat(_rmCondAlert()); } catch (e) { hush('remind', e); }
     try { list = list.concat(_rmCondEx()); } catch (e) { hush('remind', e); }
     try { list = list.concat(_rmCondUsage()); } catch (e) { hush('remind', e); }
+    try { list = list.concat(_rmCondDivSrc()); } catch (e) { hush('remind', e); }
     try { list = list.concat(await _rmCondNight()); } catch (e) { hush('remind', e); }
     _rmNow = list;
     _rmFire(list);

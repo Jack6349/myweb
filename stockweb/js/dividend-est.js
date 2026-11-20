@@ -397,6 +397,174 @@ function computeEtfYear(recs, shares, todayIso, year, code, forceStep) {
   return { months: months, actualTotal: actualTotal, estTotal: estTotal };
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// CMoney 配息頁：主要來源
+// ══════════════════════════════════════════════════════════════
+//
+// 為什麼不是 e添富。e添富 是 TWSE 自己的頁，資料正確，但公告之後通常慢一到兩週
+// 才進得去；CMoney 那一頁公告當天就有。發放日晚兩週才出現，代表月份總覽有兩週
+// 會把「其實已經公告」的那筆畫成推算的，到帳月份可能差一個月。
+//
+// 用哪一頁。`forum/stock/<代號>?s=dividend` 是伺服器直出的，日期就在原始碼裡，
+// 純 GET、不需權杖，現有的 GAS ?urltext= 代理就抓得到。
+// 另一頁 `etf/tw/<代號>/cashdividend` 不要用：那張表是前端另打
+// POST /api/customReport/.../JsonCsv 取的，要 Authorization: Bearer，直接呼叫回 401。
+//
+// 代價：CMoney 是一檔一個請求（e添富 是一次全市場）。實測一檔 2.4 秒、980KB，
+// 解析 1 毫秒。所以存當日快取、併發上限 4，而且失敗不擋畫面——
+// 擋不到的那幾檔自動退回 e添富，並把代號丟進提醒。
+var CM_DIV_LS = 'cm_div_v1';
+var CM_DIV_CONC = 4;          // 同時幾個請求。再高只是讓 GAS 排隊，不會更快
+var _cmDiv = null;            // { day, by: { code: rows } }
+var _divSrcErr = {};          // code -> 失敗原因；提醒那一頁會讀（_rmCondDivSrc）
+var _cmDivBusy = false;       // 背景抓取中（避免重入時又開一輪）
+
+function _cmDivLoad() {
+  if (_cmDiv && _cmDiv.day === _divTwDate().iso) return _cmDiv;
+  try {
+    var c = JSON.parse(localStorage.getItem(CM_DIV_LS) || 'null');
+    if (c && c.day === _divTwDate().iso) { _cmDiv = c; return c; }
+  } catch (e) { hush('dividend-est', e); }
+  _cmDiv = { day: _divTwDate().iso, by: {} };
+  return _cmDiv;
+}
+function _cmDivSave() {
+  try { localStorage.setItem(CM_DIV_LS, JSON.stringify(_cmDiv)); } catch (e) { hush('dividend-est', e); }
+}
+
+// ── 解析 ──
+//
+// 資料在 window.__NUXT__ 的 tableData 裡：
+//   {formattedDate:"2026 M10", cashDividend:"0.500",
+//    cashDividendExDate:"2026\u002F11\u002F17", cashDividendPaymentDate:"2026\u002F12\u002F11"}
+//
+// 日期一律是字面值，金額常被壓成變數別名（cashDividend:uV）。__NUXT__ 整包是
+// 一個立即呼叫的函式，參數名就是那些別名、引數就是值，所以把兩邊對起來就解得開。
+// 實測 3887 個參數對 3887 個引數，拆解耗時 1 毫秒。
+// 對不起來（CMoney 改版）就只取日期，金額留空讓後備來補，不要猜。
+function _cmDivParse(text) {
+  var i = text.indexOf('window.__NUXT__=(function(');
+  if (i < 0) return null;                       // 連 __NUXT__ 都沒有＝不是預期的頁
+  var end = text.indexOf('<' + '/script>', i);
+  var seg = text.slice(i, end < 0 ? text.length : end);
+  if (seg.indexOf('cashDividendExDate') < 0) return [];   // 是那一頁，但這一檔沒有配息紀錄
+  var map = null;
+  try {
+    var pm = seg.match(/^window\.__NUXT__=\(function\(([^)]*)\)/);
+    var params = pm ? pm[1].split(',') : [];
+    var j = seg.lastIndexOf('}('), k2 = seg.lastIndexOf('))');
+    var args = (j >= 0 && k2 > j) ? seg.slice(j + 2, k2) : '';
+    var out = [], depth = 0, q = null, cur = '', BS = String.fromCharCode(92);
+    for (var k = 0; k < args.length; k++) {
+      var ch = args.charAt(k);
+      if (q) { cur += ch; if (ch === BS) { cur += args.charAt(++k); } else if (ch === q) q = null; continue; }
+      if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+      if ('([{'.indexOf(ch) >= 0) depth++;
+      if (')]}'.indexOf(ch) >= 0) depth--;
+      if (ch === ',' && depth === 0) { out.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    out.push(cur);
+    if (params.length === out.length) {
+      map = {};
+      for (var p = 0; p < params.length; p++) map[params[p]] = out[p];
+    }
+  } catch (e) { hush('dividend-est', e); }
+
+  var slash = String.fromCharCode(92) + 'u002F';
+  var dt = function (v) { return v.split(slash).join('-').split('/').join('-'); };
+  var re = /cashDividend:([^,]+),cashDividendExDate:"([^"]*)",cashDividendPaymentDate:"([^"]*)"/g;
+  var rows = [], m;
+  while ((m = re.exec(seg))) {
+    var raw = m[1];
+    if (raw.charAt(0) !== '"' && map && map[raw] !== undefined) raw = map[raw];
+    var a = parseFloat(String(raw).replace(/"/g, ''));
+    var ex = dt(m[2]), pay = dt(m[3]);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ex)) continue;
+    rows.push({ exDate: ex, payDate: /^\d{4}-\d{2}-\d{2}$/.test(pay) ? pay : null,
+                amount: isNaN(a) ? null : a });
+  }
+  return rows;
+}
+
+async function fetchCmDiv(code, force) {
+  code = String(code);
+  var c = _cmDivLoad();
+  if (!force && c.by[code]) return c.by[code];
+  var url = 'https://www.cmoney.tw/forum/stock/' + encodeURIComponent(code) + '?s=dividend';
+  var r = await fetch(NEWS_GAS_URL + '?urltext=' + encodeURIComponent(url));
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  var t = await r.text();
+  if (t.charAt(0) === '{') {                    // GAS 端自己的錯誤（配額等）回 JSON
+    var je = null;
+    try { je = JSON.parse(t); } catch (pe) { hush('dividend-est', pe); }
+    if (je && je.error) throw new Error(je.error);
+  }
+  var rows = _cmDivParse(t);
+  if (rows == null) throw new Error('頁面格式不符（找不到 __NUXT__）');
+  rows.forEach(function (x) { x.code = code; });
+  c.by[code] = rows;
+  _cmDivSave();
+  return rows;
+}
+
+// 同一個除息日兩邊都有時，CMoney 說了算；它沒有的那幾筆留著後備的。
+// 金額 CMoney 解不出來（別名對不起來）就沿用後備的，不要把有的值蓋成空的。
+function _divMergeCmRows(cm, base) {
+  var byEx = {};
+  (base || []).forEach(function (r) { if (r && r.exDate) byEx[r.exDate] = r; });
+  (cm || []).forEach(function (r) {
+    if (!r || !r.exDate) return;
+    var b = byEx[r.exDate] || {};
+    byEx[r.exDate] = {
+      code: r.code || b.code, name: b.name || '',
+      exDate: r.exDate,
+      payDate: r.payDate || b.payDate || null,
+      amount: (r.amount != null) ? r.amount : (b.amount != null ? b.amount : null)
+    };
+  });
+  return Object.keys(byEx).sort().reverse().map(function (k) { return byEx[k]; });
+}
+
+// 當日快取裡已經有的那幾檔，直接併，不發請求。
+function _cmDivHave(codes) {
+  var c = _cmDivLoad();
+  return codes.every(function (x) { return c.by[String(x)] !== undefined; });
+}
+function _divMergeCmCached(recMap, codes) {
+  var c = _cmDivLoad();
+  codes.forEach(function (code) {
+    var rows = c.by[String(code)];
+    if (rows && rows.length) recMap[code] = _divMergeCmRows(rows, recMap[code]);
+  });
+}
+
+// 併發上限跑一輪，失敗的記進 _divSrcErr 供提醒讀，不擋畫面
+async function _divMergeCm(recMap, codes, force) {
+  var list = codes.slice(), idx = 0;
+  var worker = async function () {
+    while (idx < list.length) {
+      var code = list[idx++];
+      try {
+        var rows = await fetchCmDiv(code, force);
+        if (rows && rows.length) {
+          recMap[code] = _divMergeCmRows(rows, recMap[code]);
+          delete _divSrcErr[code];
+        } else if (rows && !rows.length) {
+          delete _divSrcErr[code];            // 那一頁在，只是這一檔沒有配息紀錄
+        }
+      } catch (e) {
+        _divSrcErr[code] = String((e && e.message) || e);
+        hush('dividend-est', e);
+      }
+    }
+  };
+  var n = Math.min(CM_DIV_CONC, list.length);
+  var ws = []; for (var i = 0; i < n; i++) ws.push(worker());
+  await Promise.all(ws);
+}
+
 async function startDividendEst(force) {
   var errEl = document.getElementById('divest-error');
   var wrap = document.getElementById('divest-wrap');
@@ -460,6 +628,19 @@ async function startDividendEst(force) {
   try { await fetchTpexExright(); } catch (e) { hush('dividend-est', e); }
   // Yahoo 下一期金額（div-mix.js 非同步載入）：沒等它就併，第一次進頁會少一筆金額
   if (typeof _dmReady !== 'undefined') { try { await _dmReady; } catch (e) { hush('dividend-est', e); } }
+  // ── 主要來源：CMoney ──
+  //
+  // 公告當天就有，e添富 慢一到兩週，所以 CMoney 覆蓋在上面。
+  // 但它是一檔一個請求：2026-11-20 實測 20 檔第一次要 117 秒，等它等不得。
+  // 所以照官方除權息歷史那一套：當日快取有的先併上去頂著，缺的在背景抓，
+  // 抓完再跑一次 startDividendEst（那時全部命中快取，瞬間完成）。
+  // 抓不到的那幾檔自動留用 e添富／Yahoo 的結果，代號進提醒。
+  _divMergeCmCached(recMap, allCodes);
+  if (!_cmDivHave(allCodes) && !_cmDivBusy) {
+    _cmDivBusy = true;
+    _divMergeCm({}, allCodes, force).catch(function (e) { hush('dividend-est', e); })
+      .then(function () { _cmDivBusy = false; startDividendEst(false); });
+  }
   _divMergeAnnounced(recMap, allCodes);   // 併入已公告除息（TPEx 預告表／Yahoo／手動補登），估算改採實際公告值
   _divRecMap = recMap;   // 供換股試算與填息追蹤共用
 
@@ -804,7 +985,8 @@ function renderDividendEst() {
     '<dt>可領張數</dt><dd><code>除息日當天（含）之後買進的批次不計</code>，依建倉明細判定。' +
     '近 12 個月內已賣出、但除息日當時仍持有的批次照算（依券商已實現損益明細）。</dd>' +
     '<dt>月份總覽的三種字色</dt><dd>綠色＝已領到的；金色＝還沒領的；'
-    + '金色<span class="dv-fix">加底線</span>＝還沒領，但發放日已經公告，到帳的月份不會再變。'
+    + '金色<span class="dv-fix">加底線</span>＝還沒領，但發放日已經公告，到帳的月份不會再變'
+    + '（底線只保證月份，金額仍可能由投信調整；滑鼠移上去看公告的發放日）。'
     + '沒有底線的金色，月份是依這一檔過去「除息到發放」的間隔推算的，公告出來可能落到前後一個月。'
     + '一格裝兩次除息時，只有兩次都公告了才加底線。</dd>'
     + '<dt>月份總覽</dt><dd>本月（上月除息、本月發放）起 12 個月。跨到明年的月份以今年各次配息投影，' +
@@ -1223,13 +1405,13 @@ function _divStatRows(stocks) {
     // fix／unk：還沒領的那幾筆，發放日是公告的（fix）還是推算的（unk）。
     // 一格可能裝兩次除息（00981B 的 3/3 與 3/19 分別在 3、4 月發放），
     // 只有整格都公告了才算公告；混著的時候照推算處理，不把不確定的部分說成確定。
-    var r = { code: s.code, out: !!s.soldOut, m: {}, act: {}, fix: {}, unk: {},
+    var r = { code: s.code, out: !!s.soldOut, m: {}, act: {}, fix: {}, fixD: {}, unk: {},
               tot: 0, lent: {}, lentTot: 0 };
     (s.res.months || []).forEach(function (m) {
       r.m[m.month] = (r.m[m.month] || 0) + m.total;
       if (m.status === 'actual') r.act[m.month] = true;
       else if (m.derivedPay) r.unk[m.month] = true;
-      else r.fix[m.month] = true;
+      else { r.fix[m.month] = true; r.fixD[m.month] = m; }
       r.tot += m.total;
       if (m.lentTotal > 0) { r.lent[m.month] = (r.lent[m.month] || 0) + m.lentTotal; r.lentTot += m.lentTotal; }
     });
@@ -1267,8 +1449,14 @@ function _divStatTableHtml(stocks, money, title, labels) {
     var cell = function (v, mo) {
       if (!v) return '<td class="num"></td>';
       var done = r.act[mo], fixed = !done && r.fix[mo] && !r.unk[mo];
+      // 底線講的是「到帳月份確定」，不是「金額確定」。
+      // 2026-11-20 實測 00984D 12/23 那筆：發放日已公告，但 e添富 的金額欄是空的，
+      // 畫面上的錢是沿用上期算的。把日期寫出來，使用者才查得動。
+      var fd = r.fixD[mo];
       var tip = done ? '已領'
-        : (fixed ? '發放日已公告，金額與到帳月份都確定'
+        : (fixed ? ('發放日 ' + (fd && fd.payDate ? fd.payDate : '—') + ' 已公告'
+                    + (fd && fd.exDate ? '（除息 ' + fd.exDate + '）' : '')
+                    + '，到帳月份確定。金額仍可能由投信調整')
                  : '發放日尚未公告，月份是依這一檔過去「除息到發放」的間隔推算的');
       return '<td class="num ' + (done ? 'dv-act' : 'dv-est') + '" title="' + tip + '">'
         + (fixed ? '<span class="dv-fix">' + money(v) + '</span>' : money(v)) + '</td>';
@@ -1563,14 +1751,22 @@ async function _divGetRecs(code, force) {
   }
   if (_divByCode[code] && _divByCode[code].length) {
     _divRecMap[code] = _divByCode[code];
+    await _divMergeCmOne(code, force);
     await _divMergeNext(code);
     return _divRecMap[code];
   }
   var yr = [];
   try { yr = await fetchYahooDiv(code, force); } catch (e) { hush('dividend-est', e); }
   _divRecMap[code] = yr || [];
+  await _divMergeCmOne(code, force);
   await _divMergeNext(code);
   return _divRecMap[code];
+}
+async function _divMergeCmOne(code, force) {
+  var m = {};
+  m[code] = _divRecMap[code] || [];
+  try { await _divMergeCm(m, [code], force); } catch (e) { hush('dividend-est', e); }
+  if (m[code] && m[code].length) _divRecMap[code] = m[code];
 }
 
 // 只刷新現價快照（重抓持股 ETF 快照後重繪，不重抓配息資料、不動 GAS）
