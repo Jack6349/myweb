@@ -208,53 +208,28 @@ async function loadSettleBox() {
         + (runD ? ' ＋ 配息 ' + abMoney(runD) : '') + '</span></div>';
     }
 
-    // ── 帳戶調整紀錄 ──
+    // ── 預計進出紀錄 ──
     //
     // 這一區跟交割是兩件事。交割券商有存檔，畫面上刪掉也查得回來；
-    // 帳戶調整只有使用者自己記，所以這裡不提供刪除，只換狀態。
-    //
-    // 過了日期還沒表態的要他判斷，直接列出來；已經表態的收起來，不刪掉。
-    var swept = (typeof adSwept === 'function') ? adSwept() : [];
-    if (swept.length) {
-      html += '<div class="tx-od tx-od-sw"><div class="tx-od-t">'
-        + '剛剛確認的那一天（含以前）有 ' + swept.length + ' 筆帳戶調整一起標成已反映：'
-        + swept.map(function (p) { return p.date.slice(5).replace('-', '/') + ' ' + abSigned(p.amt); }).join('、')
-        + '。銀行那個數字裡本來就有它們，所以只換狀態，沒有再加一次。'
-        + '標錯了可以在下面的紀錄裡改回來。</div></div>';
-      adSweptClear();
-    }
-    var od = apOverdue();
-    if (od.length) {
-      html += '<div class="tx-od"><div class="tx-od-t">這幾筆過了日期，已經停止計入餘額，等你判斷</div>';
-      od.forEach(function (p) {
-        html += '<div class="tx-od-r"><span class="tx-od-d">' + p.date.slice(5).replace('-', '/') + '</span>'
-          + '<span class="tx-od-m">' + (p.memo || ((p.amt || 0) < 0 ? '提領' : '入金')) + '</span>'
-          + '<span class="num tx-od-a ' + ((p.amt || 0) > 0 ? 'up' : 'down') + '">' + abSigned(p.amt) + '</span>'
-          + '<button class="btn-query" title="這筆錢真的動了。現在的帳戶總額是用交割推的，裡面沒有它，'
-          + '所以會把它加進去。紀錄留著，不刪除。"'
-          + ' onclick="apApply(\'' + p.id + '\').then(abRefreshViews)">已反映</button>'
-          + '<button class="btn-query" title="還沒發生，往後延一天，繼續算在預估裡"'
-          + ' onclick="apPostpone(\'' + p.id + '\')">延後</button>'
-          + '<button class="btn-query" title="排了但沒有發生。永遠不計入，紀錄留著"'
-          + ' onclick="apVoid(\'' + p.id + '\').then(abRefreshViews)">沒發生</button></div>';
-      });
-      html += '</div>';
-    }
+    // 預計進出只有使用者自己記，所以不提供刪除。記錯了補一筆相反的，帳才留得出軌跡。
     var ps = (typeof apSettled === 'function') ? apSettled() : [];
     if (ps.length) {
-      html += '<details class="nbox ad-hist"><summary>帳戶調整紀錄　' + ps.length + ' 筆</summary>'
+      // 狀態欄問的是「這一筆還在不在餘額裡」。答案只看日期：
+      // 比餘額起點早的已經折進那個數字，不再單獨算一次；其餘都在算。
+      var anc = (typeof adAnchorDay === 'function') ? adAnchorDay() : '';
+      html += '<details class="nbox ad-hist"><summary>預計進出紀錄　' + ps.length + ' 筆</summary>'
         + '<table class="tx-settle-table ad-htable"><thead><tr><th>日期</th><th>說明</th>'
-        + '<th class="num">金額</th><th>狀態</th><th></th></tr></thead><tbody>';
+        + '<th class="num">金額</th><th>計入</th></tr></thead><tbody>';
       ps.forEach(function (p) {
-        var vd = apState(p) === 'void';
+        var folded = anc && p.date && p.date <= anc;
         html += '<tr><td>' + p.date.slice(5).replace('-', '/') + '</td>'
           + '<td>' + (p.memo || ((p.amt || 0) < 0 ? '提領' : '入金')) + '</td>'
           + '<td class="num ' + ((p.amt || 0) > 0 ? 'up' : 'down') + '">' + abSigned(p.amt) + '</td>'
-          + '<td>' + (vd ? '<span class="tx-st">沒發生</span>'
-                         : '<span class="tx-st tx-st-ok">已反映</span>') + '</td>'
-          + '<td class="tx-cf-act"><button class="ad-btn" title="退回未反映，重新判斷。'
-          + '這顆鈕不動帳戶總額：要改金額的話，去上面確認那一天的總額才是對的做法。"'
-          + ' onclick="apUnmark(\'' + p.id + '\').then(abRefreshViews)">改回</button></td></tr>';
+          + '<td>' + (folded
+              ? '<span class="tx-st" title="這一天不晚於你確認過的餘額起點 ' + anc
+                + '，那個數字是對過銀行的，裡面已經有這筆錢，不再單獨算一次。">已折進起點</span>'
+              : '<span class="tx-st tx-st-ok" title="已經算在餘額裡。金額有變就補一筆相反的。">計入中</span>')
+          + '</td></tr>';
       });
       html += '</tbody></table></details>';
     }
@@ -319,14 +294,11 @@ async function loadSettleBox() {
                           : '<b>未計入</b>——這次自動載入沒成功（通常是資料來源沒回應）。'
                             + '<button class="btn-query" onclick="txLoadDiv()">重試</button>')))
       + '<br><b>預計進出</b>：提領、入金這類券商看不到的動帳，自己排進來。'
-      + '過了日期不會自動消失，也不提供刪除：這些錢只有你自己記，交割那邊券商有存檔，這邊沒有。'
-      + '<br>過期又還沒表態的會停止計入，列在表格下方等你判斷，三個選擇：'
-      + '<b>已反映</b>（錢真的動了，加進帳戶總額）、<b>延後</b>（還沒發生，往後延一天繼續算在預估裡）、'
-      + '<b>沒發生</b>（排了但沒發生，永遠不計入）。表過態的收在「帳戶調整紀錄」裡，可以改回。'
-      + '<br><b>確認一天的總額會連帶掃掉它們</b>：你對過銀行填進來的數字裡本來就含這些錢，'
-      + '所以那一天（含以前）還沒表態的會一起標成已反映，只換狀態，不會再加一次。'
-      + '掃到哪幾筆會寫在畫面上，標錯了去紀錄裡改回。'
-      + '<br>「改回」只退回狀態，不動帳戶總額。要改金額的話，去確認那一天的總額才是對的做法。</div>';
+      + '排了就算進餘額，過了日期也一樣 —— 錢是你自己排的，排了就是會發生。'
+      + '<br><b>金額有變或根本沒發生，補一筆相反的。</b>這一區不提供刪除：'
+      + '這些錢只有你自己記，交割那邊券商有存檔，這邊沒有，留著相反的那一筆才看得出當初排過什麼。'
+      + '<br><b>確認一天的總額之後，那天以前的就不再單獨算</b>：你對過銀行填進來的數字裡'
+      + '本來就含那些錢，再加一次就是算兩遍。紀錄裡會標成「已折進起點」。</div>';
     el.innerHTML = html;
   } catch (e) { el.innerHTML = '<div class="modal-loading">查詢失敗：' + e.message + '</div>'; }
 }
@@ -343,13 +315,6 @@ async function apAddFromForm() {
   if (!d.value) { if (msg) msg.textContent = '要先選日期'; return; }
   if (v == null || !isFinite(v) || v === 0) { if (msg) msg.textContent = '金額要是數字，負數＝提領、正數＝入金'; return; }
   await apAdd(d.value, v, String(m.value || '').trim());
-  loadSettleBox();
-}
-// 「沒扣」＝還沒發生，往後挪一天。挪到哪一天使用者自己最清楚，
-// 這裡只負責讓它離開過期狀態，不替他猜日期。
-async function apPostpone(id) {
-  var t = new Date(Date.now() + 8 * 3600000 + 86400000).toISOString().slice(0, 10);
-  await apSet(id, { date: t });
   loadSettleBox();
 }
 
