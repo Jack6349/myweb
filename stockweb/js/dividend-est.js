@@ -352,7 +352,10 @@ function computeEtfYear(recs, shares, todayIso, year, code, forceStep) {
       var pay = payOf(r); if (!pay || +pay.slice(0, 4) !== year - 1) return;
       var projPay = _divPayRoll(_addMonths(pay, 12)), pm = +projPay.slice(5, 7);
       if (taken[pm] || pm <= lastActualM) return;
-      byMonth[pm + '|proj'] = { month: pm, exDate: r.exDate ? _addMonths(r.exDate, 12) : null, payDate: projPay, derivedPay: !r.payDate, perShare: lastAmt, status: 'est' };
+      // derivedPay 一律 true：這一筆的發放日是「去年那一筆 ＋12 個月」投影出來的，
+      // 不管去年那一筆當初有沒有公告過。原本寫 !r.payDate 等於把去年的公告狀態
+      // 當成明年的，2026-11-20 實測有 29 格被標成已公告，裡面包含 2027 年的投影。
+      byMonth[pm + '|proj'] = { month: pm, exDate: r.exDate ? _addMonths(r.exDate, 12) : null, payDate: projPay, derivedPay: true, perShare: lastAmt, status: 'est' };
       taken[pm] = true;
     });
   } else {
@@ -800,7 +803,11 @@ function renderDividendEst() {
     '<span style="color:var(--down)">綠＝已發放</span>、<span style="color:var(--accent2)">黃＝預估</span>（看發放日是否已過）。</dd>' +
     '<dt>可領張數</dt><dd><code>除息日當天（含）之後買進的批次不計</code>，依建倉明細判定。' +
     '近 12 個月內已賣出、但除息日當時仍持有的批次照算（依券商已實現損益明細）。</dd>' +
-    '<dt>月份總覽</dt><dd>本月（上月除息、本月發放）起 12 個月。跨到明年的月份以今年各次配息投影，' +
+    '<dt>月份總覽的三種字色</dt><dd>綠色＝已領到的；金色＝還沒領的；'
+    + '金色<span class="dv-fix">加底線</span>＝還沒領，但發放日已經公告，到帳的月份不會再變。'
+    + '沒有底線的金色，月份是依這一檔過去「除息到發放」的間隔推算的，公告出來可能落到前後一個月。'
+    + '一格裝兩次除息時，只有兩次都公告了才加底線。</dd>'
+    + '<dt>月份總覽</dt><dd>本月（上月除息、本月發放）起 12 個月。跨到明年的月份以今年各次配息投影，' +
     '每股金額取最近一次已知值、張數用目前持股。</dd>' +
     '<dt>空格的兩種意思</dt><dd><span class="na-gap">✕</span> 是<b>資料源沒給</b>，' +
       '按「重新整理」有機會會有；<span class="dm-dim">—</span> 是<b>資料拿到了但算不出來</b>' +
@@ -1213,10 +1220,16 @@ function _divStatRows(stocks) {
   var rows = [];
   stocks.forEach(function (s) {
     // m／tot 為合計（排序與欄合計用）；lent／lentTot 為其中借券補償的部分，畫面另拆一列
-    var r = { code: s.code, out: !!s.soldOut, m: {}, act: {}, tot: 0, lent: {}, lentTot: 0 };
+    // fix／unk：還沒領的那幾筆，發放日是公告的（fix）還是推算的（unk）。
+    // 一格可能裝兩次除息（00981B 的 3/3 與 3/19 分別在 3、4 月發放），
+    // 只有整格都公告了才算公告；混著的時候照推算處理，不把不確定的部分說成確定。
+    var r = { code: s.code, out: !!s.soldOut, m: {}, act: {}, fix: {}, unk: {},
+              tot: 0, lent: {}, lentTot: 0 };
     (s.res.months || []).forEach(function (m) {
       r.m[m.month] = (r.m[m.month] || 0) + m.total;
       if (m.status === 'actual') r.act[m.month] = true;
+      else if (m.derivedPay) r.unk[m.month] = true;
+      else r.fix[m.month] = true;
       r.tot += m.total;
       if (m.lentTotal > 0) { r.lent[m.month] = (r.lent[m.month] || 0) + m.lentTotal; r.lentTot += m.lentTotal; }
     });
@@ -1248,8 +1261,17 @@ function _divStatTableHtml(stocks, money, title, labels) {
   var colT = {}, grand = 0;
   rows.forEach(function (r) {
     // 有借出的檔拆兩列：主列＝直接入帳（發行公司匯入），子列＝借券補償（借券人另付）。兩列相加＝合計，欄合計不變。
+    // 三種狀態：已領（綠）、未領但發放日已公告（金＋底線）、未領且發放日是推算的（金）。
+    // 底線不換顏色：換第三個顏色會跟「已領／未領」這一組對立混在一起，
+    // 而公告與否是未領裡面的細分，不是另一類。
     var cell = function (v, mo) {
-      return '<td class="num' + (v ? (r.act[mo] ? ' dv-act' : ' dv-est') : '') + '">' + (v ? money(v) : '') + '</td>';
+      if (!v) return '<td class="num"></td>';
+      var done = r.act[mo], fixed = !done && r.fix[mo] && !r.unk[mo];
+      var tip = done ? '已領'
+        : (fixed ? '發放日已公告，金額與到帳月份都確定'
+                 : '發放日尚未公告，月份是依這一檔過去「除息到發放」的間隔推算的');
+      return '<td class="num ' + (done ? 'dv-act' : 'dv-est') + '" title="' + tip + '">'
+        + (fixed ? '<span class="dv-fix">' + money(v) + '</span>' : money(v)) + '</td>';
     };
     h += '<tr><td class="dstat-code"' + (r.out ? ' title="已全數賣出；只計持有期間已領的配息"' : '') + '>' + r.code +
       (r.out ? '<span class="dexm-lent"> (已出清)</span>' : '') + '</td>';
