@@ -592,13 +592,24 @@ function abFlow(settleRows, opts) {
     items.push({ d: r.date, kind: 'settle', label: 'T' + (r.T ? '+' + r.T : ''),
                  amt: Math.round(r.amount || 0), ref: r });
   });
+  // ── 預計進出的分界：最後一筆「確認過的」，不是最後一筆錨點 ──
+  //
+  // 錨點有兩種，含的東西不一樣：
+  //   使用者確認的＝對過銀行的真實數字，什麼都含，所以那天以前的預計進出不能再算一次。
+  //   系統算的＝前一天的總額 ＋ 當天的交割，只含交割，裡面沒有預計進出。
+  //
+  // 拿錨點當分界就會把第二種也算成「已經含了」。2026-11-23 實例：
+  // 錨點是系統算的 11/23，11/20 匯進來的 382,000 日期比它早，整筆被跳過，
+  // 餘額顯示 −381,684，實際上是 +316。
+  var okDay = (typeof adLastOk === 'function' && adLastOk()) ? adLastOk().d : '';
   abPlans().forEach(function (p) {
-    // 錨點那天（含）以前的不算：那個數字是對過銀行的，裡面已經有它們。
-    // 其餘一律算，過期也算 —— 過期就丟掉的話，11/20 匯進去準備付交割款的那筆
-    // 會在 11/21 憑空消失，帳面少一筆真實存在的錢。
-    if (!p.date || !after(p.date)) return;
+    if (!p.date) return;
+    if (okDay && p.date <= okDay) return;      // 對過銀行的那個數字裡已經有它
     items.push({ d: p.date, kind: 'plan', label: p.memo || ((p.amt || 0) < 0 ? '提領' : '入金'),
-                 amt: Math.round(p.amt || 0), id: p.id });
+                 amt: Math.round(p.amt || 0), id: p.id,
+                 // 日期比錨點早，但錨點是系統算的所以沒含它。列的時候要講，
+                 // 否則使用者會看到起點 11/23 底下掛一列 11/20，不知道為什麼。
+                 preAnc: !!(anchor && p.date <= anchor) });
   });
   var divs = opts.divs === false ? null : abDivIn();
   if (divs) divs.forEach(function (x) { items.push(x); });
