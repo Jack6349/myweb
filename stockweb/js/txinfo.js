@@ -128,6 +128,12 @@ async function loadSettleBox() {
       var paid = x.kind === 'settle' && settleIsPaid(x.ref, sp.today);
       var tag = x.kind === 'plan' ? '<span class="tx-kind k-plan">自訂</span>'
                                   : '<span class="tx-kind k-stl">交割</span>';
+      // 日期比起點早卻仍然要算：起點是「系統算的」，它只含交割，沒有這一筆。
+      if (x.preAnc) {
+        tag += '<span class="tx-src" title="這一天比上面那個起點早，但起點是系統算的，'
+          + '只含交割、不含你自己排的進出，所以這筆還沒被算進去，要在這裡補。'
+          + '去總覽把銀行的實際餘額填進來、確認過之後，它就會折進起點，這一列也會消失。">起點未含</span>';
+      }
       // 已扣款但仍列出：它不在輸入當時的餘額裡（餘額是更早填的），所以照樣要扣
       // 這一列的金額從哪裡來。券商只回今天、明天、後天，更早的是自己補的，
       // 補的方式有兩種，可信度不同，不能混在一起看起來都像券商講的。
@@ -216,7 +222,8 @@ async function loadSettleBox() {
     if (ps.length) {
       // 狀態欄問的是「這一筆還在不在餘額裡」。答案只看日期：
       // 比餘額起點早的已經折進那個數字，不再單獨算一次；其餘都在算。
-      var anc = (typeof adAnchorDay === 'function') ? adAnchorDay() : '';
+      // 分界是「最後一筆確認過的」，不是最後一筆錨點：系統算的那種只含交割
+      var anc = (typeof adLastOk === 'function' && adLastOk()) ? adLastOk().d : '';
       html += '<details class="nbox ad-hist"><summary>預計進出紀錄　' + ps.length + ' 筆</summary>'
         + '<table class="tx-settle-table ad-htable"><thead><tr><th>日期</th><th>說明</th>'
         + '<th class="num">金額</th><th>計入</th></tr></thead><tbody>';
@@ -226,7 +233,7 @@ async function loadSettleBox() {
           + '<td>' + (p.memo || ((p.amt || 0) < 0 ? '提領' : '入金')) + '</td>'
           + '<td class="num ' + ((p.amt || 0) > 0 ? 'up' : 'down') + '">' + abSigned(p.amt) + '</td>'
           + '<td>' + (folded
-              ? '<span class="tx-st" title="這一天不晚於你確認過的餘額起點 ' + anc
+              ? '<span class="tx-st" title="這一天不晚於你對過銀行、確認過的那一天 ' + anc
                 + '，那個數字是對過銀行的，裡面已經有這筆錢，不再單獨算一次。">已折進起點</span>'
               : '<span class="tx-st tx-st-ok" title="已經算在餘額裡。金額有變就補一筆相反的。">計入中</span>')
           + '</td></tr>';
