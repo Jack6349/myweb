@@ -138,6 +138,35 @@ function _ovcTier(r2) {
 // 區間不必另外畫：掛買區間的上下緣就是金線上的 16% 與 84% 兩點，
 // 收盤區間同理在青線上。節點直接從曲線取高度，所以點永遠落在線上，
 // 不會出現「區間說在裡面、曲線說機率很低」這種自相矛盾。
+// ── 右上角那個價 ──
+//
+// 兩種狀態，顏色的依據不一樣：
+//
+// 盤中：快照就是這一盤的價，_ovPxTagHtml 自己會用「對前收的漲跌」上色，照用。
+//
+// 盤前（推的是下一盤、快照是上一盤的收盤）：_ovPxTagHtml 只給灰字不給漲跌，
+// 因為那個價就是前收，相減必定是 0，寫出來反而像真的。但灰字也讀不出今天收漲還是收跌。
+// 這裡改用那一天自己的漲跌上色 —— 它問的是「這一盤收漲還是收跌」，答得出來而且有意義。
+// 標題也跟著從「現價」換成「收盤」，不然拿上一盤的收盤叫現價是錯的。
+//
+// 漲跌用還原收盤算（baseChg），除息當天未還原價會憑空掉一截，拿它上色會把配息標成下跌。
+function _ovcPxKey(r) { return r.liveSame ? '現價' : '收盤'; }
+function _ovcPxHtml(r) {
+  var tag = (typeof _ovPxTagHtml === 'function')
+    ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '';
+  if (r.liveSame) return tag;
+  if (!(r.base > 0)) return tag;
+  var c = r.baseChg, col = _rbCol(c);
+  var tri = (c > 0) ? '\u25b2' : ((c < 0) ? '\u25bc' : '\u2014');
+  return '<span class="ovx" title="' + (r.basePrev || '') + ' 的收盤 ' + _ovPx(r.base)
+    + (c == null ? '' : '，對前一個交易日 ' + (c > 0 ? '+' : '') + c.toFixed(2) + '%')
+    + '。推的是下一盤，所以這裡不是現價。">'
+    + '<span class="ovx-px" style="color:' + col + '">' + _ovPx(r.base) + '</span>'
+    + (c == null ? '' : '<span class="ovx-v" style="color:' + col + '">' + tri
+        + Math.abs(c).toFixed(2) + '%</span>')
+    + '</span>';
+}
+
 // ── 左側清單的一列 ──
 //
 // 一列講完三件事：是哪一檔、要掛在哪個價、現在多少錢。
@@ -159,8 +188,7 @@ function _ovcRow(r, on) {
       + (fillHi ? 'var(--text)' : 'var(--text2)') + '">'
       + (r.lFill == null ? '—' : Math.round(r.lFill) + '%') + '</b>'
     + '<span class="ovc-rsep">｜</span>'
-    + ((typeof _ovPxTagHtml === 'function')
-        ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '')
+    + _ovcPxHtml(r)
     + '</span></button>';
 }
 
@@ -195,9 +223,8 @@ function _ovcPanel(r) {
   var h = '<div class="ovc-panel' + (r.cal ? ' ovc-calc' : '') + '">'
     + '<div class="ovc-ptitle"><span class="tx-ocode">' + r.code + '</span>'
     + '<span class="tx-oname">' + _rbName(r.code) + '</span>'
-    + '<span class="ovc-psp"><span class="ovc-rk">現價</span>'
-    + ((typeof _ovPxTagHtml === 'function')
-        ? _ovPxTagHtml(r.code, r.base, r.liveSame, r.liveWhy) : '')
+    + '<span class="ovc-psp"><span class="ovc-rk">' + _ovcPxKey(r) + '</span>'
+    + _ovcPxHtml(r)
     + '</span></div>';
 
   if (!fLow && !fCls) {
