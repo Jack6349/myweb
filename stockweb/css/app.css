@@ -2875,13 +2875,19 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-rng { display: flex; height: 15px; }
 .ovb-rng + .ovb-rng { margin-top: 4px; }
 .ovb-rseg { flex: 1 1 0; height: 100%; border-radius: 4px; position: relative; }
-/* 名字寫在前收那一欄的 Bar 裡面，深字壓在色塊上，不必另外留一列，
-   而且保證名字跟它指的那一條永遠對齊。那一欄沒過半時改用色字。 */
-.ovb-rlab { position: absolute; inset: 0; display: flex; align-items: center;
-  justify-content: center; font-style: normal; font-size: 11px; font-weight: 700;
-  line-height: 1; white-space: nowrap; color: #11161f; }
-.ovb-rlab.ovb-rlab-buy { color: var(--accent2); }
-.ovb-rlab.ovb-rlab-sell { color: var(--accent3); }
+/* 名字寫在前收那一欄的 Bar 裡面，不必另外留一列，而且保證名字跟它指的那一條永遠對齊。
+   色塊會隨成交機率從很淡到很實，單一一種字色一定有一端會糊，所以用白字加深色字暈：
+   對比來自字暈，跟底下是什麼顏色無關。那一欄沒過半時色塊是空的，改用該側的色字。 */
+/* 名字自己帶一塊深色底，對比因此固定在 11:1 以上，不受色塊深淺影響。
+   底只包住字本身，不是整格，所以色塊兩端的深淺還看得到。 */
+.ovb-rlab { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-style: normal; font-size: 11px; font-weight: 700; line-height: 13px;
+  white-space: nowrap; color: #f2f6fc;
+  background: rgba(11, 17, 25, .85); padding: 0 7px; border-radius: 4px; }
+/* 那一欄沒過半時色塊是空的，不需要底，改用該側的色字 */
+.ovb-rseg:not(.ovb-ron) .ovb-rlab { background: none; padding: 0; }
+.ovb-rlab.ovb-rlab-buy { color: var(--accent2); text-shadow: none; }
+.ovb-rlab.ovb-rlab-sell { color: var(--accent3); text-shadow: none; }
 .ovb-rseg.ovb-ron.ovb-buy { background: var(--accent2); }
 .ovb-rseg.ovb-ron.ovb-sell { background: var(--accent3); }
 .ovb-rseg.ovb-jl { margin-left: -6px; border-top-left-radius: 0; border-bottom-left-radius: 0; }

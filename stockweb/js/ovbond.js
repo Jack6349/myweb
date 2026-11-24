@@ -414,7 +414,7 @@ function _ovbCard(code) {
   ['buy', 'sell'].forEach(function (side) {
     segs[side] = cells.map(function (c) {
       var v = rate(main, side, c);
-      return { on: v != null && v > OVB_HI };
+      return { on: v != null && v > OVB_HI, v: v };
     });
     segs[side].forEach(function (s, i) {
       var L = segs[side][i - 1], R = segs[side][i + 1];
@@ -422,15 +422,70 @@ function _ovbCard(code) {
       s.jr = !!(s.on && R && R.on);
     });
   });
+  var pxOf = function (c) {
+    return _bsAlign(last + (c.side === 'sell' ? 1 : (c.side === 'buy' ? -1 : 0)) * c.k * tick);
+  };
   var LB = { buy: '買得到的價', sell: '賣得掉的價' };
+  // ── 一欄一階的深淺 ──
+  //
+  // 原本整條同一個顏色，於是 51% 和 99% 長得一模一樣，49% 和 3% 也一樣，
+  // 都被 50% 那條線壓成有或沒有。深淺把那個斷崖變回坡度。
+  //
+  // 為什麼不用平滑漸層：價格是離散的，升降單位 0.01，9.62 跟 9.63 之間沒有東西。
+  // 平滑漸層會在兩檔之間畫出一段對應不到任何掛價的顏色，那是憑空的中間值，
+  // 跟「過半的欄位不相鄰就不連起來」是同一條原則。而且相鄰欄是用 −6px 重疊黏起來的，
+  // 跨欄的漸層一定會在接縫錯位。一欄一階就沒有這兩個問題。
+  //
+  // 刻度用絕對值不做 normalize：50% 最淡、100% 最實，所有卡片同一把尺。
+  // 柱高本來就是全頁共用刻度、可以跨檔比，顏色不跟著做的話，
+  // 兩檔的 Bar 一樣深卻代表不同的機率。
+  // 色塊的顏色在這裡算出來，不交給 CSS 的 color-mix：算得出來才知道它的亮度，
+  // 才挑得出名字要用深字還是亮字。色相直接讀 CSS 變數，換主題也跟著走。
+  var _rgb = function (x) {
+    x = String(x || '').trim();
+    var m = x.match(/^#?([0-9a-fA-F]{6})$/);
+    if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16),
+                   parseInt(m[1].slice(4, 6), 16)];
+    var n = x.match(/(\d+)\D+(\d+)\D+(\d+)/);
+    return n ? [+n[1], +n[2], +n[3]] : null;
+  };
+  var _cssv = getComputedStyle(document.documentElement);
+  var SHBG = [11, 17, 25];
+  var SHUE = { buy: _rgb(_cssv.getPropertyValue('--accent2')) || [240, 204, 122],
+               sell: _rgb(_cssv.getPropertyValue('--accent3')) || [90, 169, 255] };
+  var _lum = function (c) {
+    var f = c.map(function (x) {
+      x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2];
+  };
+  var shade = function (side, v) {
+    var t = Math.max(0, Math.min(1, (v - OVB_HI) / (100 - OVB_HI)));
+    var m = 0.5 + 0.5 * t, h = SHUE[side];
+    var c = [0, 1, 2].map(function (i) { return Math.round(h[i] * m + SHBG[i] * (1 - m)); });
+    // 字色不跟著底色換。實測把前收那一欄從 51% 掃到 100%，挑亮度贏的那一個字色，
+    // 最差只到 4.12:1（賣側 70%）：兩個色系在中段都有一小段深字亮字都不夠。
+    // 改成讓名字自己帶一塊深色底，對比就固定在 11:1 以上，跟色塊多深無關。
+    // 這一頁的柱頭數字與近 30 日的框內數字本來就是這樣處理的，不是新發明的作法。
+    return { bg: 'rgb(' + c.join(',') + ')' };
+  };
   var ri = { buy: 0, sell: 0 };
   var rngCell = function (c, side) {
     var s = segs[side][ri[side]++];
-    var lab = (c.side === 'mid')
-      ? '<em class="ovb-rlab' + (s.on ? '' : ' ovb-rlab-' + side) + '">' + LB[side] + '</em>' : '';
+    // 名字寫在色塊上，而色塊從最淡到最實跨了一大段亮度，單一一種字色一定有一端會糊。
+    // 實測兩個色系在中段都落在「深字不夠、亮字也不夠」的區間，換字色換不掉。
+    // 改用白字加深色字暈：對比來自字暈本身，跟底下是什麼顏色無關。
+    // 字暈是這個專案既有的作法（柱頭數字、夜推股票的節點數字都是）。
+    var sh = s.on ? shade(side, s.v) : null;
+    var lab = (c.side !== 'mid') ? ''
+      : ('<em class="ovb-rlab' + (sh ? '' : ' ovb-rlab-' + side) + '">' + LB[side] + '</em>');
     return '<div class="ovb-rngs"><div class="ovb-rng"><span class="ovb-rseg'
       + (s.on ? ' ovb-ron ovb-' + side : '')
-      + (s.jl ? ' ovb-jl' : '') + (s.jr ? ' ovb-jr' : '') + '">' + lab + '</span></div></div>';
+      + (s.jl ? ' ovb-jl' : '') + (s.jr ? ' ovb-jr' : '') + '"'
+      + (sh ? ' style="background:' + sh.bg + '" title="' + _bsPx(pxOf(c)) + '：'
+          + (side === 'buy' ? '買進' : '賣出') + '成交率 ' + s.v.toFixed(0)
+          + '%。色塊越實代表機率越高，50% 最淡、100% 最實。"' : '')
+      + '>' + lab + '</span></div></div>';
   };
 
   // ── 買一張、賣一張，共用一條價格軸 ──
@@ -442,9 +497,6 @@ function _ovbCard(code) {
   // 拆成兩張之後每一張回到原本的密度。買賣在同一個價的對照從左右相鄰換成上下對位，
   // 而兩張圖的欄位垂直對齊，所以對照還在。價格與檔位只畫一次，放在最底下兩張共用：
   // 畫兩次等於把同一排數字再講一遍，而它是兩張圖共同的那一條軸。
-  var pxOf = function (c) {
-    return _bsAlign(last + (c.side === 'sell' ? 1 : (c.side === 'buy' ? -1 : 0)) * c.k * tick);
-  };
   var rate1 = function (v) {
     return '<span class="' + _ovbCls(v) + '">' + (v == null ? '—' : v.toFixed(0) + '%') + '</span>';
   };
@@ -610,6 +662,12 @@ function ovcBondHtml() {
     + '金色那條的右端通常超過前收不少，因為掛得越高越容易買到；'
     + '藍色那條的左端同理往前收下方延伸。'
     + '<br>不連續就不連起來：過半的欄位不保證相鄰，斷開本身就是資訊。'
+    + '<br><b>色塊的深淺就是成交機率</b>：50% 最淡、100% 最實，一欄一階。'
+    + '原本整條同一個顏色，51% 和 99% 長得一模一樣，都被 50% 那條線壓成有或沒有，'
+    + '深淺把那個斷崖變回坡度。'
+    + '一欄一階不做平滑漸層：升降單位 0.01，9.62 跟 9.63 之間沒有可以掛的價，'
+    + '平滑漸層會在兩檔之間畫出一段對應不到任何掛價的顏色。'
+    + '刻度是絕對值不做 normalize，所有卡片同一把尺，跟柱高一樣可以跨檔比。'
     + '<br>HYG 的方向會整條平移這兩列。HYG 下跌的日子比較買得到：'
     + '00984D 掛在前收，HYG 下跌 93%、上漲 75%，差 18 個百分點；00982D 是 83% 對 68%。'
     + '所以 HYG 下跌時金色那條會往左長、藍色那條往右縮，上漲時反過來。'
