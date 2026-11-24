@@ -192,6 +192,59 @@ function _ovFgnW(code) {
   m.rows.forEach(function (r) { if (r.kind !== 'TW') w += r.weight; });
   return w;
 }
+// ── 這一檔有沒有漲跌停 ──
+//
+// 國內成分證券的 ETF 單日漲跌限 10%，國外成分的沒有限制。區間的上下緣原本沒人管
+// 這件事：寬度是近期誤差撐出來的，撐過頭就跑到跌停以下，而那種價掛不進去，
+// 委託價超出漲跌幅會被退件。走查回測（五檔有限制的、666 個檔日，每天只用該日之前的
+// 資料重配）量到 15 天超界，全部是下緣、全部落在費半隔夜跌幅達 −3% 門檻的日子，
+// 集中在 5 個交易日，而那幾天往往整排標的一起超界。
+//
+// 怎麼分辨有沒有限制。兩個判準，任一個說「沒有限制」就不夾，兩個都說不出來才夾：
+//
+//   一、成份股的外股權重 ≥ OV_FGN_W。量到的不是接近 0 就是接近 98，中間是空的。
+//   二、自己的歷史日線有沒有單日超過 10%。有限制的話物理上就走不出來。
+//       2026 兩年實測：00981A 最大 9.97、00405A 9.28、00404A 8.94、00407A 8.89；
+//       00988A 卻有三天超過，最大 14.83（而且不是除息日），直接證明它沒有限制。
+//       門檻取 10.4，落在量到的那段空白（9.97 到 10.82）中間，不是自己訂的。
+//
+// 兩個判準都不能單獨用。只看歷史會把 00402A 誤判成有限制（外股 98.4%，但兩年最大
+// 只走過 6.85%）；只看權重則是關注清單裡沒持股的檔抓不到成份股，權重會是 null。
+var OV_LIM = 10;          // 國內成分證券 ETF 的單日漲跌幅（%）
+var OV_LIM_SEEN = 10.4;   // 歷史單日變動超過這個數，代表它沒有漲跌幅限制
+var _ovNoLimC = {};
+// 回 true＝確定沒有限制，false＝確定有，null＝不知道（不知道就不夾，維持原樣）。
+function _ovNoLim(code, raw) {
+  var k = String(code);
+  if (_ovNoLimC[k] === undefined) {
+    var hit = false;
+    for (var i = 1; i < raw.length; i++) {
+      var p0 = raw[i - 1].c, c1 = raw[i].c;
+      if (!(p0 > 0) || !(c1 > 0)) continue;
+      // 除息日整根跳過：未還原價在除息當天會憑空掉一截，那不是走出來的漲跌
+      var f0 = raw[i - 1].a / p0, f1 = raw[i].a / c1;
+      if (Math.abs(f1 - f0) > 1e-6 * Math.max(f0, f1)) continue;
+      if (Math.abs(c1 / p0 - 1) * 100 > OV_LIM_SEEN) { hit = true; break; }
+    }
+    _ovNoLimC[k] = hit;
+  }
+  if (_ovNoLimC[k]) return true;
+  // 走過超過 10% 能證明「沒有限制」，沒走過卻證明不了「有限制」——
+  // 可能只是這兩年剛好沒遇到。00402A 外股 98.4%、沒有漲跌幅限制，
+  // 但兩年最大只走過 6.85%，單看歷史會誤判成有限制，然後把它硬夾在 ±10%。
+  // 所以沒走過的時候一律回去問成份股，問不到就回 null，寧可維持原樣也不要夾錯。
+  var w = _ovFgnW(code);
+  return (w == null) ? null : (w >= OV_FGN_W);
+}
+// 漲跌停價。尾數不足一個升降單位時漲停捨去、跌停進位，兩邊都往區間內收，
+// 算出來的價保證掛得進去。升降單位與 ovTick 同一組（ETF：50 元以下 0.01）。
+function _ovLimPx(code, raw, base) {
+  if (!(base > 0) || _ovNoLim(code, raw) !== false) return null;
+  var u = base < 50 ? 0.01 : 0.05, r2 = function (v) { return Math.round(v * 100) / 100; };
+  return { dn: r2(Math.ceil(base * (1 - OV_LIM / 100) / u - 1e-9) * u),
+           up: r2(Math.floor(base * (1 + OV_LIM / 100) / u + 1e-9) * u) };
+}
+
 var OV_URL = 'data/night-txf.json';
 var OV_REC_LS = 'overnight_rec_v1';      // 命中率紀錄（預測 vs 實際）
 var _ovNight = null, _ovToday = null, _ovBusy = false, _ovRec = null, _ovAt = null;
@@ -857,6 +910,14 @@ function ovEstimate(code) {
   var lLoP = (lMid == null || !fl || !(sdl > 0)) ? null : lMid - sdl * lLoK;
   var lHiP = (lMid == null || !fl || !(sdl > 0)) ? null : lMid + sdl * lHiK;
   if (cal && cal.runLoPct != null && lHiP != null) lHiP = Math.min(lHiP, cal.runLoPct);
+  // ── 漲跌停 ──
+  // 端點與中心一律夾進漲跌停之內，夾的是顯示值，模型本身一個字都沒改。
+  // 夾完要標出來是夾過的：下緣貼在跌停而不說，會被讀成「模型推它會跌停」。
+  var lim = _ovLimPx(code, raw, base);
+  var cp = function (p) { return (p == null || !lim) ? p : Math.min(lim.up, Math.max(lim.dn, p)); };
+  var cut = function (p) { return !!(lim && p != null && (p < lim.dn || p > lim.up)); };
+  var oPx0 = mk(po), lPx0 = mk(lMid), cPx0 = mk(cMid);
+  var loPx0 = mk(cLoP), hiPx0 = mk(cHiP), lLoPx0 = mk(lLoP), lHiPx0 = mk(lHiP);
   return {
     code: code, n: fc.n, base: base, basePrev: raw[bi].d,
     basePx: base,   // 偏移度要把百分點換回元
@@ -876,13 +937,17 @@ function ovEstimate(code) {
     oPct: po, lPct: lMid, cPct: cMid,
     // 校準前的那一組也帶出去：提示要講得出「原本推多少、現在推多少」
     rawLPct: pl, rawCPct: pc2, cal: cal,
-    oPx: mk(po), lPx: mk(lMid), cPx: mk(cMid),
-    loPx: mk(cLoP),
-    hiPx: mk(cHiP),
+    oPx: cp(oPx0), lPx: cp(lPx0), cPx: cp(cPx0),
+    loPx: cp(loPx0),
+    hiPx: cp(hiPx0),
+    // 漲跌停價與「哪幾個端點被夾過」。沒有限制的標的一律 null，畫面據此完全不提這件事。
+    limDn: lim ? lim.dn : null, limUp: lim ? lim.up : null,
+    limCut: { lLo: cut(lLoPx0), lHi: cut(lHiPx0), cLo: cut(loPx0), cHi: cut(hiPx0),
+              lMid: cut(lPx0), cMid: cut(cPx0) },
     // 日內最低自己的區間。掛限價買進看的是這一個，不是收盤那一個，
     // 原本只有收盤有範圍，等於把最該有不確定性的那個數字寫成一個確定的價。
-    lLoPx: mk(lLoP),
-    lHiPx: mk(lHiP),
+    lLoPx: cp(lLoPx0),
+    lHiPx: cp(lHiPx0),
     lCover: fl ? fl.cover : null, lCoverN: fl ? fl.coverN : null,
     // 掛得到的比例：同一條迴歸、同一段樣本，數有多少比例的日子實際最低
     // 真的跌到當天推的掛買參考。校準那一層沒有進這個回測（見卡片說明）。
