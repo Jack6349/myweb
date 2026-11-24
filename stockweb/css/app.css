@@ -2859,7 +2859,19 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-rseg.ovb-jl { margin-left: -4px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .ovb-rseg.ovb-jr { margin-right: -4px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 /* 前收那一欄左半是買、右半是賣，兩段之間留縫，不跟對方黏起來 */
-.ovb-rng2 { gap: 3px; }
+/* 前收那一欄的兩格要拉開。原本 3px，貼在一起看起來像一把連續的尺被切成兩半，
+   而那兩格是兩個不同的動作。缺口要大到一眼看得出是兩條，不是一條有缺口的。 */
+.ovb-rng2 { gap: 16px; }
+
+/* 兩條 Bar 各自的名字。顏色沿用 Bar 自己的買金賣藍。
+   每一欄都留這一列（其餘欄是空的），不然底下的價格那一排會差一個行高對不齊。 */
+.ovb-rlb { height: 15px; }
+.ovb-rlb2 { display: flex; gap: 16px; }
+.ovb-rlb2 span { flex: 1 1 0; min-width: 0; font-size: 11px; font-weight: 600;
+  line-height: 15px; white-space: nowrap; }
+/* 各自靠著缺口那一側，名字就貼在它解釋的那條 Bar 的末端，不會讀成隔壁那條的 */
+.ovb-lb-buy { color: var(--accent2); text-align: right; }
+.ovb-lb-sell { color: var(--accent3); text-align: left; }
 
 .ovb-px { font-size: 15.5px; color: var(--text3); font-variant-numeric: tabular-nums; }
 .ovb-px.ovb-pxhi { color: var(--text); font-weight: 700; }
