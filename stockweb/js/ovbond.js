@@ -258,7 +258,7 @@ function _ovbHit(tdy, side, px) {
   if (!(tdy.lo > 0)) return null;
   return _bsCents(tdy.lo) <= _bsCents(px);
 }
-function _ovbHitHtml(tdy, c, px) {
+function _ovbHitHtml(tdy, side, px) {
   if (!tdy) return '';
   var one2 = function (side, lb) {
     var v = _ovbHit(tdy, side, px);
@@ -268,9 +268,9 @@ function _ovbHitHtml(tdy, c, px) {
       + _bsPx(px) + '：今天' + (v ? '已經觸及過' : '還沒碰到') + '（' + what
       + (tdy.at ? '，' + tdy.at : '') + '）">' + (lb || '') + '</span>';
   };
-  // 每一欄都有買賣兩根柱，圓點就兩顆都畫：買那顆問今天的日內最低有沒有跌到，
-  // 賣那顆問日內最高有沒有漲到，同一個價兩件事都答得出來。
-  return '<div class="ovb-hit">' + one2('buy') + one2('sell') + '</div>';
+  // 一張圖只問一件事，所以一欄一顆：買那張問今天的日內最低有沒有跌到這個價，
+  // 賣那張問日內最高有沒有漲到。
+  return '<div class="ovb-hit">' + one2(side) + '</div>';
 }
 
 function _ovbCard(code) {
@@ -397,10 +397,10 @@ function _ovbCard(code) {
   // 掛價那一行已經把過半的打亮，但那要你注意到哪幾個是亮的。
   // 這一條把「能掛到的範圍有多寬」變成一個長度，用餘光就讀得到。
   //
-  // 買賣各一列，上下疊，各自橫跨整條價格軸。
+  // 每一張圖底下一條，各自橫跨整條價格軸。
   //
-  // 不是在前收切開的兩半。兩列問的是不同的動作，而同一個價兩件事都問得出來，
-  // 所以兩列會有重疊的一段，那一段就是「掛得到也賣得掉」的價。
+  // 不是在前收切開的兩半。兩條問的是不同的動作，而同一個價兩件事都問得出來，
+  // 所以兩條蓋到的價會有重疊的一段，那一段就是「掛得到也賣得掉」的價。
   // 在前收截斷等於把範圍講短了：實測前收上方的買進最低 79%、前收下方的賣出最低 76%。
   //
   // 不連續就不連起來。過半的欄位不保證相鄰，樣本少的時候可能出現 55、48、52，
@@ -410,68 +410,74 @@ function _ovbCard(code) {
   // 而兩列 Bar 已經夠高了；寫在裡面還保證名字跟它指的那條永遠對齊。
   // 顏色沿用柱子的買金賣藍，不用橘：橘色在這個專案是警示色（夜推股票的「超出刻度」），
   // 拿來標一件好事會把它的意思弄反。
-  var ROWS = [{ s: 'buy', lb: '買得到的價' }, { s: 'sell', lb: '賣得掉的價' }];
   var segs = {};
-  ROWS.forEach(function (row) {
-    segs[row.s] = cells.map(function (c) {
-      var v = rate(main, row.s, c);
+  ['buy', 'sell'].forEach(function (side) {
+    segs[side] = cells.map(function (c) {
+      var v = rate(main, side, c);
       return { on: v != null && v > OVB_HI };
     });
-    segs[row.s].forEach(function (s, i) {
-      var L = segs[row.s][i - 1], R = segs[row.s][i + 1];
+    segs[side].forEach(function (s, i) {
+      var L = segs[side][i - 1], R = segs[side][i + 1];
       s.jl = !!(s.on && L && L.on);
       s.jr = !!(s.on && R && R.on);
     });
   });
+  var LB = { buy: '買得到的價', sell: '賣得掉的價' };
   var ri = { buy: 0, sell: 0 };
-  var rngCell = function (c) {
-    return '<div class="ovb-rngs">' + ROWS.map(function (row) {
-      var s = segs[row.s][ri[row.s]++];
-      var lab = (c.side === 'mid')
-        ? '<em class="ovb-rlab' + (s.on ? '' : ' ovb-rlab-' + row.s) + '">' + row.lb + '</em>' : '';
-      return '<div class="ovb-rng"><span class="ovb-rseg' + (s.on ? ' ovb-ron ovb-' + row.s : '')
-        + (s.jl ? ' ovb-jl' : '') + (s.jr ? ' ovb-jr' : '') + '">' + lab + '</span></div>';
-    }).join('') + '</div>';
+  var rngCell = function (c, side) {
+    var s = segs[side][ri[side]++];
+    var lab = (c.side === 'mid')
+      ? '<em class="ovb-rlab' + (s.on ? '' : ' ovb-rlab-' + side) + '">' + LB[side] + '</em>' : '';
+    return '<div class="ovb-rngs"><div class="ovb-rng"><span class="ovb-rseg'
+      + (s.on ? ' ovb-ron ovb-' + side : '')
+      + (s.jl ? ' ovb-jl' : '') + (s.jr ? ' ovb-jr' : '') + '">' + lab + '</span></div></div>';
   };
 
-  var h = head + '<div class="ovb-chart">';
-  cells.forEach(function (c) {
-    var px = _bsAlign(last + (c.side === 'sell' ? 1 : (c.side === 'buy' ? -1 : 0)) * c.k * tick);
-    h += '<div class="ovb-col' + (c.side === 'mid' ? ' ovb-mid' : '') + '">';
-    h += '<div class="ovb-plot">';
-    // 每一欄都畫買賣兩組。原本只畫這一欄「所屬那一側」，前收右邊就沒有買、
-    // 左邊就沒有賣，橫 Bar 想畫滿也會跟上面的柱子對不起來。
-    var bars = [{ s: 'buy', lb: c.side === 'mid' ? '買' : '' },
-                { s: 'sell', lb: c.side === 'mid' ? '賣' : '' }];
-    bars.forEach(function (b) {
-      var vDn = rate(dn, b.s, c), vUp = rate(up, b.s, c), v30 = rate(r30, b.s, c);
-      var sfx = '（' + base.n + ' 個日子）';
-        h += '<div class="ovb-grp">'
-        + bar1(b.s, vDn, dir < 0, dir === 0, true, _bsPx(px) + '　HYG 下跌的日子：')
-        + bar1(b.s, vUp, dir > 0, dir === 0, false, _bsPx(px) + '　HYG 上漲的日子：')
-        + frame1(v30, rate(main, b.s, c))
-        + (b.lb ? '<span class="ovb-mlb">' + b.lb + '</span>' : '')
+  // ── 買一張、賣一張，共用一條價格軸 ──
+  //
+  // 兩邊疊在同一張圖的時候，一欄要塞 4 根柱、2 個近 30 日的框、最多 6 個數字，
+  // 十一欄就是 66 個數字擠在一起，柱寬還被壓到 25px（原本 50）。
+  // 嚴格的像素重疊其實只有一兩處，讀不動的是密度本身，不是字疊在字上面。
+  //
+  // 拆成兩張之後每一張回到原本的密度。買賣在同一個價的對照從左右相鄰換成上下對位，
+  // 而兩張圖的欄位垂直對齊，所以對照還在。價格與檔位只畫一次，放在最底下兩張共用：
+  // 畫兩次等於把同一排數字再講一遍，而它是兩張圖共同的那一條軸。
+  var pxOf = function (c) {
+    return _bsAlign(last + (c.side === 'sell' ? 1 : (c.side === 'buy' ? -1 : 0)) * c.k * tick);
+  };
+  var rate1 = function (v) {
+    return '<span class="' + _ovbCls(v) + '">' + (v == null ? '—' : v.toFixed(0) + '%') + '</span>';
+  };
+  var chart1 = function (side) {
+    var s = '<div class="ovb-chart">';
+    cells.forEach(function (c) {
+      var px = pxOf(c);
+      s += '<div class="ovb-col' + (c.side === 'mid' ? ' ovb-mid' : '') + '">'
+        + '<div class="ovb-plot"><div class="ovb-grp">'
+        + bar1(side, rate(dn, side, c), dir < 0, dir === 0, true, _bsPx(px) + '　HYG 下跌的日子：')
+        + bar1(side, rate(up, side, c), dir > 0, dir === 0, false, _bsPx(px) + '　HYG 上漲的日子：')
+        + frame1(rate(r30, side, c), rate(main, side, c))
+        + '</div></div>'
+        + '<div class="ovb-rate">' + rate1(rate(main, side, c)) + '</div>'
+        + rngCell(c, side)
+        + _ovbHitHtml(tdy, side, px)
         + '</div>';
     });
-    h += '</div>';
-    // 每一欄都畫了買賣兩根柱，數字就要兩個都印。只印其中一個
-    // 會讓人以為另一根沒有值，或者把另一根的高度讀成這個數字。
-    var rate1 = function (v) {
-      return '<span class="' + _ovbCls(v) + '">' + (v == null ? '—' : v.toFixed(0) + '%') + '</span>';
-    };
-    h += '<div class="ovb-rate">'
-      + rate1(rate(main, 'buy', c)) + '<span class="ovb-sl">／</span>' + rate1(rate(main, 'sell', c))
-      + '</div>'
-      + rngCell(c)
-      // 價格數字的亮度跟著成交率走：過半的亮、沒過半的淡。
-      // 掃一整排的時候先看到的是「哪幾個價掛得到」，不必逐欄讀百分比。
+    return s + '</div>';
+  };
+  // 共用的價格軸。亮度跟著成交率走，兩邊只要有一邊過半就亮：
+  // 掃一整排的時候先看到的是「哪幾個價掛得到」，不必逐欄讀百分比。
+  var axis = '<div class="ovb-chart ovb-axis">';
+  cells.forEach(function (c) {
+    axis += '<div class="ovb-col' + (c.side === 'mid' ? ' ovb-mid' : '') + '">'
       + '<div class="ovb-px' + (_ovbTop(main, rate, c) > OVB_HI ? ' ovb-pxhi' : '') + '">'
-      + _bsPx(px) + '</div>'
+      + _bsPx(pxOf(c)) + '</div>'
       + '<div class="ovb-off">' + (c.k === 0 ? '前收' : (c.side === 'buy' ? '−' : '＋') + c.k + ' 檔') + '</div>'
-      + _ovbHitHtml(tdy, c, px)
       + '</div>';
   });
-  h += '</div>';
+  axis += '</div>';
+
+  var h = head + chart1('buy') + chart1('sell') + axis;
 
   h += '<div class="ovb-foot">'
     + (tdy ? '<span>今天 <b>'
@@ -562,11 +568,15 @@ function ovcBondHtml() {
     + '<b>定義</b>：把掛價設在前收上下 N 個升降單位，數歷史上有多少比例的日子碰得到。'
     + '買進看日內最低有沒有跌到掛價，賣出看日內最高有沒有漲到。'
     + '價格比大小一律換成「分」的整數再比，不留浮點數的容忍值。'
-    + '<br><b>每一欄是一個價，兩個數字</b>：左邊是掛這個價買得到的機率、右邊是賣得掉的，'
-    + '兩根柱也是買金賣藍各一組。同一個價本來就能問兩件事，'
-    + '而且掛得比前收高一樣可以是買單，掛得比前收低一樣可以是賣單。'
-    + '所以前收右邊的買進成交率會往 100% 走（掛越高越容易買到），'
-    + '前收左邊的賣出同理，這不是異常，是這個數字的定義本來就這樣。<br>'
+    + '<br><b>買一張、賣一張，共用一條價格軸</b>：上面金色那張是買、下面藍色那張是賣，'
+    + '同一欄在兩張圖上是同一個價，上下對位就看得到這個價的買賣兩面。'
+    + '同一個價本來就能問兩件事，而且掛得比前收高一樣可以是買單、'
+    + '掛得比前收低一樣可以是賣單，所以兩張圖都畫滿整條價格軸。'
+    + '前收右邊的買進成交率會往 100% 走（掛越高越容易買到），前收左邊的賣出同理，'
+    + '這不是異常，是這個數字的定義本來就這樣。'
+    + '<br>為什麼不疊在同一張：疊起來一欄要塞 4 根柱、2 個近 30 日的框、最多 6 個數字，'
+    + '十一欄就是 66 個數字擠在一起，柱寬從 50px 被壓到 25px。'
+    + '買賣的對照因此從左右相鄰換成上下對位，換掉的是相鄰、換到的是看得清楚。<br>'
     + '<b>比較基準</b>：兩個維度。一是同一檔的不同檔位（往左掛便宜，成交率一路降），'
     + '二是同一檔位的兩種隔夜情境（並排的兩根柱）。'
     + '柱高的刻度所有框共用，所以也可以跨檔比。<br>'
@@ -588,9 +598,9 @@ function ovcBondHtml() {
     + '<dt>過半的那一段</dt><dd>成交率過半（超過 50%）的掛價，價格數字是亮白的，'
     + '其餘的壓暗，而且掛價上面會多一條細 Bar 把連續過半的那一段橫起來。'
     + '數字要逐欄讀，Bar 把「能掛到的範圍有多寬」變成一個長度，用餘光就讀得到。'
-    + '<br><b>買賣各一列，上下疊，而且會重疊</b>：上面那條金色是「掛這個價買得到」，'
-    + '下面那條藍色是「掛這個價賣得掉」，各自橫跨整條價格軸，'
-    + '不在前收切開。兩列重疊的那一段就是掛得到也賣得掉的價。'
+    + '<br><b>一張圖底下一條</b>：金色那條是「掛這個價買得到」，藍色那條是「掛這個價賣得掉」，'
+    + '各自橫跨整條價格軸，不在前收切開。兩條蓋到的價會有重疊的一段，'
+    + '那一段就是掛得到也賣得掉的價。'
     + '金色那條的右端通常超過前收不少，因為掛得越高越容易買到；'
     + '藍色那條的左端同理往前收下方延伸。'
     + '<br>不連續就不連起來：過半的欄位不保證相鄰，斷開本身就是資訊。'
@@ -599,13 +609,13 @@ function ovcBondHtml() {
     + '所以 HYG 下跌時金色那條會往左長、藍色那條往右縮，上漲時反過來。'
     + '<br>50% 不是統計算出來的門檻，就是「碰得到的日子比碰不到的多」這條線。'
     + '<br>百分比那一行跟價格同一條線：過半的亮白，三成到五成的中間色，不到三成的壓暗。'
-    + '<br>每一欄都有買賣兩個數字，只要其中一邊過半，那個價就算亮。'
+    + '<br>最底下那排價格是兩張圖共用的，只要買賣其中一邊過半，那個價就算亮。'
     + '<br>不能告訴你什麼：過半不是保證，Bar 畫成一條實心的會看起來像一個穩固的區域，'
     + '實際上它只說「碰得到的日子比較多」。同一價位的委託照時間排隊，碰過不代表輪得到你。'
     + '亮也只代表掛得到，不代表該掛。往左每多掛一檔成本少 0.01 元，'
     + '最亮的那幾個通常是最靠近前收、也最貴的那幾個。</dd>'
 
-    + '<dt>今天碰到哪裡</dt><dd>每一欄最底下那顆圓點。實心代表今天的日內最低（賣出那半邊是最高）'
+    + '<dt>今天碰到哪裡</dt><dd>每一欄橫 Bar 下面那顆圓點。買那張看日內最低、賣那張看日內最高，實心代表'
     + '已經走到這個價，空心代表還沒。沒有今天的即時快照時整排不畫，不會拿昨天的高低充數。'
     + '<br>它跟柱子是兩件事：<b>柱子是歷史上碰得到的機率，圓點是今天實際碰到哪裡。</b>'
     + '柱子矮但今天已經碰到，代表今天走得比平常深；柱子高但今天還沒碰到，'
@@ -635,7 +645,7 @@ function ovcBondHtml() {
     + '<dt>近 30 日那個暗色外框</dt><dd>同一個掛價在最近 30 個交易日的實際成交率，'
     + '從底線框到它自己的高度，柱子從框裡穿出來，誰高誰低不用對高度就看得出來。'
     + '框橫跨「一組」柱子而不是單一一根：它不拆 HYG 方向，一組只有一個數字。'
-    + '每一欄都有買、賣兩組，所以每一欄有兩個框。'
+    + '兩張圖各自有自己的框，上面那張是買的、下面那張是賣的。'
     + '框與字都是暗色：它是參考值，柱子的金藍才是主角。'
     + '<b>它不是更準的那個數字</b>：30 天的標準誤約 ±9 個百分點，'
     + '全期是 ±2 到 ±4。實測拿近 30 日去預測接下來 20 天，四檔裡有三檔比用全期還差。'

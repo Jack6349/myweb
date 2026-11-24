@@ -2784,16 +2784,20 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   color: var(--text3); border: 1px solid var(--border); border-radius: 4px; cursor: help; }
 .ovb-thin { color: var(--text3); font-size: 14px; padding: 10px 4px; }
 
+/* 買一張、賣一張、價格軸一條，三個區塊同樣的欄結構與 gap，所以欄位垂直對齊。 */
 .ovb-chart { display: flex; align-items: flex-end; gap: 6px; margin: 6px 4px 0; }
-/* 每一欄都是一個掛價，而且都問買與賣兩件事，所以欄寬一律相同。
-   前收那一欄只剩底色標出它是分界，不再比別人寬。 */
+.ovb-chart + .ovb-chart { margin-top: 12px; }
+/* 價格軸貼著下面那張圖，不要看起來像第三張圖 */
+.ovb-chart.ovb-axis { margin-top: 3px; }
+/* 每一欄都是一個掛價，欄寬一律相同。前收那一欄只剩底色標出它是分界，不再比別人寬。
+   三個區塊各自畫一次那個底色，剛好把同一欄串成一條。 */
 .ovb-col { flex: 1 1 0; min-width: 0; text-align: center; }
 .ovb-mid { background: color-mix(in srgb, var(--bg3) 70%, transparent); border-radius: 6px; }
 /* 柱子區。上面多留 18px 給壓在柱頭的小數字。 */
 .ovb-plot { position: relative; height: 126px; display: flex; align-items: flex-end;
-  justify-content: center; gap: 9%; padding: 0 9px;
+  justify-content: center; gap: 9%; padding: 0 10px;
   border-bottom: 1px solid var(--border); }
-/* 一組＝跌、漲兩根並排。每一欄有買、賣兩組。 */
+/* 一組＝跌、漲兩根並排。拆圖之後一欄只有一組。 */
 .ovb-grp { position: relative; flex: 1 1 0; height: 100%; display: flex;
   align-items: flex-end; justify-content: center; gap: 10%; }
 /* 兩組之間只靠 .ovb-plot 的 gap 分開。再加一層 margin 會把四根柱擠到 22px，
@@ -2832,10 +2836,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-r30lab.ovb-up { top: auto; bottom: 100%; margin-bottom: 2px; }
 /* HYG 平盤那天兩根都有柱頭數字，沒有空邊可站，往上讓一行 */
 .ovb-r30lab.ovb-lift { top: auto; bottom: 100%; margin-bottom: 17px; right: 1px; }
-.ovb-mlb { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center;
-  font-size: 11px; color: var(--text3); z-index: 3; }
-/* 一欄兩個數字，所以字級用原本前收那一欄的 13.5，不是單一數字時的 15.5 */
-.ovb-rate { font-size: 13.5px; font-weight: 700; margin-top: 6px;
+/* 拆成兩張圖之後一欄只剩一個數字，字級回到 15.5 */
+.ovb-rate { font-size: 15.5px; font-weight: 700; margin-top: 6px;
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ovb-rate .ovb-sl { color: var(--text3); font-weight: 400; margin: 0 1px; }
 .ovb-rate .ovb-s3 { color: var(--text); }
