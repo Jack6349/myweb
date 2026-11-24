@@ -2486,6 +2486,12 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-rk { font-size: 11px; color: var(--th); font-weight: 600; }
 .ovc-r2 b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .ovc-rsep { color: var(--border-strong); margin: 0 2px; }
+/* 一列一列往下掃的時候，數字要在同一條直線上，不然得一個一個對位。
+   價與百分比各自固定寬度、靠右切齊，沒值的放佔位符不留空。 */
+.ovc-r2 b.ovc-rv { min-width: 42px; display: inline-block; text-align: right; }
+.ovc-r2 b.ovc-rf { min-width: 34px; display: inline-block; text-align: right; }
+.ovc-rp { min-width: 54px; display: inline-block; text-align: right;
+  font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
 /* 清單裡的現價不必再跟誰分隔，那條左邊框是給表格那一頁用的 */
 .ovc-r2 .ovx, .ovc-psp .ovx { margin-left: 0; padding-left: 0; border-left: 0; }
 
@@ -2572,6 +2578,12 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   font-size: 13px; font-weight: 700; white-space: nowrap;
   font-variant-numeric: tabular-nums; }
 .ovc-tk { position: absolute; top: 0; width: 1px; height: 4px; background: var(--border); }
+/* 掛買參考在兩條 Bar 上的位置。金色是因為它屬於掛買那一組，
+   在收盤那條 Bar 上維持同一個顏色才看得出是同一個價。 */
+.ovc-tk.ovc-tkk { width: 2px; height: 7px; background: var(--accent2); }
+.ovc-gnk { font-size: 12px; }
+.ovc-gbk { position: absolute; top: 0; width: 2px; height: 12px;
+  transform: translateX(-50%); background: var(--accent2); }
 .ovc-gb { position: relative; height: 17px; }
 .ovc-gb em { position: absolute; top: 3px; height: 6px;
   border-left-width: 1px; border-right-width: 1px; border-top-width: 1.5px;

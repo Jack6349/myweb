@@ -179,6 +179,9 @@ function _ovcPxHtml(r) {
 // 掛買參考與成交機率放在同一行相鄰，因為它們是一組：價是要抄的，機率是這個價值不值得抄。
 function _ovcRow(r, on) {
   var fillHi = (r.lFill != null && r.lFill > OVC_FILL_HI);
+  // 掛買參考對前收的幅度。光看 20.58 要在心裡跟前收相減才知道是要等幾趴的回檔，
+  // 而前收每一檔不同，一列一列掃的時候相減那一步會漏。顏色照台股慣例，漲紅跌綠。
+  var lChg = (r.lPx > 0 && r.base > 0) ? (r.lPx / r.base - 1) * 100 : null;
   return '<button class="ovc-row' + (on ? ' on' : '') + '" onclick="ovcPick(\'' + r.code + '\')">'
     + '<span class="ovc-r1">'
     + '<span class="tx-ocode">' + r.code + '</span>'
@@ -189,8 +192,13 @@ function _ovcRow(r, on) {
         : '<span class="ovc-wt" title="在關注清單裡，目前沒有持股。">關注</span>')
     + '</span>'
     + '<span class="ovc-r2">'
-    + '<span class="ovc-rk">掛買參考</span><b>' + (r.lPx > 0 ? _ovPx(r.lPx) : '—') + '</b>'
-    + '<span class="ovc-rk">成交機率</span><b style="color:'
+    + '<span class="ovc-rk">掛買參考</span><b class="ovc-rv">'
+      + (r.lPx > 0 ? _ovPx(r.lPx) : '—') + '</b>'
+    + '<span class="ovc-rp" title="掛買參考對前收 ' + (r.base > 0 ? _ovPx(r.base) : '—')
+      + ' 的幅度，也就是要等多深的回檔才掛得到。" style="color:'
+      + (lChg == null ? 'var(--text3)' : _rbCol(lChg)) + '">'
+      + (lChg == null ? '—' : _ovcPctTxt(lChg)) + '</span>'
+    + '<span class="ovc-rk">成交機率</span><b class="ovc-rf" style="color:'
       + (fillHi ? 'var(--text)' : 'var(--text2)') + '">'
       + (r.lFill == null ? '—' : Math.round(r.lFill) + '%') + '</b>'
     + '<span class="ovc-rsep">｜</span>'
@@ -395,23 +403,37 @@ function _ovcPanel(r) {
   h += '</div>';
 
   // ── 座標下方：一組就是「這一條區間的兩個數字 ＋ 它自己的橫 Bar」 ──
-  var grpBar = function (a, b, cls, lab, tip) {
+  // mark：掛買參考在這條 Bar 上的位置。兩條都標，因為要抄進委託單的只有這一個價，
+  // 而它在收盤區間裡站哪裡決定了「掛到之後會不會收更低」。
+  // 數字只在離兩端夠遠時才寫，不然三個數字會擠成一團；擠的時候留記號，價另有地方看得到。
+  var grpBar = function (a, b, cls, lab, tip, mark) {
     if (!(a > 0) || !(b > 0)) return '';
     var g = '<div class="ovc-gp" title="' + tip.replace(/"/g, '&quot;') + '"><div class="ovc-gn">';
     [a, b].forEach(function (v) {
       g += '<div class="ovc-tk" style="left:' + XV(v).toFixed(2) + '%"></div>'
         + '<span class="' + cls + '" style="left:' + XV(v).toFixed(2) + '%">' + _ovPx(v) + '</span>';
     });
+    var mb = '';
+    if (mark > 0 && mark > a && mark < b) {
+      var xm = XV(mark), far = Math.min(Math.abs(xm - XV(a)), Math.abs(xm - XV(b))) > 9;
+      g += '<div class="ovc-tk ovc-tkk" style="left:' + xm.toFixed(2) + '%"></div>'
+        + (far ? '<span class="ovc-c1 ovc-gnk" style="left:' + xm.toFixed(2) + '%">'
+            + _ovPx(mark) + '</span>' : '');
+      mb = '<i class="ovc-gbk" style="left:' + xm.toFixed(2) + '%"></i>';
+    }
     return g + '</div><div class="ovc-gb"><b class="' + cls + '">' + lab + '</b>'
       + '<em class="' + cls + '" style="left:' + XV(a).toFixed(2) + '%;width:'
-      + (XV(b) - XV(a)).toFixed(2) + '%"></em></div></div>';
+      + (XV(b) - XV(a)).toFixed(2) + '%"></em>' + mb + '</div></div>';
   };
   h += grpBar(r.lLoPx, r.lHiPx, 'ovc-c1', '掛買區間',
     '掛限價買進看的是這一段。兩端就是金線上的 16% 與 84%，'
-    + '掛在下緣約一成六會成交、掛在上緣約八成四會成交。');
+    + '掛在下緣約一成六會成交、掛在上緣約八成四會成交。'
+    + '中間那道金色記號是掛買參考 ' + (r.lPx > 0 ? _ovPx(r.lPx) : '—') + '。', r.lPx);
   h += grpBar(r.loPx, r.hiPx, 'ovc-c2', '收盤區間',
     '收盤大約六成八的日子會落在這一段裡。中心就是估收 '
-    + (r.cPx > 0 ? _ovPx(r.cPx) : '—') + '。');
+    + (r.cPx > 0 ? _ovPx(r.cPx) : '—') + '。'
+    + '金色記號是掛買參考 ' + (r.lPx > 0 ? _ovPx(r.lPx) : '—')
+    + '，它在這一段裡偏左代表掛到之後多數日子會收在買價之上。', r.lPx);
   h += '</div>';
 
   return h + _ovcFoot(r, tierCol) + '</div>';
