@@ -680,37 +680,12 @@ function abRefreshViews() {
 function abMoney(v) { return (v == null) ? '—' : Math.round(v).toLocaleString('zh-TW'); }
 function abSigned(v) { return (v == null) ? '—' : (v > 0 ? '+' : '') + Math.round(v).toLocaleString('zh-TW'); }
 
-// ── 抽屜裡的輸入格 ──
-function abInputHtml() {
-  var v = abGet(), a = adAnchor(), day = a ? a.d : abAtDay();
-  var tip = a
-    ? (a.d + ' 收盤後的帳戶總額，'
-        + (a.ok ? '你對過銀行確認過的。' : '系統用前一天加當天交割推的，只含交割，不含配息與帳戶調整。')
-        + '在這裡填進銀行的實際餘額，就等於確認今天（十點前算前一天），'
-        + '推算不再往更早的日子推。')
-    : '券商給不出銀行帳戶餘額，這個數字要自己維護';
-  return '<span class="sum-pair ab-pair" title="' + tip.replace(/"/g, '&quot;')
-    + '"><span class="sum-plabel">帳戶餘額</span>'
-    + '<input id="ab-inp" class="ab-inp" type="text" inputmode="numeric" placeholder="未填"'
-    + ' value="' + (v == null ? '' : v.toLocaleString('zh-TW')) + '"'
-    + ' onkeydown="if(event.key===\'Enter\')this.blur()" onblur="abInputDone(this)">'
-    + (day ? '<span class="ab-at">' + day.slice(5).replace('-', '/') + '</span>' : '')
-    + '</span>';
-}
-function abInputDone(el) {
-  var raw = String(el.value || '').replace(/[,\s元]/g, '');
-  var v = raw === '' ? null : Number(raw);
-  if (v != null && !isFinite(v)) { el.value = (abGet() == null ? '' : abGet().toLocaleString('zh-TW')); return; }
-  if (v === abGet()) return;                       // 沒改就不寫，也不更新輸入日期
-  abSave(v).then(abRefreshViews).catch(function (e) { hush('acct', e); });
-}
-// 抽屜：交割後餘額（帳戶餘額扣掉還沒扣的交割，不含配息與自訂進出——
-// 那兩項有日期先後，一行放不下，完整的在交易資訊「台幣交割」）
-function abNetHtml() {
-  var bal = abGet();
-  if (bal == null || typeof _settleTot === 'undefined' || _settleTot == null) return '';
-  var net = bal + _settleTot;
-  return '<span class="sum-pair"><span class="sum-plabel">交割後餘額</span>'
-    + '<span class="sum-pval" style="color:' + (net < 0 ? 'var(--warn)' : 'var(--accent2)') + '">'
-    + abMoney(net) + '</span></span>';
-}
+// ── 帳戶餘額的輸入格搬走了 ──
+//
+// 原本總覽抽屜「部位與配置」有一格可以直接打帳戶餘額，另一格顯示交割後餘額。
+// 2026-11-24 整組移除：那一格寫進去的是「今天（十點前算前一天）已確認」，
+// 跟交易資訊「台幣交割」第一列那顆確認鈕完全等價，同一份資料兩個入口。
+// 留下的那一個比較好：旁邊就寫著日期與「已確認／系統算的」，底下整條線跟著重算。
+// 顯示用的交割後餘額也一起拿掉，它沒算預計進出，跟那條線的尾數對不起來。
+//
+// 唯一要補的洞是冷啟動：完全沒有紀錄時那顆確認鈕原本不畫，現在改成一律畫。

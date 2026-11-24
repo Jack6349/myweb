@@ -132,7 +132,8 @@ async function _rmCondSettle() {
       id: 'settle|' + r.date, k: 'settle', lv: r.T <= 1 ? 2 : 1,
       s: r.date + ' 要付 ' + Math.abs(r.amount).toLocaleString('zh-TW') + ' 元（T+' + r.T + '）',
       w: bal == null
-        ? '券商交割款。總覽「部位與配置」填了帳戶餘額之後，這裡會直接說那天帳上剩多少'
+        ? '券商交割款。到交易資訊「台幣交割」第一列按「確認」填上帳戶餘額之後，'
+          + '這裡會直接說那天帳上剩多少'
         : '券商交割款。那天扣完帳上預估剩 ' + Math.round(bal).toLocaleString('zh-TW') + ' 元（不含配息）'
     });
   });
