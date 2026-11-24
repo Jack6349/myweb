@@ -2785,20 +2785,19 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-thin { color: var(--text3); font-size: 14px; padding: 10px 4px; }
 
 .ovb-chart { display: flex; align-items: flex-end; gap: 6px; margin: 6px 4px 0; }
+/* 每一欄都是一個掛價，而且都問買與賣兩件事，所以欄寬一律相同。
+   前收那一欄只剩底色標出它是分界，不再比別人寬。 */
 .ovb-col { flex: 1 1 0; min-width: 0; text-align: center; }
-/* 前收那一欄印的是「買 ／ 賣」兩個數字，字放大之後跟其他欄一樣寬會擠爆 */
-.ovb-col.ovb-mid { flex: 2.3 1 0; }
-/* 前收那一欄放買賣兩根半寬的柱，底色標出它是分界 */
 .ovb-mid { background: color-mix(in srgb, var(--bg3) 70%, transparent); border-radius: 6px; }
 /* 柱子區。上面多留 18px 給壓在柱頭的小數字。 */
 .ovb-plot { position: relative; height: 126px; display: flex; align-items: flex-end;
-  justify-content: center; gap: 14%; padding: 0 12px;
+  justify-content: center; gap: 9%; padding: 0 9px;
   border-bottom: 1px solid var(--border); }
-.ovb-mid .ovb-plot { gap: 6%; }
-/* 一組＝跌、漲兩根並排。前收那一欄有買、賣兩組。 */
+/* 一組＝跌、漲兩根並排。每一欄有買、賣兩組。 */
 .ovb-grp { position: relative; flex: 1 1 0; height: 100%; display: flex;
   align-items: flex-end; justify-content: center; gap: 10%; }
-.ovb-mid .ovb-grp + .ovb-grp { margin-left: 16%; }
+/* 兩組之間只靠 .ovb-plot 的 gap 分開。再加一層 margin 會把四根柱擠到 22px，
+   柱頭那兩個 10.5px 的數字就貼在一起了。 */
 .ovb-fill { position: relative; flex: 1 1 0; border-radius: 3px 3px 0 0; z-index: 1; }
 .ovb-fill.ovb-buy { background: var(--accent2); }
 .ovb-fill.ovb-sell { background: var(--accent3); }
@@ -2807,7 +2806,7 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-fill.ovb-dim.ovb-buy { background: color-mix(in srgb, var(--accent2) 50%, #0b1119); }
 .ovb-fill.ovb-dim.ovb-sell { background: color-mix(in srgb, var(--accent3) 50%, #0b1119); }
 /* 另一種情境的數字，貼在它自己那根柱子的頭上，靠左。
-   不印百分號：前收那一組只有 48px 寬，兩個帶百分號的標籤加起來塞不下。 */
+   不印百分號：一組只有 50px 上下，兩個帶百分號的標籤加起來塞不下。 */
 /* 貼外緘：一組只有 36px，兩個 23px 的標籤要各站一邊才讓得開。
    外框左右各比柱子寬 9px，兩個標籤一起用滿那 54px，留 8px 空隙。 */
 .ovb-top { position: absolute; bottom: 100%; margin-bottom: 3px;
@@ -2835,9 +2834,9 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-r30lab.ovb-lift { top: auto; bottom: 100%; margin-bottom: 17px; right: 1px; }
 .ovb-mlb { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center;
   font-size: 11px; color: var(--text3); z-index: 3; }
-.ovb-rate { font-size: 15.5px; font-weight: 700; margin-top: 6px;
+/* 一欄兩個數字，所以字級用原本前收那一欄的 13.5，不是單一數字時的 15.5 */
+.ovb-rate { font-size: 13.5px; font-weight: 700; margin-top: 6px;
   font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ovb-mid .ovb-rate { font-size: 13.5px; }
 .ovb-rate .ovb-sl { color: var(--text3); font-weight: 400; margin: 0 1px; }
 .ovb-rate .ovb-s3 { color: var(--text); }
 .ovb-rate .ovb-s2 { color: var(--text2); }
@@ -2852,26 +2851,23 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
    圖表欄距 6px，所以接的那一邊向外長 4px 把縫越过去。
    做得細（高 5px）且不加光暈：50% 是「碰得到的日子比碰不到的多」，
    不是保證，畫得太實會看起來比實際確定。 */
-.ovb-rng { display: flex; height: 5px; margin: 5px 0 3px; }
-.ovb-rseg { flex: 1 1 0; height: 100%; border-radius: 3px; }
+/* 過半的那一段。買賣各一列、上下疊，各自橫跨整條價格軸，
+   所以兩列會有重疊的一段，那一段就是掛得到也賣得掉的價。 */
+.ovb-rngs { margin: 5px 0 3px; }
+.ovb-rng { display: flex; height: 15px; }
+.ovb-rng + .ovb-rng { margin-top: 4px; }
+.ovb-rseg { flex: 1 1 0; height: 100%; border-radius: 4px; position: relative; }
+/* 名字寫在前收那一欄的 Bar 裡面，深字壓在色塊上，不必另外留一列，
+   而且保證名字跟它指的那一條永遠對齊。那一欄沒過半時改用色字。 */
+.ovb-rlab { position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; font-style: normal; font-size: 11px; font-weight: 700;
+  line-height: 1; white-space: nowrap; color: #11161f; }
+.ovb-rlab.ovb-rlab-buy { color: var(--accent2); }
+.ovb-rlab.ovb-rlab-sell { color: var(--accent3); }
 .ovb-rseg.ovb-ron.ovb-buy { background: var(--accent2); }
 .ovb-rseg.ovb-ron.ovb-sell { background: var(--accent3); }
-.ovb-rseg.ovb-jl { margin-left: -4px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.ovb-rseg.ovb-jr { margin-right: -4px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
-/* 前收那一欄左半是買、右半是賣，兩段之間留縫，不跟對方黏起來 */
-/* 前收那一欄的兩格要拉開。原本 3px，貼在一起看起來像一把連續的尺被切成兩半，
-   而那兩格是兩個不同的動作。缺口要大到一眼看得出是兩條，不是一條有缺口的。 */
-.ovb-rng2 { gap: 16px; }
-
-/* 兩條 Bar 各自的名字。顏色沿用 Bar 自己的買金賣藍。
-   每一欄都留這一列（其餘欄是空的），不然底下的價格那一排會差一個行高對不齊。 */
-.ovb-rlb { height: 15px; }
-.ovb-rlb2 { display: flex; gap: 16px; }
-.ovb-rlb2 span { flex: 1 1 0; min-width: 0; font-size: 11px; font-weight: 600;
-  line-height: 15px; white-space: nowrap; }
-/* 各自靠著缺口那一側，名字就貼在它解釋的那條 Bar 的末端，不會讀成隔壁那條的 */
-.ovb-lb-buy { color: var(--accent2); text-align: right; }
-.ovb-lb-sell { color: var(--accent3); text-align: left; }
+.ovb-rseg.ovb-jl { margin-left: -6px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.ovb-rseg.ovb-jr { margin-right: -6px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 
 .ovb-px { font-size: 15.5px; color: var(--text3); font-variant-numeric: tabular-nums; }
 .ovb-px.ovb-pxhi { color: var(--text); font-weight: 700; }

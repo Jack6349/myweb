@@ -189,7 +189,13 @@ function bsFill(code, sel, days) {
   for (var z = all.length - 1; z >= 0; z--) { if (all[z].c > 0) { lastC = all[z]; break; } }
   if (!lastC) lastC = bars[bars.length - 1];
   var tick = _bsTick(lastC.c);
-  var buy = BS_OFFS.map(function () { return 0; }), sell = BS_OFFS.map(function () { return 0; }), n = 0;
+  // buy／sell 是原本的單邊階梯（買在前收下方、賣在前收上方）。
+  // buyU／sellD 是前收另一側：掛得比前收高的買單、掛得比前收低的賣單。
+  // 同一個價本來就能問兩件事，少算一半會讓底下的橫 Bar 在前收截斷，
+  // 看起來像「買得到的價到前收就沒了」。實際上買進成交率對價格單調遞增。
+  var buy = BS_OFFS.map(function () { return 0; }), sell = BS_OFFS.map(function () { return 0; });
+  var buyU = BS_OFFS.map(function () { return 0; }), sellD = BS_OFFS.map(function () { return 0; });
+  var n = 0;
   for (var i = win ? bars.length - win + 1 : 1; i < bars.length; i++) {
     var pc = bars[i - 1].c;
     if (!(pc > 0)) continue;
@@ -202,15 +208,20 @@ function bsFill(code, sel, days) {
     var lc = _bsCents(bars[i].l), hc = _bsCents(bars[i].h);
     for (var k = 0; k < BS_OFFS.length; k++) {
       var off = BS_OFFS[k] * tick;
-      if (lc <= _bsCents(_bsAlign(pc - off))) buy[k]++;
-      if (hc >= _bsCents(_bsAlign(pc + off))) sell[k]++;
+      var pDn = _bsCents(_bsAlign(pc - off)), pUp = _bsCents(_bsAlign(pc + off));
+      if (lc <= pDn) buy[k]++;
+      if (hc >= pUp) sell[k]++;
+      if (lc <= pUp) buyU[k]++;
+      if (hc >= pDn) sellD[k]++;
     }
   }
   if (n < (win ? 10 : 25)) return null;
   return {
     n: n, tick: tick, last: lastC.c, lastD: lastC.d,
     buy: buy.map(function (v) { return v / n * 100; }),
-    sell: sell.map(function (v) { return v / n * 100; })
+    sell: sell.map(function (v) { return v / n * 100; }),
+    buyU: buyU.map(function (v) { return v / n * 100; }),
+    sellD: sellD.map(function (v) { return v / n * 100; })
   };
 }
 
