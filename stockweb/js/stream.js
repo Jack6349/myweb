@@ -826,12 +826,10 @@ function dwTab(k) {
 function renderDrawer() {
   var d = document.getElementById('dw');
   if (!d) return;
-  // 盤中每一筆 tick 都會重畫這個抽屜。帳戶餘額是裡面唯一能打字的欄位，
-  // 整張 innerHTML 換掉就把它連同游標一起丟了——實測點進去焦點立刻跳開，
-  // 一個字都打不進去。正在輸入時整張不重畫：旁邊那幾個數字停個幾秒沒人看得出來，
-  // 打不了字是功能壞掉。離開欄位（blur）會存檔並重畫，不會停在舊值。
-  var ae = document.activeElement;
-  if (_dwOpen && ae && ae.id === 'ab-inp') return;
+  // 盤中每一筆 tick 都會重畫這個抽屜。原本這裡要先檢查帳戶餘額輸入框有沒有焦點，
+  // 有就整張不重畫，否則 innerHTML 一換就把游標丟了，一個字都打不進去。
+  // 那一格搬走之後抽屜裡沒有任何能打字的欄位，檢查可以省掉。
+  // 之後要在抽屜裡放輸入框的話，這個坑要重新擋一次。
   d.hidden = !_dwOpen;
   if (!_dwOpen) { d.innerHTML = ''; return; }   // 收起時不留 DOM，盤中不跟著重繪
   var t = portfolioTotals();
@@ -865,10 +863,11 @@ function renderDrawer() {
       ? sumPair('合計待交割', (_settleTot > 0 ? '+' : '') + _settleTot.toLocaleString('zh-TW'),
                 cvar[colorClass(_settleTot)])
       : '') +
-    // 帳戶餘額：手動輸入。券商 API 給得出交割應收付，給不出銀行帳戶裡有多少錢，
-    // 那兩件事在不同機構。放在「合計待交割」旁邊，因為它們是同一筆錢的兩端。
-    (typeof abInputHtml === 'function' ? abInputHtml() : '') +
-    (typeof abNetHtml === 'function' ? abNetHtml() : '') +
+    // 帳戶餘額與交割後餘額不放這裡。2026-11-24 整格搬到交易資訊「台幣交割」：
+    // 那邊第一列本來就有同一個數字，旁邊寫著它是哪一天的、是對過銀行的還是系統推的，
+    // 改完底下整條推算線立刻跟著重算。這裡只有一格，填完看不出填到哪一天去，
+    // 而且這裡的「交割後餘額」沒算預計進出，跟那條線的尾數是兩個數字。
+    // 這一頁的定位是掃一眼，不是維護資料。
     '</div>';
   h += '<div class="dw-sec">配置</div><div id="dw-cats"></div>';
   d.innerHTML = h;

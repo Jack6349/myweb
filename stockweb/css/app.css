@@ -231,7 +231,6 @@ html, body { overflow-x: clip; }
 .ab-inp:focus { border-color: var(--accent2); outline: none;
   box-shadow: 0 0 0 2px rgba(90,169,255,.25); background: var(--bg2); }
 .ab-inp::placeholder { color: var(--text3); font-weight: 400; letter-spacing: 0; }
-.ab-at { font-size: 11px; color: var(--text3); }
 .sum-pval { font-size: 14px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
 .btn-toggle { background: rgba(138,180,212,.14); border: 1px solid rgba(138,180,212,.45); color: var(--accent3); font-size: 12px; font-weight: 600; padding: 4px 0; border-radius: 6px; cursor: pointer; font-family: var(--font); white-space: nowrap; width: 84px; text-align: center; box-sizing: border-box; flex-shrink: 0; }
 .btn-toggle:hover { background: rgba(138,180,212,.26); }
