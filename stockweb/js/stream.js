@@ -198,8 +198,11 @@ async function loadBrokerPositionsFull(say) {
             var adj = cpx != null ? cpx * d.quantity * 1000 : 0;
             // sub：券商端有記成本的筆，它的 cost 已被扣掉該筆累積配息（原始成本要加回）；
             // price=0 由認購價還原的筆沒有被扣過，加回去會重複。
+            // fee：資產統計「建倉明細」那一欄要用。明細這裡已經有了，
+            // 不記的話那一頁得為了一個欄位把每一檔的明細再打一次券商。
             return { date: d.date, shares: d.quantity * 1000, sub: d.price > 0,
-                     cost: (d.price || 0) + adj, pnl: (d.pnl || 0) - adj, div: d.ex_dividends || 0 };
+                     cost: (d.price || 0) + adj, pnl: (d.pnl || 0) - adj,
+                     div: d.ex_dividends || 0, fee: d.fee || 0 };
           })
           .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
         (det || []).forEach(function (d) {
@@ -962,6 +965,7 @@ async function _tickWatchOnce(force) {
       if (typeof renderTopConstRow === 'function') renderTopConstRow(code);
       if (typeof renderWatchRow === 'function') renderWatchRow(code);
       if (typeof ovPxRow === 'function') ovPxRow(code);
+      if (typeof ltOnTick === 'function') ltOnTick();
     });
     renderSummaries();
   } catch (e) { console.warn('[tick watchdog]', e); }
@@ -991,6 +995,7 @@ function openSSE() {
       if (typeof renderTopConstRow === 'function') renderTopConstRow(code);
       if (typeof renderWatchRow === 'function') renderWatchRow(code);
       if (typeof ovPxRow === 'function') ovPxRow(code);
+      if (typeof ltOnTick === 'function') ltOnTick();
       if (prev != null && close !== prev) flashCard(code, close > prev ? 1 : -1);
     } catch (e) { hush('stream', e, 2); }
   });
