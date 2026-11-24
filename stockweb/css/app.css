@@ -3046,3 +3046,63 @@ td.inv-code.code-cost.cost-even::before  { background: var(--caution); }
 .rm-when { font-style: normal; color: var(--text3); font-size: 11px; font-weight: 400; margin-left: 8px; }
 .rm-w { grid-column: 2; color: var(--text2); font-size: 11.5px; }
 .rm-none { color: var(--text3); font-size: 12px; padding: 6px 2px; }
+
+/* ── 資產統計：建倉明細彙整 ── */
+/* 三欄：最外層的功能選單 180、持股清單 280、明細表吃剩下的。
+   75% 顯示時可用寬約 1650，明細表拿到約 1154，十二欄排得下。
+   不夠的時候把功能選單收起來（那顆鈕本來就有），再多 146。
+   表格另外包一層可捲動的框：寬度估錯也只是那一塊出現捲軸，不會把整個版面撐破。 */
+.lt-wrap { display: flex; gap: 18px; align-items: flex-start; }
+.lt-sidewrap { width: 280px; flex: none; }
+.lt-side { display: flex; flex-direction: column; gap: 6px;
+  max-height: 72vh; overflow: auto; padding-right: 2px; }
+.lt-main { flex: 1; min-width: 0; }
+
+.lt-sort { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.lt-sortk { font-size: 12px; color: var(--text3); margin-right: 2px; }
+.lt-sbtn { background: var(--bg3); border: 1px solid var(--border); color: var(--text3);
+  font-family: var(--font); font-size: 12px; padding: 3px 8px; border-radius: 6px; cursor: pointer; }
+.lt-sbtn:hover { color: var(--text); }
+.lt-sbtn.on { color: var(--text); border-color: var(--accent); }
+
+/* 一列兩行：上行是哪一檔，下行是現在多少錢、幾張、含息賺賠多少。
+   下行每一格固定寬度，名稱長短不會把數字推來推去；這一排是拿來掃的。 */
+.lt-row { position: relative; display: block; width: 100%; text-align: left;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px 7px 12px; cursor: pointer; color: inherit; font: inherit; }
+.lt-row::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px;
+  width: 3px; border-radius: 0 3px 3px 0; background: transparent; }
+.lt-row:hover { border-color: var(--border-strong); }
+.lt-row.on { background: var(--bg3); border-color: var(--accent); }
+.lt-row.on::before { background: var(--accent); }
+.lt-r1 { display: flex; align-items: baseline; gap: 6px; }
+.lt-code { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.lt-name { font-size: 12px; color: var(--text2); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.lt-r2 { display: flex; align-items: baseline; margin-top: 3px;
+  font-size: 12px; font-variant-numeric: tabular-nums; }
+.lt-px { width: 48px; text-align: right; color: var(--text); }
+.lt-chg { width: 58px; text-align: right; }
+.lt-q { width: 52px; text-align: right; color: var(--text2); }
+.lt-w { width: 70px; text-align: right; font-weight: 700; }
+.lt-sep { width: 12px; text-align: center; color: var(--text3); }
+
+.lt-ptitle { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.lt-pcode { font-size: 16px; font-weight: 700; color: var(--accent2);
+  font-variant-numeric: tabular-nums; }
+.lt-pname { font-size: 13px; color: var(--text2); }
+.lt-pn { font-size: 12px; color: var(--text3); }
+
+.lt-scroll { overflow: auto; max-height: 72vh; }
+/* 十二欄要塞進約 1150，格內留白收窄；字級維持 13px 不動，縮字會先傷可讀性 */
+.lt-table th, .lt-table td { padding: 6px 7px; white-space: nowrap; }
+.lt-table tfoot td { font-weight: 700; border-top: 2px solid var(--border-strong); }
+
+.lt-stale { font-size: 12px; color: var(--warn); margin-top: 8px; }
+.lt-note { margin-top: 10px; }
+
+@media (max-width: 1100px) {
+  .lt-wrap { flex-direction: column; }
+  .lt-sidewrap { width: 100%; }
+  .lt-side { max-height: 240px; }
+}

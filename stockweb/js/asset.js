@@ -32,7 +32,10 @@ var AS_MENU = [
   { id: 'src', label: '錢從哪來', need: 'feed', render: asRenderSrc },
   { id: 'mix', label: '持股結構', need: 'feed', render: asRenderMix },
   { id: 'cap', label: '本金走勢', need: 'pv', render: asRenderCap },
-  { id: 'conc', label: '集中度', need: 'const', render: asRenderConc }
+  { id: 'conc', label: '集中度', need: 'const', render: asRenderConc },
+  // 建倉明細寫在另一支，而且要先載入：這個清單是在檔案載入當下就建好的，
+  // 那時候函式還不存在的話，存進去的會是 undefined。
+  { id: 'lots', label: '建倉明細', need: 'feed', render: asRenderLots }
 ];
 
 function openAsset() {
