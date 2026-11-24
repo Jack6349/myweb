@@ -448,19 +448,24 @@ function _ovbCard(code) {
   var rate1 = function (v) {
     return '<span class="' + _ovbCls(v) + '">' + (v == null ? '—' : v.toFixed(0) + '%') + '</span>';
   };
-  var chart1 = function (side) {
-    var s = '<div class="ovb-chart">';
+  // down＝這一張倒掛向下。價格那一排放在兩張圖中間，所以下面那張要鏡像：
+  // 柱子從頂邊往下長，元素由上而下的順序也整個倒過來（圓點、過半 Bar、百分比、柱子），
+  // 這樣兩張圖到價格那一排的距離一樣遠。
+  // 不鏡像的話價格只貼著其中一張，另一張要越過三排才找得到自己的價。
+  var chart1 = function (side, down) {
+    var s = '<div class="ovb-chart' + (down ? ' ovb-dn' : '') + '">';
     cells.forEach(function (c) {
       var px = pxOf(c);
-      s += '<div class="ovb-col' + (c.side === 'mid' ? ' ovb-mid' : '') + '">'
-        + '<div class="ovb-plot"><div class="ovb-grp">'
+      var plot = '<div class="ovb-plot"><div class="ovb-grp">'
         + bar1(side, rate(dn, side, c), dir < 0, dir === 0, true, _bsPx(px) + '　HYG 下跌的日子：')
         + bar1(side, rate(up, side, c), dir > 0, dir === 0, false, _bsPx(px) + '　HYG 上漲的日子：')
         + frame1(rate(r30, side, c), rate(main, side, c))
-        + '</div></div>'
-        + '<div class="ovb-rate">' + rate1(rate(main, side, c)) + '</div>'
-        + rngCell(c, side)
-        + _ovbHitHtml(tdy, side, px)
+        + '</div></div>';
+      var num = '<div class="ovb-rate">' + rate1(rate(main, side, c)) + '</div>';
+      var rng = rngCell(c, side);
+      var hit = _ovbHitHtml(tdy, side, px);
+      s += '<div class="ovb-col' + (c.side === 'mid' ? ' ovb-mid' : '') + '">'
+        + (down ? (hit + rng + num + plot) : (plot + num + rng + hit))
         + '</div>';
     });
     return s + '</div>';
@@ -477,7 +482,8 @@ function _ovbCard(code) {
   });
   axis += '</div>';
 
-  var h = head + chart1('buy') + chart1('sell') + axis;
+  // 價格那一排夾在中間，它本身就是兩張圖的分界，不必再畫一條線。
+  var h = head + chart1('buy') + axis + chart1('sell', true);
 
   h += '<div class="ovb-foot">'
     + (tdy ? '<span>今天 <b>'
