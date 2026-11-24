@@ -2786,9 +2786,27 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 
 /* 買一張、賣一張、價格軸一條，三個區塊同樣的欄結構與 gap，所以欄位垂直對齊。 */
 .ovb-chart { display: flex; align-items: flex-end; gap: 6px; margin: 6px 4px 0; }
-.ovb-chart + .ovb-chart { margin-top: 12px; }
-/* 價格軸貼著下面那張圖，不要看起來像第三張圖 */
-.ovb-chart.ovb-axis { margin-top: 3px; }
+/* 價格那一排夾在兩張圖中間，上下留一樣的空隙：它是共用的軸，不是第三張圖 */
+.ovb-chart.ovb-axis { margin-top: 5px; margin-bottom: 5px; }
+.ovb-chart.ovb-dn { margin-top: 0; }
+
+/* ── 倒掛那一張 ──
+   柱子從頂邊往下長，所以基準線、圓角、柱頭數字、近 30 日的框全部要鏡像。
+   每一項都是上下對調，沒有例外，照著原本那一版一條一條翻過來。 */
+.ovb-dn .ovb-plot { align-items: flex-start;
+  border-bottom: 0; border-top: 1px solid var(--border); }
+.ovb-dn .ovb-grp { align-items: flex-start; }
+.ovb-dn .ovb-fill { border-radius: 0 0 3px 3px; }
+.ovb-dn .ovb-top { bottom: auto; top: 100%; margin-bottom: 0; margin-top: 3px; }
+.ovb-dn .ovb-r30b { bottom: auto; top: 0;
+  border-top-width: 1px; border-bottom-width: 2px;
+  border-radius: 0 0 3px 3px; }
+.ovb-dn .ovb-r30lab { top: auto; bottom: 1px; }
+.ovb-dn .ovb-r30lab.ovb-up { bottom: auto; top: 100%; margin-bottom: 0; margin-top: 2px; }
+/* 這一張的元素順序整個倒過來，所以每一排的外距也要對調 */
+.ovb-dn .ovb-rate { margin-top: 0; margin-bottom: 6px; }
+.ovb-dn .ovb-rngs { margin: 3px 0 5px; }
+.ovb-dn .ovb-hit { margin-top: 0; margin-bottom: 4px; }
 /* 每一欄都是一個掛價，欄寬一律相同。前收那一欄只剩底色標出它是分界，不再比別人寬。
    三個區塊各自畫一次那個底色，剛好把同一欄串成一條。 */
 .ovb-col { flex: 1 1 0; min-width: 0; text-align: center; }
@@ -2834,8 +2852,6 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovb-mid .ovb-r30lab { background: #1a2430; }
 /* 框太矮塞不下數字時改放框的正上方 */
 .ovb-r30lab.ovb-up { top: auto; bottom: 100%; margin-bottom: 2px; }
-/* HYG 平盤那天兩根都有柱頭數字，沒有空邊可站，往上讓一行 */
-.ovb-r30lab.ovb-lift { top: auto; bottom: 100%; margin-bottom: 17px; right: 1px; }
 /* 拆成兩張圖之後一欄只剩一個數字，字級回到 15.5 */
 .ovb-rate { font-size: 15.5px; font-weight: 700; margin-top: 6px;
   font-variant-numeric: tabular-nums; white-space: nowrap; }
