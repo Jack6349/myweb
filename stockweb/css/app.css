@@ -2530,6 +2530,17 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   stroke-dasharray: 5 3; }
 .ovc-ar { fill: var(--accent2); opacity: .09; stroke: none; }
 
+/* 漲跌停。線的另一邊不畫曲線：那一段的價位掛不進去。
+   用灰色虛線不用紅綠，紅綠在這一頁是漲跌。 */
+.ovc-lim { position: absolute; top: 0; bottom: 0; width: 0;
+  border-left: 1px dashed var(--text3); opacity: .7; }
+.ovc-limt { position: absolute; bottom: calc(100% - 13px); transform: translateX(-50%);
+  font-size: 11px; font-weight: 700; color: var(--text3); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 4px var(--bg2), 0 0 3px var(--bg2), 0 0 2px var(--bg2), 0 0 1px var(--bg2); }
+.ovc-limt.ovc-limt-l { transform: none; padding-left: 5px; }
+.ovc-limt.ovc-limt-r { transform: translateX(-100%); padding-right: 5px; }
+
 /* 節點：區間上下緣是空心一圈，掛買參考是實心大一點 */
 .ovc-pt { position: absolute; width: 8px; height: 8px; border-radius: 50%;
   transform: translate(-50%, 50%); border: 1.5px solid var(--bg2); }

@@ -92,7 +92,13 @@ function _ovcWin(r) {
   add(r.lPx); add(r.cPx); add(r.live); add(r.liveLo);
   if (r.act) { if (r.act.cPct != null) a.push(r.act.cPct); if (r.act.lPct != null) a.push(r.act.lPct); }
   if (!a.length) return { mn: -1, mx: 1 };
-  return { mn: Math.min.apply(null, a), mx: Math.max.apply(null, a) };
+  var w = { mn: Math.min.apply(null, a), mx: Math.max.apply(null, a) };
+  // 漲跌停以外的價位不進軸。留著只會讓真正要看的那一段被擠窄，
+  // 而那一段的價連委託都掛不進去。
+  var pd = p(r.limDn), pu = p(r.limUp);
+  if (pd != null) w.mn = Math.max(w.mn, pd);
+  if (pu != null) w.mx = Math.min(w.mx, pu);
+  return (w.mx > w.mn) ? w : { mn: -1, mx: 1 };
 }
 function _ovcSpan(r) { var w = _ovcWin(r); return w.mx - w.mn; }
 
@@ -272,6 +278,25 @@ function _ovcPanel(r) {
       + '<div class="ovc-yl" style="bottom:' + g + '%">' + g + '%</div>';
   });
 
+  // ── 漲跌停：曲線只畫到這裡 ──
+  //
+  // 跌停以下的價位掛不進去，委託價超出漲跌幅會被退件，所以那一段的機率不是低，
+  // 是不存在。曲線切在跌停，切掉的機率不會憑空消失：累積分布在跌停那一點讀到的
+  // 高度，就是它們的總和，也就是「掛在跌停價的成交機率」。
+  // 沒有漲跌幅限制的標的（國外成分）limDn 是 null，整段跳過，圖上完全不提這件事。
+  var xLo = 0, xHi = 1, limH = '';
+  if (r.limDn > 0) xLo = Math.max(0, Math.min(1, XV(r.limDn) / 100));
+  if (r.limUp > 0) xHi = Math.max(0, Math.min(1, XV(r.limUp) / 100));
+  if (!(xHi > xLo)) { xLo = 0; xHi = 1; }
+  [[r.limDn, xLo, '跌停'], [r.limUp, xHi, '漲停']].forEach(function (q) {
+    if (!(q[0] > 0) || q[1] <= 0.003 || q[1] >= 0.997) return;
+    var lp = (q[1] * 100).toFixed(2);
+    // 貼著邊的時候不置中：置中會讓字跨出圖外，左邊還會壓到縱軸的 100%。
+    var sd = (q[1] < 0.12) ? ' ovc-limt-l' : ((q[1] > 0.88) ? ' ovc-limt-r' : '');
+    limH += '<div class="ovc-lim" style="left:' + lp + '%"></div>'
+      + '<div class="ovc-limt' + sd + '" style="left:' + lp + '%">' + q[2] + ' ' + _ovPx(q[0]) + '</div>';
+  });
+  var cx = function (v) { return Math.max(xLo, Math.min(xHi, v)); };
   // 區間內亮且粗、區間外壓暗且細，一眼分得出哪一段是有效區間
   var path = function (fn, x0, x1) {
     var d = '', N = 140;
@@ -283,17 +308,32 @@ function _ovcPanel(r) {
     return d;
   };
   var seg = function (fn, a, b, cls) {
-    if (!(a > 0) || !(b > 0)) return '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, 0, 1) + '"/>';
-    var xa = Math.max(0, Math.min(1, XV(a) / 100)), xb = Math.max(0, Math.min(1, XV(b) / 100));
-    return '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, 0, xa) + '"/>'
-      + '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, xb, 1) + '"/>'
-      + '<path class="ovc-cv ' + cls + '" d="' + path(fn, xa, xb) + '"/>';
+    if (!(a > 0) || !(b > 0)) return '<path class="ovc-cv ' + cls + '-d" d="' + path(fn, xLo, xHi) + '"/>';
+    var xa = cx(XV(a) / 100), xb = cx(XV(b) / 100);
+    // 長度是零的那一段不畫。線端是圓的，零長度會留下一顆點，
+    // 而區間下緣被夾到跌停時正好是零長度，那顆點會停在切口上像是多了一個節點。
+    var one = function (x0, x1, c2) {
+      return (x1 - x0 < 1e-4) ? '' : '<path class="ovc-cv ' + c2 + '" d="' + path(fn, x0, x1) + '"/>';
+    };
+    return one(xLo, xa, cls + '-d') + one(xb, xHi, cls + '-d') + one(xa, xb, cls);
+  };
+  // 切口上那一段垂直線：曲線在跌停直接落地，讓「這裡堆了一疊機率」看得出來，
+  // 不會被讀成曲線剛好走到這個高度就沒了。
+  var cliff = function (fn, px, cls) {
+    if (!fn || !(px > 0) || !(xLo > 0.003)) return '';
+    var y = Math.max(0, Math.min(100, fn(px)));
+    if (!(y > 0.5)) return '';
+    var x = (xLo * 1000).toFixed(1);
+    return '<path class="ovc-cv ' + cls + '" d="M' + x + ',' + (100 - y).toFixed(2)
+      + 'L' + x + ',100"/>';
   };
   h += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none">'
-    + (fLow ? '<path class="ovc-ar" d="' + path(fLow, 0, 1) + ' L1000,100 L0,100 Z"/>' : '')
+    + (fLow ? '<path class="ovc-ar" d="' + path(fLow, xLo, xHi)
+        + ' L' + (xHi * 1000).toFixed(1) + ',100 L' + (xLo * 1000).toFixed(1) + ',100 Z"/>' : '')
     + (fCls ? seg(fCls, r.loPx, r.hiPx, 'ovc-cvc') : '')
     + (fLow ? seg(fLow, r.lLoPx, r.lHiPx, 'ovc-cvl') : '')
-    + '</svg>';
+    + cliff(fCls, r.limDn, 'ovc-cvc') + cliff(fLow, r.limDn, 'ovc-cvl')
+    + '</svg>' + limH;
 
   // ── 節點：區間上下緣與掛買參考，價標在點的左右不標上下 ──
   // 標上下會撞到從底部拉上來的標記線。左右也會撞，所以同高度又靠太近時往兩側分開。
@@ -314,6 +354,12 @@ function _ovcPanel(r) {
     nd.lift = (busy(nd.x, 1) && busy(nd.x, -1)) ? 15 : 0;
     // 標記的價就是這個節點的價時，標記自己已經寫了，不再印第二次
     nd.dup = M.some(function (m) { return Math.abs(m.v - nd.p) < _ovcTick(nd.p) * 0.5; });
+    // 兩個節點同一個價也只寫一次。被夾到跌停之後兩條線的下緣會是同一個數字，
+    // 印兩遍只是把同一個價擠在切口上，高度不同那件事由點本身講。
+    if (!nd.dup) {
+      nd.dup = nodes.some(function (o) { return o !== nd && o.lab && Math.abs(o.p - nd.p) < 1e-9; });
+      if (!nd.dup) nd.lab = true;
+    }
   });
   nodes.slice().sort(function (a, b) { return a.f - b.f; }).forEach(function (nd, i, arr) {
     var pv = arr[i - 1];
@@ -324,7 +370,11 @@ function _ovcPanel(r) {
   nodes.forEach(function (nd) {
     h += '<div class="ovc-pt' + (nd.key ? ' ovc-ptk' : '') + '" style="left:' + nd.x.toFixed(2)
       + '%;bottom:' + nd.f.toFixed(1) + '%;background:' + nd.c + '" title="'
-      + (nd.key ? '掛買參考 ' : '') + _ovPx(nd.p) + '，成交機率 ' + Math.round(nd.f) + '%"></div>'
+      + (nd.key ? '掛買參考 ' : '') + _ovPx(nd.p) + '，成交機率 ' + Math.round(nd.f) + '%'
+      + ((r.limDn > 0 && Math.abs(nd.p - r.limDn) < 1e-9)
+          ? '。這是跌停價：模型推的下緣比它還低，已經夾回來，'
+            + '這個機率把跌停以下的全部算在這一點上。' : '')
+      + '"></div>'
       + (nd.dup ? '' : '<div class="ovc-ptl ' + (nd.side < 0 ? 'ovc-lft' : 'ovc-rgt')
         + '" style="left:' + nd.x.toFixed(2) + '%;bottom:calc(' + nd.f.toFixed(1) + '% + '
         + nd.lift + 'px);color:' + nd.c + '">' + _ovPx(nd.p) + '</div>');
@@ -550,6 +600,28 @@ function ovcStockHtml() {
     + '金線高、青線低的那一段，代表當天摸得到但收不在那裡，適合掛買等回檔，不適合追價。<br>'
     + '<b>不能告訴你什麼</b>：它不講路徑。收盤跌破機率三成，不代表盤中沒跌破過；'
     + '跌破再拉回在這條線上完全看不出來，那要看金線。</dd>'
+
+    + '<dt>掛在跌停價的成交機率（曲線左端那一點）</dt><dd>'
+    + '<b>定義</b>：金線左端那一點的高度，也就是把限價委買掛在跌停價時，'
+    + '當日最低觸及它的機率。跌停以下的價位全部算進這一點。<br>'
+    + '<b>比較基準</b>：兩個。一是這一檔平常的掛買區間下緣，那裡是 16%；'
+    + '二是實測真的摸到跌停的頻率。走查回測五檔有漲跌幅限制的標的、666 個檔日，'
+    + '模型推的下緣撐過跌停的有 15 天，那 15 天裡實際摸到跌停的只有 1 天。<br>'
+    + '<b>白話意義</b>：模型說今天可能跌很深，深到超過當天能跌的極限，'
+    + '而超出去的那些只可能發生在跌停這一個價上。<br>'
+    + '<b>機制</b>：區間寬度取近十個交易日誤差的半衰加權。費半隔夜跌幅達 −3% 門檻的'
+    + '日子，寬度倍率從 0.96 跳到 2.30，一口氣寬一倍多，中心又被夜盤壓低，'
+    + '下緣就被推過跌停。切斷之後那一段的機率不會消失，'
+    + '累積分布在跌停那一點讀到的就是它們的總和，所以曲線在那裡垂直落地。'
+    + '回測的 15 天全部落在這種門檻日。<br>'
+    + '<b>行動含義</b>：這個數字出現就代表今天的波動已經超出模型的尺，'
+    + '掛單要分批不要一次掛到底。<br>'
+    + '<b>不能告訴你什麼</b>：它偏高，不能當機率估計，只能當上限讀。'
+    + '回測那 15 天被切掉的機率中位數 18%、最大 33.6%，而實際摸到跌停的只有 1 天：'
+    + '模型的誤差分布尾巴比真實的厚，切斷把整條厚尾堆到一個點上。'
+    + '它也不講跌停之後會不會打開。'
+    + '<br>沒有漲跌幅限制的標的（國外成分證券的 ETF）不會有這條線，'
+    + '判斷方式是成份股外股權重，加上自己的歷史日線有沒有單日走超過 10%。</dd>'
 
     + '<dt>空心點與下方那兩組 Bar</dt><dd>空心點是區間的上下緣，高度直接從曲線上取，'
     + '所以點永遠落在線上，不會出現「區間說在裡面、曲線說機率很低」這種自相矛盾。'
