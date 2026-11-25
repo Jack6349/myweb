@@ -2464,7 +2464,12 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 
 /* ══════════ 夜推股票：左清單、右單檔 ══════════ */
 .ovc-wrap { display: flex; gap: 18px; align-items: flex-start; }
-.ovc-side { width: 430px; flex: none; display: flex; flex-direction: column; gap: 6px; }
+/* 清單欄的寬度照最長的一列量出來，不是抓個整數。
+   一列最寬的情形是三位數的價配上兩位數的百分比：
+   掛買參考 124.17 −17.07% 成交機率 100% ｜ 124.72 ▼11.29 ▼14.96%，實測要 465px。
+   430px 時 00934 那一列就已經要 441px，數字會壓出圓角邊框外面。
+   多出來的寬度從圖那邊拿，圖是彈性欄，少 40px 不影響它讀得出來。 */
+.ovc-side { width: 470px; flex: none; display: flex; flex-direction: column; gap: 6px; }
 .ovc-main { flex: 1; min-width: 0; }
 
 /* 一列講完三件事：哪一檔、要掛在哪個價、現在多少錢 */
