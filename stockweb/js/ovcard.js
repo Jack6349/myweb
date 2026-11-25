@@ -302,13 +302,20 @@ function _ovcPanel(r) {
     return { px: p };
   };
 
+  // 十個百分點一格。原本 25 一格，而決策區大概在一成五到八成五之間，
+  // 整個決策區只有三條線，60% 跟 65% 在軸上分不出來。
+  // 線的輕重分三層：0% 是底線、50% 是「成交的日子比沒成交的多」那條分界，
+  // 其餘壓到最淡。十一條一樣重會把曲線蓋掉。
   h += '<div class="ovc-ch"><div class="ovc-pa" style="height:' + OVC_PH + 'px">';
-  [0, 25, 50, 75, 100].forEach(function (g) {
-    h += '<div class="ovc-hl' + (g === 50 ? ' ovc-h50' : (g === 0 ? ' ovc-h0' : ''))
+  for (var g = 0; g <= 100; g += 10) {
+    h += '<div class="ovc-hl' + (g === 50 ? ' ovc-h50' : (g === 0 ? ' ovc-h0'
+        : (g === 100 ? '' : ' ovc-hm')))
       + '" style="bottom:' + g + '%"></div>'
       + '<div class="ovc-yl" style="bottom:' + g + '%">' + g + '%</div>';
-  });
-  [25, 50, 75].forEach(function (L) {
+  }
+  // 右側跟著走同一組格線，不然「左邊機率、右邊價，同一條線」的對照會斷掉。
+  // 十分位的價格階梯：要掛幾成機率就抄那一行。
+  [10, 20, 30, 40, 50, 60, 70, 80, 90].forEach(function (L) {
     var q = raxOf(L);
     if (!q) return;
     h += q.na

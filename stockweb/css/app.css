@@ -2523,6 +2523,8 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 /* 五成那條加重：它是「成交的日子比沒成交的多」的分界，與夜推債券同一條線 */
 .ovc-hl.ovc-h50 { border-top-style: dashed; opacity: .85; border-color: var(--border-strong); }
 .ovc-hl.ovc-h0 { opacity: .9; }
+/* 其餘的整十格線壓到最淡：十一條一樣重會把曲線蓋掉 */
+.ovc-hl.ovc-hm { opacity: .26; }
 .ovc-yl { position: absolute; right: calc(100% + 7px); transform: translateY(50%);
   font-size: 11px; color: var(--text3); white-space: nowrap;
   font-variant-numeric: tabular-nums; }
