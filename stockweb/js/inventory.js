@@ -448,7 +448,7 @@ function _invExCell(code) {
       (e.loaded ? '—' : '<i class="spin"></i>') + '</td>';
   }
   var tip = e.iso + (e.est ? '（預估）' : '') +
-    (e.amount > 0 ? '　每股 ' + e.amount.toFixed(4) + (e.est ? '（預估）' : '') : '　金額待公告') +
+    (e.amount > 0 ? '　每股 ' + e.amount.toFixed(3) + (e.est ? '（預估）' : '') : '　金額待公告') +
     (e.past ? '　已除息' : '');
   // 除息在兩天內（今天之後、含第 2 天）→ 前面加閃爍 ★ 提醒：要買就得在除息日前一個交易日之前完成
   var dLeft = e.past ? null : Math.round((Date.parse(e.iso) - Date.parse(_divTwDate().iso)) / 86400000);

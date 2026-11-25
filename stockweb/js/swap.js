@@ -616,7 +616,7 @@ function _swapRestoreTip(c) {
   var head = '只還原各檔「下一次」除息（發放在今年者）：賣出未除息→賣價含息，加回；買進未除息→買價含息，扣回。';
   if (!c.restoreRows || !c.restoreRows.length) return head + '\n本次試算沒有需要還原的除息。';
   return head + '\n' + c.restoreRows.map(function (r) {
-    return r.side + ' ' + r.code + '　' + r.exDate.slice(5).replace('-', '/') + ' 除息 ' + r.perShare.toFixed(4) +
+    return r.side + ' ' + r.code + '　' + r.exDate.slice(5).replace('-', '/') + ' 除息 ' + r.perShare.toFixed(3) +
       (r.est ? '（預估）' : '') + ' × ' + r.sh.toLocaleString('zh-TW') + ' 股 = ' + _swapSigned(r.v);
   }).join('\n');
 }

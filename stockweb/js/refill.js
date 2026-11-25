@@ -736,7 +736,7 @@ function _rfMonthPayHtml() {
         (e.derived ? '（發放日由除息月＋1 推導）' : '') + '">' + e.payDate + (e.derived ? ' *' : '') + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + e.code + '\')">' + e.code + '</span></td>' +
       '<td class="inv-name">' + (_swapName(e.code) || '') + '</td>' +
-      '<td class="num' + (amt == null ? ' swap-warn' : '') + '">' + (amt != null ? amt.toFixed(4) : '待公告') + '</td>' +
+      '<td class="num' + (amt == null ? ' swap-warn' : '') + '">' + (amt != null ? amt.toFixed(3) : '待公告') + '</td>' +
       '<td class="num">' + (px != null ? px.toFixed(2) : '—') + '</td>' +
       '<td class="num swap-yield">' + (yPx != null ? yPx.toFixed(2) + '%' : '—') + '</td>' +
       costCellHtml(cost, px) +
@@ -788,8 +788,8 @@ function _rfCalHtml() {
       '<td class="rf-cal-date">' + e.exDate + '</td>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + e.code + '\')">' + e.code + '</span></td>' +
       '<td class="inv-name">' + (e.name || '') + '</td>' +
-      '<td class="num' + (amt == null ? ' swap-warn' : '') + '">' + (amt != null ? amt.toFixed(4) : '待公告') +
-        (e.diff ? '<span class="rf-cal-diff" title="' + e.diff.src + '先前為 ' + e.diff.amount.toFixed(4) +
+      '<td class="num' + (amt == null ? ' swap-warn' : '') + '">' + (amt != null ? amt.toFixed(3) : '待公告') +
+        (e.diff ? '<span class="rf-cal-diff" title="' + e.diff.src + '先前為 ' + e.diff.amount.toFixed(3) +
           '，已改用官方公告值">≠</span>' : '') + '</td>' +
       '<td' + (e.payDate ? '' : ' class="swap-warn"') + '>' + (e.payDate || '待公告') + '</td>' +
       '<td class="num">' + _swapLots(sh) + '</td>' +
