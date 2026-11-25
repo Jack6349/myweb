@@ -423,7 +423,10 @@ function _ovFit(Xs, Y, tgt) {
     if (v != null && i2 >= 40) {
       var sd0 = Math.sqrt(v), gx = X2[i2], tg = tgt || 'c';
       if (e >= -_ovK(tg + 'Lo', gx) * sd0 && e <= _ovK(tg + 'Hi', gx) * sd0) hit++;
-      if (e <= 0) fhit++;
+      // 掛買問的是「當日最低跌到推的價」，殘差要在中心之下；
+      // 掛賣問的是「當日最高漲到推的價」，殘差要在中心之上。方向反了，
+      // 算出來的機率會剛好是 100 減掉正確答案，而且看起來完全合理，不會被發現。
+      if (tg === 'h' ? e >= 0 : e <= 0) fhit++;
       zs.push(e / sd0);
       cvn++;
     }
@@ -819,6 +822,9 @@ function ovEstimate(code) {
   var fgn = _ovFgnW(code);
   var useIx = (fgn != null && fgn >= OV_FGN_W && _ovIxic);
   var X1 = [], X2 = [], X3 = [], Yo = [], Yl = [], Yc = [];
+  // 當日最高另外收一份樣本。缺最高價的那幾根只會少進這一份，
+  // 原本三條線的樣本一個字都沒動。
+  var H1 = [], H2 = [], H3 = [], Yh = [];
   for (var i = 1; i < bars.length; i++) {
     var dd = bars[i].d, pc = bars[i - 1].c;
     var nv = _ovNight[dd];
@@ -839,6 +845,10 @@ function ovEstimate(code) {
     Yo.push((bars[i].o / pc - 1) * 100);
     Yl.push((bars[i].l / pc - 1) * 100);
     Yc.push((bars[i].c / pc - 1) * 100);
+    if (bars[i].h > 0) {
+      H1.push(nv); H2.push(sv); if (useIx) H3.push(xv);
+      Yh.push((bars[i].h / pc - 1) * 100);
+    }
   }
   // 第二道閘：Nasdaq 在夜盤與費半之上還能不能多解釋一截（以收盤那條判定，三條共用同一個決定，
   // 否則同一列三個價會各用各的模型，解釋不了）
@@ -851,7 +861,11 @@ function ovEstimate(code) {
     }
   }
   var Xs = ixOn ? [X1, X2, X3] : base;
+  // 第四條：當日最高。Nasdaq 進不進來跟著收盤那條的決定走，與另外三條一致，
+  // 否則同一列的四個價會各用各的模型，解釋不了為什麼。
+  var Hs = ixOn ? [H1, H2, H3] : [H1, H2];
   var fo = _ovFit(Xs, Yo, 'c'), fl = _ovFit(Xs, Yl, 'l'), fc = _ovFit(Xs, Yc, 'c');
+  var fh = _ovFit(Hs, Yh, 'h');
   if (!fc) return null;
   var t = _ovToday;
   if (!t) return null;
@@ -860,7 +874,12 @@ function ovEstimate(code) {
   if (ixOn) {
     var un = _ovIxic.prev(t.d);
     ixNow = (un && _ovIxic.rets[un] != null) ? _ovIxic.rets[un] : null;
-    if (ixNow == null) { ixOn = false; Xs = base; fo = _ovFit(Xs, Yo, 'c'); fl = _ovFit(Xs, Yl, 'l'); fc = _ovFit(Xs, Yc, 'c'); if (!fc) return null; }
+    if (ixNow == null) {
+      ixOn = false; Xs = base; Hs = [H1, H2];
+      fo = _ovFit(Xs, Yo, 'c'); fl = _ovFit(Xs, Yl, 'l'); fc = _ovFit(Xs, Yc, 'c');
+      fh = _ovFit(Hs, Yh, 'h');
+      if (!fc) return null;
+    }
   }
   var ev = function (f) {
     if (!f) return null;
@@ -885,7 +904,7 @@ function ovEstimate(code) {
   // 要同時滿足：快照是「推估這一盤」當天的、有開盤價、現在落在 09:00～13:35、開盤模型存在。
   // 任一項不成立就維持開盤前那條，不做半套。
   var sdo = _ovSdF(fo), sdc = _ovSdF(fc), sdl = _ovSdF(fl);
-  var po = ev(fo), pl = ev(fl);
+  var po = ev(fo), pl = ev(fl), ph = ev(fh);
   var cal = null;
   (function () {
     var lv = _ovLive[String(code)];
@@ -902,6 +921,9 @@ function ovEstimate(code) {
             // 當日最低是確定的事實：日內最低不可能高於已經走出來的最低，
             // 所以中心與區間上緣都要被它壓住。歷史 1350 根日 K 全部成立。
             runLoPct: (lv.lo > 0) ? (lv.lo / base - 1) * 100 : null,
+            // 當日最高同理，方向相反：日內最高不可能低於已經走出來的最高。
+            // 這是事實不是模型，所以掛賣這一條雖然還沒做盤中校準，這個底還是頂得住。
+            runHiPct: (lv.hi > 0) ? (lv.hi / base - 1) * 100 : null,
             kc: kc, kl: kl };
     if (pc2 != null && sdc > 0) { cal.cPct = pc2 + C.bc * dev; }
     if (pl != null && sdl > 0) {
@@ -912,6 +934,13 @@ function ovEstimate(code) {
   // 校準成功就用校準後的中心與倍率，否則維持原本的
   var cMid = (cal && cal.cPct != null) ? cal.cPct : pc2;
   var lMid = (cal && cal.lPct != null) ? cal.lPct : pl;
+  // 掛賣這一條目前只有「開盤前那一版 ＋ 今天已經走出來的最高」兩層，
+  // 沒有第三層的盤中修正：那一層的係數要另外迴歸（11 個時段一組），
+  // 借用最低那一組會錯，因為開盤偏離傳導到最高與傳導到最低的強度本來就不同。
+  // 卡片上標明這件事，不讓它看起來跟掛買同一個精細度。
+  var hMid = ph;
+  var hRun = (cal && cal.runHiPct != null);
+  if (hMid != null && hRun) hMid = Math.max(hMid, cal.runHiPct);
   var cLoK = cal ? cal.kc[0] : _ovK('cLo', gs), cHiK = cal ? cal.kc[1] : _ovK('cHi', gs);
   var lLoK = cal ? cal.kl[0] : _ovK('lLo', gs), lHiK = cal ? cal.kl[1] : _ovK('lHi', gs);
   var cLoP = (cMid == null || !(sdc > 0)) ? null : cMid - sdc * cLoK;
@@ -925,7 +954,7 @@ function ovEstimate(code) {
   var lim = _ovLimPx(code, raw, base);
   var cp = function (p) { return (p == null || !lim) ? p : Math.min(lim.up, Math.max(lim.dn, p)); };
   var cut = function (p) { return !!(lim && p != null && (p < lim.dn || p > lim.up)); };
-  var oPx0 = mk(po), lPx0 = mk(lMid), cPx0 = mk(cMid);
+  var oPx0 = mk(po), lPx0 = mk(lMid), cPx0 = mk(cMid), hPx0 = mk(hMid);
   var loPx0 = mk(cLoP), hiPx0 = mk(cHiP), lLoPx0 = mk(lLoP), lHiPx0 = mk(lHiP);
   return {
     code: code, n: fc.n, base: base, basePrev: raw[bi].d,
@@ -952,12 +981,19 @@ function ovEstimate(code) {
     // 漲跌停價與「哪幾個端點被夾過」。沒有限制的標的一律 null，畫面據此完全不提這件事。
     limDn: lim ? lim.dn : null, limUp: lim ? lim.up : null,
     limCut: { lLo: cut(lLoPx0), lHi: cut(lHiPx0), cLo: cut(loPx0), cHi: cut(hiPx0),
-              lMid: cut(lPx0), cMid: cut(cPx0) },
+              lMid: cut(lPx0), cMid: cut(cPx0), hMid: cut(hPx0) },
     // 日內最低自己的區間。掛限價買進看的是這一個，不是收盤那一個，
     // 原本只有收盤有範圍，等於把最該有不確定性的那個數字寫成一個確定的價。
     lLoPx: cp(lLoPx0),
     lHiPx: cp(lHiPx0),
     lCover: fl ? fl.cover : null, lCoverN: fl ? fl.coverN : null,
+    // ── 掛賣參考（第一步：只有價與成交機率，沒有區間、沒有上圖）──
+    // hFill＝限價委賣掛在這個價，當日最高觸及它的機率，與掛買同一份回測、
+    // 同一段樣本，只是問的方向相反。
+    // 刻意不帶 fh.cover：區間倍率還沒為「最高」測過自己的一組，
+    // 現在算出來的覆蓋率會是拿收盤那組倍率量出來的，等於答非所問。
+    hPx: cp(hPx0), hPct: hMid, hFill: fh ? fh.fill : null,
+    hN: fh ? fh.n : null, hRun: hRun,
     // 掛得到的比例：同一條迴歸、同一段樣本，數有多少比例的日子實際最低
     // 真的跌到當天推的掛買參考。校準那一層沒有進這個回測（見卡片說明）。
     lFill: fl ? fl.fill : null,

@@ -175,10 +175,14 @@ function _ovcPxHtml(r) {
 
 // ── 左側清單的一列 ──
 //
-// 一列講完三件事：是哪一檔、要掛在哪個價、現在多少錢。
-// 掛買參考與成交機率放在同一行相鄰，因為它們是一組：價是要抄的，機率是這個價值不值得抄。
+// 一列講完四件事：是哪一檔、買要掛在哪個價、賣要掛在哪個價、現在多少錢。
+// 參考價與成交機率放在同一行相鄰，因為它們是一組：價是要抄的，機率是這個價值不值得抄。
+// 買一行、賣一行上下疊，欄位寬度共用，所以兩個價、兩個幅度、兩個機率各自垂直對齊，
+// 一眼就讀得出「要等多深才買得到、要漲多少才賣得掉」。
 function _ovcRow(r, on) {
   var fillHi = (r.lFill != null && r.lFill > OVC_FILL_HI);
+  var hFillHi = (r.hFill != null && r.hFill > OVC_FILL_HI);
+  var hChg = (r.hPx > 0 && r.base > 0) ? (r.hPx / r.base - 1) * 100 : null;
   // 掛買參考對前收的幅度。光看 20.58 要在心裡跟前收相減才知道是要等幾趴的回檔，
   // 而前收每一檔不同，一列一列掃的時候相減那一步會漏。顏色照台股慣例，漲紅跌綠。
   var lChg = (r.lPx > 0 && r.base > 0) ? (r.lPx / r.base - 1) * 100 : null;
@@ -198,11 +202,26 @@ function _ovcRow(r, on) {
       + ' 的幅度，也就是要等多深的回檔才掛得到。" style="color:'
       + (lChg == null ? 'var(--text3)' : _rbCol(lChg)) + '">'
       + (lChg == null ? '—' : _ovcPctTxt(lChg)) + '</span>'
-    + '<span class="ovc-rk">成交機率</span><b class="ovc-rf" style="color:'
+    + '<span class="ovc-rk">掛買機率</span><b class="ovc-rf" style="color:'
       + (fillHi ? 'var(--text)' : 'var(--text2)') + '">'
       + (r.lFill == null ? '—' : Math.round(r.lFill) + '%') + '</b>'
     + '<span class="ovc-rsep">｜</span>'
     + _ovcPxHtml(r)
+    + '</span>'
+    + '<span class="ovc-r3">'
+    + '<span class="ovc-rk">掛賣參考</span><b class="ovc-rv">'
+      + (r.hPx > 0 ? _ovPx(r.hPx) : '—') + '</b>'
+    + '<span class="ovc-rp" title="掛賣參考對前收 ' + (r.base > 0 ? _ovPx(r.base) : '—')
+      + ' 的幅度，也就是要漲多少才賣得掉。" style="color:'
+      + (hChg == null ? 'var(--text3)' : _rbCol(hChg)) + '">'
+      + (hChg == null ? '—' : _ovcPctTxt(hChg)) + '</span>'
+    + '<span class="ovc-rk">掛賣機率</span><b class="ovc-rf" style="color:'
+      + (hFillHi ? 'var(--text)' : 'var(--text2)') + '">'
+      + (r.hFill == null ? '—' : Math.round(r.hFill) + '%') + '</b>'
+    // 盤中才標。開盤前兩邊都是同一版推估，沒有差別可言，標了反而像在說它比較差。
+    + (r.cal ? '<span class="ovc-r3n" title="掛買參考在盤中會依開盤後的偏離再修正一次，'
+        + '掛賣參考還沒有那一層，目前只用開盤前的推估，再被今天已經走出來的最高頂住。'
+        + '所以盤中這兩個價的精細度不一樣。">盤中未校準</span>' : '')
     + '</span></button>';
 }
 
@@ -554,17 +573,22 @@ function _ovcTickPx(p) {
 
 var OVC_SORTS = [
   { k: 'lPx', t: '掛買參考' },
+  { k: 'hPx', t: '掛賣參考' },
   { k: 'width', t: '區間寬度' },
   { k: 'pos', t: '現價位置' },
   { k: 'prem', t: '折溢價' },
   { k: 'volX', t: '量能' },
-  { k: 'lFill', t: '成交機率' },
+  { k: 'lFill', t: '掛買機率' },
+  { k: 'hFill', t: '掛賣機率' },
   { k: 'r2', t: '說明力' },
   { k: 'code', t: '代號' }
 ];
 function _ovcSortVal(r, k) {
   if (k === 'code') return String(r.code);
+  // 兩個參考價都排「對前收的幅度」不排絕對價：絕對價跨檔不可比，
+  // 30 元的 30.14 與 9 元的 9.62 並排看不出誰比較難成交。
   if (k === 'lPx') return (r.lPx > 0 && r.base > 0) ? (r.lPx / r.base - 1) * 100 : null;
+  if (k === 'hPx') return (r.hPx > 0 && r.base > 0) ? (r.hPx / r.base - 1) * 100 : null;
   if (k === 'width') return (r.hiPx > 0 && r.loPx > 0 && r.base > 0) ? (r.hiPx - r.loPx) / r.base * 100 : null;
   // 現價在收盤區間裡的位置，0＝貼著下限、1＝貼著上限。跨檔可比，所以用比例不用價差。
   if (k === 'pos') {
@@ -662,6 +686,25 @@ function ovcStockHtml() {
     + '推估本身與隔夜推估那一頁完全相同，是同一組迴歸、同一份資料，只是畫法不同。'
     + '要精確比對數字或看實測覆蓋率，回隔夜推估那一頁。'
     + '所有價格以 ' + (rows[0] ? rows[0].basePrev : '') + ' 的收盤為基準，已對齊升降單位。</dd>'
+
+    + '<dt>掛賣參考</dt><dd>'
+    + '<b>定義</b>：限價委賣要掛在哪個價。算法與掛買完全對稱，'
+    + '同一組因子（前一夜的夜盤、費半，外股比重高的再加那斯達克）、同一段樣本，'
+    + '只是被解釋的對象從「當日最低」換成「當日最高」。'
+    + '旁邊的掛賣機率是限價委賣掛在這個價，當日最高觸及它的機率。<br>'
+    + '<b>比較基準</b>：跟同一列的掛買參考比。兩個價中間夾住的就是今天這一檔'
+    + '「買得到也賣得掉」的那一段；兩個機率一起看，才知道這一段是寬鬆還是勉強。<br>'
+    + '<b>白話意義</b>：要漲到多少才賣得掉，過去十次大約有幾次會成交。<br>'
+    + '<b>機制</b>：價位越高，當日最高能摸到它的日子越少，所以掛得越高機率越低，'
+    + '方向與掛買相反。盤中會被「今天已經走出來的最高」頂住，'
+    + '因為日內最高不可能低於已經發生的最高，那是事實不是推估。<br>'
+    + '<b>行動含義</b>：換股的時候賣出那一腳要用它，不要拿掛買參考當賣價，'
+    + '那會把賣出金額低估。單純減碼也用它。<br>'
+    + '<b>不能告訴你什麼</b>：目前只有價與機率，沒有區間，'
+    + '所以看不出這個價的不確定性有多大，掛買那邊的上下緣在這裡沒有對應物。'
+    + '盤中也還沒有第二層校準：掛買參考會依開盤後的偏離再修正一次，掛賣只有開盤前那一版'
+    + '加上今天最高的封底，所以盤中兩邊的精細度不一樣，清單上會標出來。'
+    + '它也不回答該不該賣，只回答掛在哪裡賣得掉。</dd>'
 
     + '<dt>掛買成交機率（金線）</dt><dd>'
     + '<b>定義</b>：限價委買掛在某一價位時，當日最低價觸及該價位的機率。'
