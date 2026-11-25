@@ -26,6 +26,8 @@ function showView(name) {
   if (_curView === 'stream' && name !== 'stream' && typeof stopStreamOthers === 'function') stopStreamOthers();
   // 離開關注股票 → 退訂該頁新訂閱的 tick
   if (_curView === 'watch' && name !== 'watch' && typeof stopWatch === 'function') stopWatch();
+  // 離開股利估算 → 換股比歷程停止累積，退訂它為買入腳補訂的 tick
+  if (_curView === 'divest' && name !== 'divest' && typeof stopSwapLog === 'function') stopSwapLog();
   _curView = name;
   document.getElementById('home-cards').style.display = name === 'home' ? 'grid' : 'none';
   ['stream', 'inv', 'divest', 'divmeta', 'txinfo', 'live', 'news', 'trend', 'signals', 'alerts', 'risk', 'rebound', 'params', 'topconst', 'watch', 'asset'].forEach(function (v) {
@@ -966,6 +968,7 @@ async function _tickWatchOnce(force) {
       if (typeof renderWatchRow === 'function') renderWatchRow(code);
       if (typeof ovPxRow === 'function') ovPxRow(code);
       if (typeof ltOnTick === 'function') ltOnTick();
+      if (typeof swlOnTick === 'function') swlOnTick(code);
     });
     renderSummaries();
   } catch (e) { console.warn('[tick watchdog]', e); }
@@ -996,6 +999,7 @@ function openSSE() {
       if (typeof renderWatchRow === 'function') renderWatchRow(code);
       if (typeof ovPxRow === 'function') ovPxRow(code);
       if (typeof ltOnTick === 'function') ltOnTick();
+      if (typeof swlOnTick === 'function') swlOnTick(code);
       if (prev != null && close !== prev) flashCard(code, close > prev ? 1 : -1);
     } catch (e) { hush('stream', e, 2); }
   });
