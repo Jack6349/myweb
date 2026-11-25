@@ -773,7 +773,29 @@ function _swapResultHtml(c) {
         '<td class="num ' + colorClass(d) + '">' + (d ? _swapSigned(d) : '—') + '</td>' +
       '</tr>';
     });
-    h += '</tbody></table></div>';
+    // ── 合計列 ──
+    //
+    // 三欄的性質不一樣，不能一起讀：
+    //   增減合計 ＝ 上面摘要那一格的「增減」，兩個數字必定相同。股數沒變的持股
+    //     前後配息一模一樣，差額是 0，所以只列出有變動的也不會漏。
+    //   年配息合計 ≠ 摘要那兩格。這張表只列股數有變動的，沒變動的那些照樣在配息，
+    //     只是沒出現在這裡。差的就是那些。
+    // 股數不給合計：不同標的的股數加起來不對應任何東西。
+    var tB = 0, tA = 0;
+    chg.forEach(function (r) { tB += r.before; tA += r.after; });
+    var tD = tA - tB;
+    h += '</tbody><tfoot><tr class="swap-tfoot">'
+      + '<td class="inv-code">合計</td>'
+      + '<td class="inv-name swap-tnote">以上 ' + chg.length + ' 檔，不含股數沒變動的持股</td>'
+      + '<td class="num"><span class="swap-dim">—</span></td>'
+      + '<td class="num"><span class="swap-dim">—</span></td>'
+      + '<td class="num" title="只加總上面這幾檔。沒變動的持股照樣在配息，'
+        + '所以這個數字會小於摘要的年配息（前）。">' + fmtMoney(tB) + '</td>'
+      + '<td class="num swap-mafter" title="只加總上面這幾檔，同上。">' + fmtMoney(tA) + '</td>'
+      + '<td class="num ' + colorClass(tD) + '" title="這一格等於上面摘要的「增減」：'
+        + '股數沒變動的持股前後配息一樣，差額是 0，不影響總計。">'
+        + (tD ? _swapSigned(tD) : '—') + '</td>'
+      + '</tr></tfoot></table></div>';
   }
 
   h += '<div class="detail-note nb"><dl>' +
