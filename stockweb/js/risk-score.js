@@ -611,7 +611,7 @@ async function _rsBondTableHtml() {
           (worstGap == null ? '' : ' ' + worstGap.toFixed(2) + 'pp') + '</span>' : '') +
       (x.next ? '<span class="rs-b-next" title="投信已公告下一期金額，MOPS 尚未申報；金額已計入年化配息率。&#10;' +
         '除息 ' + x.next.ex + (x.next.pay ? '　發放 ' + x.next.pay : '') + '　來源 Yahoo 台股">下期 ' +
-        x.next.amt.toFixed(4) + '</span>' : '') +
+        x.next.amt.toFixed(3) + '</span>' : '') +
       (x.pend ? '<span class="rs-b-pend" title="除息日 ' + x.pend.ex + ' 的組成占比公告尚未發布（發行商通常在除息後約 10 天才發）">占比待公告</span>' : '') +
       '</td></tr>';
   });

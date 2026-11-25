@@ -458,7 +458,7 @@ async function wtOpenDiv(code) {
       '<td class="' + (done ? 'down' : 'flat') + '">' + (done ? '已除息' : '未除息') + '</td>' +
       '<td>' + r.exDate + '</td>' +
       '<td>' + (r.payDate || (pay + ' *')) + '</td>' +
-      '<td class="num">' + (amt != null ? amt.toFixed(4) : '待公告') + '</td>' +
+      '<td class="num">' + (amt != null ? amt.toFixed(3) : '待公告') + '</td>' +
       '<td class="num swap-yield">' + (mY != null ? mY.toFixed(2) + '%' : '—') + '</td>' +
       '<td class="num swap-yield">' + (yY != null ? yY.toFixed(2) + '%' : '—') + '</td>' +
     '</tr>';
@@ -899,7 +899,7 @@ function renderWatchBond() {
         return '<td class="' + pc.cls + '">'
           + (pc.txt ? '<span class="rb-bpx">' + pc.txt + '</span>' : '—')
           + '</td>'; })() +
-      '<td class="num">' + r.amount.toFixed(4) + '</td>' +
+      '<td class="num">' + r.amount.toFixed(3) + '</td>' +
       '<td class="num swap-yield">' + r.mY.toFixed(2) + '%</td>' +
       '<td class="num swap-yield" title="' + (r.guessed ? '僅 1 筆配息紀錄，頻率推定為月配（新上市債券 ETF 慣例），待累積紀錄後自動修正'
         : '依 ' + r.n + ' 筆除息間隔推得年 ' + r.freq + ' 次') + '"><b>' + r.yY.toFixed(2) + '%</b>' +

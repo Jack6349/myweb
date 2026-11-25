@@ -176,7 +176,7 @@ function swSparkHtml(tr, key) {
   }).join('');
   var d = v[v.length - 1] - v[0];
   var tip = tr.filter(function (x) { return x[key] != null; })
-    .map(function (x) { return x.ym + '　' + x[key].toFixed(2) + '%　（配息 ' + x.amt.toFixed(4) + '　價 ' + x.px.toFixed(2) + '）'; })
+    .map(function (x) { return x.ym + '　' + x[key].toFixed(2) + '%　（配息 ' + x.amt.toFixed(3) + '　價 ' + x.px.toFixed(2) + '）'; })
     .join('&#10;');
   return '<span class="sw-spark" title="' + tip + '">' + bars + '</span>' +
     '<span class="sw-d ' + (d >= 0 ? 'down' : 'up') + '">' + (d >= 0 ? '+' : '') + d.toFixed(2) + '</span>';

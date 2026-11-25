@@ -353,7 +353,7 @@ function renderDivMeta() {
     var tot = (r.mgmt != null && r.cust != null) ? (r.mgmt + r.cust).toFixed(3).replace(/0+$/, '').replace(/\.$/, '') + '%' : dim('—');
 
     var nextTxt = r.next
-      ? md(r.next.exDate) + '　' + (r.next.amount > 0 ? r.next.amount.toFixed(4) : dim('待公告')) +
+      ? md(r.next.exDate) + '　' + (r.next.amount > 0 ? r.next.amount.toFixed(3) : dim('待公告')) +
         (r.next.payDate ? dim('　發 ' + md(r.next.payDate)) : '') + (rfMan[r.code] ? ' <span class="dm-src dm-src-manual" title="已手動補登">補登</span>' : '')
       : dim('—');
     // 補登的輸入格搬到下方自己一張表：它 150px 寬，把「下次除息」撐到 312px，
@@ -373,9 +373,9 @@ function renderDivMeta() {
       feeCell('mgmt', r.mgmt, o.mgmt) + feeCell('cust', r.cust, o.cust) +
       '<td class="num">' + tot + '</td>' +
       '<td>' + (o.listed ? esc(String(o.listed).replace(/\./g, '/')) : dim('—')) + '</td>' +
-      '<td>' + (r.last ? md(r.last.exDate) + '　' + r.last.amount.toFixed(4) : dim('—')) + '</td>' +
+      '<td>' + (r.last ? md(r.last.exDate) + '　' + r.last.amount.toFixed(3) : dim('—')) + '</td>' +
       '<td>' + nextTxt + '</td>' +
-      '<td class="num">' + (r.in12.length ? r.sum12.toFixed(4) : dim('—')) + '</td>' +
+      '<td class="num">' + (r.in12.length ? r.sum12.toFixed(3) : dim('—')) + '</td>' +
       '<td class="num">' + (r.yld1 == null ? dim('—') : r.yld1.toFixed(2) + '%') + '</td>' +
       '<td class="num">' + y12 + '</td>' +
       '<td class="num' + (r.recs.length <= 1 ? ' dm-warn' : '') + '">' + r.recs.length + '</td>' +

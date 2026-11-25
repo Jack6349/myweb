@@ -944,7 +944,7 @@ function renderEtfScreen() {
       case 'amtpct': return v == null ? dim('—')
         : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '"'
             + (r.y1Ann ? ' title="已公告、還沒除息"' : '') + '>'
-            + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + v.toFixed(2) + '%';
+            + (r.y1Amt != null ? r.y1Amt.toFixed(3) : '—') + '</span>' + v.toFixed(2) + '%';
       case 'fill': return v == null ? (_esFillBusy[r.code] || (_esMsg && /填息/.test(_esMsg)) ? '<span class="const-spin"></span>' : esFillNA(r)) : _esFillTxt(r);
       case 'days': return v == null
         ? (_esFillBusy[r.code] ? '<span class="const-spin"></span>' : esFillDaysNA(r)) : v.toFixed(1) + ' 天';
@@ -1275,7 +1275,7 @@ function esWatchCells(code, cols) {
       + '</span>',
     y1: (r.y1 == null ? dim('—')
       : '<span class="es-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '">'
-        + (r.y1Amt != null ? r.y1Amt.toFixed(4) : '—') + '</span>' + r.y1.toFixed(2) + '%'),
+        + (r.y1Amt != null ? r.y1Amt.toFixed(3) : '—') + '</span>' + r.y1.toFixed(2) + '%'),
     yEst: pct(r.yEst),
     yCost: esCostCell(code, r.yEst, r.px),
     yCons: r.yCons == null ? esSeqNA(r, false) : r.yCons.toFixed(2) + '%',

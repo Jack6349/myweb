@@ -932,7 +932,7 @@ function renderDividendEst() {
         '<span class="divest-dm">' + mo.month + '月</span>' +
         '<span class="divest-dex">' + md(mo.exDate) + '</span>' +
         '<span class="divest-dpay">' + md(mo.payDate) + '</span>' +
-        '<span class="divest-dps">' + mo.perShare.toFixed(4) + '</span>' +
+        '<span class="divest-dps">' + mo.perShare.toFixed(3) + '</span>' +
         '<span class="divest-dtot">' + money(mo.total) + '</span>' +
         '<span class="divest-dst">' + stTxt + (hasLent ? _divLentBtn(s.code, mo) : '') + '</span>' +
       '</div>' +
@@ -950,7 +950,7 @@ function renderDividendEst() {
       (m.step ? (12 / m.step) + ' 次/年' : '—');
     // 本月除息：欄位名在表頭，這裡只放日期與金額
     var exHtml = m.ex ? (md(m.ex.exDate) + ' 每股 <b>' +
-      (m.ex.amount != null ? m.ex.amount.toFixed(4) : '待公告') + '</b>') : '';
+      (m.ex.amount != null ? m.ex.amount.toFixed(3) : '待公告') + '</b>') : '';
     html += '<div class="divest-stock">' +
       '<div class="divest-shead" onclick="toggleDivStock(\'' + s.code + '\')">' +
         '<span class="divest-scode">' + s.code + '</span>' +
@@ -1060,7 +1060,7 @@ function _divEsStatHtml(code) {
   };
   var amt = r.y1Amt == null ? gap('查無配息紀錄')
     : '<span class="dvs-amt' + (r.y1Ann ? ' es-amt-ann' : '') + '"'
-      + (r.y1Ann ? ' title="已公告、還沒除息"' : '') + '>' + r.y1Amt.toFixed(4) + '</span>';
+      + (r.y1Ann ? ' title="已公告、還沒除息"' : '') + '>' + r.y1Amt.toFixed(3) + '</span>';
   // 只配過一期的推不出走向（實測 00404A、00999A）——那是算不出來（—），
   // 跟「頻率資料檔沒這檔」（X）是兩回事，esSeqNA 替兩者分流。
   // 走向與波動的寫法與 ETF 評比、關注清單共用，不在這裡再寫一份
@@ -1348,7 +1348,7 @@ function _divExMonthHtml(stocks, money, md) {
       // 持有張數：目前庫存；與除息張數不同時（除息後有買賣）變色提示；出借註記跟著目前持有走
       '<td class="num' + (it.held !== it.shares ? ' dexm-diff' : '') + '">' + (it.held / 1000).toLocaleString('zh-TW') +
         (it.lent ? ' <span class="dexm-lent">(借出 ' + (it.lent / 1000).toLocaleString('zh-TW') + ' 張)</span>' : '') + '</td>' +
-      '<td class="num">' + (it.perShare ? it.perShare.toFixed(4) : '<span style="color:var(--text3)">待公告</span>') + '</td>' +
+      '<td class="num">' + (it.perShare ? it.perShare.toFixed(3) : '<span style="color:var(--text3)">待公告</span>') + '</td>' +
       '<td class="num dstat-tot">' + (it.perShare ? money(it.total) : '<span style="color:var(--text3)">—</span>') + '</td></tr>';
     if (it.mo.lentShares > 0 && _divLentOpen[it.code + '|' + it.exDate]) {
       h += '<tr class="dexm-lentx"><td class="dstat-code"></td><td colspan="10">' + _divLentLine(it.mo, money) + '</td></tr>';
@@ -1697,7 +1697,7 @@ function _divMergeAnnounced(recMap, allCodes) {
         // 核對：財經網站先給的金額，等官方公告後對一次。官方值一律為準（不覆蓋），
         // 但兩邊不同就記下來，否則先看到的那個數字被默默換掉，不會知道它曾經錯過。
         if (cur.amount != null && n.amount != null &&
-            +cur.amount.toFixed(4) !== +n.amount.toFixed(4)) {
+            +cur.amount.toFixed(3) !== +n.amount.toFixed(3)) {
           cur._diff = { src: n.src, amount: n.amount };
         }
         if (cur.amount == null && n.amount != null) { cur.amount = n.amount; used = true; }
