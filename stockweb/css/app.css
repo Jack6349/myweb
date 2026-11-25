@@ -1242,6 +1242,34 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .dstat.dexm .dexm-yld { color: var(--accent2); }
 
 /* 換股試算：換手品質比較表（賣出 vs 買入的相對條件） */
+/* ── 換股比歷程 ──
+   三枚釘在表上方：今日最佳、今日最差、現在。整天的歷程不會逐列看，
+   要一眼看到的是「區間多寬、現在站在哪一端」，所以這三個不跟著表一起捲。 */
+.swl-pins { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 10px; }
+.swl-pin { display: flex; align-items: baseline; gap: 9px; padding: 7px 12px;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--bg2); }
+/* 「現在」是另外兩枚的比較零點，用主色框起來與它們區分 */
+.swl-pin-now { border-color: var(--accent2); }
+.swl-pin-lb { font-size: 12px; color: var(--text3); }
+.swl-pin-t { font-size: 12px; color: var(--text3); font-variant-numeric: tabular-nums; }
+.swl-pin-v { font-size: 15.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.swl-pin-d { font-size: 12.5px; color: var(--text2); font-variant-numeric: tabular-nums; }
+/* 「多／少」是固定寬度的前綴，數字才對得齊；數字加粗，掃的時候跳得出來。
+   不上紅綠：本站紅綠固定代表漲跌，拿來標好壞會被誤讀成價格方向。 */
+.swl-d { display: inline-flex; justify-content: flex-end; align-items: baseline;
+  color: var(--text2); white-space: nowrap; }
+.swl-d b { font-weight: 700; font-variant-numeric: tabular-nums; margin: 0 2px 0 3px; }
+/* 表格裡的數字給固定寬度，「多／少」才會落在同一欄；不給的話前綴會隨位數左右漂，
+   整欄掃下來要逐列重新找方向在哪個位置。2.6em 容得下三位數，再多才推開。
+   釘選的三枚不套：各自獨立一塊，沒有欄可對齊，留白反而變成一道縫。 */
+.swl-table .swl-d b { min-width: 2.6em; text-align: right; }
+.swl-d b.swl-more { color: var(--accent2); }
+.swl-table td, .swl-table th { font-variant-numeric: tabular-nums; }
+.swl-table .swl-t { color: var(--text3); font-size: 12.5px; }
+.swl-table .swl-sh { font-weight: 700; }
+/* 最新那一列是整欄的比較基準，墊一層底色標出來 */
+.swl-table tbody tr:first-child { background: var(--bg2); }
+
 .swap-qual td:first-child { color: var(--text2); }
 .swap-qual th.num, .swap-qual td.num { text-align: right; }
 

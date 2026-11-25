@@ -735,6 +735,8 @@ function _swapResultHtml(c) {
     '<div class="swap-sum">' + _swapSumPairs(c) + '</div>';
 
   h += _swapQualHtml(c);
+  // 換手品質比的是比率，歷程表補「這一刻實際換得到幾股」，兩者相鄰才讀得起來
+  if (typeof _swlHtml === 'function') h += _swlHtml(c);
 
   // 月度對照
   var maxV = 1;
