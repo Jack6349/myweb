@@ -2514,8 +2514,9 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-u2 { border-top-style: dashed; border-top-color: var(--sum); }
 .ovc-u3 { border-top-style: solid; border-top-color: var(--accent3); }
 
-/* 左邊 36px 留給縱軸的 0～100%，右邊 60px 留給貼在右端的節點數字 */
-.ovc-ch { position: relative; margin: 4px 0 0; padding: 0 60px 0 36px; }
+/* 左邊 36px 留給縱軸的 0～100%，右邊留兩段：先是貼在右端的節點數字（約 43px），
+   再外面一欄是機率對應的價。兩者不能疊，所以右側一共留 96px。 */
+.ovc-ch { position: relative; margin: 4px 0 0; padding: 0 96px 0 36px; }
 .ovc-pa { position: relative; }
 .ovc-pa svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .ovc-hl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); opacity: .4; }
@@ -2523,6 +2524,19 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-hl.ovc-h50 { border-top-style: dashed; opacity: .85; border-color: var(--border-strong); }
 .ovc-hl.ovc-h0 { opacity: .9; }
 .ovc-yl { position: absolute; right: calc(100% + 7px); transform: translateY(50%);
+  font-size: 11px; color: var(--text3); white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+/* 右側：金線走到那個機率時的價。左邊那排是機率，這一排是它對應的價，
+   同一條格線上一左一右。站在節點數字的外面，兩者不會疊。 */
+.ovc-rax { position: absolute; left: calc(100% + 52px); transform: translateY(50%);
+  font-size: 12.5px; font-weight: 700; color: var(--accent2); white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.ovc-rax.ovc-rax-na { color: var(--text3); font-weight: 400; }
+
+/* 橫軸的價格刻度。每一格都落在掛得出去的價上。 */
+.ovc-xa { position: relative; height: 17px; margin-top: 2px; }
+.ovc-xt { position: absolute; top: 0; width: 1px; height: 4px; background: var(--border); }
+.ovc-xl { position: absolute; top: 4px; transform: translateX(-50%);
   font-size: 11px; color: var(--text3); white-space: nowrap;
   font-variant-numeric: tabular-nums; }
 

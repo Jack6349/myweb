@@ -279,11 +279,43 @@ function _ovcPanel(r) {
         + (r.act ? '實際收盤' : '現價') + '</span></i>' : '')
     + '</div>';
 
+  // ── 右側：機率對應的價 ──
+  //
+  // 左邊那排是「掛這個價，機率多少」。但掛單的時候心裡先有的是機率不是價格，
+  // 要的是反過來那一個：想要七成機率，掛在哪。原本得沿著曲線往回找，
+  // 而橫軸沒有刻度可以落點，等於找不到。
+  //
+  // 只標金線不標青線：青線問的是收盤跌破，跟掛單不是同一個動作，
+  // 兩欄價格並排會變成要先分辨哪一欄是哪一條。
+  // 只標 25/50/75：0% 與 100% 是漸近線，那裡的價是視窗邊緣不是真的價。
+  // 價對齊升降單位，跟掛買參考同一個處理，才抄得進委託單。
+  var raxOf = function (L) {
+    if (!r.zl || r.lMidPct == null || !(r.sdl > 0) || !(r.base > 0)) return null;
+    var z = (typeof ovQz === 'function') ? ovQz(r.zl, L) : null;
+    if (z == null) return null;
+    var p = _ovcTickPx(r.base * (1 + (r.lMidPct + z * r.sdl) / 100));
+    if (!(p > 0)) return null;
+    // 落在漲跌停外面就不寫價。寫夾回來的那個價是錯的：在跌停那一點的機率
+    // 比 L 高（跌停以下的全堆在那裡），拿它當「L% 的價」會把機率講低。
+    if (r.limDn > 0 && p < r.limDn) return { na: '低於跌停 ' + _ovPx(r.limDn) };
+    if (r.limUp > 0 && p > r.limUp) return { na: '高於漲停 ' + _ovPx(r.limUp) };
+    return { px: p };
+  };
+
   h += '<div class="ovc-ch"><div class="ovc-pa" style="height:' + OVC_PH + 'px">';
   [0, 25, 50, 75, 100].forEach(function (g) {
     h += '<div class="ovc-hl' + (g === 50 ? ' ovc-h50' : (g === 0 ? ' ovc-h0' : ''))
       + '" style="bottom:' + g + '%"></div>'
       + '<div class="ovc-yl" style="bottom:' + g + '%">' + g + '%</div>';
+  });
+  [25, 50, 75].forEach(function (L) {
+    var q = raxOf(L);
+    if (!q) return;
+    h += q.na
+      ? '<div class="ovc-rax ovc-rax-na" style="bottom:' + L + '%" title="'
+        + L + '% 的價' + q.na + '，掛不進去，所以這裡不寫數字。">—</div>'
+      : '<div class="ovc-rax" style="bottom:' + L + '%" title="掛在 ' + _ovPx(q.px)
+        + ' 買進，當日最低觸及它的機率約 ' + L + '%。">' + _ovPx(q.px) + '</div>';
   });
 
   // ── 漲跌停：曲線只畫到這裡 ──
@@ -402,6 +434,31 @@ function _ovcPanel(r) {
 
   h += '</div>';
 
+  // ── 橫軸：價格刻度 ──
+  //
+  // 原本整張圖沒有這一排，價只出現在曲線上那幾個節點，所以圖上任意一點是哪個價
+  // 讀不出來，右側那排機率對應的價也沒有地方可以落點對照。
+  // 步進取 1、2、5 的整數倍再乘以升降單位，所以每一格刻度都落在掛得出去的價上，
+  // 不會標出 20.573 這種不存在的價。
+  (function () {
+    if (!(r.base > 0)) return;
+    var p0 = r.base * (1 + LO / 100), p1 = r.base * (1 + (LO + SPAN) / 100);
+    if (!(p1 > p0)) return;
+    // 挑「刻度不超過 9 格」裡面最細的那一個。取「第一個大於平均間距」會跳太大：
+    // 實測 00981A 的視窗寬 3.75 元，那種算法會從 0.5 跳到 1.0，整張圖只剩 4 格。
+    var u = _ovcTickU(r.base), step = 0;
+    var mult = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+    for (var i = 0; i < mult.length; i++) { step = u * mult[i]; if ((p1 - p0) / step <= 9) break; }
+    var ax = '';
+    for (var p = Math.ceil(p0 / step - 1e-9) * step; p <= p1 + 1e-9; p += step) {
+      var v = Math.round(p * 100) / 100, x = X((v / r.base - 1) * 100);
+      if (x <= 0.2 || x >= 99.8) continue;
+      ax += '<div class="ovc-xt" style="left:' + x.toFixed(2) + '%"></div>'
+        + '<div class="ovc-xl" style="left:' + x.toFixed(2) + '%">' + _ovPx(v) + '</div>';
+    }
+    if (ax) h += '<div class="ovc-xa">' + ax + '</div>';
+  })();
+
   // ── 座標下方：一組就是「這一條區間的兩個數字 ＋ 它自己的橫 Bar」 ──
   // mark：掛買參考在這條 Bar 上的位置。兩條都標，因為要抄進委託單的只有這一個價，
   // 而它在收盤區間裡站哪裡決定了「掛到之後會不會收更低」。
@@ -479,6 +536,14 @@ function _ovcFoot(r, tierCol) {
 
 // 升降單位。判斷標記的價與節點的價是不是同一個價時要用。
 function _ovcTick(p) { return p < 10 ? 0.01 : (p < 50 ? 0.05 : (p < 100 ? 0.1 : 0.5)); }
+// ETF 的升降單位（50 元以下 0.01），與 overnight.js 的 ovTick 同一組。
+// 上面那個 _ovcTick 是股票的表，只拿來判斷兩個價是不是同一個，不能拿來對齊價格。
+function _ovcTickU(p) { return p < 50 ? 0.01 : 0.05; }
+function _ovcTickPx(p) {
+  if (!(p > 0)) return null;
+  var u = _ovcTickU(p);
+  return Math.round(Math.round(p / u) * u * 100) / 100;
+}
 
 var OVC_SORTS = [
   { k: 'lPx', t: '掛買參考' },
@@ -599,6 +664,12 @@ function ovcStockHtml() {
     + '二是這一檔自己的掛買區間，金線上那兩個空心點就是區間的上下緣。'
     + '只看機率不看價位會掛在不合理的價，只看區間不看機率會以為區間裡每個價都差不多。<br>'
     + '<b>白話意義</b>：這個價掛下去，過去十次大約有幾次會成交。<br>'
+    + '<b>兩個方向都讀得出來</b>：從橫軸的價往上碰金線，往左看是機率；'
+    + '反過來從左邊的機率往右看金線，右側那一排就是它對應的價。'
+    + '掛單的時候心裡先有的通常是機率不是價格，25／50／75% 那三個價直接抄得進委託單，'
+    + '也就是分批掛的那三檔。只標金線不標青線：青線問的是收盤跌破，不是同一個動作。'
+    + '右側寫「—」代表那個機率對應的價落在漲跌停外面，掛不進去；'
+    + '不寫夾回來的那個價，因為在跌停那一點的實際機率比它高，寫上去會把機率講低。<br>'
     + '<b>機制</b>：價位越低，能觸及它的日子越少，所以金線由左下往右上遞增。'
     + '掛買參考是迴歸的中心估計，而最小平方的殘差平均必定是 0，所以它的機率天生在五成附近。'
     + '真正讓它偏離五成的是殘差的偏態：日內最低偶爾跌得很深，少數幾天把平均拉下去，'

@@ -476,6 +476,15 @@ function ovCdf(zq, z) {
   return 100;
 }
 
+// 反過來問：給機率，回 z。與 ovCdf 同一份分位點，所以照它算出來的價
+// 必定落在曲線上那個高度，不會出現「右側寫 20.58、曲線在 20.58 讀到別的數」。
+function ovQz(zq, p) {
+  if (!zq || !zq.length) return null;
+  var n = zq.length - 1, t = Math.max(0, Math.min(n, p / 100 * n));
+  var k = Math.floor(t), f = t - k;
+  return zq[k] + (zq[Math.min(k + 1, n)] - zq[k]) * f;
+}
+
 function _ovTier(r2) {
   if (r2 == null) return 'ov-t0';
   return (r2 > 0.5) ? 'ov-t3' : ((r2 >= 0.25) ? 'ov-t2' : 'ov-t1');
