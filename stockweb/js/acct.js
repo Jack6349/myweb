@@ -523,14 +523,30 @@ function _abDivInBalance(payDate) {
   var d = abAtDay();
   return !!(d && payDate && payDate <= d);
 }
-// 已經發放過的。這張表的題目是「還會進來多少錢」，過去的不算預估。
+// 這筆配息是不是已經被算進起點了。
 //
-// 為什麼不能只靠 _abDivInBalance：它比的是「你填餘額的那一天」，
-// 餘額沒填時 abAtDay() 回空字串，比較恒為 false，整年從一月起全部被當成「未來」列出來，
-// 累計欄會做出一個幾百萬的數字。餘額填得很早也一樣，只是沒那麼誇張。
-function _abDivPast(payDate) {
-  return !!(payDate && payDate < _abToday());
+// 分界是「最後一次對過銀行、按過確認的那一天」，跟預計進出同一條線。
+// 不能拿錨點當分界：錨點有兩種，系統算的那種是前一天總額加當天交割推出來的
+// （adEnsure 只加交割金額），裡面沒有配息。
+//
+// 2026-11-25 的實例就是這樣壞的：00984D 的配息 11/25 入帳，發放日當天不進餘額，
+// 隔天 _abDivPast 又把它當成過去式整筆丟掉，於是那筆錢從頭到尾沒有任何一欄認列，
+// 餘額一路偏低，而且每多一次配息就低一次。
+//
+// 連餘額都沒填的時候沒有任何起點，過去的配息無從認列，退回原本的作法只留未來的，
+// 否則整年從一月起全部被列出來，累計欄會做出一個幾百萬的數字。
+function _abDivFolded(payDate) {
+  if (!payDate) return true;
+  var ok = (typeof adLastOk === 'function' && adLastOk()) ? adLastOk().d : '';
+  if (!ok) ok = abAtDay();
+  if (!ok) return payDate < _abToday();
+  return payDate <= ok;
 }
+
+// 每一檔每一次配息，股務代理匯款時扣的手續費。帳上真正進來的是配息減掉它。
+// 只用在這一頁：這一頁問的是「帳上會有多少錢」。股利估算問的是「領了多少配息」，
+// 那邊要跟股利憑單對得起來，所以維持毛額。
+var AB_DIV_FEE = 10;
 
 // 同一天有沒有自訂進出的備註提到這一檔
 var _abDivSkip = [];
@@ -553,14 +569,14 @@ function abDivIn() {
   est.forEach(function (s) {
     (s.res.months || []).forEach(function (m) {
       if (!m.payDate || !(m.total > 0)) return;
-      if (_abDivInBalance(m.payDate)) return;        // 已經在餘額裡
-      if (_abDivPast(m.payDate)) return;            // 發放日已經過了
+      if (_abDivFolded(m.payDate)) return;          // 已經算進起點了
       // 使用者自己排了同一天、備註裡提到這一檔的自訂進出，就不要再加一次。
       // 2026-11-17 實例：對帳單上 00981B 配息 6,290 當天入帳，而使用者已經排了一筆
       // 「00981B配息+調整」，估算這邊再加一次就會算兩次。
       // 只能靠備註比對，沒有別的訊號，所以略過的時候要在畫面上講出來，不能靜靜跳過。
       if (_abDivClash(m.payDate, s.code)) return;
-      out.push({ d: m.payDate, kind: 'div', label: s.code, amt: Math.round(m.total) });
+      out.push({ d: m.payDate, kind: 'div', label: s.code,
+                 amt: Math.round(m.total) - AB_DIV_FEE, gross: Math.round(m.total) });
     });
   });
   return out;
@@ -611,8 +627,14 @@ function abFlow(settleRows, opts) {
                  // 否則使用者會看到起點 11/23 底下掛一列 11/20，不知道為什麼。
                  preAnc: !!(anchor && p.date <= anchor) });
   });
-  var divs = opts.divs === false ? null : abDivIn();
-  if (divs) divs.forEach(function (x) { items.push(x); });
+  // divs:false 的意思是「不要把還沒到手的錢算進去」，不是「配息一概不算」。
+  // 已經發放的配息是事實，錢就在帳戶裡，排除它會讓下單視窗與提醒算出來的餘額
+  // 比交易帳務那一頁低，兩個畫面對同一個帳戶講出不同的數字。
+  var divs = abDivIn();
+  if (divs) divs.forEach(function (x) {
+    if (opts.divs === false && x.d > today) return;
+    items.push(x);
+  });
   items.sort(function (a, b) {
     if (a.d !== b.d) return a.d < b.d ? -1 : 1;
     var k = { settle: 0, div: 1, plan: 2 };           // 同一天：先交割、再入帳、最後自訂

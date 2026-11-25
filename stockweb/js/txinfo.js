@@ -55,19 +55,25 @@ async function loadSettleBox() {
     var bal = f.start, abDay = abAtDay();
     var today = _divTwDate().iso;
 
-    // 兩張表分開算，不合成一條餘額線。
+    // 兩張表分開算，界線是發放日到了沒有，不是「是不是配息」。
     //
-    // 交割是已經成立的應付：那筆錢一定會在那天離開帳戶。
-    // 配息是預估收入：金額與發放日都還可能變，而且它要到那天才真的入帳。
-    // 兩邊混成一條線的話，「付得出來嗎」會被還沒到手的錢蓋過去——
+    // 還沒發的配息不能併進餘額線：金額與發放日都還可能變，而且錢還沒到手。
+    // 混成一條線的話，「付得出來嗎」會被還沒到手的錢蓋過去——
     // 帳上只剩 5 萬、明天要付 20 萬，但下個月有 30 萬配息，合計線看起來很健康。
+    //
+    // 已經發的就不是預估了，那筆錢已經在銀行帳戶裡，不放進餘額線反而是錯的。
+    // 原本整個配息都排除在餘額之外，於是發放日當天不加、隔天被當成過去式丟掉，
+    // 那筆錢從頭到尾沒有任何一欄認列（2026-11-25 的 00984D 就是這樣消失的）。
     var today = _divTwDate().iso;
-    var stl = f.rows.filter(function (x) { return x.kind !== 'div'; });
-    var div = f.rows.filter(function (x) { return x.kind === 'div'; });
+    var stl = f.rows.filter(function (x) { return x.kind !== 'div' || x.d <= today; });
+    var div = f.rows.filter(function (x) { return x.kind === 'div' && x.d > today; });
 
     // 日期還沒到的餘額是推算，用暗色；錢真的動了才轉亮
+    // 配息在發放日當天就匯進來，所以發放日到了就算已經發生，不必等到隔天
     var happened = function (x) {
-      return x.kind === 'settle' ? settleIsPaid(x.ref, sp.today) : (x.d < today);
+      if (x.kind === 'settle') return settleIsPaid(x.ref, sp.today);
+      if (x.kind === 'div') return x.d <= today;
+      return x.d < today;
     };
     var balCell = function (v, fut, tip) {
       if (v == null) return '<td class="num tx-bal"><span class="dm-dim">—</span></td>';
@@ -83,8 +89,8 @@ async function loadSettleBox() {
     // ── 表一：帳戶餘額 → 交割與自訂進出 ──
     var html = '<table class="tx-settle-table"><thead><tr><th>日期</th><th>項目</th>'
       + '<th class="num">金額</th>'
-      + '<th class="num" title="只算交割與你自己排的進出，不含配息。'
-      + '這一欄回答的是「付得出來嗎」，所以不把還沒入帳的錢算進去">餘額</th>'
+      + '<th class="num" title="算交割、你自己排的進出，以及已經發放的配息。'
+      + '這一欄回答的是「付得出來嗎」，所以還沒發的配息不算進去，那些排在下面那張表">餘額</th>'
       + '<th></th></tr></thead><tbody>';
     // 這一列是整條線的錨點。它是哪一天的、可不可以當真，要寫在臉上：
     // 「已確認」是使用者對過銀行的真實數字，什麼都含；
@@ -129,7 +135,8 @@ async function loadSettleBox() {
       var due = x.kind === 'settle' && settleIsDueToday(x.ref, sp.today);
       var paid = x.kind === 'settle' && settleIsPaid(x.ref, sp.today);
       var tag = x.kind === 'plan' ? '<span class="tx-kind k-plan">自訂</span>'
-                                  : '<span class="tx-kind k-stl">交割</span>';
+        : (x.kind === 'div' ? '<span class="tx-kind k-div">配息</span>'
+                            : '<span class="tx-kind k-stl">交割</span>');
       // 日期比起點早卻仍然要算：起點是「系統算的」，它只含交割，沒有這一筆。
       if (x.preAnc) {
         tag += '<span class="tx-src" title="這一天比上面那個起點早，但起點是系統算的，'
@@ -155,6 +162,15 @@ async function loadSettleBox() {
       }
       var pill = paid ? '<span class="tx-paid">已扣款</span>'
         : (due ? '<span class="tx-due">今日 ' + SETTLE_PAID_HOUR + ':00</span>' : '');
+      // 配息這一列講兩件事：錢已經到了，還有這個數字已經扣過匯費
+      if (x.kind === 'div') {
+        pill = (x.d === today ? '<span class="tx-due">今日入帳</span>'
+                              : '<span class="tx-paid">已入帳</span>')
+          + '<span class="tx-src" title="股務代理匯款時每一檔每一次扣 ' + AB_DIV_FEE
+          + ' 元。這一欄寫的是扣完之後實際進帳戶的錢：配息 '
+          + (x.gross == null ? '—' : abMoney(x.gross)) + ' － ' + AB_DIV_FEE + ' 元。'
+          + '股利估算那一頁寫的是毛額，兩邊差的就是這筆費用。">已扣匯費</span>';
+      }
       html += '<tr class="' + (x.kind === 'plan' ? 'tx-cf-plan' : (due ? 'tx-settle-due' : '')) + '">'
         + '<td class="tx-sd">' + (x.d || '').slice(5).replace('-', '/') + '</td>'
         + '<td>' + tag + x.label + pill + src + '</td>'
@@ -175,9 +191,10 @@ async function loadSettleBox() {
     }
     if (typeof adHistHtml === 'function') html += adHistHtml();
 
-    // ── 表二：配息入帳（預估，不併進上面那條線）──
+    // ── 表二：還沒發的配息（預估，不併進上面那條線）──
     var runD = 0;
-    html += '<div class="tx-sec">配息入帳<span class="tx-sec-n">預估，另外算</span></div>';
+    html += '<div class="tx-sec">還沒發的配息<span class="tx-sec-n">預估，另外算；'
+      + '已經發的在上面那條餘額線裡。金額都已扣掉每筆 ' + AB_DIV_FEE + ' 元匯費</span></div>';
     if (!f.hasDiv) {
       html += '<div class="tx-cf-none tx-sec-b">'
         + (_txDivBusy ? '計算中…'
@@ -213,7 +230,7 @@ async function loadSettleBox() {
       var both = (runS == null ? null : runS + runD);
       html += '<div class="tx-both">兩邊合起來 <b class="' + (both != null && both < 0 ? 'tx-bal-neg' : 'tx-fut') + '">'
         + abMoney(both) + '</b><span class="tx-both-n">交割走完 ' + abMoney(runS)
-        + (runD ? ' ＋ 配息 ' + abMoney(runD) : '') + '</span></div>';
+        + (runD ? ' ＋ 還沒發的配息 ' + abMoney(runD) : '') + '</span></div>';
     }
 
     // ── 預計進出紀錄 ──
@@ -292,8 +309,14 @@ async function loadSettleBox() {
       + '<br><b>它不能告訴你什麼</b>：沒開這一頁的日子不會有紀錄，下次開頁時一次補算，'
       + '補算用的就是上面那個會漏的反推。確認一次就等於把鏈條剪斷一次，'
       + '從來不確認的話，這一列會一路往前推到你最初手填的那一天，跟以前一樣。'
-      + '<br><b>配息入帳</b>：下單視窗與提醒的「帳上不夠」都<b>不含</b>這一邊，理由同上。'
-      + (f.hasDiv ? '取自股利估算的月度結果（可領張數已依建倉明細判定），只列發放日還沒到的。'
+      + '<br><b>配息</b>：發放日到了的直接併進上面那條餘額線，錢已經在帳戶裡，不算預估；'
+      + '還沒發的排在下面那張表，下單視窗與提醒的「帳上不夠」都<b>不含</b>那一邊，理由同上。'
+      + '分界是你最後一次按過確認的那一天，不是錨點——系統算的錨點只含交割，裡面沒有配息，'
+      + '拿它當分界會讓已經入帳的配息從帳上消失。'
+      + '<br><b>金額扣過匯費</b>：股務代理匯款時每一檔每一次扣 ' + AB_DIV_FEE
+      + ' 元，這一頁寫的是扣完之後實際進帳戶的錢。股利估算那一頁寫的是毛額，'
+      + '要跟股利憑單對得起來，兩邊差的就是這筆費用。'
+      + (f.hasDiv ? '取自股利估算的月度結果（可領張數已依建倉明細判定）。'
                   : (_txDivBusy
                       ? '<b>計算中</b>——逐檔抓配息紀錄約十幾秒，好了會自動補進上面的表。'
                       : ((typeof _twOpen === 'function' && _twOpen())
