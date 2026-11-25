@@ -2519,15 +2519,19 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
 .ovc-r1 .tx-oname { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
 .ovc-r1 .ovc-wt, .ovc-r1 .ov-fx { margin-left: auto; flex: none; }
-.ovc-r2 { display: flex; align-items: baseline; gap: 6px; margin-top: 3px;
+/* 買一行、賣一行。兩行套同一組規則，欄位寬度才相同，
+   兩個價、兩個幅度、兩個機率就各自落在同一條垂直線上。 */
+.ovc-r2, .ovc-r3 { display: flex; align-items: baseline; gap: 6px; margin-top: 3px;
   white-space: nowrap; font-size: 14px; }
 .ovc-rk { font-size: 11px; color: var(--th); font-weight: 600; }
-.ovc-r2 b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.ovc-r2 b, .ovc-r3 b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+/* 盤中掛賣還沒有第二層校準，標一下。推到最右邊，不去擠前面那三組數字的位置 */
+.ovc-r3n { margin-left: auto; font-size: 10.5px; color: var(--text3); }
 .ovc-rsep { color: var(--border-strong); margin: 0 2px; }
 /* 一列一列往下掃的時候，數字要在同一條直線上，不然得一個一個對位。
    價與百分比各自固定寬度、靠右切齊，沒值的放佔位符不留空。 */
-.ovc-r2 b.ovc-rv { min-width: 42px; display: inline-block; text-align: right; }
-.ovc-r2 b.ovc-rf { min-width: 34px; display: inline-block; text-align: right; }
+.ovc-r2 b.ovc-rv, .ovc-r3 b.ovc-rv { min-width: 42px; display: inline-block; text-align: right; }
+.ovc-r2 b.ovc-rf, .ovc-r3 b.ovc-rf { min-width: 34px; display: inline-block; text-align: right; }
 .ovc-rp { min-width: 54px; display: inline-block; text-align: right;
   font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
 /* 清單裡的現價不必再跟誰分隔，那條左邊框是給表格那一頁用的 */
