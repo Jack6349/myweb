@@ -216,6 +216,15 @@ async function pvEnsure(force) {
 }
 
 // ── 繪圖 ──
+// 幾何常數：畫圖與十字線對位共用同一組。
+// 原本兩邊各寫一份寫死的數字，右邊距從 184 改成 172 時只改到畫圖那一邊，
+// 十字線就整條偏掉，而且越靠右偏越多（最後一天差約 12 單位，肉眼看得出來）。
+// 這種錯不會噴錯誤，只會讓線停在旁邊一格，所以常數只准定義在這裡。
+var PV_W = 1180, PV_PAD_L = 74;
+var PV_SPC_PAD_R = 172;     // 管制圖右側：相對刻度欄 ＋ 端點註解欄
+var PV_TREND_PAD_R = 58;    // 走勢圖右側：只有報酬率的軸標
+function _pvStep(padR, n) { return (PV_W - PV_PAD_L - padR) / n; }
+
 function _pvWan(v) {
   var w = v / 10000;
   return (Math.abs(w) >= 1000 ? Math.round(w).toLocaleString('zh-TW') : w.toFixed(0)) + '萬';
@@ -259,7 +268,7 @@ function pvSvg(data) {
              wrate: (p != null && r.c && dv != null) ? (p + dv) / r.c * 100 : null };
   });
 
-  var W = 1180, H = 380, PAD_L = 74, PAD_R = 58, PAD_T = 14, BAR_H = 86, GAP = 26, FOOT = 16;
+  var W = PV_W, H = 380, PAD_L = PV_PAD_L, PAD_R = PV_TREND_PAD_R, PAD_T = 14, BAR_H = 86, GAP = 26, FOOT = 16;
   var PH = H - PAD_T - GAP - BAR_H - FOOT;
   var n = pts.length, step = (W - PAD_L - PAD_R) / n;
   var x = function (k) { return PAD_L + step * (k + 0.5); };
@@ -361,7 +370,7 @@ function pvBindHover(data) {
   var tax = (typeof _taxMode !== 'undefined' && _taxMode) ? 0.997735 : 1;
   var rows = data.days, n = rows.length;
   var dcum = _pvDivCum(rows);
-  var PAD_L = 74, step = (1180 - PAD_L - 58) / n, base = tip.innerHTML;
+  var PAD_L = PV_PAD_L, step = _pvStep(PV_TREND_PAD_R, n), base = tip.innerHTML;
   hit.addEventListener('mousemove', function (ev) {
     var vx = (typeof _chartVX === 'function') ? _chartVX(svg, ev.clientX) : null;
     if (vx == null) return;
@@ -483,7 +492,7 @@ function pvSpcSvg(data) {
   // 實測最寬的一行是「30 日平均 1,683萬」佔 89 單位，刻度欄 36 單位，
   // 172 讓最右緣落在 1,159，距畫布邊緣還有 21 的餘裕（夠吃下九位數的總現值）。
   // 原本是 184，所以這次對調反而讓繪圖區變寬。
-  var W = 1180, H = 450, PAD_L = 74, PAD_R = 172, PAD_T = 14, FOOT = 18;
+  var W = PV_W, H = 450, PAD_L = PV_PAD_L, PAD_R = PV_SPC_PAD_R, PAD_T = 14, FOOT = 18;
   // 右側 gutter 分兩欄：內欄放相對刻度（貼著軸，才讀得出哪一條格線是多少），
   // 外欄放端點註解（目前／窗格平均／市場效應均線）。
   // 刻度是數字，右對齊才對得齊位數；註解是文字，左對齊才會切齊成一落。
@@ -720,7 +729,7 @@ function pvBindSpcHover(data) {
   if (!svg || !hit || !cross || !tip) return;
   var tax = (typeof _taxMode !== 'undefined' && _taxMode) ? 0.997735 : 1;
   var rows = data.days, n = rows.length;
-  var PAD_L = 74, step = (1180 - PAD_L - 184) / n, base = tip.innerHTML;   // PAD_R 與 pvSpcSvg 一致
+  var PAD_L = PV_PAD_L, step = _pvStep(PV_SPC_PAD_R, n), base = tip.innerHTML;
   var cfg = (typeof rtSpc === 'function') ? rtSpc() : { lo: 17000000, up: 18000000, n: 5 };
   hit.addEventListener('mousemove', function (ev) {
     var vx = (typeof _chartVX === 'function') ? _chartVX(svg, ev.clientX) : null;
