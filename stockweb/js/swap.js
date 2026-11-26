@@ -118,6 +118,31 @@ function _swapCostPx(code) {
   var p = _swapPos(code);
   return (p && p.price != null) ? p.price : null;
 }
+// 資本損益與含息損益：沿用持股庫存的 invOrigCost，不另外算一套。
+// 同名的欄位在兩頁給出不同數字是最難查的那種錯，寧可依賴它。
+// 成本要還原配息：券商記的成本已扣掉累積配息，加回才是當初實際付出的錢。
+// 現值跟著「含稅費」切換走，與持股庫存同一個基準，所以這兩欄會跟左邊那個
+// 未扣稅費的「市值」對不起來——那一欄問的是部位多大，這兩欄問的是賺賠多少。
+function _swapPnl(code) {
+  var p = _swapPos(code);
+  var px = _swapPrice(code);
+  if (!p || px == null || typeof invOrigCost !== 'function') return null;
+  var oc = invOrigCost(p);
+  var netVal = (typeof _taxMode !== 'undefined' && _taxMode) ? px * p.quantity * 0.997735 : px * p.quantity;
+  var profit = netVal - oc.cost;
+  return {
+    profit: profit, div: oc.div, netVal: netVal, cost: oc.cost, ready: oc.ready,
+    withDiv: (oc.div == null) ? null : profit + oc.div
+  };
+}
+// 兩欄共用一個儲存格樣板：數值、顏色、提示的寫法在這裡定一次，
+// 兩欄才不會日後各自飄掉。
+function _swapPnlCell(v, tip) {
+  var cls = (v == null) ? 'flat' : colorClass(v);
+  return '<td class="num ' + cls + '"' + (tip ? ' title="' + tip + '"' : '') + '>' +
+    (v == null ? '—' : (v >= 0 ? '+' : '') + Math.round(v).toLocaleString('zh-TW')) + '</td>';
+}
+
 // 預估殖利率＝最近一次配息 × 配息期數 ÷ 現價 ×100
 // 配息期數：年配1、半年配2、季配4、月配12（由 _divInferStep 推得的月間隔換算：12÷間隔）
 function _swapYield(code) {
@@ -454,6 +479,11 @@ function _swapSellHtml() {
     '<th class="num" title="每股成本均價（券商庫存）">成本</th>' +
     '<th class="num">持有(張)</th>' +
     (anyLent ? '<th class="num" title="持有扣掉出借／匯撥中，可直接賣出的張數">可賣(張)</th>' : '') + '<th class="num">市值</th><th class="num">年配息</th>' +
+    '<th class="num" title="現值 － 原始成本，純價差。原始成本是券商淨成本加回累積配息，' +
+      '也就是當初實際付出的錢。與持股庫存同一個數字，一樣跟著「含稅費」切換。&#10;' +
+      '這是整個部位的，不是你要賣的那幾張的。">資本損益</th>' +
+    '<th class="num" title="資本損益 ＋ 已配息。配息只算目前還持有的批次，已賣掉的批次領過的不在內。&#10;' +
+      '這是整個部位的，不是你要賣的那幾張的。">含息損益</th>' +
     '<th class="num">賣出張數</th><th></th><th class="num">賣出淨額</th></tr></thead><tbody>';
   codes.forEach(function (code) {
     var px = _swapPrice(code), held = _swapHeld(code), free = _swapFree(code);
@@ -471,6 +501,16 @@ function _swapSellHtml() {
       (anyLent ? '<td class="num' + (free < held ? ' swap-warn' : '') + '">' + _swapLots(free) + '</td>' : '') +
       '<td class="num">' + (val != null ? fmtMoney(val) : '—') + '</td>' +
       '<td class="num" id="swap-base-' + code + '">—</td>' +
+      (function () {
+        var g = _swapPnl(code);
+        if (!g) return '<td class="num flat">—</td><td class="num flat">—</td>';
+        var warn = g.ready ? '' : '&#10;建倉明細尚未到齊，成本還沒還原配息，暫以券商淨成本計。';
+        return _swapPnlCell(g.profit, '現值 ' + Math.round(g.netVal).toLocaleString('zh-TW') +
+            ' － 原始成本 ' + Math.round(g.cost).toLocaleString('zh-TW') + warn) +
+          _swapPnlCell(g.withDiv, g.withDiv == null ? ''
+            : '資本損益 ' + Math.round(g.profit).toLocaleString('zh-TW') +
+              ' ＋ 已配息 ' + Math.round(g.div).toLocaleString('zh-TW') + warn);
+      })() +
       '<td class="num"><input class="sbl-inp swap-inp" type="number" min="0" max="' + (held / 1000) + '" step="1" value="' + (v != null ? v : '') + '"' +
         ' title="上下鍵每次 ±1 張；上限為持有 ' + _swapLots(held) + ' 張；零股請手動輸入小數（0.5＝500 股）" oninput="swapSellInput(\'' + code + '\',this)"></td>' +
       '<td><button class="swap-mini" onclick="swapSellAll(\'' + code + '\')">全部</button></td>' +
@@ -480,6 +520,7 @@ function _swapSellHtml() {
   h += '</tbody></table></div>' +
     '<div class="swap-foot">賣出總淨額 <b id="swap-sell-total">$0</b>' +
     '<span class="swap-dim">（已扣 ' + (SWAP_SELL_FEE * 100).toFixed(4) + '% 手續費＋交易稅）</span>' +
+    '<span class="swap-dim">　資本損益與含息損益是整個部位的，與賣出張數無關</span>' +
     '<span id="swap-recall" class="swap-warn"></span></div></div>';
   return h;
 }
