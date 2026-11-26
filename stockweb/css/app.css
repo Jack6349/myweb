@@ -1887,6 +1887,16 @@ td.cost-even::after  { background: var(--caution); }   /* 打平：黃，不是�
   font-family: var(--font); font-size: 12px; padding: 3px 12px; border-radius: 6px; cursor: pointer; }
 .pv-tab:hover { color: var(--text); }
 .pv-tab.on { border-color: var(--accent); color: var(--accent2); background: var(--bg2); }
+/* 窗格切換：比頁籤低一層，所以不給外框，只用顏色與底線標出選中的那個。
+   做成第三顆方框按鈕會讓人以為它跟「走勢／管制圖」是同一層的並列選擇。
+   float:right 的兩組，先出現的在最右；頁籤本身的右邊距就是兩組之間的間隔。 */
+.pv-wins { float: right; display: inline-flex; gap: 2px; margin-right: 16px; }
+.pv-win { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text3);
+  font-family: var(--font); font-size: 12px; padding: 3px 7px 2px; cursor: pointer; }
+.pv-win:hover { color: var(--text2); }
+.pv-win.on { color: var(--accent2); border-bottom-color: var(--accent2); }
+/* 圖外的界線標在圖頭，與左邊的統計分開 */
+.pv-off { color: var(--text3); }
 
 .pv-seg { stroke-width: 2; fill: none; }
 .pv-seg.up { stroke: var(--up); }
