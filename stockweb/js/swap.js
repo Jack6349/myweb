@@ -526,7 +526,9 @@ function _swapSellHtml() {
     var code = r.code, px = r.px, held = r.held, free = r.free, val = r.val;
     var v = _swapState.sells[code];
     var cost = r.cost, yld = r.yld;
-    h += '<tr>' +
+    // 底色標「這一列我要賣」。狀態寫在列上，但平常不靠重繪維持：
+    // 打字時整張表刻意不重繪（重繪游標會跳掉），所以底色由 swapUpdate 逐列切換。
+    h += '<tr id="swap-row-' + code + '"' + (v > 0 ? ' class="swap-sel-on"' : '') + '>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
       '<td class="inv-name">' + _swapName(code) + '</td>' +
       '<td class="num">' + (px != null ? px.toFixed(2) : '—') + '</td>' +
@@ -635,6 +637,13 @@ function swapUpdate() {
   });
   c.sellRows.forEach(function (r) {
     set('swap-sell-' + r.code, fmtMoney(r.net));
+  });
+  // 底色：有填張數的那幾列標起來。用 sells 而不是 sellRows，
+  // 因為張數填了但當下算不出淨額（例如還沒拿到價）的列也該標，
+  // 那一列一樣是「我要賣它」。
+  _swapCodes().forEach(function (code) {
+    var tr = document.getElementById('swap-row-' + code);
+    if (tr) tr.classList.toggle('swap-sel-on', _swapState.sells[code] > 0);
   });
   set('swap-sell-total', fmtMoney(c.sellNet));
   set('swap-recall', c.recallShares > 0 ? '　需先召回出借中 ' + _swapLots(c.recallShares) + ' 張' : '');
