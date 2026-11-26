@@ -21,11 +21,36 @@
 //
 // 快取：過去某一天的數字不會再變 → 整條序列算一次存 localStorage，當天重開直接用。
 
-var PV_SHOW = 90;              // 顯示的交易日數
+var PV_SHOW = 90;              // 抓與存的交易日數（序列長度）
+var PV_WINS = [90, 30];        // 可選的顯示窗格（交易日），皆由同一份序列取尾段
 var PV_BACK_DAYS = 150;        // 往前抓幾個日曆天（要蓋過 90 個交易日）
 var PV_LS = 'pv_hist_v4';   // v4：序列多了逐日買進／賣出／除息，舊快取作廢
+var PV_WIN_LS = 'pv_win';   // 記住選的窗格：每次開抽屜都退回 90 天會一直要重按
 
 var _pvOpen = false, _pvData = null, _pvLoading = false, _pvErr = '';
+var _pvWin = (function () {
+  try {
+    var v = parseInt(localStorage.getItem(PV_WIN_LS) || '', 10);
+    if (PV_WINS.indexOf(v) >= 0) return v;
+  } catch (e) {}
+  return PV_SHOW;
+})();
+
+// 兩個頁籤共用同一份序列，短窗格只取尾段：不重抓、不改快取版號、不多一個 API 請求。
+// 切窗格因此是純繪圖動作，切回去也不會有載入等待。
+function _pvView(data) {
+  if (!data || !data.days || _pvWin >= data.days.length) return data;
+  var o = {}, k;
+  for (k in data) if (Object.prototype.hasOwnProperty.call(data, k)) o[k] = data[k];
+  o.days = data.days.slice(data.days.length - _pvWin);
+  return o;
+}
+function pvWin(w) {
+  if (PV_WINS.indexOf(w) < 0 || w === _pvWin) return;
+  _pvWin = w;
+  try { localStorage.setItem(PV_WIN_LS, String(w)); } catch (e) {}
+  pvRender();
+}
 
 function _pvYmd(d) {
   return new Date(d.getTime() + 8 * 3600000).toISOString().slice(0, 10);   // 台灣日期
@@ -411,12 +436,19 @@ function _pvLampsHtml(vals, n) {
 // 整數刻度：從 10／20／25／50／100／200／250／500 萬裡挑一個，讓格線落在 3～6 條。
 // 不寫死 100 萬，資料範圍變了會自己換（現在幅度 297 萬會選 100 萬；縮到 100 萬會選 25 萬）。
 // 軸底與軸頂都對齊該刻度的整數倍，右軸的相對刻度才會是整數。
+// 刻度梯要往下留到 1 萬，收不到時也不能跳回最大的那一階：
+// 原本梯最小只有 10 萬，幅度不足 30 萬就沒有任何一階落在 3～6 格，
+// 於是落到「取最後一階」的 2000 萬，軸會變成 0～2000 萬、整條線貼著頂緣壓成一條。
+// 90 日窗格撞不到（幅度本來就大，又有目標界線撐著），30 日窗格很容易撞到。
+// 收不到就改取最接近 4 格的那一階，寧可格數少，不要整張圖失真。
 function _pvNiceAxis(lo, hi) {
-  var steps = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];   // 單位：萬
-  var st = steps[steps.length - 1];
+  var steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];   // 單位：萬
+  var st = steps[steps.length - 1], best = 1e9;
   for (var i = 0; i < steps.length; i++) {
     var k = Math.ceil(hi / 10000 / steps[i]) - Math.floor(lo / 10000 / steps[i]);
     if (k >= 3 && k <= 6) { st = steps[i]; break; }
+    var gap = Math.abs(k - 4);
+    if (gap < best) { best = gap; st = steps[i]; }
   }
   var u = st * 10000;
   var base = Math.floor(lo / u) * u, top = Math.ceil(hi / u) * u;
@@ -435,7 +467,7 @@ function pvSpcSvg(data) {
   var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
 
   var W = 1180, H = 450, PAD_L = 74, PAD_R = 184, PAD_T = 14, FOOT = 18;
-  // 右側 gutter 分兩欄：內欄放標註（目前／90 日平均），最右欄放相對刻度。
+  // 右側 gutter 分兩欄：內欄放標註（目前／窗格平均），最右欄放相對刻度。
   // 兩者原本都排在同一個 x，「距 1,500萬」會疊到「400萬」、「200萬」會疊到「90 日平均」。
   var GUT_IN = W - PAD_R + 6, GUT_R = W - 8;
   var BAR_H = 92, GAP = 26;                      // 下段：逐日分解的堆疊直條
@@ -462,8 +494,14 @@ function pvSpcSvg(data) {
   var maLo = 0, maHi = 0;
   mvals.forEach(function (o) { if (o.v < maLo) maLo = o.v; if (o.v > maHi) maHi = o.v; });
 
+  // 短窗格：目標上下限不強制撐開縱軸。它們是固定的資產水位，天數變少不會跟著縮，
+  // 硬納進去會把 30 天那段窄值域撐成跟 90 天一樣高，曲線就放不大。
+  // 代價是界線可能落在圖外，所以圖外的界線改在圖頭標出來，連「離目前多遠」一起寫。
+  // 「區間內幾天」那個統計不受影響：它直接比 cfg，與縱軸怎麼取無關。
+  var limFree = (n < PV_SHOW);
   var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-  [cfg.up, cfg.lo, cfg.mid].concat(cfg.avg ? [mean] : []).forEach(function (v) {
+  (limFree ? [] : [cfg.up, cfg.lo, cfg.mid]).concat(cfg.avg ? [mean] : []).forEach(function (v) {
+    if (v == null) return;
     if (v < lo) lo = v;
     if (v > hi) hi = v;
   });
@@ -503,8 +541,11 @@ function pvSpcSvg(data) {
 
   // 目標區間鋪極淡底色：不新增顏色，「在不在區間內」不用對照線就看得出來。
   // 畫在格線之後、界線與折線之前，免得蓋住線。
+  // 區間與縱軸沒有交集時整段不畫：夾住的寫法會把軸頂軸底當邊界，
+  // 等於把整張圖塗成區間底色（界線不撐軸之後才會遇到這個情形）。
+  var bOver = (cfg.up != null && cfg.lo != null && cfg.up >= lo && cfg.lo <= hi);
   var bTop = y(Math.min(cfg.up, hi)), bBot = y(Math.max(cfg.lo, lo));
-  if (bBot > bTop) {
+  if (bOver && bBot > bTop) {
     s += '<rect class="pv-band" x="' + PAD_L + '" y="' + bTop.toFixed(1) + '" width="' + (W - PAD_L - PAD_R) +
       '" height="' + (bBot - bTop).toFixed(1) + '"/>';
   }
@@ -545,12 +586,12 @@ function pvSpcSvg(data) {
       '" x2="' + x(i).toFixed(1) + '" y2="' + y(vals[i]).toFixed(1) + '"/>';
   }
 
-  // 右側：90 日平均線（畫線）＋線尾的目前總現值（畫點）
+  // 右側：窗格平均線（畫線）＋線尾的目前總現值（畫點）
   var right = [];
   if (cfg.avg && mean >= lo && mean <= hi) {
     s += '<line class="pv-lim avg" x1="' + PAD_L + '" y1="' + y(mean).toFixed(1) +
       '" x2="' + (W - PAD_R) + '" y2="' + y(mean).toFixed(1) + '"/>';
-    right.push({ y: y(mean), cls: 'avg', lb: '90 日平均 ' + _pvWan(mean) });
+    right.push({ y: y(mean), cls: 'avg', lb: n + ' 日平均 ' + _pvWan(mean) });
   }
   s += '<circle class="pv-dot ' + (state[n - 2] || 'na') + '" cx="' + x(n - 1).toFixed(1) +
     '" cy="' + lastY.toFixed(1) + '" r="3.5"/>';
@@ -601,9 +642,17 @@ function pvSpcSvg(data) {
     '<line id="pvs-cross" class="ck-cross" x1="0" y1="' + PAD_T + '" x2="0" y2="' + (PAD_T + PH) + '" style="display:none"/></svg>';
 
   var inBand = vals.filter(function (v) { return v >= cfg.lo && v <= cfg.up; }).length;
+  // 落在縱軸之外的界線：圖上看不到，但「離目前多遠」還是要給，否則短窗格就失去這個讀法
+  var offTx = [[cfg.up, '目標上限'], [cfg.mid, '中線'], [cfg.lo, '目標下限']]
+    .filter(function (a) { return a[0] != null && (a[0] > hi || a[0] < lo); })
+    .map(function (a) {
+      return a[1] + ' ' + _pvWan(a[0]) + ' 在圖外（目前' +
+        (a[0] > lastV ? '差 ' : '高出 ') + _pvWan(Math.abs(a[0] - lastV)) + '）';
+    });
   var head = '<div class="chart-info"><span id="pvs-tip">' +
     n + ' 日　' + _pvLampsHtml(vals, cfg.n) +
     '　區間內 <b>' + inBand + '</b>/' + n + ' 日（' + (inBand / n * 100).toFixed(0) + '%）' +
+    (offTx.length ? '　<span class="pv-off">' + offTx.join('、') + '</span>' : '') +
     '　<span class="pv-lg2 duo"><span class="pv-sw up">▌</span><span class="pv-sw dn">▌</span>市場</span>' +
     '<span class="pv-lg2 trade">買賣</span><span class="pv-lg2 ex">除息</span>' +
     '<span class="pv-lg2 duo"><span class="pv-sw up">━</span><span class="pv-sw dn">━</span>市場效應 ' + cfg.n + ' 日均</span>' +
@@ -724,6 +773,7 @@ function pvRender() {
   if (!_pvOpen) { el.innerHTML = ''; return; }
 
   var ready = _pvData && !_pvLoading && !_pvErr;
+  var view = _pvView(_pvData);
   var body;
   if (_pvLoading) body = '<div class="modal-loading">重建買賣台帳與日收盤中…（首次約 3～5 秒）</div>';
   else if (_pvErr) body = '<div class="modal-loading">載入失敗：' + _pvErr + '</div>';
@@ -736,7 +786,7 @@ function pvRender() {
     rtReady().then(function () { if (_pvOpen && _pvTab === 'spc') pvRender(); },
                    function () { if (_pvOpen && _pvTab === 'spc') pvRender(); });
   }
-  else body = (_pvTab === 'spc') ? pvSpcSvg(_pvData) : pvSvg(_pvData);
+  else body = (_pvTab === 'spc') ? pvSpcSvg(view) : pvSvg(view);
 
   var warn = (_pvData && _pvData.warn && _pvData.warn.length)
     ? '<div class="detail-note">' + _pvData.warn.join('；') + '</div>' : '';
@@ -744,11 +794,15 @@ function pvRender() {
   var tab = function (id, lb) {
     return '<button class="pv-tab' + (_pvTab === id ? ' on' : '') + '" onclick="pvTab(\'' + id + '\')">' + lb + '</button>';
   };
+  // 窗格是頁籤之下一層的選擇，所以不做成第三顆頁籤：無框、只有選中的那個上色。
+  var winBtn = function (w) {
+    return '<button class="pv-win' + (_pvWin === w ? ' on' : '') + '" onclick="pvWin(' + w + ')">' + w + ' 日</button>';
+  };
 
   var note = (_pvTab === 'spc')
-    ? '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日的總現值，用來看資產波動。' +
+    ? '<div class="detail-note">近 ' + _pvWin + ' 個交易日的總現值，用來看資產波動。' +
       '<b>目標上限／下限</b>是你自己設的資產水位（設定 → 退休現金流），不是從資料算出來的統計界線；' +
-      '<b>中線</b>是上下限的中點，<b>90 日平均</b>是這段期間的實際平均，兩條不是同一回事。' +
+      '<b>中線</b>是上下限的中點，<b>窗格平均</b>是這段期間的實際平均，兩條不是同一回事。' +
       '折線逐段著色：<span class="pv-c-up">紅＝連續上升達標</span>、' +
       '<span class="pv-c-dn">綠＝連續下降達標</span>、<span class="pv-c-na">黃＝未達設定天數</span>，與全站的紅漲綠跌同一套。' +
       '<b>上方燈號是另一套語意</b>：它是安燈不是漲跌，' +
@@ -760,18 +814,25 @@ function pvRender() {
       '下方堆疊直條把當日變動拆開：<code>當日變動 ＝ 市場效應 ＋ 買賣淨額 － 除息</code>，' +
       '三段相加等於上方折線的日變動。<span class="pv-c-up">市場正紅</span>／<span class="pv-c-dn">負綠</span>、' +
       '<span class="pv-c-tr">買賣白</span>（中性：正號是資金搬進部位，不是賺）、<span class="pv-c-na">除息黃</span>（恒為負，不是市場造成的）。' +
-      '近 90 天有 43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續綠段要先看直條是不是自己的動作造成的。' +
+      '以 90 日窗格實測，43 天出現事件，其中 15 天總現值的方向與市場相反，所以看到連續綠段要先看直條是不是自己的動作造成的。' +
       '橫跨整張圖的那條線是<b>市場效應 N 日均</b>（N 共用上面的連續天數設定）：把單日噪音濾掉之後市場的方向。' +
       '它跟全站同一套色，零線之上紅、之下綠；它與總現值折線在同一個窗格、又同一套顏色，' +
       '所以用線型分：<b>實線是總現值、虛線是均線</b>。' +
       '它與總現值同一個窗格、同一套刻度，零線就是右軸的 0（左軸在同一列標的就是基準金額），' +
       '所以右軸同時是「總現值比零線高多少」與「均線的值」。' +
-      '它平均的是<b>每日市場效應</b>，與那條「90 日平均」不同：後者是總現值本身的平均，兩者不要混。' +
+      '它平均的是<b>每日市場效應</b>，與那條「窗格平均」不同：後者是總現值本身的平均，兩者不要混。' +
       '它只平滑市場那一段，不含買賣與除息。' +
       '上方折線的左軸是絕對金額、右軸是距軸底多少；軸底只在資料跨過整數刻度時才跳一格，基準值標在右軸最上面。' +
       '買賣一律以當日收盤計價（與總現值同一套，三段才加得回變動），當天買進後到收盤的漲跌會被歸進市場效應；' +
-      '除息金額是<b>每股配息 × 當日持股</b>的推算，回答「價格為什麼掉」，不能拿去跟股利估算的本月發放對帳。</div>'
-    : '<div class="detail-note">近 ' + PV_SHOW + ' 個交易日。持股與成本由買賣台帳逐日重建' +
+      '除息金額是<b>每股配息 × 當日持股</b>的推算，回答「價格為什麼掉」，不能拿去跟股利估算的本月發放對帳。' +
+      '<b>窗格</b>切 90 或 30 個交易日，兩個頁籤一起套用，取的是同一份序列的尾段，不重抓也不會等。' +
+      '30 日時<b>目標上下限不強制撐開縱軸</b>：它們是固定的資產水位，天數變少不會跟著縮，' +
+      '硬納進來就會把 30 天那段較窄的值域撐成跟 90 天一樣高，曲線放不大。' +
+      '因此短窗格的界線可能落在圖外，改標在圖頭並寫出離目前多遠；' +
+      '「區間內幾天」那個統計與縱軸無關，不受影響。' +
+      '短窗格還有兩個邊緣效應：左緣少掉市場效應均線的前幾天，折線的連續段也可能被窗格切短，' +
+      '因為兩者都要往前數滿設定的天數才算得出來。</div>'
+    : '<div class="detail-note">近 ' + _pvWin + ' 個交易日。持股與成本由買賣台帳逐日重建' +
       (_pvData ? '（' + _pvData.codes + ' 檔）' : '') + '，收盤價用 Shioaji 1 分 K 聚合、無成交日沿用前一日。' +
       '<code>資本損益 ＝ 現值 － 原始成本</code>，資本報酬率為其除以原始成本；' +
       '賣出當天現值與成本會同時減少，已實現獲利不留在線上；除息當天價格先扣、配息還沒入帳，' +
@@ -790,9 +851,10 @@ function pvRender() {
     '<button class="dw-close" onclick="pvClose()" title="關閉">✕</button>' +
     '<div class="dw-sec">總現值' +
       '<button class="fx-reload" onclick="pvReload()" title="重新計算（清快取重抓分 K）">↻</button>' +
+      '<span class="pv-wins">' + PV_WINS.map(winBtn).join('') + '</span>' +
       '<span class="pv-tabs">' + tab('trend', '走勢') + tab('spc', '管制圖') + '</span>' +
     '</div>' + body + warn + note;
 
   if (!ready) return;
-  if (_pvTab === 'spc') pvBindSpcHover(_pvData); else pvBindHover(_pvData);
+  if (_pvTab === 'spc') pvBindSpcHover(view); else pvBindHover(view);
 }
