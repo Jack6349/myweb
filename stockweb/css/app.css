@@ -958,6 +958,14 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .swap-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .swap-tw { max-height: none; }
 .swap-table { font-size: 13px; }
+/* 賣出表：有填張數的那幾列墊一層淡灰，與還沒填的分開。
+   用中性灰不用金色或紅綠：金色在這幾張表是「持有／成本」的語彙，
+   紅綠固定代表漲跌，拿來標選取都會被讀成別的意思。
+   墊在 td 而不是 tr：tr 的背景會被 td 自己的背景蓋掉。
+   左緣再加一條亮一點的直條，淡底色在深色背景上本來就不明顯，
+   有一條邊界才掃得出這一列從哪裡開始。 */
+.swap-table tbody tr.swap-sel-on > td { background: rgba(255,255,255,.055); }
+.swap-table tbody tr.swap-sel-on > td:first-child { box-shadow: inset 3px 0 0 var(--accent2); }
 .swap-table td { padding: 5px 10px; }
 /* 合計列：粗體加一條分隔線就夠，不另外給底色，免得看起來像另一張表 */
 .swap-table tfoot .swap-tfoot td { font-weight: 700;
