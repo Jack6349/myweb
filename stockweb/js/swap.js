@@ -467,30 +467,65 @@ function renderSwap() {
   swapUpdate();
 }
 
+// ── 賣出表排序 ──
+// 表頭樣式與比較函式沿用關注股票那一套（_wtSortTh／_wtSortRows）：
+// 缺值墊底、字串用 numeric 比較、點同一欄換升降，這些規則兩邊必須一致，
+// 各寫一份遲早會飄掉。那邊的鍵名有一組是去評比資料現問的（rank/size/fee…），
+// 這裡的鍵刻意避開那組，不會誤觸。
+var SWAP_SSORT_LS = 'swap_sell_sort_v1';
+var SWAP_SSORT_RE = /^(code|name|px|yld|cost|held|free|val|base|profit|withDiv)(Asc|Desc)$/;
+var _swapSellSort = (function () {
+  try { var v = localStorage.getItem(SWAP_SSORT_LS); if (SWAP_SSORT_RE.test(v || '')) return v; } catch (e) {}
+  return 'codeAsc';                      // 預設維持原本的代號遞增，不按就跟以前一樣
+})();
+function swapSellSort(k) {
+  _swapSellSort = (typeof _wtNextSort === 'function') ? _wtNextSort(_swapSellSort, k)
+    : (_swapSellSort === k + 'Desc' ? k + 'Asc' : k + 'Desc');
+  try { localStorage.setItem(SWAP_SSORT_LS, _swapSellSort); } catch (e) {}
+  renderSwap();
+}
+
 function _swapSellHtml() {
   var codes = _swapCodes();
   // 「可賣」只在有出借／匯撥中的檔才有意義（可賣＝持有－出借中）；都沒出借時整欄與「持有」相同 → 不顯示
   var anyLent = (typeof _positions !== 'undefined' && _positions || []).some(function (p) { return p.lent && p.lentShares > 0; });
+  var sh = function (k, label, cls, tip) { return _wtSortTh(_swapSellSort, 'swapSellSort', k, label, cls, tip); };
+  // 年配息那一格平常是 swapUpdate 依代號填進去的，排序要在畫之前就知道值，
+  // 所以這裡先算一次。格子本身仍由 swapUpdate 負責，這份只給排序用。
+  var baseMap = {};
+  try {
+    (swapCompute().perCode || []).forEach(function (r) { baseMap[r.code] = r.before; });
+  } catch (e) { hush('swap', e); }
+  var rows = codes.map(function (code) {
+    var px = _swapPrice(code), held = _swapHeld(code);
+    var g = _swapPnl(code);
+    return { code: code, name: _swapName(code), px: px, yld: _swapYield(code), cost: _swapCostPx(code),
+      held: held, free: _swapFree(code), val: (px != null ? px * held : null),
+      base: (baseMap[code] > 0 ? baseMap[code] : null),
+      profit: g ? g.profit : null, withDiv: g ? g.withDiv : null, pnl: g };
+  });
+  if (typeof _wtSortRows === 'function') rows = _wtSortRows(rows, _swapSellSort);
   var h = '<div class="tx-box"><div class="tx-box-head"><span class="sub-title">賣出</span>' +
     '<span class="detail-note nb-keep">輸入張數或按「全部」；零股可輸入小數（0.5＝500 股）</span></div>' +
     '<div class="inv-table-wrap swap-tw"><table class="inv-table swap-table"><thead><tr>' +
-    '<th>代號</th><th>名稱</th><th class="num">現價</th>' +
-    '<th class="num" title="最近一次配息 × 配息期數 ÷ 現價（月配12、季配4、半年2、年配1）">預估殖利率</th>' +
-    '<th class="num" title="每股成本均價（券商庫存）">成本</th>' +
-    '<th class="num">持有(張)</th>' +
-    (anyLent ? '<th class="num" title="持有扣掉出借／匯撥中，可直接賣出的張數">可賣(張)</th>' : '') + '<th class="num">市值</th><th class="num">年配息</th>' +
-    '<th class="num" title="現值 － 原始成本，純價差。原始成本是券商淨成本加回累積配息，' +
+    sh('code', '代號') + sh('name', '名稱') + sh('px', '現價', 'num') +
+    sh('yld', '預估殖利率', 'num', '最近一次配息 × 配息期數 ÷ 現價（月配12、季配4、半年2、年配1）') +
+    sh('cost', '成本', 'num', '每股成本均價（券商庫存）') +
+    sh('held', '持有(張)', 'num') +
+    (anyLent ? sh('free', '可賣(張)', 'num', '持有扣掉出借／匯撥中，可直接賣出的張數') : '') +
+    sh('val', '市值', 'num') + sh('base', '年配息', 'num') +
+    sh('profit', '資本損益', 'num', '現值 － 原始成本，純價差。原始成本是券商淨成本加回累積配息，' +
       '也就是當初實際付出的錢。與持股庫存同一個數字，一樣跟著「含稅費」切換。&#10;' +
-      '這是整個部位的，不是你要賣的那幾張的。">資本損益</th>' +
-    '<th class="num" title="資本損益 ＋ 已配息。配息只算目前還持有的批次，已賣掉的批次領過的不在內。&#10;' +
-      '這是整個部位的，不是你要賣的那幾張的。">含息損益</th>' +
+      '這是整個部位的，不是你要賣的那幾張的。') +
+    sh('withDiv', '含息損益', 'num', '資本損益 ＋ 已配息。配息只算目前還持有的批次，已賣掉的批次領過的不在內。&#10;' +
+      '這是整個部位的，不是你要賣的那幾張的。') +
+    // 這三欄不排：值來自輸入框，而輸入時整張表刻意不重繪（重繪游標會跳掉），
+    // 排了之後順序會停在上一次重繪的狀態，看起來像排錯。
     '<th class="num">賣出張數</th><th></th><th class="num">賣出淨額</th></tr></thead><tbody>';
-  codes.forEach(function (code) {
-    var px = _swapPrice(code), held = _swapHeld(code), free = _swapFree(code);
-    var val = px != null ? px * held : null;
+  rows.forEach(function (r) {
+    var code = r.code, px = r.px, held = r.held, free = r.free, val = r.val;
     var v = _swapState.sells[code];
-    var cost = _swapCostPx(code);
-    var yld = _swapYield(code);
+    var cost = r.cost, yld = r.yld;
     h += '<tr>' +
       '<td class="inv-code"><span class="code-link" title="看線圖" onclick="openChartPop(\'' + code + '\')">' + code + '</span></td>' +
       '<td class="inv-name">' + _swapName(code) + '</td>' +
@@ -502,7 +537,7 @@ function _swapSellHtml() {
       '<td class="num">' + (val != null ? fmtMoney(val) : '—') + '</td>' +
       '<td class="num" id="swap-base-' + code + '">—</td>' +
       (function () {
-        var g = _swapPnl(code);
+        var g = r.pnl;
         if (!g) return '<td class="num flat">—</td><td class="num flat">—</td>';
         var warn = g.ready ? '' : '&#10;建倉明細尚未到齊，成本還沒還原配息，暫以券商淨成本計。';
         return _swapPnlCell(g.profit, '現值 ' + Math.round(g.netVal).toLocaleString('zh-TW') +
