@@ -355,11 +355,31 @@ function wtPxCell(code, px, extraCls) {
 // 沒持股的要留一個同寬的「—」，不是空字串。
 // 空起來的話有標記與沒標記的列代號起點差 22px，整欄掃下來是鋸齒狀，
 // 而這一欄的用處就是要一眼掃完。寬度固定在樣式裡，兩種狀態同寬。
+// 〔持〕點得下去：開建倉明細，與持股庫存那顆〔細〕同一個視窗。
+// 放在這顆而不是另外加一格：這張表當初是為了不橫向捲動才把名稱欄拿掉的，
+// 多一顆按鈕等於把省下來的寬度又吃回去。語意也接得上 ——
+// 這顆現在回答「我有沒有這檔」，點下去回答「我這檔是怎麼買的」。
+// 整列點擊會展開配息明細，但那個處理本來就排除 button，改成按鈕不會互相打架。
+// 找不到建倉編號時（券商庫存還沒載完、或庫存裡沒有這一檔的 id）退回純標籤：
+// 一顆按下去沒反應的按鈕比不能按更糟。
+function _wtHeldId(code) {
+  var ps = (typeof _positions !== 'undefined' && _positions) || [];
+  for (var i = 0; i < ps.length; i++) {
+    if (String(ps[i].code) === String(code) && ps[i].id != null) return ps[i].id;
+  }
+  return null;
+}
 function _wtHeldTag(code) {
   var m = (typeof _sharesMap !== 'undefined' && _sharesMap) || {};
   var q = m[String(code)];
   if (!(q > 0)) return '<span class="wt-held wt-held-no">—</span>';
-  return '<span class="wt-held" title="現有持股 ' + q.toLocaleString('zh-TW') + ' 股（含出借中）">持</span>';
+  var tip = '現有持股 ' + q.toLocaleString('zh-TW') + ' 股（含出借中）';
+  var id = _wtHeldId(code);
+  if (id == null || typeof openTradeDetail !== 'function') {
+    return '<span class="wt-held" title="' + tip + '">持</span>';
+  }
+  return '<button class="wt-held wt-held-btn" title="' + tip + '，點看建倉明細"' +
+    ' onclick="event.stopPropagation();openTradeDetail(\'' + code + '\',' + id + ')">持</button>';
 }
 
 function _wtRowHtml(code) {

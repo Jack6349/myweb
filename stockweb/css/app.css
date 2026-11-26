@@ -355,6 +355,11 @@ html, body { overflow-x: clip; }
   margin-right: 5px; border: 1px solid var(--accent2); border-radius: 4px;
   color: var(--accent2); vertical-align: 1px; cursor: help; }
 .wt-held.wt-held-no { border-color: transparent; color: var(--text3); cursor: default; }
+/* 可按的版本：按鈕預設的 padding／字型／背景要全部歸零，才跟純標籤同寬同位置。
+   只有游標與停留時的底色不同，位置一格都不能動 —— 旁邊那一列可能是不可按的
+   「—」，兩者對不齊整欄掃下來就是鋸齒。 */
+.wt-held-btn { font-family: var(--font); background: none; cursor: pointer; }
+.wt-held-btn:hover { background: var(--bg3); color: var(--accent); border-color: var(--accent); }
 /* 成本殖利率（持股那幾列的預估年配）。跟代號前面的「持」同一個金色，
    兩者是同一件事的兩面。不在數字後面加字：那會把整欄的右對齊打掉。 */
 .es-yoc { color: var(--accent2); cursor: help; }
