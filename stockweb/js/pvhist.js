@@ -436,14 +436,27 @@ function _pvLampsHtml(vals, n) {
 // 整數刻度：從 10／20／25／50／100／200／250／500 萬裡挑一個，讓格線落在 3～6 條。
 // 不寫死 100 萬，資料範圍變了會自己換（現在幅度 297 萬會選 100 萬；縮到 100 萬會選 25 萬）。
 // 軸底與軸頂都對齊該刻度的整數倍，右軸的相對刻度才會是整數。
-// 刻度梯要往下留到 1 萬，收不到時也不能跳回最大的那一階：
+// 刻度優先用固定的 50 萬：這張圖看的是自己的資產水位，格線間距固定才有
+// 「這一格等於多少錢」的肌肉記憶，間距會自己換反而每次都要重讀一次軸。
+// 只有當 50 萬會畫出超過 PV_GRID_MAX 條格線時才退回自動挑階（整張圖糊掉比
+// 間距不固定更糟）。
+//
+// 自動挑階那一段的刻度梯要往下留到 1 萬，收不到時也不能跳回最大的那一階：
 // 原本梯最小只有 10 萬，幅度不足 30 萬就沒有任何一階落在 3～6 格，
 // 於是落到「取最後一階」的 2000 萬，軸會變成 0～2000 萬、整條線貼著頂緣壓成一條。
-// 90 日窗格撞不到（幅度本來就大，又有目標界線撐著），30 日窗格很容易撞到。
 // 收不到就改取最接近 4 格的那一階，寧可格數少，不要整張圖失真。
+var PV_GRID_UNIT = 50;    // 單位：萬
+var PV_GRID_MAX = 16;     // 固定間距最多畫幾條格線，超過就讓它自動挑
 function _pvNiceAxis(lo, hi) {
   var steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];   // 單位：萬
   var st = steps[steps.length - 1], best = 1e9;
+  var fixed = Math.ceil(hi / 10000 / PV_GRID_UNIT) - Math.floor(lo / 10000 / PV_GRID_UNIT);
+  if (fixed >= 1 && fixed <= PV_GRID_MAX) {
+    var u0 = PV_GRID_UNIT * 10000;
+    var b0 = Math.floor(lo / u0) * u0, t0 = Math.ceil(hi / u0) * u0;
+    if (t0 === b0) t0 = b0 + u0;
+    return { lo: b0, hi: t0, u: u0, n: Math.round((t0 - b0) / u0) };
+  }
   for (var i = 0; i < steps.length; i++) {
     var k = Math.ceil(hi / 10000 / steps[i]) - Math.floor(lo / 10000 / steps[i]);
     if (k >= 3 && k <= 6) { st = steps[i]; break; }
@@ -466,10 +479,17 @@ function pvSpcSvg(data) {
     : { n: 5, up: 18000000, lo: 17000000, mid: 17500000, avg: true };
   var mean = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
 
-  var W = 1180, H = 450, PAD_L = 74, PAD_R = 184, PAD_T = 14, FOOT = 18;
-  // 右側 gutter 分兩欄：內欄放標註（目前／窗格平均），最右欄放相對刻度。
-  // 兩者原本都排在同一個 x，「距 1,500萬」會疊到「400萬」、「200萬」會疊到「90 日平均」。
-  var GUT_IN = W - PAD_R + 6, GUT_R = W - 8;
+  // 右邊距：兩欄對調之後，寬的那一欄（註解）換到最外面，量完實際佔用再收回來。
+  // 實測最寬的一行是「30 日平均 1,683萬」佔 89 單位，刻度欄 36 單位，
+  // 172 讓最右緣落在 1,159，距畫布邊緣還有 21 的餘裕（夠吃下九位數的總現值）。
+  // 原本是 184，所以這次對調反而讓繪圖區變寬。
+  var W = 1180, H = 450, PAD_L = 74, PAD_R = 172, PAD_T = 14, FOOT = 18;
+  // 右側 gutter 分兩欄：內欄放相對刻度（貼著軸，才讀得出哪一條格線是多少），
+  // 外欄放端點註解（目前／窗格平均／市場效應均線）。
+  // 刻度是數字，右對齊才對得齊位數；註解是文字，左對齊才會切齊成一落。
+  // 兩欄不可以排在同一個 x：那樣「距 1,500萬」會疊到「400萬」。
+  var GUT_SC = W - PAD_R + 52;    // 相對刻度的右緣
+  var GUT_IN = GUT_SC + 10;       // 端點註解的左緣
   var BAR_H = 92, GAP = 26;                      // 下段：逐日分解的堆疊直條
   var PH = H - PAD_T - FOOT - GAP - BAR_H;
   var n = pts.length, step = (W - PAD_L - PAD_R) / n;
@@ -524,7 +544,7 @@ function pvSpcSvg(data) {
     var gv = hi - ax.u * g, gy = PAD_T + PH * g / ax.n;
     s += '<line class="ck-grid" x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) + '"/>' +
       '<text class="ck-axis" x="' + (PAD_L - 6) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' + _pvWan(gv) + '</text>' +
-      '<text class="ck-axis pv-ax-rel" x="' + GUT_R + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' +
+      '<text class="ck-axis pv-ax-rel" x="' + GUT_SC + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end">' +
         (gv === zeroV ? '0萬' : (gv > zeroV ? '+' : '-') + _pvWan(Math.abs(gv - zeroV))) + '</text>';
   }
   var prevMo = '';
