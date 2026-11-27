@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>股利總管 Web</title>
-<link rel="stylesheet" href="css/app.css?v=495">
+<link rel="stylesheet" href="css/app.css?v=497">
 </head>
 <body>
 
@@ -362,6 +362,8 @@
           <label>起始<input type="date" id="bsg-begin"></label>
           <label>結束<input type="date" id="bsg-end"></label>
           <button class="btn-query" onclick="loadBsLog()">查詢</button>
+          <span class="detail-note nb-keep bsg-hint">區間篩的是<b>成交日</b>；表格彙總的是<b>交割日</b>，
+            比成交日晚兩個交易日，所以最後面會出現超過結束日期的交割日，那是還沒交割的部分。</span>
         </div>
         <div id="bsg-body"></div>
       </div>
@@ -497,7 +499,7 @@
 <script src="js/constituents.js?v=18"></script>
 <script src="js/live.js?v=61"></script>
 <script src="js/touch.js?v=5"></script>
-<script src="js/bslog.js?v=1"></script>
+<script src="js/bslog.js?v=2"></script>
 <script src="js/txinfo.js?v=50"></script>
 <script src="js/sbl.js?v=14"></script>
 <script src="js/yearpnl.js?v=1"></script>
@@ -534,7 +536,7 @@
 <script src="js/bondsig.js?v=12"></script>
 <script src="js/ovcard.js?v=34"></script>
 <script src="js/ovbond.js?v=33"></script>
-<script src="js/news.js?v=91"></script>
+<script src="js/news.js?v=92"></script>
 <script src="js/remind.js?v=9"></script>
 <script src="js/trend.js?v=35"></script>
 <script src="js/signals.js?v=32"></script>
