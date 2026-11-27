@@ -536,6 +536,11 @@ html, body { overflow-x: clip; }
 .macro-spark { position: relative; flex: 0 0 100%; height: 26px; margin-top: 5px; }
 /* 刻度標在圖的左上角。抽屜外那幾格只有 26px 高，字會壓到線，所以只在抽屜裡顯示。 */
 .mspk-sc { display: none; position: absolute; left: 0; top: 0; z-index: 1;
+/* 刻度後面接的基準小字（只有基準線不是昨收的那幾格才有）。
+   放在同一個 .mspk-sc 容器裡，抽屜外被收起來時一起消失。 */
+.mspk-sc2 { margin-left: 6px; color: var(--accent2); }
+/* 提示列裡「對開盤／對昨收」的標籤：比數字淡一階，數字才是主角 */
+.macro-tip-lb { color: var(--text3); font-size: 11px; margin-right: 2px; }
   font-size: 11px; font-weight: 600; color: var(--text3); pointer-events: none;
   /* 線可能正好走到左上角，所以要有底色把線擋在字後面，否則字跟線疊在一起 */
   background: var(--bg3); padding: 0 5px 1px 2px; border-radius: 0 0 5px 0; }
