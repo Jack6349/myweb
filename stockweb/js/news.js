@@ -1320,10 +1320,9 @@ function _mspkRange(hi, lo, ref) {
   return { hi: mid + span / 2, lo: mid - span / 2, step: st };
 }
 // 刻度標在圖上。抽屜裡的小圖有 76px 高放得下，抽屜外只有 26px，用 CSS 收起來。
-function _mspkScaleHtml(st, extra) {
-  if (st == null) return extra ? '<span class="mspk-sc">' + extra + '</span>' : '';
-  return '<span class="mspk-sc">刻度 ' + (st < 1 ? st.toFixed(1) : st) + '%' +
-    (extra ? '<span class="mspk-sc2">' + extra + '</span>' : '') + '</span>';
+function _mspkScaleHtml(st) {
+  if (st == null) return '';
+  return '<span class="mspk-sc">刻度 ' + (st < 1 ? st.toFixed(1) : st) + '%</span>';
 }
 function _macroSparkHtml(m) {
   var b = m.bars;
@@ -1448,18 +1447,10 @@ document.addEventListener('mousemove', function (ev) {
   if (cross) { cross.setAttribute('x1', f[2]); cross.setAttribute('x2', f[2]); cross.style.display = ''; }
   if (dot) { dot.setAttribute('cx', f[2]); dot.setAttribute('cy', f[3]); dot.style.display = ''; }
   var t = _mspkTip();
-  // 第六欄存在＝這張圖的基準線不是昨收，兩個百分比都要標，而且要標出各自比的是誰。
-  // 只給一個數字的話，跟卡片右邊那個對不起來，會被當成其中一個算錯。
-  var pctHtml = function (v, lb) {
-    if (v === '' || v == null) return '';
-    var cls = parseFloat(v) > 0 ? 'up' : (parseFloat(v) < 0 ? 'down' : 'flat');
-    return '　' + (lb ? '<span class="macro-tip-lb">' + lb + '</span>' : '') +
-      '<span class="' + cls + '">' + v + '%</span>';
-  };
   t.innerHTML = '<b>' + (f[0] || '現價') + '</b>　' + f[1] +
-    ((f[5] === '' || f[5] == null)
-      ? pctHtml(f[4], '')
-      : pctHtml(f[4], '對開盤 ') + pctHtml(f[5], '對昨收 '));
+    (f[4] === '' || f[4] == null ? ''
+      : '　<span class="' + (parseFloat(f[4]) > 0 ? 'up' : (parseFloat(f[4]) < 0 ? 'down' : 'flat')) +
+        '">' + f[4] + '%</span>');
   t.style.display = '';
   // 預設貼在圖的上緣，貼到視窗邊界就往內收
   var tw = t.offsetWidth, th = t.offsetHeight;
@@ -1497,13 +1488,13 @@ function _intraVaries(i) {
 // ^GSPC 是 2026-11-16 補進來的：它原本不在抽屜裡所以沒抓分時，
 // 加回抽屜之後整排只有它一格是近一個月的圖，兩種基準橫向排在一起比不了。
 var MACRO_INTRA_SYMS = ['^IXIC', '^SOX', '^VIX', '^TNX', 'HYG', '^GSPC'];
-// 基準線改用「這一盤的開盤」的那幾格。
-// 昨收當基準時，縱軸必須同時裝下昨收與盤中的距離，跳空大的那幾檔盤中走勢
-// 會被擠成一條平線。HYG 日內幅度是 0.1 個量級、美10年債的盤中報價更新又疏，
-// 這兩檔最明顯，看不出這一盤自己走成什麼樣。改成開盤之後縱軸只裝盤中。
-// 代價：卡片右邊的百分比仍然是對昨收（跨日的事要那個基準），與圖上的基準
-// 不再是同一個，所以圖上標「基準 開盤」，滑過去的提示兩個百分比都給。
-var MACRO_OPEN_BASE = ['HYG', '^TNX'];
+// 2026-11-27 試過讓 HYG 與美10年債改用「這一盤的開盤」當基準，隔天收回來。
+// 動機是對的：昨收當基準時，縱軸必須同時裝下昨收與盤中的距離，跳空大的那幾檔
+// 盤中走勢會被擠成一條平線（同一組資料實測，線佔框高 19% vs 97%）。
+// 收回來的原因是代價更大：右上的百分比是對昨收算的，圖上的基準一旦換成開盤，
+// 價格回穿開盤時線色就與右上不同號，而這一排九格的第一個用途就是一眼看漲跌。
+// 擠扁的問題還在。真要解，方向是讓昨收可以落在框外（線色仍以昨收分紅綠，
+// 但縱軸只裝盤中），不是換基準。
 async function fetchYahooIntra(sym) {
   var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?interval=5m&range=1d';
   var r = await fetch(NEWS_GAS_URL + '?url=' + encodeURIComponent(url));
@@ -1511,16 +1502,11 @@ async function fetchYahooIntra(sym) {
   var res = j.chart && j.chart.result && j.chart.result[0];
   if (!res) throw new Error(sym + ' no intra');
   var m = res.meta || {}, ts = res.timestamp || [];
-  var q0 = (res.indicators && res.indicators.quote && res.indicators.quote[0]) || {};
-  var raw = q0.close || [], rawO = q0.open || [];
+  var raw = (res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close) || [];
   var off = (m.gmtoffset || 0);
-  var t = [], c = [], open = null;
+  var t = [], c = [];
   for (var i = 0; i < raw.length; i++) {
     if (raw[i] == null || ts[i] == null) continue;
-    // 這一盤的開盤：第一根有資料的 5 分 K 的開盤價。
-    // 不取 c[0]（那是第一根的收盤，已經走了五分鐘），也不取 meta 的
-    // regularMarketOpen（盤後會換成下一盤的，收盤後看就錯了）。
-    if (open == null && rawO[i] != null) open = rawO[i];
     // 標的所在交易所的當地時間（^VIX／^TNX 是芝加哥、其餘紐約），與 Yahoo 畫的一致
     t.push(new Date((ts[i] + off) * 1000).toISOString().slice(11, 16));
     c.push(raw[i]);
@@ -1529,13 +1515,12 @@ async function fetchYahooIntra(sym) {
   var avg = [], sum = 0;
   for (var k = 0; k < c.length; k++) { sum += c[k]; avg.push(sum / (k + 1)); }
   var ref = (m.chartPreviousClose != null) ? m.chartPreviousClose : null;
-  if (open == null) open = c[0];                     // 整盤都沒有開盤欄位時退回第一根收盤
   // 每一檔的交易時段 Yahoo 自己會給，不用寫死：
   // ^IXIC／HYG 09:30–16:00（紐約）、^TNX 07:20–14:00、^VIX 02:00–15:15（苝加哥）
   var hm = function (ts) { return new Date((ts + off) * 1000).toISOString().slice(11, 16); };
   var rg = m.currentTradingPeriod && m.currentTradingPeriod.regular;
   var span = (rg && rg.start && rg.end) ? { from: hm(rg.start), to: hm(rg.end) } : null;
-  return { t: t, c: c, avg: avg, ref: ref, open: open, span: span, tz: m.exchangeTimezoneName || '' };
+  return { t: t, c: c, avg: avg, ref: ref, span: span, tz: m.exchangeTimezoneName || '' };
 }
 
 // ── 加權指數的當日分時（抽屜第一格）──
@@ -1580,15 +1565,12 @@ async function loadTwIdxIntra() {
 }
 
 // 分時小圖（加權指數與台指期共用）。與其他格共用 MSPK_W/MSPK_H 與紅綠切線那一套，
-// 差別有二：基準線不是區間起點，而且多畫一條均價線。
-// 基準線預設是參考價（昨收）；baseOpen 的那幾格改用這一盤的開盤（見 MACRO_OPEN_BASE）。
-// o = { t[], c[], avg[], ref, open, baseOpen, fmt, note }
+// 差別有二：基準線是參考價（不是區間起點），而且多畫一條均價線。
+// o = { t[], c[], avg[], ref, fmt, note }
 function _intraSparkHtml(o) {
   var c = o.c, n = c.length;
   if (n < 3 || !o.ref) return '';
-  var prev = o.ref, fmt = o.fmt || 0;
-  var useOpen = !!(o.baseOpen && o.open > 0);
-  var ref = useOpen ? o.open : prev;
+  var ref = o.ref, fmt = o.fmt || 0;
   var hi = Math.max.apply(null, c), lo = Math.min.apply(null, c);
   // 基準線一定要在圖內，否則「在昨收之上或之下」看不出來
   if (ref > hi) hi = ref;
@@ -1635,30 +1617,21 @@ function _intraSparkHtml(o) {
   // 均價線：單一灰線，不分紅綠（它是一條平均，沒有「漲或跌」可言）
   var av = [];
   for (var a = 0; a < n; a++) av.push(x(a).toFixed(1) + ',' + y(o.avg[a]).toFixed(1));
-  // hover 的資料：時間|值|x|y|相對基準線%|相對昨收%
-  // 第六欄只有在基準線不是昨收時才有值。那種時候圖上的百分比與卡片右邊的
-  // 不是同一個基準，兩個都給才不會被讀成同一件事。其他小圖照舊只給五欄。
+  // hover 的資料：時間|指數|x|y|相對昨收%，與其他小圖同一個格式
   var pts = [];
   for (var p = 0; p < n; p++) {
     var dp = (c[p] - ref) / ref * 100;
-    var dprev = (useOpen && Math.abs(prev) > 0) ? (c[p] - prev) / prev * 100 : null;
     pts.push(o.t[p] + '|' + _fmtNum(c[p], fmt) + '|' + x(p).toFixed(1) + '|' +
-      y(c[p]).toFixed(1) + '|' + (dp > 0 ? '+' : '') + dp.toFixed(2) +
-      (dprev == null ? '' : '|' + (dprev > 0 ? '+' : '') + dprev.toFixed(2)));
+      y(c[p]).toFixed(1) + '|' + (dp > 0 ? '+' : '') + dp.toFixed(2));
   }
-  var tip = o.note +
-    (useOpen
-      ? '　基準線＝這一盤的開盤 ' + _fmtNum(ref, fmt) +
-        '　（縱軸只裝這一盤，所以看得出盤中自己走成什麼樣；右邊那個百分比是對昨收 '
-        + _fmtNum(prev, fmt) + '，與圖上的基準不同，滑過去的提示兩個都會給）'
-      : '　基準線＝參考價 ' + _fmtNum(ref, fmt) +
-        '　（基準線＝這一盤的參考價，與右邊那個百分比同一個基準）') +
+  var tip = o.note + '　基準線＝參考價 ' + _fmtNum(ref, fmt) +
+    '　（基準線＝這一盤的參考價，與右邊那個百分比同一個基準）' +
     (rg.step == null ? '' : '　縱軸整個高度＝' + (rg.step < 1 ? rg.step.toFixed(1) : rg.step)
       + '%，刻度對齊到 1-2-5 階梯，所以各格的線高可以互相比') +
     (o.span && o.span.from ? '　橫軸＝' + o.span.from + '～' + o.span.to
       + '，右側留白是還沒走完的那一段' : '');
   return '<span class="macro-spark" title="' + tip.replace(/"/g, '&quot;') + '"' +
-    ' data-pts="' + pts.join(';') + '">' + _mspkScaleHtml(rg.step, useOpen ? '基準 開盤' : '') +
+    ' data-pts="' + pts.join(';') + '">' + _mspkScaleHtml(rg.step) +
     '<svg viewBox="0 0 ' + MSPK_W + ' ' + MSPK_H + '" preserveAspectRatio="none">' +
     (dnFl ? '<path class="ck-fill dn" d="' + dnFl + '"/>' : '') +
     (upFl ? '<path class="ck-fill up" d="' + upFl + '"/>' : '') +
@@ -1777,8 +1750,7 @@ function _macroCellHtml(m, intra) {
         + _chgBpTxt(m) + cumTxt + '</span>' +
       ((intra && m.intra && _intraVaries(m.intra))
       ? _intraSparkHtml({ t: m.intra.t, c: m.intra.c, avg: m.intra.avg, span: m.intra.span,
-      ref: m.intra.ref, open: m.intra.open, baseOpen: MACRO_OPEN_BASE.indexOf(m.sym) >= 0,
-      fmt: m.fmt, note: '當盤分時（' + (m.intra.tz || '當地') + '）　灰線＝當盤累計平均' })
+      ref: m.intra.ref, fmt: m.fmt, note: '當盤分時（' + (m.intra.tz || '當地') + '）　灰線＝當盤累計平均' })
       : _macroSparkHtml(m)) + '</div>';
   }
 }

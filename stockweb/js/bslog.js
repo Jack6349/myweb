@@ -110,10 +110,16 @@ async function loadBsLog() {
     });
 
     // ── 按交割日彙總：這一頁的主要用途 ──
+    // 金額是 0 的那幾筆要記下來，不能讓它靜靜算成 0。
+    // 成因：券商在建倉明細裡把那一筆的成本記成 0（銀行認購、配股會這樣），
+    // 程式會去參數設定的認購價表找價來還原，找不到就維持 0。
+    // 不標的話整列會畫成「—　—　+0」，看起來像一列空白，但那一天確實有成交。
     var byS = {};
     all.forEach(function (x) {
       var sd = _bsgSettleDay(x.d);
-      if (!byS[sd]) byS[sd] = { d: sd, buy: 0, sell: 0 };
+      if (!byS[sd]) byS[sd] = { d: sd, buy: 0, sell: 0, n: 0, zero: 0 };
+      byS[sd].n++;
+      if (!(x.amt > 0)) byS[sd].zero++;
       if (x.side === 'buy') byS[sd].buy += x.amt; else byS[sd].sell += x.amt;
     });
     var sds = Object.keys(byS).sort().reverse();
@@ -132,12 +138,21 @@ async function loadBsLog() {
         + '賣出那一邊不受影響，是完整的。</div>';
     }
 
-    h += '<table class="detail-table bsg-sum"><thead><tr><th>交割日</th>'
+    // 今天（台灣日）。交割日大於今天＝錢還沒動，與已經走完的那幾天分開標。
+    var today = (typeof _divTwDate === 'function') ? _divTwDate().iso : _bsgYmd(new Date());
+    h += '<table class="detail-table bsg-sum"><thead><tr><th>交割日</th><th class="num">筆數</th>'
       + '<th class="num">買進</th><th class="num">賣出</th><th class="num">當天淨額</th>'
       + '</tr></thead><tbody>';
     sds.forEach(function (k) {
       var r = byS[k], net = r.sell - r.buy;
-      h += '<tr><td>' + k + '</td>'
+      var future = k > today;
+      h += '<tr' + (future ? ' class="bsg-future"' : '') + '><td>' + k
+        + (future ? '<span class="bsg-tag t-wait" title="交割日還沒到，這筆錢還沒從帳戶進出">未交割</span>' : '')
+        + (r.zero ? '<span class="bsg-tag t-gap" title="這一天有 ' + r.zero
+            + ' 筆算不出金額：券商在建倉明細把成本記成 0（銀行認購、配股會這樣），'
+            + '要到參數設定補上認購價才還原得出來。沒補之前這一列的金額是少算的。">金額待補</span>' : '')
+        + '</td>'
+        + '<td class="num">' + r.n + '</td>'
         + '<td class="num">' + (r.buy ? '−' + _bsgMoney(r.buy) : '—') + '</td>'
         + '<td class="num">' + (r.sell ? '+' + _bsgMoney(r.sell) : '—') + '</td>'
         + '<td class="num ' + (net >= 0 ? 'up' : 'down') + '">'
@@ -150,14 +165,18 @@ async function loadBsLog() {
       + '<th>代號</th><th>名稱</th><th class="num">股數</th><th class="num">每股</th>'
       + '<th class="num">金額</th></tr></thead><tbody>';
     all.forEach(function (x) {
-      h += '<tr><td>' + x.d + '</td><td>' + _bsgSettleDay(x.d) + '</td>'
+      var xsd = _bsgSettleDay(x.d);
+      h += '<tr><td>' + x.d + '</td><td>' + xsd
+        + (xsd > today ? '<span class="bsg-tag t-wait">未交割</span>' : '') + '</td>'
         + '<td><span class="tx-kind ' + (x.side === 'buy' ? 'k-stl' : 'k-plan') + '">'
         + (x.side === 'buy' ? '買' : '賣') + '</span></td>'
         + '<td>' + x.code + '</td><td>' + _bsgName(x.code) + '</td>'
         + '<td class="num">' + (x.shares || 0).toLocaleString('zh-TW') + '</td>'
         + '<td class="num">' + (x.px == null ? '—' : x.px.toFixed(2)) + '</td>'
         + '<td class="num ' + (x.side === 'buy' ? 'down' : 'up') + '">'
-        + (x.side === 'buy' ? '−' : '+') + _bsgMoney(x.amt) + '</td></tr>';
+        + ((x.amt > 0) ? (x.side === 'buy' ? '−' : '+') + _bsgMoney(x.amt)
+            : '<span class="bsg-tag t-gap" title="券商在建倉明細把這一筆的成本記成 0，'
+              + '要到參數設定補上認購價才還原得出金額">金額待補</span>') + '</td></tr>';
     });
     h += '</tbody></table></details>';
 
@@ -165,6 +184,12 @@ async function loadBsLog() {
       + '台幣交割那張表把走完的日子收進每日剩餘總額之後，畫面上看不到明細，要回頭查就來這裡。'
       + '<br><b>交割日怎麼算</b>：成交日往後數兩個交易日，用辦公日曆算，不是加兩天，'
       + '不然連假會算錯。'
+      + '<br><b>為什麼會出現超過結束日期的交割日</b>：上面的區間篩的是成交日，表格彙總的是交割日，'
+      + '兩者差兩個交易日。所以最後面那幾列的交割日會晚於結束日期，標著「未交割」，'
+      + '意思是那筆錢還沒從帳戶進出。'
+      + '<br><b>金額待補</b>：券商在建倉明細把那一筆的成本記成 0（銀行認購、配股會這樣），'
+      + '程式會去參數設定的認購價表找價來還原，找不到就還原不出來。'
+      + '沒補之前那一列的金額是<b>少算的</b>，不是真的 0。補的方式是到參數設定填那一筆的認購價。'
       + '<br><b>兩邊的來源不對稱</b>：賣出用已實現損益按日期區間查，查得到的是完整的，'
       + '包含已經整批出清的標的。買進來自建倉明細，而建倉明細要先有持倉編號才查得到，'
       + '持倉清單只列現在還有部位的標的，所以<b>已經整批出清的標的查不到買進</b>。'

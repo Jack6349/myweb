@@ -536,11 +536,6 @@ html, body { overflow-x: clip; }
 .macro-spark { position: relative; flex: 0 0 100%; height: 26px; margin-top: 5px; }
 /* 刻度標在圖的左上角。抽屜外那幾格只有 26px 高，字會壓到線，所以只在抽屜裡顯示。 */
 .mspk-sc { display: none; position: absolute; left: 0; top: 0; z-index: 1;
-/* 刻度後面接的基準小字（只有基準線不是昨收的那幾格才有）。
-   放在同一個 .mspk-sc 容器裡，抽屜外被收起來時一起消失。 */
-.mspk-sc2 { margin-left: 6px; color: var(--accent2); }
-/* 提示列裡「對開盤／對昨收」的標籤：比數字淡一階，數字才是主角 */
-.macro-tip-lb { color: var(--text3); font-size: 11px; margin-right: 2px; }
   font-size: 11px; font-weight: 600; color: var(--text3); pointer-events: none;
   /* 線可能正好走到左上角，所以要有底色把線擋在字後面，否則字跟線疊在一起 */
   background: var(--bg3); padding: 0 5px 1px 2px; border-radius: 0 0 5px 0; }
@@ -628,6 +623,17 @@ a.news-title:hover { color: var(--accent2); text-decoration: underline; }
 .ad-hmore { color: var(--text3); font-size: 12px; margin-top: 6px; }
 /* 買賣紀錄：查不到買進的那幾檔要具名講出來。
    用警示色不用紅綠：那兩個色在這張表是買與賣。 */
+/* 區間與欄位標題講的不是同一個日期，這行字就是在講這件事，不收合 */
+.bsg-hint { margin-left: 14px; max-width: 560px; }
+/* 交割日那一欄的標記。未交割用中性灰藍：它不是好事也不是壞事，只是還沒走完。
+   金額待補用警示色：那一列的數字確實是少算的，不標會被當成真實金額。
+   紅綠不碰，這兩張表的紅綠固定是買進與賣出的方向。 */
+.bsg-tag { margin-left: 7px; padding: 1px 6px; border-radius: 4px; font-size: 11px;
+  border: 1px solid var(--border); color: var(--text3); white-space: nowrap; }
+.bsg-tag.t-wait { border-color: var(--border-strong); color: var(--text2); }
+.bsg-tag.t-gap { border-color: var(--accent2); color: var(--accent2); }
+/* 未交割那幾列整列淡一階：已經走完的才是對帳的主體 */
+.bsg-sum tr.bsg-future td { background: rgba(255,255,255,.03); }
 .bsg-warn { color: var(--warn); font-size: 12.5px; line-height: 1.6;
   border: 1px solid var(--warn); border-radius: 6px; padding: 8px 10px; margin: 10px 0; }
 .bsg-sum { margin-top: 4px; }
