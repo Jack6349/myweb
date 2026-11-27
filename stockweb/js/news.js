@@ -87,7 +87,8 @@ async function fetchYahooQuote(t) {
   var days = bars.map(function (b) {
     return { d: new Date(b.t * 1000).toISOString().slice(0, 10), c: b.c };
   });
-  return { name: t.name, sym: t.sym, price: price, changePct: pct, fmt: t.fmt, asOf: asOf, bars: days };
+  return { name: t.name, sym: t.sym, price: price, changePct: pct, prev: prev,
+           fmt: t.fmt, asOf: asOf, bars: days };
 }
 
 // 台股最後一個已收盤的交易日。盤中看這排指標時，基準要用「昨天的收盤」，
@@ -1193,6 +1194,10 @@ async function loadMacro() {
   MACRO_INTRA_SYMS.forEach(function (sym, i) {
     var hit = _macroSnap.filter(function (m) { return m.sym === sym; })[0];
     if (hit) hit.intra = (intras[i].status === 'fulfilled') ? intras[i].value : null;
+    // 前收以日線那一路為準。分時 meta 的 chartPreviousClose 會差一個交易日
+    // （2026-11-27 實測 ^TNX 給的是 11/24 而不是 11/25），用它畫線會畫錯邊，
+    // bp 也會算成 0.0 而與右邊的百分比打架。分時只拿它當退路。
+    if (hit && hit.intra && hit.prev > 0) hit.intra.ref = hit.prev;
     if (intras[i].status === 'rejected') hush('news', intras[i].reason);
   });
   _nightFut = await fetchNightFutures();
@@ -1266,8 +1271,14 @@ function _macroAtHtml(ms, lab) {
 
 // ── 每格的近一個月走勢小圖 ──
 // 資料用本來就抓回來的日K（range=1mo，原本是給警示算累計用的），不另外打請求。
-// 基準線取區間第一根收盤：這張圖回答「現在相對一個月前」。右邊的百分比回答的是
-// 「今天相對昨天」，兩者問的不是同一件事，所以同一格的線色與百分比可能相反。
+// 基準線取前收（與右邊那個百分比同一個基準），不取區間第一根收盤。
+// 原本取區間起點，於是這張圖回答的是「現在相對一個月前」，與右邊的「今天相對昨天」
+// 是兩件事，線色與百分比可以剛好相反 —— 2026-11-27 實測：費半 +2.60%、
+// 標普 +1.15%、Nasdaq +1.38%、HYG +0.16%，四格的線全是綠的，因為它們都還在
+// 一個月前的水位之下。使用者讀到的是「漲還是跌」，不是「相對一個月前」，
+// 所以改成前收：線的末端必定落在與右邊同號的那一側。
+// 這張圖什麼時候會出現：美股剛開盤那十幾分鐘分時點數不足三點、或週末與休市日
+// 完全沒有分時，就退回這一張。那正好是最容易看到顏色矛盾的時段。
 // 畫法與即時持股的分時小圖同一套：基準線以上紅、以下綠，跨線處在交點切開。
 var MSPK_W = 100, MSPK_H = 26;
 
@@ -1327,7 +1338,8 @@ function _macroSparkHtml(m) {
     else { cs.push(m.price); ds.push(d); }
     liveK = cs.length - 1;
   }
-  var n = cs.length, ref = cs[0];
+  // 前收優先；真的拿不到（極少數抓不到日線的情形）才退回區間起點
+  var n = cs.length, ref = (m.prev > 0) ? m.prev : cs[0];
   var hi = Math.max.apply(null, cs), lo = Math.min.apply(null, cs);
   var rg = _mspkRange(hi, lo, ref);
   hi = rg.hi; lo = rg.lo;
@@ -1348,13 +1360,15 @@ function _macroSparkHtml(m) {
   }
   var last = cs[n - 1];
   var pct = ref ? (last - ref) / ref * 100 : null;
-  var tip = '近 ' + n + ' 個交易日收盤走勢　基準線＝區間起點 ' + _fmtNum(ref, m.fmt) +
+  var tip = '近 ' + n + ' 個交易日收盤走勢　基準線＝前收 ' + _fmtNum(ref, m.fmt) +
     (rg.step == null ? '' : '　縱軸整個高度＝' + (rg.step < 1 ? rg.step.toFixed(1) : rg.step)
       + '%（這一段實際走了 ' + ((Math.max.apply(null, cs) - Math.min.apply(null, cs))
       / Math.abs(ref) * 100).toFixed(2) + '%）'
       + '　刻度對齊到 1-2-5 階梯，所以各格的線高可以互相比') +
-    (pct == null ? '' : '　至今 ' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%') +
-    '　（這一格比的是一個月前，與右邊的當日漲跌不同基準；旁邊其他格是當盤分時）' + (m.note || '');
+    (pct == null ? '' : '　現在 ' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%') +
+    '　（基準線＝前收，與右邊那個百分比同一個基準，所以線的末端與它同號。'
+    + '這一格畫的是近一個月的日收盤，旁邊其他格是當盤分時；'
+    + '美股剛開盤或休市時分時點數不足，那一格就會退回這一張）' + (m.note || '');
   // hover 用的點位。寫在 data 屬性上，滑鼠移上來直接讀，不必每次重繪都重算。
   // 格式：日期|收盤|x|y|相對基準%，以 ; 分隔；最後一點若是現價，日期寫成空字串。
   // 百分比在這裡就算好，hover 時只讀不算。比的是基準線（區間起點），
